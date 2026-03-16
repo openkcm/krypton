@@ -10,22 +10,22 @@ import (
 )
 
 func TestNowUTC(t *testing.T) {
-	t.Run("returns current UTC timestamp", func(t *testing.T) {
+	t.Run("returns current UTC timestamp as nanoseconds", func(t *testing.T) {
 		// given
-		before := time.Now().UTC()
+		before := time.Now().UTC().UnixNano()
 
 		// when
-		result := clock.NowUTC()
+		result := clock.NowUnixUTC()
 
 		// then
-		after := time.Now().UTC()
-		assert.False(t, result.Before(before))
-		assert.False(t, result.After(after))
+		after := time.Now().UTC().UnixNano()
+		assert.GreaterOrEqual(t, result, before)
+		assert.LessOrEqual(t, result, after)
 	})
 
 	t.Run("returns non-zero value", func(t *testing.T) {
 		// when
-		result := clock.NowUTC()
+		result := clock.NowUnixUTC()
 
 		// then
 		assert.NotZero(t, result)
@@ -33,11 +33,11 @@ func TestNowUTC(t *testing.T) {
 
 	t.Run("returns increasing values on subsequent calls", func(t *testing.T) {
 		// when
-		first := clock.NowUTC()
+		first := clock.NowUnixUTC()
 		time.Sleep(time.Millisecond)
-		second := clock.NowUTC()
+		second := clock.NowUnixUTC()
 
 		// then
-		assert.False(t, second.Before(first))
+		assert.Greater(t, second, first)
 	})
 }

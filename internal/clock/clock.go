@@ -2,7 +2,7 @@ package clock
 
 import "time"
 
-// NowUTC returns the current time in UTC.
-func NowUTC() time.Time {
-	return time.Now().UTC()
+// NowUnixUTC returns the current time in UTC as Unix nanoseconds.
+func NowUnixUTC() int64 {
+	return time.Now().UTC().UnixNano()
 }

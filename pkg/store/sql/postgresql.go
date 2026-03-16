@@ -25,8 +25,8 @@ func NewPostgreSQL(ctx context.Context, db *sql.DB) (*PostgreSQL, error) {
 		id UUID PRIMARY KEY,
 		name TEXT NOT NULL,
 		labels JSONB,
-		created_at TIMESTAMPTZ NOT NULL,
-		updated_at TIMESTAMPTZ NOT NULL
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL
 	);
 	`
 

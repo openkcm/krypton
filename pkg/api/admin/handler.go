@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -38,8 +37,8 @@ type TenantResponse struct {
 	ID        string       `json:"id"`
 	Name      string       `json:"name"`
 	Labels    model.Labels `json:"labels,omitempty"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	CreatedAt int64        `json:"created_at"`
+	UpdatedAt int64        `json:"updated_at"`
 }
 
 func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
