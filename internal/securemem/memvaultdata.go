@@ -15,17 +15,6 @@ type MemVaultData struct {
 
 var ErrInvalidSize = errors.New("invalid size: must be greater than 0")
 
-func NewMemVaultDataFrom(name string, data []byte) (*MemVaultData, error) {
-	vault, err := NewMemVaultData(name, len(data))
-	if err != nil {
-		return nil, err
-	}
-
-	copy(vault.data, data)
-
-	return vault, nil
-}
-
 func NewMemVaultData(name string, size int) (*MemVaultData, error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize

@@ -387,4 +387,61 @@ func TestVaultMarkReadOnly(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, data2, actBytes)
 	})
+
+	t.Run("should be idempotent when marking all data as read-only", func(t *testing.T) {
+		// given
+		vault := securemem.NewMemVault()
+		name := "test"
+		data := []byte("secret")
+
+		b, err := vault.Reserve(name, len(data))
+		assert.NoError(t, err)
+		copy(b, data)
+
+		// when
+		err = vault.MarkAllReadOnly()
+		assert.NoError(t, err)
+
+		err = vault.MarkAllReadOnly()
+		assert.NoError(t, err)
+
+		// then
+		actBytes, ok := vault.Get(name)
+		assert.True(t, ok)
+		assert.Equal(t, data, actBytes)
+	})
+
+	t.Run("should not return an error when vault is empty", func(t *testing.T) {
+		// given
+		vault := securemem.NewMemVault()
+
+		// when
+		err := vault.MarkAllReadOnly()
+
+		// then
+		assert.NoError(t, err)
+	})
+
+	t.Run("should destroy after marking all data as read-only", func(t *testing.T) {
+		// given
+		vault := securemem.NewMemVault()
+		name := "test"
+		data := []byte("secret")
+
+		b, err := vault.Reserve(name, len(data))
+		assert.NoError(t, err)
+		copy(b, data)
+
+		// when
+		err = vault.MarkAllReadOnly()
+		assert.NoError(t, err)
+
+		err = vault.Destroy(name)
+		assert.NoError(t, err)
+
+		// then
+		actBytes, ok := vault.Get(name)
+		assert.False(t, ok)
+		assert.Nil(t, actBytes)
+	})
 }

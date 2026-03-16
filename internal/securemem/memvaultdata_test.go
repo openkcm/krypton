@@ -51,66 +51,6 @@ func TestNewWithSize(t *testing.T) {
 	})
 }
 
-func TestNewWithData(t *testing.T) {
-	t.Run("should create vault with provided data", func(t *testing.T) {
-		// given
-		input := []byte("secret123")
-
-		// when
-		subj, err := securemem.NewMemVaultDataFrom("test-secret", input)
-		assert.NoError(t, err)
-
-		t.Cleanup(func() {
-			err := subj.Destroy()
-			assert.NoError(t, err)
-		})
-
-		// then
-		assert.Equal(t, input, subj.Data(), "vault data does not match input")
-	})
-
-	t.Run("should return error for invalid data inputs", func(t *testing.T) {
-		tts := []struct {
-			name string
-			data []byte
-		}{
-			{name: "empty input", data: []byte{}},
-			{name: "nil input", data: nil},
-		}
-
-		for _, tt := range tts {
-			t.Run("should return error for "+tt.name, func(t *testing.T) {
-				// given when
-				subj, err := securemem.NewMemVaultDataFrom("test-"+tt.name, tt.data)
-
-				// then
-				assert.ErrorIs(t, err, securemem.ErrInvalidSize)
-				assert.Nil(t, subj)
-			})
-		}
-	})
-
-	t.Run("should create independent copy of input data", func(t *testing.T) {
-		// given
-		input := []byte("original")
-
-		// when
-		subj, err := securemem.NewMemVaultDataFrom("test-copy", input)
-		assert.NoError(t, err)
-
-		t.Cleanup(func() {
-			err := subj.Destroy()
-			assert.NoError(t, err)
-		})
-
-		// then
-		// Mutate the original slice
-		input[0] = 'X'
-
-		assert.Equal(t, byte('o'), subj.Data()[0])
-	})
-}
-
 func TestDestroy(t *testing.T) {
 	t.Run("should securely destroy vault data", func(t *testing.T) {
 		// given
@@ -187,5 +127,22 @@ func TestReadonly(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		assert.True(t, subj.IsReadOnly())
+	})
+
+	t.Run("should destroy vault even if readonly", func(t *testing.T) {
+		// given
+		subj, err := securemem.NewMemVaultData("test-readonly-destroy", 40)
+		assert.NoError(t, err)
+
+		err = subj.MarkReadOnly()
+		assert.NoError(t, err)
+
+		assert.True(t, subj.IsReadOnly())
+
+		// when
+		err = subj.Destroy()
+
+		// then
+		assert.NoError(t, err)
 	})
 }
