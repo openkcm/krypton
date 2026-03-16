@@ -97,24 +97,18 @@ func setupPostgres() ([]func(), error) {
 
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		runCleanups(cleanupFns)
-		return nil, err
+		return cleanupFns, err
 	}
 
 	tenantTestDB, err = sql.Open("postgres", connStr)
 	if err != nil {
-		runCleanups(cleanupFns)
-		return nil, err
+		return cleanupFns, err
 	}
 	cleanupFns = append(cleanupFns, func() { tenantTestDB.Close() })
 
 	tenantTestStore, err = storesql.NewPostgreSQL(ctx, tenantTestDB)
-	if err != nil {
-		runCleanups(cleanupFns)
-		return nil, err
-	}
 
-	return cleanupFns, nil
+	return cleanupFns, err
 }
 
 func runCleanups(cleanups []func()) {
