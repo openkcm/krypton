@@ -12,15 +12,15 @@ import (
 func TestNowUTC(t *testing.T) {
 	t.Run("returns current UTC timestamp", func(t *testing.T) {
 		// given
-		before := float64(time.Now().UTC().Unix())
+		before := time.Now().UTC()
 
 		// when
 		result := clock.NowUTC()
 
 		// then
-		after := float64(time.Now().UTC().Unix())
-		assert.GreaterOrEqual(t, result, before)
-		assert.LessOrEqual(t, result, after)
+		after := time.Now().UTC()
+		assert.False(t, result.Before(before))
+		assert.False(t, result.After(after))
 	})
 
 	t.Run("returns non-zero value", func(t *testing.T) {
@@ -38,6 +38,6 @@ func TestNowUTC(t *testing.T) {
 		second := clock.NowUTC()
 
 		// then
-		assert.GreaterOrEqual(t, second, first)
+		assert.False(t, second.Before(first))
 	})
 }

@@ -32,7 +32,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	cleanups := make([]func(), 0, 2)
+	var cleanups []func()
 
 	cliCleanup, err := setupCLI()
 	if err != nil {
@@ -40,25 +40,26 @@ func TestMain(m *testing.M) {
 	}
 	cleanups = append(cleanups, cliCleanup)
 
-	pgCleanup, err := setupPostgres()
+	pgCleanups, err := setupPostgres()
 	if err != nil {
 		runCleanups(cleanups)
 		os.Exit(1)
 	}
-	cleanups = append(cleanups, pgCleanup)
+	cleanups = append(cleanups, pgCleanups...)
 
 	exitCode := m.Run()
 	runCleanups(cleanups)
 	os.Exit(exitCode)
 }
 
-func setupCLI() (cleanup func(), err error) {
+func setupCLI() (func(), error) {
 	ctx := context.Background()
 
 	tmpDir, err := os.MkdirTemp("", "kr-integration-test-*")
 	if err != nil {
 		return nil, err
 	}
+	cleanupFn := func() { os.RemoveAll(tmpDir) }
 
 	binaryPath = filepath.Join(tmpDir, "kr")
 
@@ -71,17 +72,13 @@ func setupCLI() (cleanup func(), err error) {
 
 	buildCmd := exec.CommandContext(ctx, "go", buildArgs...)
 	buildCmd.Stderr = os.Stderr
-	if err := buildCmd.Run(); err != nil {
-		os.RemoveAll(tmpDir)
-		return nil, err
-	}
 
-	return func() { os.RemoveAll(tmpDir) }, nil
+	return cleanupFn, buildCmd.Run()
 }
 
-func setupPostgres() (cleanup func(), err error) {
+func setupPostgres() ([]func(), error) {
 	ctx := context.Background()
-	var cleanups []func()
+	var cleanupFns []func()
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
@@ -96,28 +93,28 @@ func setupPostgres() (cleanup func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-	cleanups = append(cleanups, func() { _ = pgContainer.Terminate(ctx) })
+	cleanupFns = append(cleanupFns, func() { _ = pgContainer.Terminate(ctx) })
 
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		runCleanups(cleanups)
+		runCleanups(cleanupFns)
 		return nil, err
 	}
 
 	tenantTestDB, err = sql.Open("postgres", connStr)
 	if err != nil {
-		runCleanups(cleanups)
+		runCleanups(cleanupFns)
 		return nil, err
 	}
-	cleanups = append(cleanups, func() { tenantTestDB.Close() })
+	cleanupFns = append(cleanupFns, func() { tenantTestDB.Close() })
 
 	tenantTestStore, err = storesql.NewPostgreSQL(ctx, tenantTestDB)
 	if err != nil {
-		runCleanups(cleanups)
+		runCleanups(cleanupFns)
 		return nil, err
 	}
 
-	return func() { runCleanups(cleanups) }, nil
+	return cleanupFns, nil
 }
 
 func runCleanups(cleanups []func()) {

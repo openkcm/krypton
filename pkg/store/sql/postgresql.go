@@ -41,7 +41,7 @@ func NewPostgreSQL(ctx context.Context, db *sql.DB) (*PostgreSQL, error) {
 func (ps *PostgreSQL) CreateTenant(ctx context.Context, tenant model.Tenant) (model.Tenant, error) {
 	stmt := `
 		INSERT INTO tenants (id, name, labels, created_at, updated_at)
-		VALUES ($1, $2, $3, to_timestamp($4), to_timestamp($5))
+		VALUES ($1, $2, $3, $4, $5)
 	`
 
 	labelsJSON, err := json.Marshal(tenant.Labels)
@@ -65,7 +65,7 @@ func (ps *PostgreSQL) CreateTenant(ctx context.Context, tenant model.Tenant) (mo
 
 func (ps *PostgreSQL) GetTenant(ctx context.Context, tenantID string) (model.Tenant, error) {
 	stmt := `
-		SELECT id, name, labels, EXTRACT(EPOCH FROM created_at), EXTRACT(EPOCH FROM updated_at)
+		SELECT id, name, labels, created_at, updated_at
 		FROM tenants
 		WHERE id = $1
 	`

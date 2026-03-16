@@ -24,7 +24,7 @@ func mustMarshal(t *testing.T, v any) []byte {
 }
 
 func TestCreateTenant(t *testing.T) {
-	handler := admin.NewHandler(tenantTestStore)
+	handler := admin.NewServerMux(tenantTestStore)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -126,7 +126,7 @@ func TestCreateTenant(t *testing.T) {
 }
 
 func TestGetTenant(t *testing.T) {
-	handler := admin.NewHandler(tenantTestStore)
+	handler := admin.NewServerMux(tenantTestStore)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -194,7 +194,7 @@ func TestGetTenant(t *testing.T) {
 }
 
 func TestCreateAndGetTenant(t *testing.T) {
-	handler := admin.NewHandler(tenantTestStore)
+	handler := admin.NewServerMux(tenantTestStore)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -249,8 +249,8 @@ func TestCreateAndGetTenant(t *testing.T) {
 	// then - verify data integrity
 	assert.Equal(t, createdTenant.ID, gotTenant.ID)
 	assert.Equal(t, createdTenant.Name, gotTenant.Name)
-	assert.InDelta(t, createdTenant.CreatedAt, gotTenant.CreatedAt, 0.001)
-	assert.InDelta(t, createdTenant.UpdatedAt, gotTenant.UpdatedAt, 0.001)
+	assert.Equal(t, createdTenant.CreatedAt, gotTenant.CreatedAt)
+	assert.Equal(t, createdTenant.UpdatedAt, gotTenant.UpdatedAt)
 
 	// verify labels are preserved correctly
 	assert.Equal(t, createdTenant.Labels["environment"], gotTenant.Labels["environment"])

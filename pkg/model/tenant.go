@@ -1,17 +1,21 @@
 package model
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/openkcm/krypton/internal/clock"
 )
 
+type Labels map[string]string
+
 type Tenant struct {
 	ID        string
 	Name      string
-	Labels    map[string]string
-	CreatedAt float64
-	UpdatedAt float64
+	Labels    Labels
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func NewTenant(name string, labels map[string]string) Tenant {

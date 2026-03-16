@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -15,8 +16,8 @@ const (
 	PathTenantByID = "/admin/tenants/{id}"
 )
 
-// NewHandler creates the admin API handler.
-func NewHandler(s store.Store) http.Handler {
+// NewServerMux creates the admin API multiplexer with all routes registered.
+func NewServerMux(s store.Store) http.Handler {
 	mux := http.NewServeMux()
 	a := &admin{store: s}
 	mux.HandleFunc("POST "+PathTenants, a.createTenant)
@@ -29,16 +30,16 @@ type admin struct {
 }
 
 type CreateTenantRequest struct {
-	Name   string            `json:"name"`
-	Labels map[string]string `json:"labels,omitempty"`
+	Name   string       `json:"name"`
+	Labels model.Labels `json:"labels,omitempty"`
 }
 
 type TenantResponse struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Labels    map[string]string `json:"labels,omitempty"`
-	CreatedAt float64           `json:"created_at"`
-	UpdatedAt float64           `json:"updated_at"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Labels    model.Labels `json:"labels,omitempty"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
 }
 
 func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +58,8 @@ func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(toTenantResponse(created)); err != nil {
+	err = json.NewEncoder(w).Encode(toTenantResponse(created))
+	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 	}
 }
@@ -80,7 +82,8 @@ func (a *admin) getTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(toTenantResponse(tenant)); err != nil {
+	err = json.NewEncoder(w).Encode(toTenantResponse(tenant))
+	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 	}
 }
