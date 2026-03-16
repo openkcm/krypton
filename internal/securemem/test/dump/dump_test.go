@@ -42,7 +42,11 @@ func TestProtection(t *testing.T) {
 		logs, err := container.Logs(ctx)
 		require.NoError(t, err, "failed to get container logs")
 
-		defer logs.Close()
+		t.Cleanup(func() {
+			if err := logs.Close(); err != nil {
+				t.Logf("warning: failed to close logs: %v", err)
+			}
+		})
 
 		isExposedSecretFound := false
 		isPersistentVaultGetFound := false
@@ -105,7 +109,11 @@ func TestProtection(t *testing.T) {
 		logs, err := container.Logs(ctx)
 		require.NoError(t, err, "failed to get container logs")
 
-		defer logs.Close()
+		t.Cleanup(func() {
+			if err := logs.Close(); err != nil {
+				t.Logf("warning: failed to close logs: %v", err)
+			}
+		})
 
 		isPersistentVaultGetFound := false
 		isExposedSecretFound := false
@@ -159,7 +167,8 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 
 	testTimeout := 6 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
+
+	t.Cleanup(cancel)
 
 	root, err := os.Getwd()
 	require.NoError(t, err)
