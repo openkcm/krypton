@@ -2,6 +2,8 @@ package securemem_test
 
 import (
 	"context"
+	"crypto/aes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,4 +155,37 @@ func TestHandlerRequestRun(t *testing.T) {
 			assert.NotNil(t, resp)
 		})
 	})
+}
+
+func BenchmarkMemVault_Reserve(b *testing.B) {
+	for range b.N {
+		b.ReportAllocs()
+		resp, err := securemem.Run(b.Context(), func(ctx context.Context, hr *securemem.HandlerRequest) error {
+			b := []byte("MYSECRETKEY123458901234567890123")
+			secret, err := hr.PersistentVault().Reserve("secret", len(b))
+			if err != nil {
+				return err
+			}
+			copy(secret, b)
+
+			tmpSecret, err := hr.TmpVault().Reserve("tmp_secret", len(b))
+			if err != nil {
+				return err
+			}
+			copy(tmpSecret, b)
+
+			_, err = aes.NewCipher(b)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to create AES cipher: %v", err))
+			}
+
+			return nil
+		})
+		assert.NoError(b, err)
+		v, ok := resp.MemVault().Get("secret")
+		assert.True(b, ok)
+		assert.Equal(b, []byte("MYSECRETKEY123458901234567890123"), v)
+		err = resp.MemVault().DestroyAll()
+		assert.NoError(b, err)
+	}
 }

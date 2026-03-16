@@ -40,3 +40,11 @@ func TestSecureMem(t *testing.T) {
 		}
 	})
 }
+
+func TestNoDump(t *testing.T) {
+	// given
+	err := securemem.NoDump()
+
+	// when then
+	assert.NoError(t, err)
+}
