@@ -34,32 +34,35 @@ var (
 func TestMain(m *testing.M) {
 	var cleanups []func()
 
-	cliCleanup, err := setupCLI()
-	if err != nil {
-		os.Exit(1)
-	}
-	cleanups = append(cleanups, cliCleanup)
-
-	pgCleanups, err := setupPostgres()
+	cliCleanups, err := setupCLI()
+	cleanups = append(cleanups, cliCleanups...)
 	if err != nil {
 		runCleanups(cleanups)
 		os.Exit(1)
 	}
+
+	pgCleanups, err := setupPostgres()
 	cleanups = append(cleanups, pgCleanups...)
+	if err != nil {
+		runCleanups(cleanups)
+		os.Exit(1)
+	}
 
 	exitCode := m.Run()
 	runCleanups(cleanups)
 	os.Exit(exitCode)
 }
 
-func setupCLI() (func(), error) {
+func setupCLI() ([]func(), error) {
 	ctx := context.Background()
+	var cleanupFns []func()
 
 	tmpDir, err := os.MkdirTemp("", "kr-integration-test-*")
 	if err != nil {
 		return nil, err
 	}
 	cleanupFn := func() { os.RemoveAll(tmpDir) }
+	cleanupFns = append(cleanupFns, cleanupFn)
 
 	binaryPath = filepath.Join(tmpDir, "kr")
 
@@ -73,7 +76,7 @@ func setupCLI() (func(), error) {
 	buildCmd := exec.CommandContext(ctx, "go", buildArgs...)
 	buildCmd.Stderr = os.Stderr
 
-	return cleanupFn, buildCmd.Run()
+	return cleanupFns, buildCmd.Run()
 }
 
 func setupPostgres() ([]func(), error) {
