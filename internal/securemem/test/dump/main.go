@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/openkcm/krypton/internal/securemem"
@@ -30,27 +33,34 @@ func main() {
 		enableDump()
 	}
 	// Run the secret runner and the exposed secret in parallel to simulate a real-world scenario
-	secretRunner()
+	handlerResponse := secretRunner()
 
 	// Simulate an exposed secret that is not protected by securemem
 	exposedSecret()
 
 	// Create a trigger file to keep the container running for analysis
-	createTrigger()
+	go createTrigger()
+
+	// Wait for SIGINT/SIGTERM
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	err := handlerResponse.MemVault().DestroyAll()
+	if err != nil {
+		log.Printf("Error destroying secrets: %v\n", err)
+	}
+	log.Println("Shutting down...")
 }
 
 func createTrigger() {
-	isCreated := false
 	for {
-		if !isCreated {
-			_, err := os.Create("start_" + triggerName)
-			if err != nil {
-				fmt.Printf("Error creating file: %v\n", err)
-				continue
-			}
-			isCreated = true
+		_, err := os.Create("start_" + triggerName)
+		if err != nil {
+			time.Sleep(10 * time.Second)
+			fmt.Printf("Error creating file: %v\n", err)
+			continue
 		}
-		time.Sleep(10 * time.Second)
+		break
 	}
 }
 
@@ -62,7 +72,7 @@ func exposedSecret() {
 	}
 }
 
-func secretRunner() {
+func secretRunner() *securemem.HandlerResponse {
 	resp, err := securemem.Run(context.Background(), func(ctx context.Context, hr *securemem.HandlerRequest) error {
 		file, err := os.Open("secret_" + triggerName)
 		if err != nil {
@@ -92,14 +102,14 @@ func secretRunner() {
 	}
 
 	fmt.Println("Checking for secrets in MemVault...")
-	secret, ok := resp.MemVault().Get("secret")
+	_, ok := resp.MemVault().Get("secret")
 	if !ok {
 		fmt.Println("❌ SECRET NOT FOUND IN MEMVAULT")
 	} else {
 		fmt.Println("✅ SECRET FOUND IN MEMVAULT")
 	}
 
-	keepInMem(secret)
+	return resp
 }
 
 func enableDump() {
@@ -107,16 +117,4 @@ func enableDump() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set no dump: %v", err))
 	}
-}
-
-func keepInMem(b []byte) {
-	go func() {
-		for {
-			// The condition is never true at runtime; the loop just prevents
-			// the slice from being optimised away entirely.
-			if b[0] == 0xFF {
-				panic("keepAlive: unreachable")
-			}
-		}
-	}()
 }

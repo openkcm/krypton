@@ -146,3 +146,23 @@ func TestReadonly(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestName(t *testing.T) {
+	t.Run("should return vault name", func(t *testing.T) {
+		// given
+		name := "test-name"
+		subj, err := securemem.NewMemVaultData(name, 32)
+		assert.NoError(t, err)
+
+		t.Cleanup(func() {
+			err := subj.Destroy()
+			assert.NoError(t, err)
+		})
+
+		// when
+		got := subj.Name()
+
+		// then
+		assert.Equal(t, name, got)
+	})
+}

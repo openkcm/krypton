@@ -83,4 +83,9 @@ grep " r" /proc/${pid}/maps | while read line; do
   dd if=/proc/${pid}/mem bs=1 skip=${START} count=${LEN} 2>/dev/null | strings | grep $UNEXPOSED_SECRET | xargs -I {} echo "☣️ ALERT DUMP UNEXPOSED SECRET FOUND: {}"
 done
 
+kill $pid
+
+sleep 5
+
+# Cleanup
 cleanup

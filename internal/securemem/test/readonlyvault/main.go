@@ -19,6 +19,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	defer func() {
+		err := data.Destroy()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	copy(data.Data(), []byte(secret))
 
 	err = data.MarkReadOnly()

@@ -29,6 +29,13 @@ func main() {
 		panic(err)
 	}
 
+	defer func() {
+		err := res.MemVault().DestroyAll()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	b, ok := res.MemVault().Get("secret")
 	if !ok {
 		panic(errors.New("secret not found in vault"))
