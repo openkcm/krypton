@@ -7,11 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/lib/pq"
 
@@ -88,10 +85,7 @@ func setupPostgres() ([]func(), error) {
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second)),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		return nil, err
