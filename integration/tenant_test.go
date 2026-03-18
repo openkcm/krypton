@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/pkg/api/admin"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 func mustMarshal(t *testing.T, v any) []byte {
@@ -48,7 +49,7 @@ func TestCreateTenant(t *testing.T) {
 		// then
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		var respBody admin.TenantResponse
+		var respBody model.Tenant
 		err = json.NewDecoder(resp.Body).Decode(&respBody)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, respBody.ID)
@@ -81,7 +82,7 @@ func TestCreateTenant(t *testing.T) {
 		// then
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		var respBody admin.TenantResponse
+		var respBody model.Tenant
 		err = json.NewDecoder(resp.Body).Decode(&respBody)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, respBody.ID)
@@ -149,7 +150,7 @@ func TestGetTenant(t *testing.T) {
 		}
 		defer createResp.Body.Close()
 
-		var createdTenant admin.TenantResponse
+		var createdTenant model.Tenant
 		err = json.NewDecoder(createResp.Body).Decode(&createdTenant)
 		if !assert.NoError(t, err) {
 			return
@@ -167,7 +168,7 @@ func TestGetTenant(t *testing.T) {
 		// then
 		assert.Equal(t, http.StatusOK, getResp.StatusCode)
 
-		var gotTenant admin.TenantResponse
+		var gotTenant model.Tenant
 		err = json.NewDecoder(getResp.Body).Decode(&gotTenant)
 		assert.NoError(t, err)
 		assert.Equal(t, createdTenant.ID, gotTenant.ID)
@@ -223,7 +224,7 @@ func TestCreateAndGetTenant(t *testing.T) {
 		return
 	}
 
-	var createdTenant admin.TenantResponse
+	var createdTenant model.Tenant
 	err = json.NewDecoder(createResp.Body).Decode(&createdTenant)
 	if !assert.NoError(t, err) {
 		return
@@ -240,7 +241,7 @@ func TestCreateAndGetTenant(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)
 
-	var gotTenant admin.TenantResponse
+	var gotTenant model.Tenant
 	err = json.NewDecoder(getResp.Body).Decode(&gotTenant)
 	if !assert.NoError(t, err) {
 		return
