@@ -16,9 +16,13 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   check:
     uses: openkcm/build/.github/workflows/ci.svc.yaml@main
+    with:
+      run_task_tests: false
+      run_makefile_tests: true
     secrets: inherit
 

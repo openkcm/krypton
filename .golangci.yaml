@@ -80,6 +80,7 @@ linters:
           - gocognit
           - goconst
           - maintidx
+          - prealloc
         path: (.+)_test\.go
     paths:
       - kmip
