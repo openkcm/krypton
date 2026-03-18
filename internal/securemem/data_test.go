@@ -12,7 +12,7 @@ import (
 func TestNewWithSize(t *testing.T) {
 	t.Run("should create vault with specified size", func(t *testing.T) {
 		// given when
-		subj, err := securemem.NewMemVaultData("test-region", 64)
+		subj, err := securemem.NewData("test-region", 64)
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -42,7 +42,7 @@ func TestNewWithSize(t *testing.T) {
 		for _, tt := range tts {
 			t.Run("for "+tt.name, func(t *testing.T) {
 				// given when
-				subj, err := securemem.NewMemVaultData("test-"+tt.name, tt.size)
+				subj, err := securemem.NewData("test-"+tt.name, tt.size)
 
 				// then
 				assert.ErrorIs(t, err, securemem.ErrInvalidSize)
@@ -54,7 +54,7 @@ func TestNewWithSize(t *testing.T) {
 	t.Run("should write data and read it back", func(t *testing.T) {
 		// given
 		secret := []byte("my-secret-key-1234567890")
-		subj, err := securemem.NewMemVaultData("test-roundtrip", len(secret))
+		subj, err := securemem.NewData("test-roundtrip", len(secret))
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -74,7 +74,7 @@ func TestNewWithSize(t *testing.T) {
 		expectedSize := 5000
 
 		// when
-		subj, err := securemem.NewMemVaultData("test-large-region", expectedSize)
+		subj, err := securemem.NewData("test-large-region", expectedSize)
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -95,7 +95,7 @@ func TestNewWithSize(t *testing.T) {
 func TestDestroy(t *testing.T) {
 	t.Run("should securely destroy vault data", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-destroy", 128)
+		subj, err := securemem.NewData("test-destroy", 128)
 		require.NoError(t, err)
 
 		// when
@@ -108,7 +108,7 @@ func TestDestroy(t *testing.T) {
 
 	t.Run("should be idempotent", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-idempotent", 64)
+		subj, err := securemem.NewData("test-idempotent", 64)
 		require.NoError(t, err)
 
 		// when
@@ -129,7 +129,7 @@ func TestDestroy(t *testing.T) {
 func TestReadonly(t *testing.T) {
 	t.Run("should set vault to readonly mode", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-readonly", 40)
+		subj, err := securemem.NewData("test-readonly", 40)
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -147,7 +147,7 @@ func TestReadonly(t *testing.T) {
 
 	t.Run("should be idempotent", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-readonly-idempotent", 40)
+		subj, err := securemem.NewData("test-readonly-idempotent", 40)
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -172,7 +172,7 @@ func TestReadonly(t *testing.T) {
 
 	t.Run("should destroy vault even if readonly", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-readonly-destroy", 40)
+		subj, err := securemem.NewData("test-readonly-destroy", 40)
 		require.NoError(t, err)
 
 		err = subj.MarkReadOnly()
@@ -189,7 +189,7 @@ func TestReadonly(t *testing.T) {
 
 	t.Run("should return nil data after destroying a read-only vault", func(t *testing.T) {
 		// given
-		subj, err := securemem.NewMemVaultData("test-nil-after-readonly-destroy", 64)
+		subj, err := securemem.NewData("test-nil-after-readonly-destroy", 64)
 		require.NoError(t, err)
 
 		err = subj.MarkReadOnly()
@@ -208,7 +208,7 @@ func TestReadonly(t *testing.T) {
 	t.Run("should preserve data after marking read-only", func(t *testing.T) {
 		// given
 		secret := []byte("preserve-after-readonly")
-		subj, err := securemem.NewMemVaultData("test-roundtrip-readonly", len(secret))
+		subj, err := securemem.NewData("test-roundtrip-readonly", len(secret))
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
@@ -231,7 +231,7 @@ func TestName(t *testing.T) {
 	t.Run("should return vault name", func(t *testing.T) {
 		// given
 		name := "test-name"
-		subj, err := securemem.NewMemVaultData(name, 32)
+		subj, err := securemem.NewData(name, 32)
 		require.NoError(t, err)
 
 		t.Cleanup(func() {

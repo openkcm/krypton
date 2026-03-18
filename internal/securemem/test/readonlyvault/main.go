@@ -15,7 +15,7 @@ func main() {
 		}
 	}()
 
-	data, err := securemem.NewMemVaultData("secret", len(secret))
+	data, err := securemem.NewData("secret", len(secret))
 	if err != nil {
 		panic(err)
 	}

@@ -5,27 +5,27 @@ import (
 	"sync"
 )
 
-// MemVaultData is a named, secure memory region backed by mmap'd anonymous memory
+// Data is a named, secure memory region backed by mmap'd anonymous memory
 // that is locked to physical RAM to prevent swapping. It supports toggling the
 // underlying memory between read-write and read-only modes via mprotect, and
 // provides a Destroy method that securely zeroes the buffer, unlocks, and unmaps
 // the memory.
-type MemVaultData struct {
+type Data struct {
 	name       string
 	data       []byte
 	isReadOnly bool
 	mux        sync.RWMutex
 }
 
-// ErrInvalidSize is returned by NewMemVaultData when the requested allocation
+// ErrInvalidSize is returned by NewData when the requested allocation
 // size is zero or negative.
 var ErrInvalidSize = errors.New("invalid size: must be greater than 0")
 
-// NewMemVaultData allocates a new secure memory region of the given size and
+// NewData allocates a new secure memory region of the given size and
 // associates it with the provided name. The underlying memory is mmap'd and
 // locked to prevent swapping. It returns ErrInvalidSize if size is less than
 // or equal to zero.
-func NewMemVaultData(name string, size int) (*MemVaultData, error) {
+func NewData(name string, size int) (*Data, error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}
@@ -35,7 +35,7 @@ func NewMemVaultData(name string, size int) (*MemVaultData, error) {
 		return nil, err
 	}
 
-	return &MemVaultData{
+	return &Data{
 		name: name,
 		data: aBytes,
 	}, nil
@@ -44,7 +44,7 @@ func NewMemVaultData(name string, size int) (*MemVaultData, error) {
 // Data returns the underlying byte slice of the secure memory region. If the
 // vault has been destroyed, it returns nil. The returned slice points directly
 // to the locked memory; callers must not hold references after Destroy is called.
-func (m *MemVaultData) Data() []byte {
+func (m *Data) Data() []byte {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 
@@ -59,7 +59,7 @@ func (m *MemVaultData) Data() []byte {
 // process address space. If the vault is currently read-only, it is first
 // switched back to read-write before zeroing. Subsequent calls to Destroy are
 // safe and return nil. After Destroy returns, Data will return nil.
-func (m *MemVaultData) Destroy() error {
+func (m *Data) Destroy() error {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
@@ -88,7 +88,7 @@ func (m *MemVaultData) Destroy() error {
 // destroyed, it returns nil.
 // Once `MarkReadOnly()` is called, the only way to make data writable again is
 // `Destroy()`.
-func (m *MemVaultData) MarkReadOnly() error {
+func (m *Data) MarkReadOnly() error {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
@@ -106,13 +106,13 @@ func (m *MemVaultData) MarkReadOnly() error {
 }
 
 // Name returns the human-readable name associated with this secure memory region.
-func (m *MemVaultData) Name() string {
+func (m *Data) Name() string {
 	return m.name
 }
 
 // IsReadOnly reports whether the underlying memory region is currently protected
 // as read-only.
-func (m *MemVaultData) IsReadOnly() bool {
+func (m *Data) IsReadOnly() bool {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 	return m.isReadOnly
