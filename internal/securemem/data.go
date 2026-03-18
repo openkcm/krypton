@@ -30,14 +30,14 @@ func NewData(name string, size int) (*Data, error) {
 		return nil, ErrInvalidSize
 	}
 
-	aBytes, err := alloc(size)
+	b, err := alloc(size)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Data{
 		name: name,
-		data: aBytes,
+		data: b,
 	}, nil
 }
 
