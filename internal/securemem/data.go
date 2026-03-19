@@ -41,10 +41,10 @@ func NewData(name string, size int) (*Data, error) {
 	}, nil
 }
 
-// Data returns the underlying byte slice of the secure memory region. If the
+// Bytes returns the underlying byte slice of the secure memory region. If the
 // vault has been destroyed, it returns nil. The returned slice points directly
 // to the locked memory; callers must not hold references after Destroy is called.
-func (m *Data) Data() []byte {
+func (m *Data) Bytes() []byte {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 

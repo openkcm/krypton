@@ -21,7 +21,7 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// then
-		data := subj.Data()
+		data := subj.Bytes()
 		assert.Len(t, data, 64)
 
 		// mmap'd anonymous memory should be zeroed
@@ -63,10 +63,10 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// when
-		copy(subj.Data(), secret)
+		copy(subj.Bytes(), secret)
 
 		// then
-		assert.Equal(t, secret, subj.Data())
+		assert.Equal(t, secret, subj.Bytes())
 	})
 
 	t.Run("should allocate larger sizes", func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// then
-		data := subj.Data()
+		data := subj.Bytes()
 		assert.Len(t, data, expectedSize)
 
 		for _, b := range data {
@@ -103,7 +103,7 @@ func TestDestroy(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Nil(t, subj.Data())
+		assert.Nil(t, subj.Bytes())
 	})
 
 	t.Run("should be idempotent", func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestDestroy(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Nil(t, subj.Data())
+		assert.Nil(t, subj.Bytes())
 	})
 }
 
@@ -202,7 +202,7 @@ func TestReadonly(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		assert.Nil(t, subj.Data())
+		assert.Nil(t, subj.Bytes())
 	})
 
 	t.Run("should preserve data after marking read-only", func(t *testing.T) {
@@ -216,14 +216,14 @@ func TestReadonly(t *testing.T) {
 			assert.NoError(t, err)
 		})
 
-		copy(subj.Data(), secret)
+		copy(subj.Bytes(), secret)
 
 		// when
 		err = subj.MarkReadOnly()
 		assert.NoError(t, err)
 
 		// then
-		assert.Equal(t, secret, subj.Data())
+		assert.Equal(t, secret, subj.Bytes())
 	})
 }
 
