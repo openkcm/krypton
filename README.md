@@ -6,6 +6,15 @@
 
 OpenKCM Krypton is a manging key materials.
 
+## Getting Started
+
+```bash
+make test   # run tests
+make lint   # run linter
+make dev    # start postgres + Krypton server locally
+make cli    # build and install the Krypton CLI
+```
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/openkcm/krypton/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).

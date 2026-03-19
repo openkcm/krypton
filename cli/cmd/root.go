@@ -4,6 +4,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var serverURL string
+
 var rootCmd = &cobra.Command{
 	Use:   "kr",
 	Short: "A CLI tool for managing Krypton",
@@ -15,5 +17,9 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "http://localhost:8080", "Krypton server URL")
+
 	rootCmd.AddCommand(loginCmd())
+	rootCmd.AddCommand(createCmd())
+	rootCmd.AddCommand(getCmd())
 }
