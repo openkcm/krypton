@@ -29,7 +29,9 @@ func getTenantCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := admin.NewClient(serverURL)
 
-			tenant, err := c.GetTenant(cmd.Context(), args[0])
+			tenant, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
+				ID: args[0],
+			})
 			if err != nil {
 				if errors.Is(err, admin.ErrTenantNotFound) {
 					return fmt.Errorf("tenant %q not found", args[0])

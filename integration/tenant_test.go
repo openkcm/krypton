@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/pkg/api/admin"
-	"github.com/openkcm/krypton/pkg/model"
 )
 
 func TestCreateTenant(t *testing.T) {
@@ -28,9 +27,9 @@ func TestCreateTenant(t *testing.T) {
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(output))
-		tenant := decodeTenant(t, output)
-		assert.NotEmpty(t, tenant.ID)
-		assert.Equal(t, expName, tenant.Name)
+		resp := decode[admin.CreateTenantResponse](t, output)
+		assert.NotEmpty(t, resp.ID)
+		assert.Equal(t, expName, resp.Name)
 	})
 
 	t.Run("creates tenant with name and labels", func(t *testing.T) {
@@ -58,11 +57,11 @@ func TestCreateTenant(t *testing.T) {
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(output))
-		tenant := decodeTenant(t, output)
-		assert.NotEmpty(t, tenant.ID)
-		assert.Equal(t, expName, tenant.Name)
-		assert.Equal(t, expLabels["env"], tenant.Labels["env"])
-		assert.Equal(t, expLabels["team"], tenant.Labels["team"])
+		resp := decode[admin.CreateTenantResponse](t, output)
+		assert.NotEmpty(t, resp.ID)
+		assert.Equal(t, expName, resp.Name)
+		assert.Equal(t, expLabels["env"], resp.Labels["env"])
+		assert.Equal(t, expLabels["team"], resp.Labels["team"])
 	})
 
 	t.Run("fails when server is unavailable", func(t *testing.T) {
@@ -93,17 +92,17 @@ func TestGetTenant(t *testing.T) {
 			return
 		}
 
-		tenant := decodeTenant(t, createOutput)
+		createResp := decode[admin.CreateTenantResponse](t, createOutput)
 
 		// when `kr get tenant <tenant-id> --server <server-url>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", tenant.ID, "--server", server.URL)
+		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", createResp.ID, "--server", server.URL)
 		getOutput, err := getCmd.CombinedOutput()
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(getOutput))
-		tenant = decodeTenant(t, getOutput)
-		assert.NotEmpty(t, tenant.ID)
-		assert.Equal(t, tenantName, tenant.Name)
+		getResp := decode[admin.GetTenantResponse](t, getOutput)
+		assert.NotEmpty(t, getResp.ID)
+		assert.Equal(t, tenantName, getResp.Name)
 	})
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
@@ -130,11 +129,12 @@ func TestGetTenant(t *testing.T) {
 	})
 }
 
-func decodeTenant(t *testing.T, output []byte) model.Tenant {
+func decode[T any](t *testing.T, output []byte) T {
 	t.Helper()
-	var tenant model.Tenant
-	if err := json.Unmarshal(output, &tenant); err != nil {
-		assert.FailNowf(t, "failed to decode tenant", "output: %s, error: %v", string(output), err)
+	var result T
+	err := json.Unmarshal(output, &result)
+	if err != nil {
+		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
 	}
-	return tenant
+	return result
 }
