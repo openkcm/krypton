@@ -28,10 +28,32 @@ type admin struct {
 	store store.Store
 }
 
-type CreateTenantRequest struct {
-	Name   string       `json:"name"`
-	Labels model.Labels `json:"labels,omitempty"`
-}
+type (
+	CreateTenantRequest struct {
+		Name   string       `json:"name"`
+		Labels model.Labels `json:"labels,omitempty"`
+	}
+
+	CreateTenantResponse struct {
+		ID        string       `json:"id"`
+		Name      string       `json:"name"`
+		Labels    model.Labels `json:"labels,omitempty"`
+		UpdatedAt int64        `json:"updated_at"`
+		CreatedAt int64        `json:"created_at"`
+	}
+
+	GetTenantRequest struct {
+		ID string `json:"id"`
+	}
+
+	GetTenantResponse struct {
+		ID        string       `json:"id"`
+		Name      string       `json:"name"`
+		Labels    model.Labels `json:"labels,omitempty"`
+		UpdatedAt int64        `json:"updated_at"`
+		CreatedAt int64        `json:"created_at"`
+	}
+)
 
 func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
 	var req CreateTenantRequest
@@ -49,7 +71,7 @@ func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	err = json.NewEncoder(w).Encode(created)
+	err = json.NewEncoder(w).Encode(toCreateTenantResponse(created))
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 	}
@@ -57,10 +79,6 @@ func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
 
 func (a *admin) getTenant(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "tenant id is required", http.StatusBadRequest)
-		return
-	}
 
 	tenant, err := a.store.GetTenant(r.Context(), id)
 	if err != nil {
@@ -73,8 +91,28 @@ func (a *admin) getTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(tenant)
+	err = json.NewEncoder(w).Encode(toGetTenantResponse(tenant))
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
+	}
+}
+
+func toCreateTenantResponse(t model.Tenant) CreateTenantResponse {
+	return CreateTenantResponse{
+		ID:        t.ID,
+		Name:      t.Name,
+		Labels:    t.Labels,
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
+	}
+}
+
+func toGetTenantResponse(t model.Tenant) GetTenantResponse {
+	return GetTenantResponse{
+		ID:        t.ID,
+		Name:      t.Name,
+		Labels:    t.Labels,
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
 	}
 }
