@@ -33,16 +33,19 @@ func (v *MemVault) Reserve(name string, size int) ([]byte, error) {
 	defer v.mux.Unlock()
 
 	if v.isReadOnly {
+		slog.Error("cannot reserve vault data, vault is read-only", "name", name)
 		return nil, ErrVaultReadOnly
 	}
 
 	_, ok := v.store[name]
 	if ok {
+		slog.Error("vault data with the same name already exists", "name", name)
 		return nil, ErrVaultDataAlreadyExists
 	}
 
 	data, err := NewData(name, size)
 	if err != nil {
+		slog.Error("failed to create vault data", "name", name, "size", size, "error", err)
 		return nil, err
 	}
 
@@ -57,6 +60,7 @@ func (v *MemVault) Get(name string) ([]byte, bool) {
 
 	data, ok := v.store[name]
 	if !ok {
+		slog.Warn("vault data not found for", "name", name)
 		return nil, false
 	}
 
@@ -70,11 +74,13 @@ func (v *MemVault) Destroy(name string) error {
 
 	data, ok := v.store[name]
 	if !ok {
+		slog.Warn("vault data not found for", "name", name)
 		return nil
 	}
 
 	err := data.Destroy()
 	if err != nil {
+		slog.Error("failed to destroy vault data for", "name", name, "error", err)
 		return err
 	}
 
