@@ -538,35 +538,4 @@ func TestVaultMarkReadOnly(t *testing.T) {
 		assert.False(t, ok)
 		assert.Nil(t, actBytes)
 	})
-
-	t.Run("should not able to reserve new data after marking all data as read-only", func(t *testing.T) {
-		// given
-		name := "test"
-		data := []byte("secret")
-
-		subj := securemem.NewMemVault()
-
-		t.Cleanup(func() {
-			err := subj.DestroyAll()
-			assert.NoError(t, err)
-		})
-
-		b, err := subj.Reserve(name, len(data))
-		assert.NoError(t, err)
-		copy(b, data)
-
-		// when
-		err = subj.MarkAllReadOnly()
-		assert.NoError(t, err)
-
-		res, err := subj.Reserve("new-data", 10)
-
-		// then
-		assert.ErrorIs(t, err, securemem.ErrVaultReadOnly)
-		assert.Nil(t, res)
-
-		aByte, ok := subj.Get(name)
-		assert.True(t, ok)
-		assert.Equal(t, data, aByte)
-	})
 }

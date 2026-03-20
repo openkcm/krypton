@@ -8,17 +8,13 @@ import (
 
 // MemVault is an in-memory vault that manages multiple named Data instances.
 type MemVault struct {
-	store      map[string]*Data
-	mux        sync.RWMutex
-	isReadOnly bool
+	store map[string]*Data
+	mux   sync.RWMutex
 }
 
 // ErrVaultDataAlreadyExists is returned by MemVault.Reserve when a vault data
 // with the same name already exists in the vault.
 var ErrVaultDataAlreadyExists = errors.New("vault data with the same name already exists")
-
-// ErrVaultReadOnly is returned by MemVault.Reserve when the vault is marked as read-only.
-var ErrVaultReadOnly = errors.New("vault is read-only")
 
 // NewMemVault creates a new MemVault instance with an empty data map.
 func NewMemVault() *MemVault {
@@ -31,11 +27,6 @@ func NewMemVault() *MemVault {
 func (v *MemVault) Reserve(name string, size int) ([]byte, error) {
 	v.mux.Lock()
 	defer v.mux.Unlock()
-
-	if v.isReadOnly {
-		slog.Error("cannot reserve vault data, vault is read-only", "name", name)
-		return nil, ErrVaultReadOnly
-	}
 
 	_, ok := v.store[name]
 	if ok {
@@ -123,10 +114,5 @@ func (v *MemVault) MarkAllReadOnly() error {
 		}
 	}
 
-	err := errors.Join(errs...)
-	if err == nil {
-		v.isReadOnly = true
-	}
-
-	return err
+	return errors.Join(errs...)
 }
