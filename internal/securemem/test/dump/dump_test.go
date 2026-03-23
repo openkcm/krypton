@@ -26,6 +26,12 @@ const (
 )
 
 func TestProtection(t *testing.T) {
+	// refer https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+	ci := os.Getenv("CI")
+	if ci == "true" {
+		t.Skip("skipping test: not running in CI environment")
+	}
+
 	t.Run("with memory protection=ON and dump protection=ON", func(t *testing.T) {
 		ctx := t.Context()
 		container := setupDocker(t, true)
