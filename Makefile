@@ -1,3 +1,5 @@
+export GOEXPERIMENT := runtimesecret
+
 .PHONY: clean
 clean:
 	rm -f cover.out cover.html krypton
