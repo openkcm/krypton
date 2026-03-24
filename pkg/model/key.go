@@ -33,6 +33,8 @@ var (
 		KeyRoleKek:  {},
 		KeyRoleDek:  {},
 	}
+
+	validKeyUsageMask = KeyUsageEncrypt | KeyUsageDecrypt
 )
 
 // KeyHierarchy represents a structured arrangement of cryptographic keys, defining their relationships
@@ -106,9 +108,7 @@ func (k KeySpec) Validate() error {
 		return ErrKeySpecAlgorithmInvalid
 	}
 
-	validMask := KeyUsageEncrypt | KeyUsageDecrypt
-
-	if k.Usage == 0 || (k.Usage & ^validMask != 0) {
+	if k.Usage == 0 || (k.Usage & ^validKeyUsageMask != 0) {
 		return ErrKeySpecUsageInvalid
 	}
 
