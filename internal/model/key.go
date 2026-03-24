@@ -5,17 +5,25 @@ import (
 )
 
 const (
+	// KeyRoleRoot represents the top-level key.
 	KeyRoleRoot KeyRole = "root"
-	KeyRoleKek  KeyRole = "kek"
-	KeyRoleDek  KeyRole = "dek"
+	// KeyRoleKek represents a key encryption key, used to encrypt other keys.
+	KeyRoleKek KeyRole = "kek"
+	// KeyRoleDek represents a data encryption key, used to encrypt data directly.
+	KeyRoleDek KeyRole = "dek"
 )
 
+// KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
 const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 
 const (
+	// KeyUsageEncrypt allows the key to be used for encryption operations.
 	KeyUsageEncrypt KeyUsage = 1 << iota
+	// KeyUsageDecrypt allows the key to be used for decryption operations.
 	KeyUsageDecrypt
+	// KeyUsageWrap allows the key to be used for wrapping (encrypting) other keys.
 	KeyUsageWrap
+	// KeyUsageUnwrap allows the key to be used for unwrapping (decrypting) other keys.
 	KeyUsageUnwrap
 )
 
@@ -32,7 +40,7 @@ var (
 	ErrKeySpecAlgorithmInvalid     = errors.New("invalid algorithm: must be 'AES256'")
 	ErrKeySpecUsageInvalid         = errors.New("invalid key usage")
 
-	validRoles = map[KeyRole]struct{}{
+	validKeyRoles = map[KeyRole]struct{}{
 		KeyRoleRoot: {},
 		KeyRoleKek:  {},
 		KeyRoleDek:  {},
@@ -101,7 +109,7 @@ func (k KeySpec) Validate() error {
 		return ErrKeySpecKindEmpty
 	}
 
-	_, ok := validRoles[k.Role]
+	_, ok := validKeyRoles[k.Role]
 	if !ok {
 		return ErrKeySpecRoleInvalid
 	}
