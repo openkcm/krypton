@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/internal/model"
 )
 
 func TestKeyHierarchyValidate(t *testing.T) {
