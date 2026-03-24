@@ -75,7 +75,7 @@ func (h KeyHierarchy) Validate() error {
 		return ErrKeyHierarchyFirstKeyNotRoot
 	}
 
-	isFound := make(map[string]struct{}, len(h.Keys))
+	seen := make(map[string]struct{}, len(h.Keys))
 	for i, k := range h.Keys {
 		if i > 0 && k.Role == KeyRoleRoot {
 			return ErrKeyHierarchyDuplicateRoot
@@ -86,10 +86,10 @@ func (h KeyHierarchy) Validate() error {
 			return err
 		}
 
-		if _, ok := isFound[k.Kind]; ok {
+		if _, ok := seen[k.Kind]; ok {
 			return ErrKeyHierarchyDuplicateKind
 		}
-		isFound[k.Kind] = struct{}{}
+		seen[k.Kind] = struct{}{}
 	}
 	return nil
 }

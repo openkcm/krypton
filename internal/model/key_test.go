@@ -260,9 +260,8 @@ func TestKeySpec(t *testing.T) {
 
 	t.Run("should return nil if valid", func(t *testing.T) {
 		tts := []struct {
-			name   string
-			input  model.KeySpec
-			expErr error
+			name  string
+			input model.KeySpec
 		}{
 			{
 				name: "if usage is only encrypt",
@@ -272,7 +271,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if usage is only decrypt",
@@ -282,7 +280,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageDecrypt,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if usage is only unwrap",
@@ -292,7 +289,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageUnwrap,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if usage is only wrap",
@@ -302,7 +298,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageWrap,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if usage is encrypt and decrypt",
@@ -312,17 +307,15 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if usage is all valid values",
 				input: model.KeySpec{
-					Kind:      "K	0",
+					Kind:      "K0",
 					Role:      model.KeyRoleRoot,
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap | model.KeyUsageUnwrap,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if role is 'kek'",
@@ -332,7 +325,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: nil,
 			},
 			{
 				name: "if role is 'dek'",
@@ -342,7 +334,6 @@ func TestKeySpec(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: nil,
 			},
 		}
 
