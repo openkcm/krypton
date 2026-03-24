@@ -22,9 +22,9 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Keys: []model.KeySpec{
 						{
 							Kind:      "K0",
-							Role:      "root",
-							Algorithm: "AES256",
-							Usage:     []string{"encrypt"},
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
 						},
 					},
 				},
@@ -36,7 +36,7 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Name: "production-hierarchy",
 					Keys: []model.KeySpec{},
 				},
-				expErr: model.ErrHierarchyKeysListEmpty,
+				expErr: model.ErrKeyHierarchyKeysListEmpty,
 			},
 			{
 				name: "if keys list is nil",
@@ -44,23 +44,22 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Name: "production-hierarchy",
 					Keys: nil,
 				},
-				expErr: model.ErrHierarchyKeysListEmpty,
+				expErr: model.ErrKeyHierarchyKeysListEmpty,
 			},
 			{
 				name: "if first key does not have role 'root'",
-
 				input: model.KeyHierarchy{
 					Name: "production-hierarchy",
 					Keys: []model.KeySpec{
 						{
 							Kind:      "K0",
-							Role:      "kek",
-							Algorithm: "AES256",
-							Usage:     []string{"encrypt"},
+							Role:      model.KeyRoleKek,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
 						},
 					},
 				},
-				expErr: model.ErrHierarchyFirstKeyNotRoot,
+				expErr: model.ErrKeyHierarchyFirstKeyNotRoot,
 			},
 			{
 				name: "if there are duplicate key kinds",
@@ -69,19 +68,19 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Keys: []model.KeySpec{
 						{
 							Kind:      "K0",
-							Role:      "root",
-							Algorithm: "AES256",
-							Usage:     []string{"encrypt"},
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
 						},
 						{
 							Kind:      "K0",
-							Role:      "kek",
-							Algorithm: "AES256",
-							Usage:     []string{"encrypt"},
+							Role:      model.KeyRoleKek,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
 						},
 					},
 				},
-				expErr: model.ErrHierarchyDuplicateKind,
+				expErr: model.ErrKeyHierarchyDuplicateKind,
 			},
 			{
 				name: "if there is an invalid key spec in the keys list",
@@ -90,13 +89,40 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Keys: []model.KeySpec{
 						{
 							Kind:      "K0",
-							Role:      "root",
+							Role:      model.KeyRoleRoot,
 							Algorithm: "",
-							Usage:     []string{"encrypt"},
+							Usage:     model.KeyUsageEncrypt,
 						},
 					},
 				},
-				expErr: model.ErrKeySpecAlgorithmEmpty,
+				expErr: model.ErrKeySpecAlgorithmInvalid,
+			},
+			{
+				name: "if there are multiple 'root' keys",
+				input: model.KeyHierarchy{
+					Name: "production-hierarchy",
+					Keys: []model.KeySpec{
+						{
+							Kind:      "K0",
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
+						},
+						{
+							Kind:      "K1",
+							Role:      model.KeyRoleKek,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageEncrypt,
+						},
+						{
+							Kind:      "K1",
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+							Usage:     model.KeyUsageDecrypt,
+						},
+					},
+				},
+				expErr: model.ErrKeyHierarchyDuplicateRoot,
 			},
 		}
 		for _, tt := range tts {
@@ -115,21 +141,21 @@ func TestKeyHierarchyValidate(t *testing.T) {
 			Keys: []model.KeySpec{
 				{
 					Kind:      "K0",
-					Role:      "root",
-					Algorithm: "AES256",
-					Usage:     []string{"encrypt"},
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
 				},
 				{
 					Kind:      "K1",
-					Role:      "kek",
-					Algorithm: "AES256",
-					Usage:     []string{"encrypt"},
+					Role:      model.KeyRoleKek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
 				},
 				{
 					Kind:      "K2",
-					Role:      "dek",
-					Algorithm: "AES256",
-					Usage:     []string{"encrypt", "decrypt"},
+					Role:      model.KeyRoleDek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt,
 				},
 			},
 		}
@@ -153,19 +179,19 @@ func TestKeySpec(t *testing.T) {
 				name: "if kind is empty",
 				input: model.KeySpec{
 					Kind:      "",
-					Role:      "root",
-					Algorithm: "AES256",
-					Usage:     []string{"encrypt"},
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: model.ErrKeySpecNameEmpty,
+				expErr: model.ErrKeySpecKindEmpty,
 			},
 			{
 				name: "if role is invalid",
 				input: model.KeySpec{
 					Kind:      "K0",
 					Role:      "invalid-role",
-					Algorithm: "AES256",
-					Usage:     []string{"encrypt"},
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
 				},
 				expErr: model.ErrKeySpecRoleInvalid,
 			},
@@ -173,36 +199,41 @@ func TestKeySpec(t *testing.T) {
 				name: "if algorithm is empty",
 				input: model.KeySpec{
 					Kind:      "K0",
-					Role:      "root",
+					Role:      model.KeyRoleRoot,
 					Algorithm: "",
-					Usage:     []string{"encrypt"},
+					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: model.ErrKeySpecAlgorithmEmpty,
+				expErr: model.ErrKeySpecAlgorithmInvalid,
 			},
 			{
-				name: "if usage list is empty",
+				name: "if algorithm is invalid",
 				input: model.KeySpec{
 					Kind:      "K0",
-					Role:      "root",
-					Algorithm: "AES256",
-					Usage:     []string{},
+					Role:      model.KeyRoleRoot,
+					Algorithm: "some-invalid-algorithm",
+					Usage:     model.KeyUsageEncrypt,
 				},
-				expErr: model.ErrKeySpecUsageListEmpty,
+				expErr: model.ErrKeySpecAlgorithmInvalid,
 			},
 			{
-				name: "if usage list contains a empty",
+				name: "if usage is zero",
 				input: model.KeySpec{
 					Kind:      "K0",
-					Role:      "root",
-					Algorithm: "AES256",
-					Usage: []string{
-						"decrypt",
-						"",
-						"wrap",
-						"unwrap",
-					},
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     0,
 				},
-				expErr: model.ErrKeySpecUsageListEmpty,
+				expErr: model.ErrKeySpecUsageInvalid,
+			},
+			{
+				name: "if usage contains an invalid value",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageDecrypt | model.KeyUsageEncrypt | 8, // 8 is an invalid usage
+				},
+				expErr: model.ErrKeySpecUsageInvalid,
 			},
 		}
 
@@ -210,7 +241,7 @@ func TestKeySpec(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				err := tt.input.Validate()
 				assert.Error(t, err)
-				assert.EqualError(t, err, tt.expErr.Error())
+				assert.ErrorIs(t, err, tt.expErr)
 			})
 		}
 	})
@@ -219,9 +250,9 @@ func TestKeySpec(t *testing.T) {
 		// given
 		keySpec := model.KeySpec{
 			Kind:      "K0",
-			Role:      "root",
-			Algorithm: "AES256",
-			Usage:     []string{"encrypt"},
+			Role:      model.KeyRoleRoot,
+			Algorithm: model.KeyAlgorithmAES256,
+			Usage:     model.KeyUsageEncrypt,
 		}
 
 		// when
