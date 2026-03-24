@@ -15,7 +15,11 @@ const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 const (
 	KeyUsageEncrypt KeyUsage = 1 << iota
 	KeyUsageDecrypt
+	KeyUsageWrap
+	KeyUsageUnwrap
 )
+
+const validKeyUsageMask = KeyUsageEncrypt | KeyUsageDecrypt | KeyUsageWrap | KeyUsageUnwrap
 
 var (
 	ErrKeyHierarchyNameEmpty       = errors.New("hierarchy name cannot be empty")
@@ -33,8 +37,6 @@ var (
 		KeyRoleKek:  {},
 		KeyRoleDek:  {},
 	}
-
-	validKeyUsageMask = KeyUsageEncrypt | KeyUsageDecrypt
 )
 
 // KeyHierarchy represents a structured arrangement of cryptographic keys, defining their relationships

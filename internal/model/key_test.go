@@ -115,7 +115,7 @@ func TestKeyHierarchyValidate(t *testing.T) {
 							Usage:     model.KeyUsageEncrypt,
 						},
 						{
-							Kind:      "K1",
+							Kind:      "K2",
 							Role:      model.KeyRoleRoot,
 							Algorithm: model.KeyAlgorithmAES256,
 							Usage:     model.KeyUsageDecrypt,
@@ -231,7 +231,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      model.KeyRoleRoot,
 					Algorithm: model.KeyAlgorithmAES256,
-					Usage:     model.KeyUsageDecrypt | model.KeyUsageEncrypt | 8, // 8 is an invalid usage
+					Usage:     model.KeyUsageDecrypt | model.KeyUsageEncrypt | 16, // 16 is an invalid usage
 				},
 				expErr: model.ErrKeySpecUsageInvalid,
 			},
