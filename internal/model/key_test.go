@@ -157,6 +157,18 @@ func TestKeyHierarchyValidate(t *testing.T) {
 					Algorithm: model.KeyAlgorithmAES256,
 					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt,
 				},
+				{
+					Kind:      "K3",
+					Role:      model.KeyRoleDek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageUnwrap,
+				},
+				{
+					Kind:      "K4",
+					Role:      model.KeyRoleDek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageWrap,
+				},
 			},
 		}
 
@@ -247,18 +259,98 @@ func TestKeySpec(t *testing.T) {
 	})
 
 	t.Run("should return nil if valid", func(t *testing.T) {
-		// given
-		keySpec := model.KeySpec{
-			Kind:      "K0",
-			Role:      model.KeyRoleRoot,
-			Algorithm: model.KeyAlgorithmAES256,
-			Usage:     model.KeyUsageEncrypt,
+		tts := []struct {
+			name   string
+			input  model.KeySpec
+			expErr error
+		}{
+			{
+				name: "if usage is only encrypt",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if usage is only decrypt",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageDecrypt,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if usage is only unwrap",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageUnwrap,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if usage is only wrap",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageWrap,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if usage is encrypt and decrypt",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if usage is all valid values",
+				input: model.KeySpec{
+					Kind:      "K	0",
+					Role:      model.KeyRoleRoot,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap | model.KeyUsageUnwrap,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if role is 'kek'",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleKek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
+				},
+				expErr: nil,
+			},
+			{
+				name: "if role is 'dek'",
+				input: model.KeySpec{
+					Kind:      "K0",
+					Role:      model.KeyRoleDek,
+					Algorithm: model.KeyAlgorithmAES256,
+					Usage:     model.KeyUsageEncrypt,
+				},
+				expErr: nil,
+			},
 		}
 
-		// when
-		err := keySpec.Validate()
-
-		// then
-		assert.NoError(t, err)
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				err := tt.input.Validate()
+				assert.NoError(t, err)
+			})
+		}
 	})
 }
