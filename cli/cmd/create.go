@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
+	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
@@ -30,7 +30,7 @@ func createTenantCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := admin.NewClient(serverURL)
 
-			tenant, err := c.CreateTenant(cmd.Context(), admin.CreateTenantRequest{
+			resp, err := c.CreateTenant(cmd.Context(), admin.CreateTenantRequest{
 				Name:   name,
 				Labels: labels,
 			})
@@ -38,9 +38,7 @@ func createTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to create tenant: %w", err)
 			}
 
-			enc := json.NewEncoder(cmd.OutOrStdout())
-			enc.SetIndent("", "  ")
-			return enc.Encode(tenant)
+			return output.PrintTable(cmd.OutOrStdout(), resp)
 		},
 	}
 

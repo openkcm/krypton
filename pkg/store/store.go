@@ -12,4 +12,5 @@ var ErrTenantNotFound = errors.New("tenant not found")
 type Store interface {
 	CreateTenant(ctx context.Context, tenant model.Tenant) (model.Tenant, error)
 	GetTenant(ctx context.Context, id string) (model.Tenant, error)
+	ListTenants(ctx context.Context) ([]model.Tenant, error)
 }

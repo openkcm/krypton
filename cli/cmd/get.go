@@ -1,22 +1,23 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
+	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
 func getCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
-		Short: "Get a resource",
+		Short: "Get a resource or a list of resources",
 	}
 
 	cmd.AddCommand(getTenantCmd())
+	cmd.AddCommand(getTenantsCmd())
 
 	return cmd
 }
@@ -29,7 +30,7 @@ func getTenantCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := admin.NewClient(serverURL)
 
-			tenant, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
+			resp, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
 				ID: args[0],
 			})
 			if err != nil {
@@ -39,9 +40,26 @@ func getTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to get tenant: %w", err)
 			}
 
-			enc := json.NewEncoder(cmd.OutOrStdout())
-			enc.SetIndent("", "  ")
-			return enc.Encode(tenant)
+			return output.PrintTable(cmd.OutOrStdout(), resp)
+		},
+	}
+
+	return cmd
+}
+
+func getTenantsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tenants",
+		Short: "Get all tenants",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := admin.NewClient(serverURL)
+
+			resp, err := c.ListTenants(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to list tenants: %w", err)
+			}
+
+			return output.PrintTable(cmd.OutOrStdout(), resp)
 		},
 	}
 

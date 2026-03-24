@@ -21,6 +21,7 @@ func NewServerMux(s store.Store) http.Handler {
 	a := &admin{store: s}
 	mux.HandleFunc("POST "+PathTenants, a.createTenant)
 	mux.HandleFunc("GET "+PathTenantByID, a.getTenant)
+	mux.HandleFunc("GET "+PathTenants, a.listTenants)
 	return mux
 }
 
@@ -52,6 +53,13 @@ type (
 		Labels    model.Labels `json:"labels,omitempty"`
 		UpdatedAt int64        `json:"updated_at"`
 		CreatedAt int64        `json:"created_at"`
+	}
+
+	ListTenantsRequest struct {
+	}
+
+	ListTenantsResponse struct {
+		Tenants []GetTenantResponse `json:"tenants"`
 	}
 )
 
@@ -97,6 +105,20 @@ func (a *admin) getTenant(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *admin) listTenants(w http.ResponseWriter, r *http.Request) {
+	tenants, err := a.store.ListTenants(r.Context())
+	if err != nil {
+		http.Error(w, "failed to list tenants", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(toListTenantsResponse(tenants))
+	if err != nil {
+		log.Printf("failed to encode response: %v", err)
+	}
+}
+
 func toCreateTenantResponse(t model.Tenant) CreateTenantResponse {
 	return CreateTenantResponse{
 		ID:        t.ID,
@@ -115,4 +137,14 @@ func toGetTenantResponse(t model.Tenant) GetTenantResponse {
 		CreatedAt: t.CreatedAt,
 		UpdatedAt: t.UpdatedAt,
 	}
+}
+
+func toListTenantsResponse(tenants []model.Tenant) ListTenantsResponse {
+	resp := ListTenantsResponse{
+		Tenants: make([]GetTenantResponse, len(tenants)),
+	}
+	for i, t := range tenants {
+		resp.Tenants[i] = toGetTenantResponse(t)
+	}
+	return resp
 }

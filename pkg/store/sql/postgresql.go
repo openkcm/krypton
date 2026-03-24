@@ -90,3 +90,40 @@ func (ps *PostgreSQL) GetTenant(ctx context.Context, tenantID string) (model.Ten
 
 	return tenant, nil
 }
+
+func (ps *PostgreSQL) ListTenants(ctx context.Context) ([]model.Tenant, error) {
+	stmt := `
+		SELECT id, name, labels, created_at, updated_at
+		FROM tenants
+	`
+
+	rows, err := ps.db.QueryContext(ctx, stmt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	var tenants []model.Tenant
+	for rows.Next() {
+		var tenant model.Tenant
+		var labelsData []byte
+		err := rows.Scan(&tenant.ID, &tenant.Name, &labelsData, &tenant.CreatedAt, &tenant.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(labelsData) > 0 {
+			if err := json.Unmarshal(labelsData, &tenant.Labels); err != nil {
+				return nil, err
+			}
+		}
+
+		tenants = append(tenants, tenant)
+	}
+
+	return tenants, nil
+}
