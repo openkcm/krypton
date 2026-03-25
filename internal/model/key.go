@@ -12,6 +12,8 @@ const (
 	KeyRoleKek KeyRole = "kek"
 	// KeyRoleDek represents a data encryption key, used to encrypt data directly.
 	KeyRoleDek KeyRole = "dek"
+	// KeyRoleTek represents a traffic encryption key.
+	KeyRoleTek KeyRole = "tek"
 )
 
 // KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
@@ -43,17 +45,18 @@ var (
 	ErrKeyHierarchyLastKeyNotDek = errors.New("last key must have role 'dek'")
 	// ErrKeySpecKindEmpty is returned when a KeySpec has an empty kind.
 	ErrKeySpecKindEmpty = errors.New("key kind cannot be empty")
-	// ErrKeySpecRoleInvalid is returned when a KeySpec has a role other than 'root', 'kek', or 'dek'.
-	ErrKeySpecRoleInvalid = errors.New("invalid role: must be 'root', 'kek', or 'dek'")
+	// ErrKeySpecRoleInvalid is returned when a KeySpec has a role other than 'root', 'kek', 'tek', or 'dek'.
+	ErrKeySpecRoleInvalid = errors.New("invalid role: must be 'root', 'kek', 'tek', or 'dek'")
 	// ErrKeySpecAlgorithmInvalid is returned when a KeySpec has an algorithm other than 'AES256'.
 	ErrKeySpecAlgorithmInvalid = errors.New("invalid algorithm: must be 'AES256'")
-	// ErrKeyHierarchyIntermediateKeyNotKek is returned when an intermediate key in a KeyHierarchy does not have role 'kek'.
-	ErrKeyHierarchyIntermediateKeyNotKek = errors.New("intermediate keys must have role 'kek'")
+	// ErrKeyHierarchyInvalidIntermediateKey is returned when an intermediate key in a KeyHierarchy does not have role 'kek' or 'tek'.
+	ErrKeyHierarchyInvalidIntermediateKey = errors.New("intermediate keys must have role 'kek' or 'tek'")
 
 	validKeyRoles = map[KeyRole]struct{}{
 		KeyRoleRoot: {},
 		KeyRoleKek:  {},
 		KeyRoleDek:  {},
+		KeyRoleTek:  {},
 	}
 )
 
@@ -85,8 +88,9 @@ type (
 
 // Validate checks the KeyHierarchy for structural correctness. It returns an error if the name is
 // empty, the keys list is empty or nil, the first key does not have role 'root', the last key in a
-// multi-key hierarchy does not have role 'dek', intermediate keys must have role 'kek', there are
-// multiple keys with role 'root', there are duplicate key kinds, or any KeySpec fails its own validation.
+// multi-key hierarchy does not have role 'dek', intermediate keys must have role 'kek' or 'tek',
+// there are multiple keys with role 'root', there are duplicate key kinds, or any KeySpec fails its
+// own validation.
 func (h *KeyHierarchy) Validate() error {
 	if h.Name == "" {
 		return ErrKeyHierarchyNameEmpty
@@ -117,7 +121,7 @@ func (h *KeyHierarchy) Validate() error {
 			case KeyRoleRoot:
 				return ErrKeyHierarchyDuplicateRoot
 			case KeyRoleDek:
-				return ErrKeyHierarchyIntermediateKeyNotKek
+				return ErrKeyHierarchyInvalidIntermediateKey
 			}
 		}
 
@@ -158,7 +162,7 @@ func (h *KeyHierarchy) Usage(kind KeyKind) (KeyUsage, bool) {
 				} else {
 					usage = KeyUsageWrap | KeyUsageUnwrap
 				}
-			case KeyRoleKek:
+			case KeyRoleKek, KeyRoleTek:
 				usage = KeyUsageWrap | KeyUsageUnwrap
 			case KeyRoleDek:
 				usage = KeyUsageEncrypt | KeyUsageDecrypt
@@ -180,7 +184,7 @@ func (ku KeyUsage) Has(usage KeyUsage) bool {
 }
 
 // Validate checks the KeySpec for correctness. It returns an error if the kind is empty,
-// the role is not one of 'root', 'kek', or 'dek', or the algorithm is not 'AES256'.
+// the role is not one of 'root', 'kek', 'tek', or 'dek', or the algorithm is not 'AES256'.
 func (k KeySpec) Validate() error {
 	if k.Kind == "" {
 		return ErrKeySpecKindEmpty
