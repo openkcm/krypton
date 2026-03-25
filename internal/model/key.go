@@ -47,6 +47,8 @@ var (
 	ErrKeySpecRoleInvalid = errors.New("invalid role: must be 'root', 'kek', or 'dek'")
 	// ErrKeySpecAlgorithmInvalid is returned when a KeySpec has an algorithm other than 'AES256'.
 	ErrKeySpecAlgorithmInvalid = errors.New("invalid algorithm: must be 'AES256'")
+	// ErrKeyHierarchyIntermediateKeyNotKek is returned when an intermediate key in a KeyHierarchy does not have role 'kek'.
+	ErrKeyHierarchyIntermediateKeyNotKek = errors.New("intermediate keys must have role 'kek'")
 
 	validKeyRoles = map[KeyRole]struct{}{
 		KeyRoleRoot: {},
@@ -57,20 +59,22 @@ var (
 
 // KeyHierarchy defines an ordered arrangement of cryptographic keys and their roles.
 type KeyHierarchy struct {
-	Name        string
-	Keys        []KeySpec
-	keyUsageSet map[string]KeyUsage
-	mu          sync.RWMutex
+	Name         string
+	Keys         []KeySpec
+	keyKindUsage map[KeyKind]KeyUsage
+	mu           sync.RWMutex
 }
 
 // KeySpec defines the properties of a key within a hierarchy, including its kind, role, and algorithm.
 type KeySpec struct {
-	Kind      string
+	Kind      KeyKind
 	Role      KeyRole
 	Algorithm KeyAlgorithm
 }
 
 type (
+	// KeyKind identifies the type or purpose of a key within a hierarchy.
+	KeyKind string
 	// KeyRole identifies the role of a key within a hierarchy.
 	KeyRole string
 	// KeyAlgorithm identifies the encryption algorithm used by a key.
@@ -81,8 +85,8 @@ type (
 
 // Validate checks the KeyHierarchy for structural correctness. It returns an error if the name is
 // empty, the keys list is empty or nil, the first key does not have role 'root', the last key in a
-// multi-key hierarchy does not have role 'dek', there are multiple keys with role 'root', there are
-// duplicate key kinds, or any KeySpec fails its own validation.
+// multi-key hierarchy does not have role 'dek', intermediate keys must have role 'kek', there are
+// multiple keys with role 'root', there are duplicate key kinds, or any KeySpec fails its own validation.
 func (h *KeyHierarchy) Validate() error {
 	if h.Name == "" {
 		return ErrKeyHierarchyNameEmpty
@@ -93,39 +97,46 @@ func (h *KeyHierarchy) Validate() error {
 		return ErrKeyHierarchyKeysListEmpty
 	}
 
-	first, last := h.Keys[0], h.Keys[keyLen-1]
-
-	if first.Role != KeyRoleRoot {
-		return ErrKeyHierarchyFirstKeyNotRoot
-	}
-	if keyLen > 1 && last.Role != KeyRoleDek {
-		return ErrKeyHierarchyLastKeyNotDek
-	}
-
-	seenKind := make(map[string]struct{}, keyLen)
+	seenKind := make(map[KeyKind]struct{}, keyLen)
 	for i, k := range h.Keys {
-		if i > 0 && k.Role == KeyRoleRoot {
-			return ErrKeyHierarchyDuplicateRoot
-		}
-
 		if err := k.Validate(); err != nil {
 			return err
+		}
+
+		switch i {
+		case 0:
+			if k.Role != KeyRoleRoot {
+				return ErrKeyHierarchyFirstKeyNotRoot
+			}
+		case (keyLen - 1):
+			if k.Role != KeyRoleDek {
+				return ErrKeyHierarchyLastKeyNotDek
+			}
+		default:
+			switch k.Role {
+			case KeyRoleRoot:
+				return ErrKeyHierarchyDuplicateRoot
+			case KeyRoleDek:
+				return ErrKeyHierarchyIntermediateKeyNotKek
+			}
 		}
 
 		if _, ok := seenKind[k.Kind]; ok {
 			return ErrKeyHierarchyDuplicateKind
 		}
+
 		seenKind[k.Kind] = struct{}{}
 	}
+
 	return nil
 }
 
 // Usage returns the KeyUsage for the key with the given kind.
 // Returns false if no key with the given kind exists in the hierarchy.
-func (h *KeyHierarchy) Usage(kind string) (KeyUsage, bool) {
+func (h *KeyHierarchy) Usage(kind KeyKind) (KeyUsage, bool) {
 	h.mu.RLock()
-	if h.keyUsageSet != nil {
-		usage, ok := h.keyUsageSet[kind]
+	if h.keyKindUsage != nil {
+		usage, ok := h.keyKindUsage[kind]
 		h.mu.RUnlock()
 		return usage, ok
 	}
@@ -134,9 +145,9 @@ func (h *KeyHierarchy) Usage(kind string) (KeyUsage, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.keyUsageSet == nil {
+	if h.keyKindUsage == nil {
 		keyLen := len(h.Keys)
-		h.keyUsageSet = make(map[string]KeyUsage, keyLen)
+		h.keyKindUsage = make(map[KeyKind]KeyUsage, keyLen)
 
 		for _, k := range h.Keys {
 			var usage KeyUsage
@@ -152,11 +163,11 @@ func (h *KeyHierarchy) Usage(kind string) (KeyUsage, bool) {
 			case KeyRoleDek:
 				usage = KeyUsageEncrypt | KeyUsageDecrypt
 			}
-			h.keyUsageSet[k.Kind] = usage
+			h.keyKindUsage[k.Kind] = usage
 		}
 	}
 
-	usage, ok := h.keyUsageSet[kind]
+	usage, ok := h.keyKindUsage[kind]
 	return usage, ok
 }
 

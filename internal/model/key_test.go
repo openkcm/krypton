@@ -104,7 +104,7 @@ func TestKeyHierarchy(t *testing.T) {
 						},
 						{
 							Kind:      "K1",
-							Role:      model.KeyRoleDek,
+							Role:      model.KeyRoleKek,
 							Algorithm: model.KeyAlgorithmAES256,
 						},
 						{
@@ -146,7 +146,7 @@ func TestKeyHierarchy(t *testing.T) {
 				expErr: model.ErrKeyHierarchyLastKeyNotDek,
 			},
 			{
-				name: "should return nil if the hierarchy has root, kek, and multiple dek keys",
+				name: "should return error if a dek key appears in an intermediate position",
 				input: &model.KeyHierarchy{
 					Name: "production-hierarchy",
 					Keys: []model.KeySpec{
@@ -177,6 +177,79 @@ func TestKeyHierarchy(t *testing.T) {
 						},
 					},
 				},
+				expErr: model.ErrKeyHierarchyIntermediateKeyNotKek,
+			},
+			{
+				name: "should return error if there is a non-kek key in the middle of the hierarchy",
+				input: &model.KeyHierarchy{
+					Name: "production-hierarchy",
+					Keys: []model.KeySpec{
+						{
+							Kind:      "K0",
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K1",
+							Role:      model.KeyRoleDek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K2",
+							Role:      model.KeyRoleKek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K3",
+							Role:      model.KeyRoleDek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+					},
+				},
+				expErr: model.ErrKeyHierarchyIntermediateKeyNotKek,
+			},
+			{
+				name: "should return nil if the hierarchy has root and dek keys",
+				input: &model.KeyHierarchy{
+					Name: "production-hierarchy",
+					Keys: []model.KeySpec{
+						{
+							Kind:      "K0",
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K1",
+							Role:      model.KeyRoleDek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+					},
+				},
+				expErr: nil,
+			},
+			{
+				name: "should return nil if the hierarchy has root, kek, and dek keys",
+				input: &model.KeyHierarchy{
+					Name: "production-hierarchy",
+					Keys: []model.KeySpec{
+						{
+							Kind:      "K0",
+							Role:      model.KeyRoleRoot,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K1",
+							Role:      model.KeyRoleKek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+						{
+							Kind:      "K2",
+							Role:      model.KeyRoleDek,
+							Algorithm: model.KeyAlgorithmAES256,
+						},
+					},
+				},
+				expErr: nil,
 			},
 			{
 				name: "should return nil if the hierarchy has only a root key",
@@ -302,7 +375,7 @@ func TestKeyUsage(t *testing.T) {
 		tts := []struct {
 			name         string
 			input        *model.KeyHierarchy
-			keyToCheck   string
+			keyToCheck   model.KeyKind
 			expIsFound   bool
 			expIsEncrypt bool
 			expIsDecrypt bool
@@ -486,7 +559,7 @@ func TestKeyUsage(t *testing.T) {
 		err := hierarchy.Validate()
 		assert.NoError(t, err)
 
-		keyToCheck := "K1"
+		keyToCheck := model.KeyKind("K1")
 
 		// when
 		subj, ok := hierarchy.Usage(keyToCheck)
