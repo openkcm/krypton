@@ -103,11 +103,7 @@ func (ps *PostgreSQL) ListTenants(ctx context.Context) ([]model.Tenant, error) {
 	}
 	defer rows.Close()
 
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-
-	var tenants []model.Tenant
+	tenants := []model.Tenant{}
 	for rows.Next() {
 		var tenant model.Tenant
 		var labelsData []byte
@@ -123,6 +119,10 @@ func (ps *PostgreSQL) ListTenants(ctx context.Context) ([]model.Tenant, error) {
 		}
 
 		tenants = append(tenants, tenant)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return tenants, nil

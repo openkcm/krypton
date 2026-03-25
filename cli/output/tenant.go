@@ -1,27 +1,14 @@
 package output
 
 import (
-	"errors"
-
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
 const labelMaxLen = 25
 
-var ErrUnsupportedResponse = errors.New("unsupported response type")
-
-// Tenant represents a displayable tenant for table output.
-type Tenant struct {
-	ID        string
-	Name      string
-	Labels    map[string]string
-	CreatedAt int64
-	UpdatedAt int64
-}
-
 // TenantTable implements the Table interface for displaying tenant data.
 type TenantTable struct {
-	Tenants []Tenant
+	TenantRows [][]string
 }
 
 // Header returns the column headers for tenant table output.
@@ -31,49 +18,37 @@ func (tt TenantTable) Header() []string {
 
 // Rows returns the rows of tenant data for table output.
 func (tt TenantTable) Rows() [][]string {
-	rows := make([][]string, len(tt.Tenants))
-	for i, t := range tt.Tenants {
-		rows[i] = []string{
-			t.ID,
-			t.Name,
-			formatLabels(t.Labels, labelMaxLen),
-			formatRelativeTime(t.CreatedAt),
-			formatRelativeTime(t.UpdatedAt),
-		}
-	}
-	return rows
+	return tt.TenantRows
 }
 
-func fromCreateTenantResponse(r admin.CreateTenantResponse) Tenant {
-	return Tenant{
-		ID:        r.ID,
-		Name:      r.Name,
-		Labels:    r.Labels,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+func fromCreateTenantResponse(r admin.CreateTenantResponse) TenantTable {
+	return TenantTable{
+		TenantRows: [][]string{tenantToRow(r.Tenant)},
 	}
 }
 
-func fromGetTenantResponse(r admin.GetTenantResponse) Tenant {
-	return Tenant{
-		ID:        r.ID,
-		Name:      r.Name,
-		Labels:    r.Labels,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+func fromGetTenantResponse(r admin.GetTenantResponse) TenantTable {
+	return TenantTable{
+		TenantRows: [][]string{tenantToRow(r.Tenant)},
 	}
 }
 
-func fromListTenantsResponse(r admin.ListTenantsResponse) []Tenant {
-	tenants := make([]Tenant, len(r.Tenants))
+func fromListTenantsResponse(r admin.ListTenantsResponse) TenantTable {
+	rows := make([][]string, len(r.Tenants))
 	for i, t := range r.Tenants {
-		tenants[i] = Tenant{
-			ID:        t.ID,
-			Name:      t.Name,
-			Labels:    t.Labels,
-			CreatedAt: t.CreatedAt,
-			UpdatedAt: t.UpdatedAt,
-		}
+		rows[i] = tenantToRow(t)
 	}
-	return tenants
+	return TenantTable{
+		TenantRows: rows,
+	}
+}
+
+func tenantToRow(t admin.Tenant) []string {
+	return []string{
+		t.ID,
+		t.Name,
+		formatLabels(t.Labels, labelMaxLen),
+		formatRelativeTime(t.CreatedAt),
+		formatRelativeTime(t.UpdatedAt),
+	}
 }

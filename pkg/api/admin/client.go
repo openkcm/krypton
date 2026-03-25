@@ -94,7 +94,7 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 	return resp, nil
 }
 
-func (c *Client) ListTenants(ctx context.Context) (ListTenantsResponse, error) {
+func (c *Client) ListTenants(ctx context.Context, _ ListTenantsRequest) (ListTenantsResponse, error) {
 	url := c.baseURL + PathTenants
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

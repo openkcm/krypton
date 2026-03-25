@@ -54,7 +54,7 @@ func getTenantsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := admin.NewClient(serverURL)
 
-			resp, err := c.ListTenants(cmd.Context())
+			resp, err := c.ListTenants(cmd.Context(), admin.ListTenantsRequest{})
 			if err != nil {
 				return fmt.Errorf("failed to list tenants: %w", err)
 			}

@@ -1,12 +1,15 @@
 package output
 
 import (
+	"errors"
 	"io"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
+
+var ErrUnsupportedResponse = errors.New("unsupported response type")
 
 // Table represents a type that can be displayed in table format.
 type Table interface {
@@ -22,17 +25,11 @@ func PrintTable(w io.Writer, v any) error {
 
 	switch val := v.(type) {
 	case admin.CreateTenantResponse:
-		table = TenantTable{
-			Tenants: []Tenant{fromCreateTenantResponse(val)},
-		}
+		table = fromCreateTenantResponse(val)
 	case admin.GetTenantResponse:
-		table = TenantTable{
-			Tenants: []Tenant{fromGetTenantResponse(val)},
-		}
+		table = fromGetTenantResponse(val)
 	case admin.ListTenantsResponse:
-		table = TenantTable{
-			Tenants: fromListTenantsResponse(val),
-		}
+		table = fromListTenantsResponse(val)
 	default:
 		return ErrUnsupportedResponse
 	}
@@ -71,13 +68,13 @@ func write(w io.Writer, s string) error {
 	return err
 }
 
-// Row represents a parsed table row with column values accessible by header name.
-type Row map[string]string
+// NamedRow represents a parsed table row with column values accessible by header name.
+type NamedRow map[string]string
 
 // ParsedTable holds parsed table output with header-keyed row access.
 type ParsedTable struct {
 	Header []string
-	Rows   []Row
+	Rows   []NamedRow
 }
 
 // ParseTable parses table output bytes into a ParsedTable structure.
@@ -104,7 +101,7 @@ func ParseTable(output []byte) ParsedTable {
 		pos[i] = strings.Index(headerLine, h)
 	}
 
-	rows := make([]Row, 0, len(lines)-1)
+	rows := make([]NamedRow, 0, len(lines)-1)
 	for _, line := range lines[1:] {
 		if line == "" {
 			continue
@@ -119,8 +116,8 @@ func ParseTable(output []byte) ParsedTable {
 }
 
 // parseRow extracts column values based on header positions and returns a Row keyed by header name.
-func parseRow(line string, headers []string, pos []int) Row {
-	row := make(Row, len(pos))
+func parseRow(line string, headers []string, pos []int) NamedRow {
+	row := make(NamedRow, len(pos))
 	for i, start := range pos {
 		end := len(line)
 		if i+1 < len(pos) {

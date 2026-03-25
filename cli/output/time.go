@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// formatRelativeTime converts a Unix timestamp (seconds) to a human-readable
+// formatRelativeTime converts a Unix timestamp (nanoseconds) to a human-readable
 // relative time string like "2h ago", "3d ago", etc.
 func formatRelativeTime(unixTimestamp int64) string {
 	t := time.Unix(0, unixTimestamp)

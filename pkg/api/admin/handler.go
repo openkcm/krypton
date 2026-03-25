@@ -30,17 +30,21 @@ type admin struct {
 }
 
 type (
+	Tenant struct {
+		ID        string       `json:"id"`
+		Name      string       `json:"name"`
+		Labels    model.Labels `json:"labels,omitempty"`
+		UpdatedAt int64        `json:"updated_at"`
+		CreatedAt int64        `json:"created_at"`
+	}
+
 	CreateTenantRequest struct {
 		Name   string       `json:"name"`
 		Labels model.Labels `json:"labels,omitempty"`
 	}
 
 	CreateTenantResponse struct {
-		ID        string       `json:"id"`
-		Name      string       `json:"name"`
-		Labels    model.Labels `json:"labels,omitempty"`
-		UpdatedAt int64        `json:"updated_at"`
-		CreatedAt int64        `json:"created_at"`
+		Tenant Tenant `json:"tenant"`
 	}
 
 	GetTenantRequest struct {
@@ -48,18 +52,14 @@ type (
 	}
 
 	GetTenantResponse struct {
-		ID        string       `json:"id"`
-		Name      string       `json:"name"`
-		Labels    model.Labels `json:"labels,omitempty"`
-		UpdatedAt int64        `json:"updated_at"`
-		CreatedAt int64        `json:"created_at"`
+		Tenant Tenant `json:"tenant"`
 	}
 
 	ListTenantsRequest struct {
 	}
 
 	ListTenantsResponse struct {
-		Tenants []GetTenantResponse `json:"tenants"`
+		Tenants []Tenant `json:"tenants"`
 	}
 )
 
@@ -121,30 +121,40 @@ func (a *admin) listTenants(w http.ResponseWriter, r *http.Request) {
 
 func toCreateTenantResponse(t model.Tenant) CreateTenantResponse {
 	return CreateTenantResponse{
-		ID:        t.ID,
-		Name:      t.Name,
-		Labels:    t.Labels,
-		CreatedAt: t.CreatedAt,
-		UpdatedAt: t.UpdatedAt,
+		Tenant: Tenant{
+			ID:        t.ID,
+			Name:      t.Name,
+			Labels:    t.Labels,
+			CreatedAt: t.CreatedAt,
+			UpdatedAt: t.UpdatedAt,
+		},
 	}
 }
 
 func toGetTenantResponse(t model.Tenant) GetTenantResponse {
 	return GetTenantResponse{
-		ID:        t.ID,
-		Name:      t.Name,
-		Labels:    t.Labels,
-		CreatedAt: t.CreatedAt,
-		UpdatedAt: t.UpdatedAt,
+		Tenant: Tenant{
+			ID:        t.ID,
+			Name:      t.Name,
+			Labels:    t.Labels,
+			CreatedAt: t.CreatedAt,
+			UpdatedAt: t.UpdatedAt,
+		},
 	}
 }
 
 func toListTenantsResponse(tenants []model.Tenant) ListTenantsResponse {
 	resp := ListTenantsResponse{
-		Tenants: make([]GetTenantResponse, len(tenants)),
+		Tenants: make([]Tenant, len(tenants)),
 	}
 	for i, t := range tenants {
-		resp.Tenants[i] = toGetTenantResponse(t)
+		resp.Tenants[i] = Tenant{
+			ID:        t.ID,
+			Name:      t.Name,
+			Labels:    t.Labels,
+			CreatedAt: t.CreatedAt,
+			UpdatedAt: t.UpdatedAt,
+		}
 	}
 	return resp
 }

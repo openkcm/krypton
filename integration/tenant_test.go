@@ -127,3 +127,45 @@ func TestGetTenant(t *testing.T) {
 		assert.Contains(t, string(out), "accepts 1 arg")
 	})
 }
+
+func TestGetTenants(t *testing.T) {
+	handler := admin.NewServerMux(tenantTestStore)
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	t.Run("get all tenants", func(t *testing.T) {
+		// given - create two tenants
+		tenant1 := "tenant-" + uuid.NewString()
+		tenant2 := "tenant-" + uuid.NewString()
+
+		cmd1 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant1, "--server", server.URL)
+		_, err := cmd1.CombinedOutput()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		cmd2 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant2, "--label", "env=test", "--server", server.URL)
+		_, err = cmd2.CombinedOutput()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		// when `kr get tenants --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--server", server.URL)
+		out, err := cmd.CombinedOutput()
+
+		// then
+		assert.NoError(t, err, "command should succeed, output: %s", string(out))
+		table := output.ParseTable(out)
+		assert.Equal(t, output.TenantTable{}.Header(), table.Header)
+		assert.GreaterOrEqual(t, len(table.Rows), 2, "should have at least 2 tenants")
+
+		// verify our created tenants are in the list
+		names := make([]string, len(table.Rows))
+		for i, row := range table.Rows {
+			names[i] = row["NAME"]
+		}
+		assert.Contains(t, names, tenant1)
+		assert.Contains(t, names, tenant2)
+	})
+}
