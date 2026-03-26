@@ -1,9 +1,15 @@
 package securemem
 
 import (
+	"encoding"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"sync"
 )
+
+const Redacted = "<<REDACTED>>"
 
 // Data is a named, secure memory region backed by mmap'd anonymous memory
 // that is locked to physical RAM to prevent swapping. It supports toggling the
@@ -16,6 +22,20 @@ type Data struct {
 	isReadOnly bool
 	mux        sync.RWMutex
 }
+
+var (
+	// This is to ensure that data secret is not accidentally logged or printed in any way.
+	// Ensure covers %s, %v, %+v
+	_ fmt.Stringer = (*Data)(nil)
+	// covers %#v
+	_ fmt.GoStringer = (*Data)(nil)
+	// covers slog
+	_ slog.LogValuer = (*Data)(nil)
+	// covers structured loggers
+	_ encoding.TextMarshaler = (*Data)(nil)
+	// covers JSON serialization
+	_ json.Marshaler = (*Data)(nil)
+)
 
 // ErrInvalidSize is returned by NewData when the requested allocation
 // size is zero or negative.
@@ -116,4 +136,29 @@ func (m *Data) IsReadOnly() bool {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 	return m.isReadOnly
+}
+
+// String implements [fmt.Stringer].
+func (m *Data) String() string {
+	return fmt.Sprintf(`{"Name":"%s", "Value":"%s"}`, m.name, Redacted)
+}
+
+// GoString implements [fmt.GoStringer].
+func (m *Data) GoString() string {
+	return m.String()
+}
+
+// LogValue implements [slog.LogValuer].
+func (m *Data) LogValue() slog.Value {
+	return slog.StringValue(m.String())
+}
+
+// MarshalJSON implements [json.Marshaler].
+func (m *Data) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+// MarshalText implements [encoding.TextMarshaler].
+func (m *Data) MarshalText() (text []byte, err error) {
+	return []byte(m.String()), nil
 }
