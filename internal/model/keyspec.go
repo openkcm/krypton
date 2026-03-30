@@ -27,6 +27,11 @@ const (
 // KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
 const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 
+// validKeyAlgorithms defines the set of supported KeyAlgorithm values.
+var validKeyAlgorithms = map[KeyAlgorithm]struct{}{
+	KeyAlgorithmAES256: {},
+}
+
 var (
 	// ErrKeySpecKindEmpty is returned when a KeySpec has an empty kind.
 	ErrKeySpecKindEmpty = errors.New("key kind cannot be empty")
@@ -78,9 +83,15 @@ func (k KeySpec) Validate() error {
 		return ErrKeySpecRoleInvalid
 	}
 
-	if k.Algorithm != KeyAlgorithmAES256 {
+	if !IsSupportedAlgorithm(k.Algorithm) {
 		return ErrKeySpecAlgorithmInvalid
 	}
 
 	return nil
+}
+
+// IsSupportedAlgorithm checks if the provided KeyAlgorithm is supported by the system.
+func IsSupportedAlgorithm(alg KeyAlgorithm) bool {
+	_, ok := validKeyAlgorithms[alg]
+	return ok
 }

@@ -165,4 +165,38 @@ func TestKeySpec(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("IsSupportedAlgorithm", func(t *testing.T) {
+		tts := []struct {
+			name  string
+			input model.KeyAlgorithm
+			expOk bool
+		}{
+			{
+				name:  "should return true for 'AES256'",
+				input: model.KeyAlgorithmAES256,
+				expOk: true,
+			},
+			{
+				name:  "should return false for an unsupported algorithm",
+				input: "unsupported-algorithm",
+				expOk: false,
+			},
+			{
+				name:  "should return false for an empty algorithm",
+				input: "",
+				expOk: false,
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// when
+				ok := model.IsSupportedAlgorithm(tt.input)
+
+				// then
+				assert.Equal(t, tt.expOk, ok)
+			})
+		}
+	})
 }

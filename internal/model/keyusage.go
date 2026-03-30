@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -21,6 +22,7 @@ const (
 	KeyUsageUnwrap
 )
 
+// validKeyUsages defines the set of valid KeyUsage flags for iteration in the String() method.
 var validKeyUsages = []KeyUsage{
 	KeyUsageEncrypt,
 	KeyUsageDecrypt,
@@ -28,6 +30,7 @@ var validKeyUsages = []KeyUsage{
 	KeyUsageUnwrap,
 }
 
+// validKeyUsageNames maps each KeyUsage flag to its string representation for use in the String() method.
 var validKeyUsageNames = map[KeyUsage]string{
 	KeyUsageEncrypt: "encrypt",
 	KeyUsageDecrypt: "decrypt",
@@ -50,8 +53,11 @@ func (u KeyUsage) String() string {
 		return "none"
 	}
 
+	var allKeyUsage KeyUsage
+
 	var sb strings.Builder
 	for _, validUsage := range validKeyUsages {
+		allKeyUsage |= validUsage
 		hasPermission := u.Has(validUsage)
 		if hasPermission {
 			if sb.Len() > 0 {
@@ -60,6 +66,14 @@ func (u KeyUsage) String() string {
 			validUsageName := validKeyUsageNames[validUsage]
 			sb.WriteString(validUsageName)
 		}
+	}
+
+	extraFlags := u &^ allKeyUsage
+	if extraFlags != 0 {
+		if sb.Len() > 0 {
+			sb.WriteString("|")
+		}
+		fmt.Fprintf(&sb, "unknown(%d)", extraFlags)
 	}
 	return sb.String()
 }

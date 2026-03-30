@@ -121,7 +121,7 @@ func TestKeyUsage(t *testing.T) {
 				exp:   "wrap",
 			},
 			{
-				name:  "should return 'unwrap' if only the unwrap flag is	 set",
+				name:  "should return 'unwrap' if only the unwrap flag is set",
 				input: model.KeyUsageUnwrap,
 				exp:   "unwrap",
 			},
@@ -129,6 +129,16 @@ func TestKeyUsage(t *testing.T) {
 				name:  "should return multiple flag names separated by '|' if multiple flags are set",
 				input: model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
 				exp:   "encrypt|decrypt|wrap",
+			},
+			{
+				name:  "should return the valid flag names followed by unknown flags if there are extra flags set",
+				input: model.KeyUsage(64),
+				exp:   "unknown(64)",
+			},
+			{
+				name:  "should return the valid flag names followed by unknown flags if there are valid and extra flags set",
+				input: model.KeyUsage(32) | model.KeyUsageEncrypt,
+				exp:   "encrypt|unknown(32)",
 			},
 		}
 
