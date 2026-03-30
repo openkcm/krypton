@@ -27,8 +27,8 @@ type ParentKeyProviderRef struct {
 	AgentName string // Agent name that provides parent keys
 }
 
-// Vault holds storage backend configuration
-type Vault struct {
+// VaultSpec holds storage backend configuration
+type VaultSpec struct {
 	Name   string         // Vault identifier
 	Type   string         // Vault type (e.g., "open-bao", "aws-kms", "gcp-kms")
 	Params map[string]any // Type-specific configuration
@@ -36,7 +36,7 @@ type Vault struct {
 
 // KeyBinding encapsulates all dependencies needed to implement a key kind
 type KeyBinding struct {
-	Vault             Vault                 // Storage backend configuration
+	Vault             VaultSpec             // Storage backend configuration
 	ParentKeyProvider *ParentKeyProviderRef // Where to get parent keys for unwrapping
 	Labels            Labels                // Per-binding labels
 }

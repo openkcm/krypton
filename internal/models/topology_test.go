@@ -75,7 +75,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "valid binding with all fields",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name:   "my-vault",
 					Type:   "aws-kms",
 					Params: map[string]any{"region": "us-east-1"},
@@ -90,7 +90,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "valid binding without parent key provider",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name: "my-vault",
 					Type: "open-bao",
 				},
@@ -100,7 +100,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "valid binding with nil params",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name: "my-vault",
 					Type: "gcp-kms",
 				},
@@ -110,14 +110,14 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "missing vault configuration",
 			binding: KeyBinding{
-				Vault: Vault{},
+				Vault: VaultSpec{},
 			},
 			wantErr: ErrVaultConfigMissing,
 		},
 		{
 			name: "empty vault name",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name: "",
 					Type: "aws-kms",
 				},
@@ -127,7 +127,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "empty vault type",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name: "my-vault",
 					Type: "",
 				},
@@ -137,7 +137,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "empty parent key provider agent name",
 			binding: KeyBinding{
-				Vault: Vault{
+				Vault: VaultSpec{
 					Name: "my-vault",
 					Type: "aws-kms",
 				},
@@ -164,7 +164,7 @@ func TestValidateKeyBinding(t *testing.T) {
 func TestValidateTopologySegment(t *testing.T) {
 	validKeyBindings := map[string]KeyBinding{
 		"K2": {
-			Vault: Vault{
+			Vault: VaultSpec{
 				Name: "vault-k2",
 				Type: "aws-kms",
 			},
