@@ -94,4 +94,68 @@ func TestKeyUsage(t *testing.T) {
 			})
 		}
 	})
+	t.Run("String", func(t *testing.T) {
+		tts := []struct {
+			name  string
+			input model.KeyUsage
+			exp   string
+		}{
+			{
+				name:  "should return 'none' if no flags are set",
+				input: model.KeyUsageNone,
+				exp:   "none",
+			},
+			{
+				name:  "should return 'encrypt' if only the encrypt flag is set",
+				input: model.KeyUsageEncrypt,
+				exp:   "encrypt",
+			},
+			{
+				name:  "should return 'decrypt' if only the decrypt flag is set",
+				input: model.KeyUsageDecrypt,
+				exp:   "decrypt",
+			},
+			{
+				name:  "should return 'wrap' if only the wrap flag is set",
+				input: model.KeyUsageWrap,
+				exp:   "wrap",
+			},
+			{
+				name:  "should return 'unwrap' if only the unwrap flag is	 set",
+				input: model.KeyUsageUnwrap,
+				exp:   "unwrap",
+			},
+			{
+				name:  "should return multiple flag names separated by '|' if multiple flags are set",
+				input: model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
+				exp:   "encrypt|decrypt|wrap",
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// when
+				act := tt.input.String()
+
+				// then
+				assert.Equal(t, tt.exp, act)
+			})
+		}
+	})
+
+	t.Run("ValidKeyUsages", func(t *testing.T) {
+		// when
+		validUsages := model.ValidKeyUsages
+		validUsageNames := model.ValidKeyUsageNames
+
+		// then
+		assert.Len(t, validUsages, 4, "number of valid usage names should be 4")
+		assert.Len(t, validUsageNames, 4, "number of valid usage names should be 4")
+
+		for _, usage := range validUsages {
+			name, ok := validUsageNames[usage]
+			assert.True(t, ok, "valid usage should have a corresponding name")
+			assert.NotEmpty(t, name, "valid usage name should not be empty")
+		}
+	})
 }

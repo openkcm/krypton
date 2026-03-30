@@ -1,5 +1,9 @@
 package model
 
+import (
+	"strings"
+)
+
 // KeyUsage is a bitmask describing the permitted operations for a key.
 type KeyUsage uint
 
@@ -17,10 +21,45 @@ const (
 	KeyUsageUnwrap
 )
 
+var validKeyUsages = []KeyUsage{
+	KeyUsageEncrypt,
+	KeyUsageDecrypt,
+	KeyUsageWrap,
+	KeyUsageUnwrap,
+}
+
+var validKeyUsageNames = map[KeyUsage]string{
+	KeyUsageEncrypt: "encrypt",
+	KeyUsageDecrypt: "decrypt",
+	KeyUsageWrap:    "wrap",
+	KeyUsageUnwrap:  "unwrap",
+}
+
 // Has reports whether all of the flags in usage are set in ku. Returns false if usage is zero.
 func (u KeyUsage) Has(usage KeyUsage) bool {
 	if usage == 0 {
 		return false
 	}
 	return u&usage == usage
+}
+
+// String returns a string representation of the KeyUsage, listing all set flags separated by
+// '|', or "none" if no flags are set.
+func (u KeyUsage) String() string {
+	if u == KeyUsageNone {
+		return "none"
+	}
+
+	var sb strings.Builder
+	for _, validUsage := range validKeyUsages {
+		hasPermission := u.Has(validUsage)
+		if hasPermission {
+			if sb.Len() > 0 {
+				sb.WriteString("|")
+			}
+			validUsageName := validKeyUsageNames[validUsage]
+			sb.WriteString(validUsageName)
+		}
+	}
+	return sb.String()
 }
