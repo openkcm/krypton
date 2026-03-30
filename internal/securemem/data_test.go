@@ -1,6 +1,11 @@
 package securemem_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,6 +94,94 @@ func TestNewWithSize(t *testing.T) {
 		for _, b := range data {
 			assert.Equal(t, byte(0), b)
 		}
+	})
+}
+
+func TestAvoidLogPrints(t *testing.T) {
+	// given
+	secret := []byte("super-secret-key")
+	subj, err := securemem.NewData("test-key", len(secret))
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := subj.Destroy()
+		assert.NoError(t, err)
+	})
+
+	copy(subj.Bytes(), secret)
+
+	t.Run("should not leak data when printing with fmt.Printf", func(t *testing.T) {
+		tts := []struct {
+			format string
+		}{
+			{format: "%s"},
+			{format: "%v"},
+			{format: "%+v"},
+			{format: "%#v"},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.format, func(t *testing.T) {
+				var buf bytes.Buffer
+
+				// when
+				fmt.Fprintf(&buf, tt.format, subj)
+
+				got, err := io.ReadAll(&buf)
+
+				// then
+				require.NoError(t, err)
+				actString := string(got)
+				assert.Contains(t, actString, "test-key")
+				assert.Contains(t, actString, securemem.Redacted)
+				assert.NotContains(t, actString, string(secret))
+			})
+		}
+	})
+
+	t.Run("should not leak data in slog output", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+		// when
+		logger.Info("vault", "data", subj)
+
+		got, err := io.ReadAll(&buf)
+
+		// then
+		require.NoError(t, err)
+		actString := string(got)
+		assert.Contains(t, actString, "test-key")
+		assert.Contains(t, actString, securemem.Redacted)
+		assert.NotContains(t, actString, string(secret))
+	})
+
+	t.Run("should not leak data in MarshalJSON()", func(t *testing.T) {
+		// when
+		got, err := json.Marshal(subj)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, json.Valid(got))
+
+		var decoded string
+		err = json.Unmarshal(got, &decoded)
+		require.NoError(t, err)
+		assert.Contains(t, decoded, "test-key")
+		assert.Contains(t, decoded, securemem.Redacted)
+		assert.NotContains(t, decoded, string(secret))
+	})
+
+	t.Run("should not leak data in MarshalText()", func(t *testing.T) {
+		// when
+		got, err := subj.MarshalText()
+
+		// then
+		require.NoError(t, err)
+		actString := string(got)
+		assert.Contains(t, actString, "test-key")
+		assert.Contains(t, actString, securemem.Redacted)
+		assert.NotContains(t, actString, string(secret))
 	})
 }
 
