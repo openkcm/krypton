@@ -2,7 +2,15 @@ package clock
 
 import "time"
 
-// NowUnixUTC returns the current time in UTC as Unix nanoseconds.
-func NowUnixUTC() int64 {
-	return time.Now().UTC().UnixNano()
+// UnixNano is a Unix timestamp in nanoseconds.
+type UnixNano int64
+
+// Time converts the UnixNano to a time.Time.
+func (t UnixNano) Time() time.Time {
+	return time.Unix(0, int64(t))
+}
+
+// Now returns the current time as Unix nanoseconds.
+func Now() UnixNano {
+	return UnixNano(time.Now().UnixNano())
 }

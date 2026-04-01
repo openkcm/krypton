@@ -9,23 +9,23 @@ import (
 	"github.com/openkcm/krypton/internal/clock"
 )
 
-func TestNowUTC(t *testing.T) {
-	t.Run("returns current UTC timestamp as nanoseconds", func(t *testing.T) {
+func TestNow(t *testing.T) {
+	t.Run("returns current timestamp as nanoseconds", func(t *testing.T) {
 		// given
-		before := time.Now().UTC().UnixNano()
+		before := time.Now().UnixNano()
 
 		// when
-		result := clock.NowUnixUTC()
+		result := clock.Now()
 
 		// then
-		after := time.Now().UTC().UnixNano()
-		assert.GreaterOrEqual(t, result, before)
-		assert.LessOrEqual(t, result, after)
+		after := time.Now().UnixNano()
+		assert.GreaterOrEqual(t, int64(result), before)
+		assert.LessOrEqual(t, int64(result), after)
 	})
 
 	t.Run("returns non-zero value", func(t *testing.T) {
 		// when
-		result := clock.NowUnixUTC()
+		result := clock.Now()
 
 		// then
 		assert.NotZero(t, result)
@@ -33,9 +33,9 @@ func TestNowUTC(t *testing.T) {
 
 	t.Run("returns increasing values on subsequent calls", func(t *testing.T) {
 		// when
-		first := clock.NowUnixUTC()
+		first := clock.Now()
 		time.Sleep(time.Millisecond)
-		second := clock.NowUnixUTC()
+		second := clock.Now()
 
 		// then
 		assert.Greater(t, second, first)

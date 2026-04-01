@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
+	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
@@ -22,6 +22,8 @@ func getCmd() *cobra.Command {
 }
 
 func getTenantCmd() *cobra.Command {
+	var jsonOutput bool
+
 	cmd := &cobra.Command{
 		Use:   "tenant <id>",
 		Short: "Get a tenant by ID",
@@ -29,7 +31,7 @@ func getTenantCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := admin.NewClient(serverURL)
 
-			tenant, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
+			resp, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
 				ID: args[0],
 			})
 			if err != nil {
@@ -39,11 +41,27 @@ func getTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to get tenant: %w", err)
 			}
 
-			enc := json.NewEncoder(cmd.OutOrStdout())
-			enc.SetIndent("", "  ")
-			return enc.Encode(tenant)
+			builder, err := output.From(resp.Tenant)
+			if err != nil {
+				return fmt.Errorf("failed to format output: %w", err)
+			}
+
+			format := output.Tabular
+			formatters := []output.Formatter{timeFormatter, labelsFormatter}
+
+			if jsonOutput {
+				format = output.JSON
+				formatters = []output.Formatter{timeFormatter}
+			}
+
+			return builder.
+				Format(formatters...).
+				As(format).
+				To(cmd.OutOrStdout())
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
 
 	return cmd
 }

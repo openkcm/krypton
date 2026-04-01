@@ -35,11 +35,7 @@ type (
 	}
 
 	CreateTenantResponse struct {
-		ID        string       `json:"id"`
-		Name      string       `json:"name"`
-		Labels    model.Labels `json:"labels,omitempty"`
-		UpdatedAt int64        `json:"updated_at"`
-		CreatedAt int64        `json:"created_at"`
+		Tenant model.Tenant `json:"tenant"`
 	}
 
 	GetTenantRequest struct {
@@ -47,11 +43,7 @@ type (
 	}
 
 	GetTenantResponse struct {
-		ID        string       `json:"id"`
-		Name      string       `json:"name"`
-		Labels    model.Labels `json:"labels,omitempty"`
-		UpdatedAt int64        `json:"updated_at"`
-		CreatedAt int64        `json:"created_at"`
+		Tenant model.Tenant `json:"tenant"`
 	}
 )
 
@@ -71,7 +63,9 @@ func (a *admin) createTenant(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	err = json.NewEncoder(w).Encode(toCreateTenantResponse(created))
+	err = json.NewEncoder(w).Encode(CreateTenantResponse{
+		Tenant: created,
+	})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 	}
@@ -91,28 +85,10 @@ func (a *admin) getTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(toGetTenantResponse(tenant))
+	err = json.NewEncoder(w).Encode(GetTenantResponse{
+		Tenant: tenant,
+	})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
-	}
-}
-
-func toCreateTenantResponse(t model.Tenant) CreateTenantResponse {
-	return CreateTenantResponse{
-		ID:        t.ID,
-		Name:      t.Name,
-		Labels:    t.Labels,
-		CreatedAt: t.CreatedAt,
-		UpdatedAt: t.UpdatedAt,
-	}
-}
-
-func toGetTenantResponse(t model.Tenant) GetTenantResponse {
-	return GetTenantResponse{
-		ID:        t.ID,
-		Name:      t.Name,
-		Labels:    t.Labels,
-		CreatedAt: t.CreatedAt,
-		UpdatedAt: t.UpdatedAt,
 	}
 }
