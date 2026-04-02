@@ -16,9 +16,8 @@ var labelsFormatter = output.ForType(func(l model.Labels) any {
 	return l.String()
 })
 
-// formatTenant formats the tenant output based on the specified format (JSON or tabular).
-// It applies appropriate formatters for time and labels fields.
-func formatTenant(builder *output.Builder, asJSON bool) *output.Builder {
+// formatOutput formats the output based on the asJSON flag.
+func formatOutput(builder *output.Builder, asJSON bool) *output.Builder {
 	format := output.Tabular
 	formatters := []output.Formatter{timeFormatter, labelsFormatter}
 

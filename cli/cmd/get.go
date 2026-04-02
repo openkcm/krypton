@@ -46,7 +46,7 @@ func getTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
 
-			return formatTenant(builder, asJSON).To(cmd.OutOrStdout())
+			return formatOutput(builder, asJSON).To(cmd.OutOrStdout())
 		},
 	}
 
