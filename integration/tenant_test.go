@@ -12,6 +12,15 @@ import (
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
+// expTenant represents the JSON structure returned by the CLI's tenant commands.
+type expTenant struct {
+	ID        string            `json:"ID"`
+	Name      string            `json:"Name"`
+	Labels    map[string]string `json:"Labels,omitempty"`
+	CreatedAt string            `json:"CreatedAt"`
+	UpdatedAt string            `json:"UpdatedAt"`
+}
+
 func TestCreateTenant(t *testing.T) {
 	handler := admin.NewServerMux(tenantTestStore)
 	server := httptest.NewServer(handler)
@@ -21,15 +30,21 @@ func TestCreateTenant(t *testing.T) {
 		// given
 		expName := "tenant-" + uuid.NewString()
 
-		// when `kr create tenant --name <name> --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--server", server.URL)
+		// when `kr create tenant --name <name> --json --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--json", "--server", server.URL)
 		output, err := cmd.CombinedOutput()
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(output))
-		resp := decode[admin.CreateTenantResponse](t, output)
-		assert.NotEmpty(t, resp.ID)
-		assert.Equal(t, expName, resp.Name)
+		tenants := decode(t, output)
+		if !assert.Len(t, tenants, 1) {
+			return
+		}
+		assert.NotEmpty(t, tenants[0].ID)
+		assert.Equal(t, expName, tenants[0].Name)
+		assert.Empty(t, tenants[0].Labels)
+		assert.NotEmpty(t, tenants[0].CreatedAt)
+		assert.NotEmpty(t, tenants[0].UpdatedAt)
 	})
 
 	t.Run("creates tenant with name and labels", func(t *testing.T) {
@@ -51,17 +66,22 @@ func TestCreateTenant(t *testing.T) {
 			i++
 		}
 
-		// when `kr create tenant --name <name> --label env=production,team=platform --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--label", labelArg.String(), "--server", server.URL)
+		// when `kr create tenant --name <name> --label env=production,team=platform --json --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--label", labelArg.String(), "--json", "--server", server.URL)
 		output, err := cmd.CombinedOutput()
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(output))
-		resp := decode[admin.CreateTenantResponse](t, output)
-		assert.NotEmpty(t, resp.ID)
-		assert.Equal(t, expName, resp.Name)
-		assert.Equal(t, expLabels["env"], resp.Labels["env"])
-		assert.Equal(t, expLabels["team"], resp.Labels["team"])
+		tenants := decode(t, output)
+		if !assert.Len(t, tenants, 1) {
+			return
+		}
+		assert.NotEmpty(t, tenants[0].ID)
+		assert.Equal(t, expName, tenants[0].Name)
+		assert.Equal(t, expLabels["env"], tenants[0].Labels["env"])
+		assert.Equal(t, expLabels["team"], tenants[0].Labels["team"])
+		assert.NotEmpty(t, tenants[0].CreatedAt)
+		assert.NotEmpty(t, tenants[0].UpdatedAt)
 	})
 
 	t.Run("fails when server is unavailable", func(t *testing.T) {
@@ -86,23 +106,29 @@ func TestGetTenant(t *testing.T) {
 	t.Run("gets tenant by id", func(t *testing.T) {
 		// given - create a tenant first
 		tenantName := "tenant-" + uuid.NewString()
-		createCmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenantName, "--server", server.URL)
+		createCmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenantName, "--json", "--server", server.URL)
 		createOutput, err := createCmd.CombinedOutput()
 		if !assert.NoError(t, err) {
 			return
 		}
 
-		createResp := decode[admin.CreateTenantResponse](t, createOutput)
+		tenants := decode(t, createOutput)
+		if !assert.Len(t, tenants, 1) {
+			return
+		}
 
-		// when `kr get tenant <tenant-id> --server <server-url>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", createResp.ID, "--server", server.URL)
+		// when `kr get tenant <tenant-id> --json --server <server-url>`
+		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", tenants[0].ID, "--json", "--server", server.URL)
 		getOutput, err := getCmd.CombinedOutput()
 
 		// then
 		assert.NoError(t, err, "command should succeed, output: %s", string(getOutput))
-		getResp := decode[admin.GetTenantResponse](t, getOutput)
-		assert.NotEmpty(t, getResp.ID)
-		assert.Equal(t, tenantName, getResp.Name)
+		tenants = decode(t, getOutput)
+		if !assert.Len(t, tenants, 1) {
+			return
+		}
+		assert.NotEmpty(t, tenants[0].ID)
+		assert.Equal(t, tenantName, tenants[0].Name)
 	})
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
@@ -129,12 +155,15 @@ func TestGetTenant(t *testing.T) {
 	})
 }
 
-func decode[T any](t *testing.T, output []byte) T {
+func decode(t *testing.T, output []byte) []expTenant {
 	t.Helper()
-	var result T
-	err := json.Unmarshal(output, &result)
+	var ts []expTenant
+	err := json.Unmarshal(output, &ts)
 	if err != nil {
 		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
 	}
-	return result
+	if len(ts) == 0 {
+		assert.FailNowf(t, "empty response array", "output: %s", string(output))
+	}
+	return ts
 }
