@@ -19,6 +19,7 @@ import (
 var (
 	triggerID               = os.Getenv("TRIGGER_ID")
 	isDumpProtectionEnabled = os.Getenv("IS_DUMP_PROTECTION_ENABLED")
+	exposedSecretValue      = os.Getenv("EXPOSED_SECRET")
 )
 
 func main() {
@@ -49,6 +50,7 @@ func main() {
 	if err != nil {
 		log.Printf("Error destroying secrets: %v\n", err)
 	}
+
 	log.Println("Shutting down...")
 }
 
@@ -65,8 +67,7 @@ func createTrigger() {
 }
 
 func exposedSecret() {
-	exposedSecret := "EXPOSED_SECRET123456789012345678"
-	_, err := aes.NewCipher([]byte(exposedSecret))
+	_, err := aes.NewCipher([]byte(exposedSecretValue))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create AES cipher with exposed secret: %v", err))
 	}
