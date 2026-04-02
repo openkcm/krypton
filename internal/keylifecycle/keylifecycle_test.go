@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/keylifecycle"
+	"github.com/openkcm/krypton/internal/model"
 )
 
 var allKeyStates = []keylifecycle.State{
@@ -18,14 +19,14 @@ var allKeyStates = []keylifecycle.State{
 	keylifecycle.StateDestroyed,
 }
 
-var allKeyOperations = []keylifecycle.Operation{
-	keylifecycle.OperationEncrypt,
-	keylifecycle.OperationDecrypt,
-	keylifecycle.OperationWrap,
-	keylifecycle.OperationUnwrap,
+var allKeyOperations = []model.KeyUsage{
+	model.KeyUsageEncrypt,
+	model.KeyUsageDecrypt,
+	model.KeyUsageUnwrap,
+	model.KeyUsageWrap,
 }
 
-func TestKeyLifeCycleStateTransitions(t *testing.T) {
+func TestKeyLifecycleStateTransitions(t *testing.T) {
 	t.Parallel()
 
 	tts := []struct {
@@ -126,68 +127,54 @@ func TestKeyLifeCycleStateTransitions(t *testing.T) {
 	})
 }
 
-func TestKeyLifeCycleOperations(t *testing.T) {
+func TestKeyLifecycleKeyUsages(t *testing.T) {
 	t.Parallel()
 
 	tts := []struct {
 		state           keylifecycle.State
-		validOperations map[keylifecycle.Operation]struct{}
+		validOperations model.KeyUsage
 	}{
 		{
 			state:           keylifecycle.StatePreActivation,
-			validOperations: map[keylifecycle.Operation]struct{}{},
+			validOperations: model.KeyUsageNone,
 		},
 		{
-			state: keylifecycle.StateActive,
-			validOperations: map[keylifecycle.Operation]struct{}{
-				keylifecycle.OperationEncrypt: {},
-				keylifecycle.OperationDecrypt: {},
-				keylifecycle.OperationWrap:    {},
-				keylifecycle.OperationUnwrap:  {},
-			},
+			state:           keylifecycle.StateActive,
+			validOperations: model.KeyUsageDecrypt | model.KeyUsageEncrypt | model.KeyUsageWrap | model.KeyUsageUnwrap,
 		},
 		{
-			state: keylifecycle.StateSuspended,
-			validOperations: map[keylifecycle.Operation]struct{}{
-				keylifecycle.OperationDecrypt: {},
-				keylifecycle.OperationUnwrap:  {},
-			},
+			state:           keylifecycle.StateSuspended,
+			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
 		},
 		{
-			state: keylifecycle.StateDeactivated,
-			validOperations: map[keylifecycle.Operation]struct{}{
-				keylifecycle.OperationDecrypt: {},
-				keylifecycle.OperationUnwrap:  {},
-			},
+			state:           keylifecycle.StateDeactivated,
+			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
 		},
 		{
-			state: keylifecycle.StateCompromised,
-			validOperations: map[keylifecycle.Operation]struct{}{
-				keylifecycle.OperationDecrypt: {},
-				keylifecycle.OperationUnwrap:  {},
-			},
+			state:           keylifecycle.StateCompromised,
+			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateDestroyed,
-			validOperations: map[keylifecycle.Operation]struct{}{},
+			validOperations: model.KeyUsageNone,
 		},
 		{
 			state:           "invalid-state",
-			validOperations: map[keylifecycle.Operation]struct{}{},
+			validOperations: model.KeyUsageNone,
 		},
 	}
 
-	t.Run("ValidateOperation", func(t *testing.T) {
+	t.Run("ValidateKeyUsage", func(t *testing.T) {
 		t.Parallel()
 		for _, tt := range tts {
 			for _, op := range allKeyOperations {
-				_, isValid := tt.validOperations[op]
+				isValid := tt.validOperations.Has(op)
 
 				t.Run(fmt.Sprintf("[%s] perform [%s]=%t", tt.state, op, isValid), func(t *testing.T) {
 					t.Parallel()
 
 					// when
-					actResult := keylifecycle.ValidateOperation(tt.state, op)
+					actResult := keylifecycle.ValidateKeyUsage(tt.state, op)
 
 					// then
 					if isValid {
@@ -200,23 +187,20 @@ func TestKeyLifeCycleOperations(t *testing.T) {
 		}
 	})
 
-	t.Run("GetAllowedOperations", func(t *testing.T) {
+	t.Run("GetAllowedKeyUsages", func(t *testing.T) {
 		t.Parallel()
 		for _, tt := range tts {
 			// given
-			expResult := make([]keylifecycle.Operation, 0, len(tt.validOperations))
-			for k := range tt.validOperations {
-				expResult = append(expResult, k)
-			}
+			expResult := tt.validOperations
 
 			t.Run(fmt.Sprintf("in state [%s] allowed operations =%v", tt.state, expResult), func(t *testing.T) {
 				t.Parallel()
 
 				// when
-				actResult := keylifecycle.GetAllowedOperations(tt.state)
+				actResult := keylifecycle.GetAllowedKeyUsages(tt.state)
 
 				// then
-				assert.ElementsMatch(t, expResult, actResult, "unexpected allowed operations in state %s", tt.state)
+				assert.Equal(t, expResult, actResult, "unexpected allowed operations in state %s", tt.state)
 			})
 		}
 	})

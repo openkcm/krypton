@@ -1,41 +1,39 @@
-// Package keylifecycle provides key lifecycle state management and transition validation.
+// Package keylifecycle manages cryptographic key lifecycle states and
+// transition validation per NIST SP 800-57 Part 1 Rev 5.
 package keylifecycle
 
 import (
 	"errors"
 	"fmt"
+
+	"github.com/openkcm/krypton/internal/model"
 )
 
 type (
-	// Operation represents a cryptographic operation a key can perform.
-	Operation string
 	// State represents a lifecycle state of a cryptographic key.
 	State string
 )
 
-// Key lifecycle states.
-// The lifecycle states and transitions are based on the NIST SP 800-57 Part 1, Revision 5.
+// Key lifecycle states per NIST SP 800-57.
 const (
+	// StatePreActivation: key generated but not yet in use.
 	StatePreActivation State = "pre-activation"
-	StateActive        State = "active"
-	StateSuspended     State = "suspended"
-	StateDeactivated   State = "deactivated"
-	StateCompromised   State = "compromised"
-	StateDestroyed     State = "destroyed"
+	// StateActive: key is in normal operational use.
+	StateActive State = "active"
+	// StateSuspended: key temporarily disabled; decrypt/unwrap only.
+	StateSuspended State = "suspended"
+	// StateDeactivated: key retired; decrypt/unwrap only.
+	StateDeactivated State = "deactivated"
+	// StateCompromised: key integrity suspect; decrypt/unwrap only.
+	StateCompromised State = "compromised"
+	// StateDestroyed: key material erased; no operations allowed.
+	StateDestroyed State = "destroyed"
 )
 
-// Supported cryptographic key operations.
-const (
-	OperationEncrypt Operation = "encrypt"
-	OperationDecrypt Operation = "decrypt"
-	OperationWrap    Operation = "wrap"
-	OperationUnwrap  Operation = "unwrap"
-)
-
-// lifecycle defines allowed state transitions and per-state permitted operations for a cryptographic key.
+// lifecycle holds allowed state transitions and per-state permitted operations.
 type lifecycle struct {
 	transitions map[State]map[State]struct{}
-	operations  map[State]map[Operation]struct{}
+	stateUsages map[State]model.KeyUsage
 }
 
 // Sentinel errors for lifecycle validation.
@@ -44,6 +42,7 @@ var (
 	ErrOperationNotAllowedInState = errors.New("operation not allowed in current key state")
 )
 
+// defaultLifecycle encodes the NIST SP 800-57 state machine used by all public functions.
 var defaultLifecycle = lifecycle{
 	transitions: map[State]map[State]struct{}{
 		StatePreActivation: {
@@ -72,27 +71,13 @@ var defaultLifecycle = lifecycle{
 		},
 		StateDestroyed: {},
 	},
-	operations: map[State]map[Operation]struct{}{
-		StatePreActivation: {},
-		StateActive: {
-			OperationEncrypt: {},
-			OperationDecrypt: {},
-			OperationWrap:    {},
-			OperationUnwrap:  {},
-		},
-		StateSuspended: {
-			OperationDecrypt: {},
-			OperationUnwrap:  {},
-		},
-		StateDeactivated: {
-			OperationDecrypt: {},
-			OperationUnwrap:  {},
-		},
-		StateCompromised: {
-			OperationDecrypt: {},
-			OperationUnwrap:  {},
-		},
-		StateDestroyed: {},
+	stateUsages: map[State]model.KeyUsage{
+		StatePreActivation: model.KeyUsageNone,
+		StateActive:        model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageUnwrap | model.KeyUsageWrap,
+		StateSuspended:     model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+		StateDeactivated:   model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+		StateCompromised:   model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+		StateDestroyed:     model.KeyUsageNone,
 	},
 }
 
@@ -110,14 +95,14 @@ func ValidateTransition(from, to State) error {
 	return nil
 }
 
-// ValidateOperation checks whether the given operation is permitted in the given state.
-func ValidateOperation(s State, op Operation) error {
-	ops, ok := defaultLifecycle.operations[s]
+// ValidateKeyUsage checks whether operation op is permitted in state s.
+func ValidateKeyUsage(s State, op model.KeyUsage) error {
+	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
 		return fmt.Errorf("invalid state: %s: %w", s, ErrOperationNotAllowedInState)
 	}
 
-	_, ok = ops[op]
+	ok = ops.Has(op)
 	if !ok {
 		return fmt.Errorf("operation %s not allowed in state %s: %w", op, s, ErrOperationNotAllowedInState)
 	}
@@ -138,16 +123,12 @@ func GetAllowedTransitions(s State) []State {
 	return rs
 }
 
-// GetAllowedOperations returns the operations permitted in the given state.
-func GetAllowedOperations(s State) []Operation {
-	ops, ok := defaultLifecycle.operations[s]
+// GetAllowedKeyUsages returns the permitted operations for the given state.
+func GetAllowedKeyUsages(s State) model.KeyUsage {
+	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
-		return []Operation{}
+		return model.KeyUsageNone
 	}
 
-	rs := make([]Operation, 0, len(ops))
-	for k := range ops {
-		rs = append(rs, k)
-	}
-	return rs
+	return ops
 }
