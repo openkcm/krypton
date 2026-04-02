@@ -22,7 +22,7 @@ func getCmd() *cobra.Command {
 }
 
 func getTenantCmd() *cobra.Command {
-	var jsonOutput bool
+	var asJSON bool
 
 	cmd := &cobra.Command{
 		Use:   "tenant <id>",
@@ -46,22 +46,11 @@ func getTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
 
-			format := output.Tabular
-			formatters := []output.Formatter{timeFormatter, labelsFormatter}
-
-			if jsonOutput {
-				format = output.JSON
-				formatters = []output.Formatter{timeFormatter}
-			}
-
-			return builder.
-				Format(formatters...).
-				As(format).
-				To(cmd.OutOrStdout())
+			return formatTenant(builder, asJSON).To(cmd.OutOrStdout())
 		},
 	}
 
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output in JSON format")
 
 	return cmd
 }

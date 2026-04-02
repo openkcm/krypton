@@ -15,3 +15,17 @@ var timeFormatter = output.ForType(func(t clock.UnixNano) any {
 var labelsFormatter = output.ForType(func(l model.Labels) any {
 	return l.String()
 })
+
+// formatTenant formats the tenant output based on the specified format (JSON or tabular).
+// It applies appropriate formatters for time and labels fields.
+func formatTenant(builder *output.Builder, asJSON bool) *output.Builder {
+	format := output.Tabular
+	formatters := []output.Formatter{timeFormatter, labelsFormatter}
+
+	if asJSON {
+		format = output.JSON
+		formatters = []output.Formatter{timeFormatter}
+	}
+
+	return builder.Format(formatters...).As(format)
+}
