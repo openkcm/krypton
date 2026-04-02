@@ -186,7 +186,7 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 
 	hostPath, err := filepath.Abs(filepath.Join(root, "../../../.."))
 	require.NoError(t, err)
-	// Step 2: Define the container request
+
 	req := testcontainers.ContainerRequest{
 		Image: image,
 		HostConfigModifier: func(hc *container.HostConfig) {
@@ -210,7 +210,6 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 			},
 		},
 
-		// Wait until the container finishes executing
 		WaitingFor: wait.ForLog("FINISHED").WithStartupTimeout(testTimeout),
 		Env: map[string]string{
 			"IS_DUMP_PROTECTION_ENABLED": strconv.FormatBool(isDumpProtectionEnabled),
@@ -218,7 +217,6 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 		},
 	}
 
-	// Step 3: Start the container
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
