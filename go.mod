@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.41.0
