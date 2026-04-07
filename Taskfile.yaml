@@ -1,5 +1,8 @@
 version: 3
 
+env:
+  GOEXPERIMENT: runtimesecret
+
 includes:
   shared:
     taskfile: hack/common/Taskfile_service.yaml

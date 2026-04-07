@@ -8,6 +8,12 @@ OpenKCM Krypton is a manging key materials.
 
 ## Getting Started
 
+Since this project requires `GOEXPERIMENT=runtimesecret`, add the following line to your environment variables:
+
+```sh
+echo 'export GOEXPERIMENT=runtimesecret' >> ~/.zshrc
+```
+
 ```bash
 make test   # run tests
 make lint   # run linter
