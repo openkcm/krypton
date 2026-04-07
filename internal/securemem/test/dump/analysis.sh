@@ -21,8 +21,8 @@ cleanup() {
 
 trap cleanup TERM INT QUIT
 
-UNEXPOSED_SECRET=${UNEXPOSED_SECRET:?UNEXPOSED_SECRET env var is required}
-EXPOSED_SECRET=${EXPOSED_SECRET:?EXPOSED_SECRET env var is required}
+SECUREMEM_SECRET=MYSECRETKEY123458901234567890123
+UNSECURED_SECRET=EXPOSED_SECRET123456789012345678
 
 set +x
 cd /app
@@ -35,7 +35,10 @@ echo "🚀 Starting secret-runner in the background..."
 cd ./tmp
 
 # Write the unexposed secret to a file that secret-runner will read
-echo $UNEXPOSED_SECRET >secret_$TRIGGER_ID
+echo $SECUREMEM_SECRET >secret_$TRIGGER_ID
+
+# Write the unexposed secret to a file that unsecret-runner will read
+echo $UNSECURED_SECRET >exposed_$TRIGGER_ID
 
 # Start the secret-runner in the background
 ./$TRIGGER_ID &
@@ -75,8 +78,8 @@ echo "DUMPING CORE"
 gcore -o core ${pid} >/dev/null 2>&1
 echo " 🔎 SEARCHING FOR SECRET"
 echo "-----------------------"
-strings core.${pid} | grep $UNEXPOSED_SECRET | xargs -I {} echo "☣️ ALERT UNEXPOSED SECRET FOUND: {}"
-strings core.${pid} | grep $EXPOSED_SECRET | xargs -I {} echo "✅ EXPOSED SECRET FOUND: {}"
+strings core.${pid} | grep $SECUREMEM_SECRET | xargs -I {} echo "☣️ ALERT SECUREMEM SECRET FOUND: {}"
+strings core.${pid} | grep $UNSECURED_SECRET | xargs -I {} echo "✅ UNSECURED SECRET FOUND: {}"
 
 # Check if dump protection is enabled and if so, attempt to dump the memory
 # of the secret-runner process to find the unexposed secret
@@ -90,7 +93,7 @@ if [ "$IS_DUMP_PROTECTION_ENABLED" = "true" ]; then
     END=$((0x$(echo "$RANGE" | cut -d- -f2)))
     LEN=$((END - START))
     [ "$LEN" -gt 67108864 ] && continue
-    dd if=/proc/${pid}/mem bs=1 skip=${START} count=${LEN} 2>/dev/null | strings | grep $UNEXPOSED_SECRET | xargs -I {} echo "☣️ ALERT DUMP UNEXPOSED SECRET FOUND: {}"
+    dd if=/proc/${pid}/mem bs=1 skip=${START} count=${LEN} 2>/dev/null | strings | grep $SECUREMEM_SECRET | xargs -I {} echo "☣️ ALERT SECUREMEM SECRET FOUND: {}"
   done
 
 fi
