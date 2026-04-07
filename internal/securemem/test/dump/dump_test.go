@@ -21,10 +21,8 @@ import (
 )
 
 const (
-	scriptDest      = "/usr/local/bin/analysis.sh"
-	image           = "golang:1.26-alpine"
-	unexposedSecret = "MYSECRETKEY123458901234567890123"
-	exposedSecret   = "EXPOSED_SECRET123456789012345678"
+	scriptDest = "/usr/local/bin/analysis.sh"
+	image      = "golang:1.26-alpine"
 )
 
 func TestProtection(t *testing.T) {
@@ -41,7 +39,6 @@ func TestProtection(t *testing.T) {
 		isPersistentVaultGetFound bool
 		isCoreFileNotFound        bool
 		isPermissionDeniedFound   bool
-		isUnexposedSecretFound    bool
 		isDumpProtectionTestRan   bool
 	}{
 		{
@@ -52,14 +49,12 @@ func TestProtection(t *testing.T) {
 			isPersistentVaultGetFound: true,
 			isDumpProtectionTestRan:   true,
 			isExposedSecretFound:      false,
-			isUnexposedSecretFound:    false,
 		},
 		{
 			name:                      "with memory protection=ON and dump protection=OFF",
 			isDumpProtectionEnabled:   false,
 			isPermissionDeniedFound:   false,
 			isCoreFileNotFound:        false,
-			isUnexposedSecretFound:    false,
 			isDumpProtectionTestRan:   false,
 			isPersistentVaultGetFound: true,
 			isExposedSecretFound:      true,
@@ -93,14 +88,13 @@ func TestProtection(t *testing.T) {
 			isPersistentVaultGetFound := false
 			isCoreFileNotFound := false
 			isPermissionDeniedFound := false
-			isUnexposedSecretFound := false
 			isDumpProtectionTestRan := false
 
 			scanner := bufio.NewScanner(logs)
 			for scanner.Scan() {
 				text := scanner.Text()
 				assert.NotContains(t, text, "PANIC RECOVERED")
-				assert.NotContains(t, text, "ALERT UNEXPOSED SECRET FOUND: "+unexposedSecret)
+				assert.NotContains(t, text, "ALERT SECUREMEM SECRET FOUND:")
 
 				if !isPermissionDeniedFound {
 					regexMatch := permissionDenied.FindString(text)
@@ -115,10 +109,7 @@ func TestProtection(t *testing.T) {
 					isPersistentVaultGetFound = strings.Contains(text, "SECRET FOUND IN MEMVAULT")
 				}
 				if !isExposedSecretFound {
-					isExposedSecretFound = strings.Contains(text, "EXPOSED SECRET FOUND: "+exposedSecret)
-				}
-				if !isUnexposedSecretFound {
-					isUnexposedSecretFound = strings.Contains(text, "ALERT DUMP UNEXPOSED SECRET FOUND: "+unexposedSecret)
+					isExposedSecretFound = strings.Contains(text, "UNSECURED SECRET FOUND:")
 				}
 				if !isDumpProtectionTestRan {
 					isDumpProtectionTestRan = strings.Contains(text, "RUNNING DUMP PROTECTION TEST")
@@ -130,7 +121,6 @@ func TestProtection(t *testing.T) {
 			assert.Equal(t, tt.isPermissionDeniedFound, isPermissionDeniedFound, "expected permission denied message presence does not match in logs")
 			assert.Equal(t, tt.isCoreFileNotFound, isCoreFileNotFound, "expected core file not found message presence does not match in logs")
 			assert.Equal(t, tt.isExposedSecretFound, isExposedSecretFound, "exposed secret presence does not match in logs")
-			assert.Equal(t, tt.isUnexposedSecretFound, isUnexposedSecretFound, "expected dump alert presence does not match in logs")
 			assert.Equal(t, tt.isDumpProtectionTestRan, isDumpProtectionTestRan, "dump protection test ran presence does not match as expected")
 
 			state, err := ctr.State(ctx)
@@ -181,8 +171,6 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 		Env: map[string]string{
 			"IS_DUMP_PROTECTION_ENABLED": strconv.FormatBool(isDumpProtectionEnabled),
 			"TRIGGER_ID":                 strconv.FormatInt(time.Now().UnixNano(), 10),
-			"UNEXPOSED_SECRET":           unexposedSecret,
-			"EXPOSED_SECRET":             exposedSecret,
 		},
 	}
 

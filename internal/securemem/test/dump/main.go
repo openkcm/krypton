@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/aes"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -19,7 +17,6 @@ import (
 var (
 	triggerID               = os.Getenv("TRIGGER_ID")
 	isDumpProtectionEnabled = os.Getenv("IS_DUMP_PROTECTION_ENABLED")
-	exposedSecretValue      = os.Getenv("EXPOSED_SECRET")
 )
 
 func main() {
@@ -33,11 +30,12 @@ func main() {
 	if isDumpProtectionEnabled == "true" {
 		enableDump()
 	}
-	// Run the secret runner and the exposed secret in parallel to simulate a real-world scenario
-	handlerResponse := secretRunner()
 
-	// Simulate an exposed secret that is not protected by securemem
-	exposedSecret()
+	// Run the secret runner and the exposed secret in parallel to simulate a real-world scenario
+	handlerResponse := securememRunner()
+
+	// Simulate an un unsecured secret read that is not protected by securemem
+	unSecuredSecretReader()
 
 	// Create a trigger file to keep the container running for analysis
 	go createTrigger()
@@ -54,6 +52,8 @@ func main() {
 	log.Println("Shutting down...")
 }
 
+// createTrigger creates a file named "start_<triggerID>" to signal that the process is ready for analysis.
+// It retries if there is an error creating the file, which can happen if there are transient filesystem issues.
 func createTrigger() {
 	for {
 		_, err := os.Create("start_" + triggerID)
@@ -66,28 +66,32 @@ func createTrigger() {
 	}
 }
 
-func exposedSecret() {
-	_, err := aes.NewCipher([]byte(exposedSecretValue))
+// unSecuredSecretReader simulates a secret that is not protected by securemem.
+// It reads the secret from a file and attempts to create an AES cipher with it,
+// which would expose the secret in memory if it is not protected.
+func unSecuredSecretReader() {
+	exposedSecretBytes := make([]byte, 32)
+	err := readSecretBytesFromFile("exposed_"+triggerID, exposedSecretBytes)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = aes.NewCipher(exposedSecretBytes)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create AES cipher with exposed secret: %v", err))
 	}
 }
 
-func secretRunner() *securemem.HandlerResponse {
+// securememRunner runs the securemem handler and checks if the secret is present in the MemVault after execution.
+func securememRunner() *securemem.HandlerResponse {
 	resp, err := securemem.Run(context.Background(), func(ctx context.Context, hr *securemem.HandlerRequest) error {
-		file, err := os.Open("secret_" + triggerID)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
 		secret, err := hr.PersistentVault().Reserve("secret", 32)
 		if err != nil {
 			return err
 		}
 
-		_, err = bufio.NewReader(file).Read(secret)
-		if err != nil && !errors.Is(err, io.EOF) {
+		err = readSecretBytesFromFile("secret_"+triggerID, secret)
+		if err != nil {
 			return err
 		}
 
@@ -113,9 +117,22 @@ func secretRunner() *securemem.HandlerResponse {
 	return resp
 }
 
+// enableDump sets the process memory to be non-dumpable, which should prevent secrets from being exposed in core dumps.
 func enableDump() {
 	err := securemem.NoDump()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set no dump: %v", err))
 	}
+}
+
+// readSecretBytesFromFile reads bytes from a file into the provided byte slice. It returns an error if the file cannot be read.
+func readSecretBytesFromFile(filename string, to []byte) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = bufio.NewReader(file).Read(to)
+	return err
 }
