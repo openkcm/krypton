@@ -6,8 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	_ "github.com/lib/pq"
@@ -22,11 +25,8 @@ var (
 	coverDir   string
 )
 
-// Tenant test globals
-var (
-	tenantTestDB    *sql.DB
-	tenantTestStore store.Store
-)
+// Postgres test globals
+var pgConnStr string
 
 func TestMain(m *testing.M) {
 	var cleanups []func()
@@ -82,7 +82,7 @@ func setupPostgres() ([]func(), error) {
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
-		postgres.WithDatabase("testdb"),
+		postgres.WithDatabase("postgres"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
@@ -92,18 +92,7 @@ func setupPostgres() ([]func(), error) {
 	}
 	cleanupFns = append(cleanupFns, func() { _ = pgContainer.Terminate(ctx) })
 
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		return cleanupFns, err
-	}
-
-	tenantTestDB, err = sql.Open("postgres", connStr)
-	if err != nil {
-		return cleanupFns, err
-	}
-	cleanupFns = append(cleanupFns, func() { tenantTestDB.Close() })
-
-	tenantTestStore, err = storesql.NewPostgreSQL(ctx, tenantTestDB)
+	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
 
 	return cleanupFns, err
 }
@@ -123,4 +112,49 @@ func newCLICommand(ctx context.Context, homeDir string, args ...string) *exec.Cm
 		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
 	}
 	return cmd
+}
+
+// newTestStore creates a new isolated database and store for testing.
+// The database is automatically dropped when the test completes.
+func newTestStore(t *testing.T) store.Store {
+	t.Helper()
+	ctx := t.Context()
+
+	db, err := sql.Open("postgres", pgConnStr)
+	if err != nil {
+		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
+	}
+
+	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+
+	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
+	if err != nil {
+		db.Close()
+		assert.FailNowf(t, "failed to create test database", "error: %v", err)
+	}
+	db.Close()
+
+	testConnStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
+	testDB, err := sql.Open("postgres", testConnStr)
+	if err != nil {
+		assert.FailNowf(t, "failed to connect to test database", "error: %v", err)
+	}
+
+	s, err := storesql.NewPostgreSQL(ctx, testDB)
+	if err != nil {
+		testDB.Close()
+		assert.FailNowf(t, "failed to create test store", "error: %v", err)
+	}
+
+	t.Cleanup(func() {
+		testDB.Close()
+
+		db, err := sql.Open("postgres", pgConnStr)
+		if err == nil {
+			_, _ = db.ExecContext(context.Background(), "DROP DATABASE "+dbName)
+			db.Close()
+		}
+	})
+
+	return s
 }
