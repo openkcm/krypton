@@ -7,8 +7,10 @@ type (
 	KeepAliveConfig int
 )
 
+// DefaultRole is the default role assigned to agents if not specified otherwise.
 var DefaultRole AgentRole = "agent"
 
+// AgentConfig represents the configuration for an agent, including its name, key bindings, segment, labels, role, hierarchy, and keep-alive settings.
 type AgentConfig struct {
 	Name        string                       `json:"name"`
 	KeyBindings map[string]models.KeyBinding `json:"key_bindings"`
@@ -19,6 +21,7 @@ type AgentConfig struct {
 	KeepAlive   KeepAliveConfig              `json:"keep_alive"`
 }
 
+// NewAgentConfig creates a new AgentConfig based on the provided KeyHierarchy and TopologySegment.
 func NewAgentConfig(KeyHierarchy KeyHierarchy, seg models.TopologySegment) AgentConfig {
 	return AgentConfig{
 		Name:        seg.Name,

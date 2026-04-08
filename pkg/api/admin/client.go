@@ -92,23 +92,23 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 func (c *Client) ListTenants(ctx context.Context, _ ListTenantsRequest) (ListTenantsResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+PathTenants, nil)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToCreateRequest, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToSendRequest, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
 	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode != http.StatusOK {
-		return ListTenantsResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", ErrUnexpectedStatusCode, httpResp.StatusCode)
+		return ListTenantsResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", api.ErrUnexpectedStatusCode, httpResp.StatusCode)
 	}
 
 	var resp ListTenantsResponse
 	err = json.NewDecoder(httpResp.Body).Decode(&resp)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToDecodeResponse, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
 	}
 
 	return resp, nil
