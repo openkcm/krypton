@@ -3,9 +3,10 @@ package model_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openkcm/krypton/internal/model"
 	"github.com/openkcm/krypton/internal/models"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAgentConfig(t *testing.T) {

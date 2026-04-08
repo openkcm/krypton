@@ -12,14 +12,6 @@ import (
 	"github.com/openkcm/krypton/internal/krhttp"
 )
 
-type SuccessResp struct {
-	Message string `json:"message"`
-}
-
-type ErrorResp struct {
-	Message string `json:"message"`
-}
-
 func TestNewClient(t *testing.T) {
 	t.Run("should create client for valid url and empty opts", func(t *testing.T) {
 		// given when
