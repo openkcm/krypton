@@ -8,16 +8,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/openkcm/krypton/pkg/api"
 )
 
-var (
-	ErrFailedToEncodeRequest  = errors.New("failed to encode request")
-	ErrFailedToCreateRequest  = errors.New("failed to create request")
-	ErrFailedToSendRequest    = errors.New("failed to send request")
-	ErrUnexpectedStatusCode   = errors.New("unexpected status code")
-	ErrFailedToDecodeResponse = errors.New("failed to decode response")
-	ErrTenantNotFound         = errors.New("tenant not found")
-)
+var ErrTenantNotFound = errors.New("tenant not found")
 
 type Client struct {
 	baseURL    string
@@ -35,29 +30,29 @@ func NewClient(baseURL string) *Client {
 func (c *Client) CreateTenant(ctx context.Context, req CreateTenantRequest) (CreateTenantResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return CreateTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToEncodeRequest, err)
+		return CreateTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+PathTenants, bytes.NewReader(body))
 	if err != nil {
-		return CreateTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToCreateRequest, err)
+		return CreateTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return CreateTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToSendRequest, err)
+		return CreateTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
 	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode != http.StatusCreated {
-		return CreateTenantResponse{}, fmt.Errorf("%w: expected 201 Created, got %d", ErrUnexpectedStatusCode, httpResp.StatusCode)
+		return CreateTenantResponse{}, fmt.Errorf("%w: expected 201 Created, got %d", api.ErrUnexpectedStatusCode, httpResp.StatusCode)
 	}
 
 	var resp CreateTenantResponse
 	err = json.NewDecoder(httpResp.Body).Decode(&resp)
 	if err != nil {
-		return CreateTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToDecodeResponse, err)
+		return CreateTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
 	}
 
 	return resp, nil
@@ -68,12 +63,12 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return GetTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToCreateRequest, err)
+		return GetTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return GetTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToSendRequest, err)
+		return GetTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
 	defer httpResp.Body.Close()
 
@@ -82,13 +77,13 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
-		return GetTenantResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", ErrUnexpectedStatusCode, httpResp.StatusCode)
+		return GetTenantResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", api.ErrUnexpectedStatusCode, httpResp.StatusCode)
 	}
 
 	var resp GetTenantResponse
 	err = json.NewDecoder(httpResp.Body).Decode(&resp)
 	if err != nil {
-		return GetTenantResponse{}, fmt.Errorf("%w: %w", ErrFailedToDecodeResponse, err)
+		return GetTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
 	}
 
 	return resp, nil
@@ -97,23 +92,23 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 func (c *Client) ListTenants(ctx context.Context, _ ListTenantsRequest) (ListTenantsResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+PathTenants, nil)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToCreateRequest, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToSendRequest, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
 	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode != http.StatusOK {
-		return ListTenantsResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", ErrUnexpectedStatusCode, httpResp.StatusCode)
+		return ListTenantsResponse{}, fmt.Errorf("%w: expected 200 OK, got %d", api.ErrUnexpectedStatusCode, httpResp.StatusCode)
 	}
 
 	var resp ListTenantsResponse
 	err = json.NewDecoder(httpResp.Body).Decode(&resp)
 	if err != nil {
-		return ListTenantsResponse{}, fmt.Errorf("%w: %w", ErrFailedToDecodeResponse, err)
+		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
 	}
 
 	return resp, nil
