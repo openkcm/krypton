@@ -1,10 +1,6 @@
 package krhttp
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"time"
 )
@@ -16,9 +12,6 @@ type HTTPClientOpts func(*http.Client)
 type Client struct {
 	cli *http.Client
 }
-
-// ErrFailedToDecodeResponse is returned when the response body cannot be decoded as JSON.
-var ErrFailedToDecodeResponse = errors.New("failed to decode response")
 
 // NewClient creates a Client with default transport settings (20 max connections, 30s idle timeout,
 // 10s request timeout). Use HTTPClientOpts to override defaults.
@@ -42,33 +35,7 @@ func NewClient(opts ...HTTPClientOpts) *Client {
 	return &Client{cli: cli}
 }
 
-// Do executes the request and decodes the JSON response. Status 2xx responses are decoded into
-// the success target; all others into the error target. If the target is nil, decoding is skipped.
-func Do[S any, E any](c *Client, req *http.Request, resp *Response[S, E]) error {
-	hRes, err := c.cli.Do(req)
-	if err != nil {
-		return err
-	}
-	defer hRes.Body.Close()
-
-	resp.code = hRes.StatusCode
-	if hRes.StatusCode >= 200 && hRes.StatusCode < 300 {
-		if resp.success == nil {
-			return nil
-		}
-		return decodeResponse(hRes.Body, resp.success)
-	}
-
-	if resp.error == nil {
-		return nil
-	}
-	return decodeResponse(hRes.Body, resp.error)
-}
-
-func decodeResponse(body io.Reader, to any) error {
-	err := json.NewDecoder(body).Decode(to)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFailedToDecodeResponse, err)
-	}
-	return nil
+// Do sends an HTTP request and returns an HTTP response.
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	return c.cli.Do(req)
 }
