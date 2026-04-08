@@ -16,7 +16,10 @@ type (
 	}
 )
 
-const PathRegister = "/api/v1/agents/register"
+const (
+	PathRegister     = "/api/v1/agents/register"
+	XAgentNameHeader = "X-Agent-Name"
+)
 
 type agent struct {
 	hierarchy model.KeyHierarchy
@@ -35,21 +38,21 @@ func NewServerMux(mux *http.ServeMux, hierarchy model.KeyHierarchy, topology mod
 
 // register handles the agent registration request.
 func (a *agent) register(w http.ResponseWriter, r *http.Request) {
-	xAgentName := r.Header.Get("X-Agent-Name")
+	xAgentName := r.Header.Get(XAgentNameHeader)
 	if xAgentName == "" {
 		log.Println("missing X-Agent-Name header")
 		http.Error(w, "missing X-Agent-Name header", http.StatusBadRequest)
 		return
 	}
 
-	top, ok := a.topologySegment(xAgentName)
+	seg, ok := a.topologySegment(xAgentName)
 	if !ok {
 		log.Printf("agent '%s' not found in topology", xAgentName)
 		http.Error(w, "agent not found in topology", http.StatusNotFound)
 		return
 	}
 
-	cfg := model.NewAgentConfig(a.hierarchy, top)
+	cfg := model.NewAgentConfig(a.hierarchy, seg)
 
 	err := json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
 	if err != nil {

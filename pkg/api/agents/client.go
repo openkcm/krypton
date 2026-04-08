@@ -21,11 +21,16 @@ type Client struct {
 var (
 	ErrAgentNameEmpty = errors.New("agent name cannot be empty")
 	ErrAgentNotFound  = errors.New("agent not found in topology")
+	ErrBaseURLEmpty   = errors.New("base URL cannot be empty")
 )
 
+// NewClient creates a new Client with the given base URL and agent name.
 func NewClient(baseURL, agentName string) (*Client, error) {
 	if agentName == "" {
 		return nil, ErrAgentNameEmpty
+	}
+	if baseURL == "" {
+		return nil, ErrBaseURLEmpty
 	}
 	return &Client{
 		baseURL:   baseURL,
@@ -34,6 +39,7 @@ func NewClient(baseURL, agentName string) (*Client, error) {
 	}, nil
 }
 
+// Register sends a agent registration request to the server and returns the response.
 func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -45,7 +51,7 @@ func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterRes
 		return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-Agent-Name", c.agentName)
+	httpReq.Header.Set(XAgentNameHeader, c.agentName)
 
 	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {

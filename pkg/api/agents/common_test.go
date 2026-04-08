@@ -17,10 +17,19 @@ import (
 func TestClient(t *testing.T) {
 	t.Run("agent client should return error if agent name is empty", func(t *testing.T) {
 		// given when
-		subj, err := agents.NewClient("", "")
+		subj, err := agents.NewClient("some-url", "")
 
 		// then
 		assert.ErrorIs(t, err, agents.ErrAgentNameEmpty)
+		assert.Nil(t, subj)
+	})
+
+	t.Run("agent client should return error if baseURL is empty", func(t *testing.T) {
+		// given when
+		subj, err := agents.NewClient("", "agent-aws")
+
+		// then
+		assert.ErrorIs(t, err, agents.ErrBaseURLEmpty)
 		assert.Nil(t, subj)
 	})
 
