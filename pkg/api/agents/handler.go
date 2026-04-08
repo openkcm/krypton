@@ -17,8 +17,8 @@ type (
 )
 
 const (
-	PathRegister     = "/api/v1/agents/register"
-	XAgentNameHeader = "X-Agent-Name"
+	PathRegister    = "/api/v1/agents/register"
+	AgentNameHeader = "X-Agent-Name"
 )
 
 type agent struct {
@@ -38,7 +38,7 @@ func NewServerMux(mux *http.ServeMux, hierarchy model.KeyHierarchy, topology mod
 
 // register handles the agent registration request.
 func (a *agent) register(w http.ResponseWriter, r *http.Request) {
-	xAgentName := r.Header.Get(XAgentNameHeader)
+	xAgentName := r.Header.Get(AgentNameHeader)
 	if xAgentName == "" {
 		log.Println("missing X-Agent-Name header")
 		http.Error(w, "missing X-Agent-Name header", http.StatusBadRequest)

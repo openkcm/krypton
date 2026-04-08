@@ -51,7 +51,7 @@ func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterRes
 		return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(XAgentNameHeader, c.agentName)
+	httpReq.Header.Set(AgentNameHeader, c.agentName)
 
 	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {
