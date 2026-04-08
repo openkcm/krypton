@@ -22,7 +22,8 @@ type expTenant struct {
 }
 
 func TestCreateTenant(t *testing.T) {
-	handler := admin.NewServerMux(tenantTestStore)
+	store := newTestStore(t)
+	handler := admin.NewServerMux(store)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -99,7 +100,8 @@ func TestCreateTenant(t *testing.T) {
 }
 
 func TestGetTenant(t *testing.T) {
-	handler := admin.NewServerMux(tenantTestStore)
+	store := newTestStore(t)
+	handler := admin.NewServerMux(store)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -155,15 +157,68 @@ func TestGetTenant(t *testing.T) {
 	})
 }
 
+func TestListTenants(t *testing.T) {
+	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
+		// given
+		store := newTestStore(t)
+		handler := admin.NewServerMux(store)
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+
+		// when `kr get tenants --json --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", server.URL)
+		output, err := cmd.CombinedOutput()
+
+		// then
+		assert.NoError(t, err, "command should succeed, output: %s", string(output))
+		tenants := decode(t, output)
+		assert.Empty(t, tenants)
+	})
+
+	t.Run("lists created tenants", func(t *testing.T) {
+		// given
+		store := newTestStore(t)
+		handler := admin.NewServerMux(store)
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+
+		tenant1Name := "tenant-" + uuid.NewString()
+		tenant2Name := "tenant-" + uuid.NewString()
+
+		createCmd1 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant1Name, "--json", "--server", server.URL)
+		_, err := createCmd1.CombinedOutput()
+		assert.NoError(t, err)
+
+		createCmd2 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant2Name, "--json", "--server", server.URL)
+		_, err = createCmd2.CombinedOutput()
+		assert.NoError(t, err)
+
+		// when `kr get tenants --json --server <server-url>`
+		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", server.URL)
+		output, err := getCmd.CombinedOutput()
+
+		// then
+		assert.NoError(t, err, "command should succeed, output: %s", string(output))
+		tenants := decode(t, output)
+		assert.Len(t, tenants, 2)
+
+		actTenantNames := map[string]struct{}{}
+		for _, tenant := range tenants {
+			actTenantNames[tenant.Name] = struct{}{}
+		}
+		for _, tenantName := range []string{tenant1Name, tenant2Name} {
+			_, found := actTenantNames[tenantName]
+			assert.True(t, found)
+		}
+	})
+}
+
 func decode(t *testing.T, output []byte) []expTenant {
 	t.Helper()
 	var ts []expTenant
 	err := json.Unmarshal(output, &ts)
 	if err != nil {
 		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
-	}
-	if len(ts) == 0 {
-		assert.FailNowf(t, "empty response array", "output: %s", string(output))
 	}
 	return ts
 }

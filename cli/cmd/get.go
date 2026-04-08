@@ -17,6 +17,7 @@ func getCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(getTenantCmd())
+	cmd.AddCommand(getTenantsCmd())
 
 	return cmd
 }
@@ -42,6 +43,35 @@ func getTenantCmd() *cobra.Command {
 			}
 
 			builder, err := output.From(resp.Tenant)
+			if err != nil {
+				return fmt.Errorf("failed to format output: %w", err)
+			}
+
+			return formatOutput(builder, asJSON).To(cmd.OutOrStdout())
+		},
+	}
+
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output in JSON format")
+
+	return cmd
+}
+
+func getTenantsCmd() *cobra.Command {
+	var asJSON bool
+
+	cmd := &cobra.Command{
+		Use:   "tenants",
+		Short: "Get tenants",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := admin.NewClient(serverURL)
+
+			resp, err := c.ListTenants(cmd.Context(), admin.ListTenantsRequest{})
+			if err != nil {
+				return fmt.Errorf("failed to list tenants: %w", err)
+			}
+
+			builder, err := output.From(resp.Tenants)
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}

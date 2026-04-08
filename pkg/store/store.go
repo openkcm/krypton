@@ -10,6 +10,30 @@ import (
 var ErrTenantNotFound = errors.New("tenant not found")
 
 type Store interface {
-	CreateTenant(ctx context.Context, tenant model.Tenant) (model.Tenant, error)
-	GetTenant(ctx context.Context, id string) (model.Tenant, error)
+	CreateTenant(ctx context.Context, query CreateTenantQuery) (CreateTenantResult, error)
+	GetTenant(ctx context.Context, query GetTenantQuery) (GetTenantResult, error)
+	ListTenants(ctx context.Context, query ListTenantsQuery) (ListTenantsResult, error)
+}
+
+type CreateTenantQuery struct {
+	Tenant model.Tenant
+}
+
+type CreateTenantResult struct {
+	Tenant model.Tenant
+}
+
+type GetTenantQuery struct {
+	ID string
+}
+
+type GetTenantResult struct {
+	Tenant model.Tenant
+}
+
+type ListTenantsQuery struct {
+}
+
+type ListTenantsResult struct {
+	Tenants []model.Tenant
 }
