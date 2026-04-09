@@ -1,11 +1,10 @@
-package model_test
+package models_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/model"
 	"github.com/openkcm/krypton/internal/models"
 )
 
@@ -26,34 +25,34 @@ func TestNewAgentConfig(t *testing.T) {
 			},
 		},
 	}
-	expHierarchy := model.KeyHierarchy{
+	expHierarchy := models.KeyHierarchy{
 		Name: "some-hierarchy",
-		KeySpecs: []model.KeySpec{
+		KeySpecs: []models.KeySpec{
 			{
 				Kind:      "K1",
-				Role:      model.KeyRoleRoot,
+				Role:      models.KeyRoleRoot,
 				Algorithm: "",
 			},
 			{
 				Kind:      "K2",
-				Role:      model.KeyRoleDek,
+				Role:      models.KeyRoleDek,
 				Algorithm: "",
 			},
 		},
 	}
 
-	expConfig := model.AgentConfig{
+	expConfig := models.AgentConfig{
 		Name:        "segment1",
 		KeyBindings: topologySegment.KeyBindings,
 		Segment:     topologySegment.Segment,
 		Labels:      topologySegment.Labels,
-		Role:        model.DefaultRole,
+		Role:        models.DefaultRole,
 		Hierarchy:   expHierarchy,
 		KeepAlive:   30,
 	}
 
 	// when
-	actConfig := model.NewAgentConfig(expHierarchy, topologySegment)
+	actConfig := models.NewAgentConfig(expHierarchy, topologySegment)
 
 	// then
 	assert.Equal(t, expConfig, actConfig)

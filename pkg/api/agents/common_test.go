@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/model"
 	"github.com/openkcm/krypton/internal/models"
 	"github.com/openkcm/krypton/pkg/api"
 	"github.com/openkcm/krypton/pkg/api/agents"
@@ -74,17 +73,17 @@ func TestAgentRegister(t *testing.T) {
 			Segments: []models.TopologySegment{expSegment},
 		}
 
-		expHierarchy := model.KeyHierarchy{
+		expHierarchy := models.KeyHierarchy{
 			Name: "some-hierarchy",
-			KeySpecs: []model.KeySpec{
+			KeySpecs: []models.KeySpec{
 				{
 					Kind:      "K1",
-					Role:      model.KeyRoleRoot,
+					Role:      models.KeyRoleRoot,
 					Algorithm: "",
 				},
 				{
 					Kind:      "K2",
-					Role:      model.KeyRoleDek,
+					Role:      models.KeyRoleDek,
 					Algorithm: "",
 				},
 			},
@@ -106,12 +105,12 @@ func TestAgentRegister(t *testing.T) {
 			// then
 			assert.NoError(t, err)
 			assert.Equal(t, agents.RegisterResponse{
-				Config: model.AgentConfig{
+				Config: models.AgentConfig{
 					Name:        expSegment.Name,
 					KeyBindings: expSegment.KeyBindings,
 					Segment:     expSegment.Segment,
 					Labels:      expSegment.Labels,
-					Role:        model.DefaultRole,
+					Role:        models.DefaultRole,
 					Hierarchy:   expHierarchy,
 					KeepAlive:   30,
 				},

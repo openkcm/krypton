@@ -5,14 +5,13 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/openkcm/krypton/internal/model"
 	"github.com/openkcm/krypton/internal/models"
 )
 
 type (
 	RegisterRequest  struct{}
 	RegisterResponse struct {
-		Config model.AgentConfig `json:"config"`
+		Config models.AgentConfig `json:"config"`
 	}
 )
 
@@ -22,12 +21,12 @@ const (
 )
 
 type agent struct {
-	hierarchy model.KeyHierarchy
+	hierarchy models.KeyHierarchy
 	topology  models.Topology
 }
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(mux *http.ServeMux, hierarchy model.KeyHierarchy, topology models.Topology) http.Handler {
+func NewServerMux(mux *http.ServeMux, hierarchy models.KeyHierarchy, topology models.Topology) http.Handler {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
@@ -52,7 +51,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := model.NewAgentConfig(a.hierarchy, seg)
+	cfg := models.NewAgentConfig(a.hierarchy, seg)
 
 	err := json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
 	if err != nil {

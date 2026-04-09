@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/keylifecycle"
-	"github.com/openkcm/krypton/internal/model"
+	"github.com/openkcm/krypton/internal/models"
 )
 
 var allKeyStates = []keylifecycle.State{
@@ -19,11 +19,11 @@ var allKeyStates = []keylifecycle.State{
 	keylifecycle.StateDestroyed,
 }
 
-var allKeyOperations = []model.KeyUsage{
-	model.KeyUsageEncrypt,
-	model.KeyUsageDecrypt,
-	model.KeyUsageUnwrap,
-	model.KeyUsageWrap,
+var allKeyOperations = []models.KeyUsage{
+	models.KeyUsageEncrypt,
+	models.KeyUsageDecrypt,
+	models.KeyUsageUnwrap,
+	models.KeyUsageWrap,
 }
 
 func TestKeyLifecycleStateTransitions(t *testing.T) {
@@ -132,35 +132,35 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 
 	tts := []struct {
 		state           keylifecycle.State
-		validOperations model.KeyUsage
+		validOperations models.KeyUsage
 	}{
 		{
 			state:           keylifecycle.StatePreActivation,
-			validOperations: model.KeyUsageNone,
+			validOperations: models.KeyUsageNone,
 		},
 		{
 			state:           keylifecycle.StateActive,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageEncrypt | model.KeyUsageWrap | model.KeyUsageUnwrap,
+			validOperations: models.KeyUsageDecrypt | models.KeyUsageEncrypt | models.KeyUsageWrap | models.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateSuspended,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: models.KeyUsageDecrypt | models.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateDeactivated,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: models.KeyUsageDecrypt | models.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateCompromised,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: models.KeyUsageDecrypt | models.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateDestroyed,
-			validOperations: model.KeyUsageNone,
+			validOperations: models.KeyUsageNone,
 		},
 		{
 			state:           "invalid-state",
-			validOperations: model.KeyUsageNone,
+			validOperations: models.KeyUsageNone,
 		},
 	}
 

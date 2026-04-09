@@ -1,11 +1,11 @@
-package model_test
+package models_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/model"
+	"github.com/openkcm/krypton/internal/models"
 )
 
 func TestKeySpec(t *testing.T) {
@@ -13,53 +13,53 @@ func TestKeySpec(t *testing.T) {
 		// given
 		tts := []struct {
 			name     string
-			input    model.KeySpec
-			expUsage model.KeyUsage
+			input    models.KeySpec
+			expUsage models.KeyUsage
 		}{
 			{
 				name: "should return wrap and unwrap for 'root' role",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleRoot,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleRoot,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expUsage: model.KeyUsageWrap | model.KeyUsageUnwrap,
+				expUsage: models.KeyUsageWrap | models.KeyUsageUnwrap,
 			},
 			{
 				name: "should return wrap and unwrap for 'kek' role",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleKek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleKek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expUsage: model.KeyUsageWrap | model.KeyUsageUnwrap,
+				expUsage: models.KeyUsageWrap | models.KeyUsageUnwrap,
 			},
 			{
 				name: "should return wrap and unwrap for 'tek' role",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleTek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleTek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expUsage: model.KeyUsageWrap | model.KeyUsageUnwrap,
+				expUsage: models.KeyUsageWrap | models.KeyUsageUnwrap,
 			},
 			{
 				name: "should return encrypt and decrypt for 'dek' role",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleDek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleDek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expUsage: model.KeyUsageEncrypt | model.KeyUsageDecrypt,
+				expUsage: models.KeyUsageEncrypt | models.KeyUsageDecrypt,
 			},
 			{
 				name: "should return zero usage for an invalid role",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
 					Role:      "invalid-role",
-					Algorithm: model.KeyAlgorithmAES256,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expUsage: model.KeyUsageNone,
+				expUsage: models.KeyUsageNone,
 			},
 		}
 
@@ -77,75 +77,75 @@ func TestKeySpec(t *testing.T) {
 	t.Run("Validate", func(t *testing.T) {
 		tts := []struct {
 			name   string
-			input  model.KeySpec
+			input  models.KeySpec
 			expErr error
 		}{
 			{
 				name: "should return error if kind is empty",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "",
-					Role:      model.KeyRoleRoot,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleRoot,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expErr: model.ErrKeySpecKindEmpty,
+				expErr: models.ErrKeySpecKindEmpty,
 			},
 			{
 				name: "should return error if role is invalid",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
 					Role:      "invalid-role",
-					Algorithm: model.KeyAlgorithmAES256,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
-				expErr: model.ErrKeySpecRoleInvalid,
+				expErr: models.ErrKeySpecRoleInvalid,
 			},
 			{
 				name: "should return error if algorithm is empty",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleRoot,
+					Role:      models.KeyRoleRoot,
 					Algorithm: "",
 				},
-				expErr: model.ErrKeySpecAlgorithmInvalid,
+				expErr: models.ErrKeySpecAlgorithmInvalid,
 			},
 			{
 				name: "should return error if algorithm is invalid",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleRoot,
+					Role:      models.KeyRoleRoot,
 					Algorithm: "some-invalid-algorithm",
 				},
-				expErr: model.ErrKeySpecAlgorithmInvalid,
+				expErr: models.ErrKeySpecAlgorithmInvalid,
 			},
 			{
 				name: "should return nil if role is 'root'",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleRoot,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleRoot,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
 			},
 			{
 				name: "should return nil if role is 'kek'",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleKek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleKek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
 			},
 			{
 				name: "should return nil if role is 'dek'",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleDek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleDek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
 			},
 			{
 				name: "should return nil if role is 'tek'",
-				input: model.KeySpec{
+				input: models.KeySpec{
 					Kind:      "K0",
-					Role:      model.KeyRoleTek,
-					Algorithm: model.KeyAlgorithmAES256,
+					Role:      models.KeyRoleTek,
+					Algorithm: models.KeyAlgorithmAES256,
 				},
 			},
 		}
@@ -169,12 +169,12 @@ func TestKeySpec(t *testing.T) {
 	t.Run("IsSupportedAlgorithm", func(t *testing.T) {
 		tts := []struct {
 			name  string
-			input model.KeyAlgorithm
+			input models.KeyAlgorithm
 			expOk bool
 		}{
 			{
 				name:  "should return true for 'AES256'",
-				input: model.KeyAlgorithmAES256,
+				input: models.KeyAlgorithmAES256,
 				expOk: true,
 			},
 			{
@@ -192,7 +192,7 @@ func TestKeySpec(t *testing.T) {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// when
-				ok := model.IsSupportedAlgorithm(tt.input)
+				ok := models.IsSupportedAlgorithm(tt.input)
 
 				// then
 				assert.Equal(t, tt.expOk, ok)

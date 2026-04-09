@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"errors"
@@ -24,8 +24,8 @@ var (
 
 // KeyHierarchy defines an ordered arrangement of cryptographic keys and their roles.
 type KeyHierarchy struct {
-	Name     string
-	KeySpecs []KeySpec
+	Name     string    `yaml:"name"`
+	KeySpecs []KeySpec `yaml:"key_specs"`
 }
 
 // Validate checks the KeyHierarchy for structural correctness. It returns an error if the name is

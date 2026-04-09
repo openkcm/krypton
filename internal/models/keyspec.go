@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"errors"
@@ -50,9 +50,9 @@ var (
 
 // KeySpec defines the properties of a key within a hierarchy, including its kind, role, and algorithm.
 type KeySpec struct {
-	Kind      KeyKind
-	Role      KeyRole
-	Algorithm KeyAlgorithm
+	Kind      KeyKind      `yaml:"kind"`
+	Role      KeyRole      `yaml:"role"`
+	Algorithm KeyAlgorithm `yaml:"algorithm"`
 }
 
 // Usage returns the KeyUsage associated with the KeySpec's role.

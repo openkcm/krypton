@@ -1,85 +1,85 @@
-package model_test
+package models_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/model"
+	"github.com/openkcm/krypton/internal/models"
 )
 
 func TestKeyUsage(t *testing.T) {
 	t.Run("Has", func(t *testing.T) {
 		tts := []struct {
 			name  string
-			subj  model.KeyUsage
-			input model.KeyUsage
+			subj  models.KeyUsage
+			input models.KeyUsage
 			expOk bool
 		}{
 			{
 				name:  "should return true if the subject has only 'encrypt' flag",
-				subj:  model.KeyUsageEncrypt,
-				input: model.KeyUsageEncrypt,
+				subj:  models.KeyUsageEncrypt,
+				input: models.KeyUsageEncrypt,
 				expOk: true,
 			},
 			{
 				name:  "should return true if the subject has only 'decrypt' flag",
-				subj:  model.KeyUsageDecrypt,
-				input: model.KeyUsageDecrypt,
+				subj:  models.KeyUsageDecrypt,
+				input: models.KeyUsageDecrypt,
 				expOk: true,
 			},
 			{
 				name:  "should return true if the subject has only 'wrap' flag",
-				subj:  model.KeyUsageWrap,
-				input: model.KeyUsageWrap,
+				subj:  models.KeyUsageWrap,
+				input: models.KeyUsageWrap,
 				expOk: true,
 			},
 			{
 				name:  "should return true if the subject has only 'unwrap' flag",
-				subj:  model.KeyUsageUnwrap,
-				input: model.KeyUsageUnwrap,
+				subj:  models.KeyUsageUnwrap,
+				input: models.KeyUsageUnwrap,
 				expOk: true,
 			},
 			{
 				name:  "should return true if the subject has multiple flags and the input matches all of them",
-				subj:  model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
-				input: model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
+				subj:  models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
+				input: models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
 				expOk: true,
 			},
 			{
 				name:  "should return true if the subject has multiple flags and the input is a subset of them",
-				subj:  model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
-				input: model.KeyUsageEncrypt | model.KeyUsageDecrypt,
+				subj:  models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
+				input: models.KeyUsageEncrypt | models.KeyUsageDecrypt,
 				expOk: true,
 			},
 			{
 				name:  "should return false if the input contains a flag that is set and a flag that is not set in the subject",
-				subj:  model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
-				input: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+				subj:  models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
+				input: models.KeyUsageDecrypt | models.KeyUsageUnwrap,
 				expOk: false,
 			},
 			{
 				name:  "should return false if the subject contains only one of the multiple flags in the input",
-				subj:  model.KeyUsageEncrypt,
-				input: model.KeyUsageEncrypt | model.KeyUsageWrap,
+				subj:  models.KeyUsageEncrypt,
+				input: models.KeyUsageEncrypt | models.KeyUsageWrap,
 				expOk: false,
 			},
 			{
 				name:  "should return false if the input is zero",
-				subj:  model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
+				subj:  models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
 				input: 0,
 				expOk: false,
 			},
 			{
 				name:  "should return false if the input is not in the subject",
-				subj:  model.KeyUsageEncrypt | model.KeyUsageDecrypt,
-				input: model.KeyUsage(64),
+				subj:  models.KeyUsageEncrypt | models.KeyUsageDecrypt,
+				input: models.KeyUsage(64),
 				expOk: false,
 			},
 			{
 				name:  "should return false if the subject is zero",
-				subj:  model.KeyUsage(0),
-				input: model.KeyUsageEncrypt,
+				subj:  models.KeyUsage(0),
+				input: models.KeyUsageEncrypt,
 				expOk: false,
 			},
 		}
@@ -97,47 +97,47 @@ func TestKeyUsage(t *testing.T) {
 	t.Run("String", func(t *testing.T) {
 		tts := []struct {
 			name  string
-			input model.KeyUsage
+			input models.KeyUsage
 			exp   string
 		}{
 			{
 				name:  "should return 'none' if no flags are set",
-				input: model.KeyUsageNone,
+				input: models.KeyUsageNone,
 				exp:   "none",
 			},
 			{
 				name:  "should return 'encrypt' if only the encrypt flag is set",
-				input: model.KeyUsageEncrypt,
+				input: models.KeyUsageEncrypt,
 				exp:   "encrypt",
 			},
 			{
 				name:  "should return 'decrypt' if only the decrypt flag is set",
-				input: model.KeyUsageDecrypt,
+				input: models.KeyUsageDecrypt,
 				exp:   "decrypt",
 			},
 			{
 				name:  "should return 'wrap' if only the wrap flag is set",
-				input: model.KeyUsageWrap,
+				input: models.KeyUsageWrap,
 				exp:   "wrap",
 			},
 			{
 				name:  "should return 'unwrap' if only the unwrap flag is set",
-				input: model.KeyUsageUnwrap,
+				input: models.KeyUsageUnwrap,
 				exp:   "unwrap",
 			},
 			{
 				name:  "should return multiple flag names separated by '|' if multiple flags are set",
-				input: model.KeyUsageEncrypt | model.KeyUsageDecrypt | model.KeyUsageWrap,
+				input: models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageWrap,
 				exp:   "encrypt|decrypt|wrap",
 			},
 			{
 				name:  "should return the valid flag names followed by unknown flags if there are extra flags set",
-				input: model.KeyUsage(64),
+				input: models.KeyUsage(64),
 				exp:   "unknown(64)",
 			},
 			{
 				name:  "should return the valid flag names followed by unknown flags if there are valid and extra flags set",
-				input: model.KeyUsage(32) | model.KeyUsageEncrypt,
+				input: models.KeyUsage(32) | models.KeyUsageEncrypt,
 				exp:   "encrypt|unknown(32)",
 			},
 		}
@@ -155,8 +155,8 @@ func TestKeyUsage(t *testing.T) {
 
 	t.Run("ValidKeyUsages", func(t *testing.T) {
 		// when
-		validUsages := model.ValidKeyUsages
-		validUsageNames := model.ValidKeyUsageNames
+		validUsages := models.ValidKeyUsages
+		validUsageNames := models.ValidKeyUsageNames
 
 		// then
 		assert.Len(t, validUsages, 4, "number of valid usage names should be 4")
