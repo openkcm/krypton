@@ -59,8 +59,8 @@ func (cfg *RootConfig) Validate() error {
 	if cfg.Name == "" {
 		return ErrConfigNameEmpty
 	}
-	if cfg.Role != "root" {
-		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, "root")
+	if cfg.Role != spec.RootRole {
+		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.RootRole)
 	}
 	if err := cfg.Hierarchy.Validate(); err != nil {
 		return fmt.Errorf("hierarchy: %w", err)
@@ -82,8 +82,8 @@ func (cfg *AgentBootstrapConfig) Validate() error {
 	if cfg.Name == "" {
 		return ErrConfigNameEmpty
 	}
-	if cfg.Role != "agent" {
-		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, "agent")
+	if cfg.Role != spec.DefaultRole {
+		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.DefaultRole)
 	}
 	if cfg.KryptonRoot.Address.URL == "" {
 		return ErrConfigAddressEmpty

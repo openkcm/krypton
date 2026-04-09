@@ -5,8 +5,11 @@ type (
 	KeepAliveConfig int
 )
 
-// DefaultRole is the default role assigned to agents if not specified otherwise.
-var DefaultRole AgentRole = "agent"
+var (
+	// DefaultRole is the default role assigned to agents if not specified otherwise.
+	DefaultRole AgentRole = "agent"
+	RootRole    AgentRole = "root"
+)
 
 // AgentConfig represents the configuration for an agent, including its name, key bindings, segment, labels, role, hierarchy, and keep-alive settings.
 type AgentConfig struct {
