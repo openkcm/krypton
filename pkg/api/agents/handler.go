@@ -5,13 +5,13 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/openkcm/krypton/internal/models"
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 type (
 	RegisterRequest  struct{}
 	RegisterResponse struct {
-		Config models.AgentConfig `json:"config"`
+		Config spec.AgentConfig `json:"config"`
 	}
 )
 
@@ -21,12 +21,12 @@ const (
 )
 
 type agent struct {
-	hierarchy models.KeyHierarchy
-	topology  models.Topology
+	hierarchy spec.KeyHierarchy
+	topology  spec.Topology
 }
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(mux *http.ServeMux, hierarchy models.KeyHierarchy, topology models.Topology) http.Handler {
+func NewServerMux(mux *http.ServeMux, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
@@ -51,7 +51,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := models.NewAgentConfig(a.hierarchy, seg)
+	cfg := spec.NewAgentConfig(a.hierarchy, seg)
 
 	err := json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
 	if err != nil {
@@ -61,11 +61,11 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *agent) topologySegment(agentName string) (models.TopologySegment, bool) {
+func (a *agent) topologySegment(agentName string) (spec.TopologySegment, bool) {
 	for _, seg := range a.topology.Segments {
 		if seg.Name == agentName {
 			return seg, true
 		}
 	}
-	return models.TopologySegment{}, false
+	return spec.TopologySegment{}, false
 }

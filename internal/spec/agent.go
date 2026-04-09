@@ -1,4 +1,4 @@
-package models
+package spec
 
 type (
 	AgentRole       string

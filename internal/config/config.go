@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/openkcm/krypton/internal/models"
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 var (
@@ -23,10 +23,6 @@ type AddressType string
 const (
 	// AddressTypeHTTP represents HTTP/HTTPS transport.
 	AddressTypeHTTP AddressType = "http"
-	// AddressTypeGRPC represents gRPC transport (placeholder for future use).
-	AddressTypeGRPC AddressType = "grpc"
-	// AddressTypeMessageQueue represents message queue transport (placeholder for future use).
-	AddressTypeMessageQueue AddressType = "message-queue"
 )
 
 // Address represents a network address for inter-service communication.
@@ -42,20 +38,20 @@ type KryptonRoot struct {
 
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
-	Name        string                       `yaml:"name"`
-	Role        models.AgentRole             `yaml:"role"`
-	Segment     models.HierarchySegment      `yaml:"segment"`
-	Labels      models.Labels                `yaml:"labels,omitempty"`
-	KeyBindings map[string]models.KeyBinding `yaml:"key_bindings"`
-	Hierarchy   models.KeyHierarchy          `yaml:"hierarchy"`
-	Topology    models.Topology              `yaml:"topology"`
+	Name        string                     `yaml:"name"`
+	Role        spec.AgentRole             `yaml:"role"`
+	Segment     spec.HierarchySegment      `yaml:"segment"`
+	Labels      spec.Labels                `yaml:"labels,omitempty"`
+	KeyBindings map[string]spec.KeyBinding `yaml:"key_bindings"`
+	Hierarchy   spec.KeyHierarchy          `yaml:"hierarchy"`
+	Topology    spec.Topology              `yaml:"topology"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
 type AgentBootstrapConfig struct {
-	Name        string           `yaml:"name"`
-	Role        models.AgentRole `yaml:"role"`
-	KryptonRoot KryptonRoot      `yaml:"krypton_root"`
+	Name        string         `yaml:"name"`
+	Role        spec.AgentRole `yaml:"role"`
+	KryptonRoot KryptonRoot    `yaml:"krypton_root"`
 }
 
 // Validate checks the RootConfig for structural correctness.

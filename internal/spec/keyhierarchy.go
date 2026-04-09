@@ -1,4 +1,4 @@
-package models
+package spec
 
 import (
 	"errors"

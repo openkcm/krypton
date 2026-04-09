@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openkcm/krypton/internal/models"
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 type (
@@ -33,7 +33,7 @@ const (
 // lifecycle holds allowed state transitions and per-state permitted operations.
 type lifecycle struct {
 	transitions map[State]map[State]struct{}
-	stateUsages map[State]models.KeyUsage
+	stateUsages map[State]spec.KeyUsage
 }
 
 // Sentinel errors for lifecycle validation.
@@ -71,13 +71,13 @@ var defaultLifecycle = lifecycle{
 		},
 		StateDestroyed: {},
 	},
-	stateUsages: map[State]models.KeyUsage{
-		StatePreActivation: models.KeyUsageNone,
-		StateActive:        models.KeyUsageEncrypt | models.KeyUsageDecrypt | models.KeyUsageUnwrap | models.KeyUsageWrap,
-		StateSuspended:     models.KeyUsageDecrypt | models.KeyUsageUnwrap,
-		StateDeactivated:   models.KeyUsageDecrypt | models.KeyUsageUnwrap,
-		StateCompromised:   models.KeyUsageDecrypt | models.KeyUsageUnwrap,
-		StateDestroyed:     models.KeyUsageNone,
+	stateUsages: map[State]spec.KeyUsage{
+		StatePreActivation: spec.KeyUsageNone,
+		StateActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
+		StateSuspended:     spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		StateDeactivated:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		StateCompromised:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		StateDestroyed:     spec.KeyUsageNone,
 	},
 }
 
@@ -96,7 +96,7 @@ func ValidateTransition(from, to State) error {
 }
 
 // ValidateKeyUsage checks whether operation op is permitted in state s.
-func ValidateKeyUsage(s State, op models.KeyUsage) error {
+func ValidateKeyUsage(s State, op spec.KeyUsage) error {
 	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
 		return fmt.Errorf("invalid state: %s: %w", s, ErrOperationNotAllowedInState)
@@ -124,10 +124,10 @@ func GetAllowedTransitions(s State) []State {
 }
 
 // GetAllowedKeyUsages returns the permitted operations for the given state.
-func GetAllowedKeyUsages(s State) models.KeyUsage {
+func GetAllowedKeyUsages(s State) spec.KeyUsage {
 	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
-		return models.KeyUsageNone
+		return spec.KeyUsageNone
 	}
 
 	return ops

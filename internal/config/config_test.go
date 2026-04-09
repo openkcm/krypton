@@ -7,31 +7,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/models"
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 func validRootConfig() *RootConfig {
 	return &RootConfig{
 		Name: "root",
 		Role: "root",
-		Segment: models.HierarchySegment{
+		Segment: spec.HierarchySegment{
 			StartKind: "K0",
 			EndKind:   "K1",
 		},
-		Labels: models.Labels{"env": "prod"},
-		KeyBindings: map[string]models.KeyBinding{
+		Labels: spec.Labels{"env": "prod"},
+		KeyBindings: map[string]spec.KeyBinding{
 			"K0": {
-				Vault: models.VaultSpec{Name: "v", Type: "aws-kms"},
+				Vault: spec.VaultSpec{Name: "v", Type: "aws-kms"},
 			},
 		},
-		Hierarchy: models.KeyHierarchy{
+		Hierarchy: spec.KeyHierarchy{
 			Name: "h",
-			KeySpecs: []models.KeySpec{
-				{Kind: "K0", Role: models.KeyRoleRoot, Algorithm: models.KeyAlgorithmAES256},
-				{Kind: "K1", Role: models.KeyRoleDek, Algorithm: models.KeyAlgorithmAES256},
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
 			},
 		},
-		Topology: models.Topology{},
+		Topology: spec.Topology{},
 	}
 }
 
@@ -77,36 +77,36 @@ func TestValidateRootConfig(t *testing.T) {
 		{
 			name:    "invalid hierarchy",
 			modify:  func(c *RootConfig) { c.Hierarchy.Name = "" },
-			wantErr: models.ErrKeyHierarchyNameEmpty,
+			wantErr: spec.ErrKeyHierarchyNameEmpty,
 		},
 		{
 			name: "invalid topology segment",
 			modify: func(c *RootConfig) {
-				c.Topology = models.Topology{
-					Segments: []models.TopologySegment{
+				c.Topology = spec.Topology{
+					Segments: []spec.TopologySegment{
 						{
 							Name: "",
-							Segment: models.HierarchySegment{
+							Segment: spec.HierarchySegment{
 								StartKind: "K2",
 								EndKind:   "K3",
 							},
-							KeyBindings: map[string]models.KeyBinding{
-								"K2": {Vault: models.VaultSpec{Name: "v", Type: "t"}},
+							KeyBindings: map[string]spec.KeyBinding{
+								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
 							},
 						},
 					},
 				}
 			},
-			wantErr: models.ErrAgentNameEmpty,
+			wantErr: spec.ErrAgentNameEmpty,
 		},
 		{
 			name:    "invalid segment",
 			modify:  func(c *RootConfig) { c.Segment.StartKind = "" },
-			wantErr: models.ErrStartKindEmpty,
+			wantErr: spec.ErrStartKindEmpty,
 		},
 		{
 			name:    "empty key bindings",
-			modify:  func(c *RootConfig) { c.KeyBindings = map[string]models.KeyBinding{} },
+			modify:  func(c *RootConfig) { c.KeyBindings = map[string]spec.KeyBinding{} },
 			wantErr: ErrConfigKeyBindingsEmpty,
 		},
 		{
@@ -116,7 +116,7 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name:    "empty topology is valid",
-			modify:  func(c *RootConfig) { c.Topology = models.Topology{} },
+			modify:  func(c *RootConfig) { c.Topology = spec.Topology{} },
 			wantErr: nil,
 		},
 	}
@@ -240,7 +240,7 @@ topology:
 			validate: func(t *testing.T, cfg *RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
-				assert.Equal(t, models.AgentRole("root"), cfg.Role)
+				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
 				assert.Equal(t, "production", cfg.Labels["environment"])
@@ -250,7 +250,7 @@ topology:
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
 				assert.Equal(t, "production-hierarchy", cfg.Hierarchy.Name)
 				assert.Len(t, cfg.Hierarchy.KeySpecs, 3)
-				assert.Equal(t, models.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
+				assert.Equal(t, spec.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
 			},
@@ -337,7 +337,7 @@ krypton_root:
 			validate: func(t *testing.T, cfg *AgentBootstrapConfig) {
 				t.Helper()
 				assert.Equal(t, "agent-aws", cfg.Name)
-				assert.Equal(t, models.AgentRole("agent"), cfg.Role)
+				assert.Equal(t, spec.AgentRole("agent"), cfg.Role)
 				assert.Equal(t, AddressTypeHTTP, cfg.KryptonRoot.Address.Type)
 				assert.Equal(t, "https://root.krypton.example.com:8443", cfg.KryptonRoot.Address.URL)
 			},
