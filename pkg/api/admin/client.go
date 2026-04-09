@@ -9,22 +9,28 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/openkcm/krypton/internal/krhttp"
 	"github.com/openkcm/krypton/pkg/api"
 )
 
-var ErrTenantNotFound = errors.New("tenant not found")
+var (
+	ErrTenantNotFound = errors.New("tenant not found")
+)
 
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL string
+	cli     *krhttp.Client
 }
 
 // NewClient creates a new Krypton admin API client.
-func NewClient(baseURL string) *Client {
-	return &Client{
-		baseURL:    baseURL,
-		httpClient: http.DefaultClient,
+func NewClient(baseURL string) (*Client, error) {
+	if baseURL == "" {
+		return nil, api.ErrBaseURLEmpty
 	}
+	return &Client{
+		baseURL: baseURL,
+		cli:     krhttp.NewClient(),
+	}, nil
 }
 
 func (c *Client) CreateTenant(ctx context.Context, req CreateTenantRequest) (CreateTenantResponse, error) {
@@ -39,7 +45,7 @@ func (c *Client) CreateTenant(ctx context.Context, req CreateTenantRequest) (Cre
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	httpResp, err := c.httpClient.Do(httpReq)
+	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {
 		return CreateTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
@@ -66,7 +72,7 @@ func (c *Client) GetTenant(ctx context.Context, req GetTenantRequest) (GetTenant
 		return GetTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 
-	httpResp, err := c.httpClient.Do(httpReq)
+	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {
 		return GetTenantResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
@@ -95,7 +101,7 @@ func (c *Client) ListTenants(ctx context.Context, _ ListTenantsRequest) (ListTen
 		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
 	}
 
-	httpResp, err := c.httpClient.Do(httpReq)
+	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {
 		return ListTenantsResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}

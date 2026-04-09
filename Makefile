@@ -12,13 +12,13 @@ lint:
 
 .PHONY: test
 test: clean
-	@mkdir -p cover/integration cover/unit
+	@mkdir -p cover/integration-cli cover/integration-test cover/unit
 	@go clean -testcache
 
 	go test -count=1 -race -cover ./... -args -test.gocoverdir="${PWD}/cover/unit"
-	GOCOVERDIR="${PWD}/cover/integration" go test -count=1 -race ./integration
+	CLI_GOCOVERDIR="${PWD}/cover/integration-cli" go test -count=1 -race -cover -coverpkg=./... ./integration -args -test.gocoverdir="${PWD}/cover/integration-test"
 
-	@go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
+	@go tool covdata textfmt -i=./cover/unit,./cover/integration-test,./cover/integration-cli -o cover.out
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
 

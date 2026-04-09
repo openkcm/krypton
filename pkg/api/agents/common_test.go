@@ -29,7 +29,7 @@ func TestClient(t *testing.T) {
 		subj, err := agents.NewClient("", "agent-aws")
 
 		// then
-		assert.ErrorIs(t, err, agents.ErrBaseURLEmpty)
+		assert.ErrorIs(t, err, api.ErrBaseURLEmpty)
 		assert.Nil(t, subj)
 	})
 

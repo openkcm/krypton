@@ -63,7 +63,7 @@ func setupCLI() ([]func(), error) {
 
 	binaryPath = filepath.Join(tmpDir, "kr")
 
-	coverDir = os.Getenv("GOCOVERDIR")
+	coverDir = os.Getenv("CLI_GOCOVERDIR")
 	buildArgs := []string{"build", "-o", binaryPath}
 	if coverDir != "" {
 		buildArgs = append(buildArgs, "-cover", "-covermode=atomic")

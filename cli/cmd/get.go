@@ -30,7 +30,10 @@ func getTenantCmd() *cobra.Command {
 		Short: "Get a tenant by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := admin.NewClient(serverURL)
+			c, err := admin.NewClient(serverURL)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
 
 			resp, err := c.GetTenant(cmd.Context(), admin.GetTenantRequest{
 				ID: args[0],
@@ -64,7 +67,10 @@ func getTenantsCmd() *cobra.Command {
 		Short: "Get tenants",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := admin.NewClient(serverURL)
+			c, err := admin.NewClient(serverURL)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
 
 			resp, err := c.ListTenants(cmd.Context(), admin.ListTenantsRequest{})
 			if err != nil {
