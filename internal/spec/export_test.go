@@ -1,4 +1,4 @@
-package model
+package spec
 
 var (
 	ValidKeyUsageNames = validKeyUsageNames

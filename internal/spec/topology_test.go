@@ -1,4 +1,4 @@
-package models
+package spec
 
 import (
 	"testing"
@@ -266,6 +266,127 @@ func TestValidateTopologySegment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.segment.Validate()
+			if tt.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateTopology(t *testing.T) {
+	validKeyBindings := map[string]KeyBinding{
+		"K2": {
+			Vault: VaultSpec{
+				Name: "vault-k2",
+				Type: "aws-kms",
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		topology Topology
+		wantErr  error
+	}{
+		{
+			name:     "empty topology (0 agents) is valid",
+			topology: Topology{},
+			wantErr:  nil,
+		},
+		{
+			name: "nil segments is valid",
+			topology: Topology{
+				Segments: nil,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid single segment",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: validKeyBindings,
+					},
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid multiple segments",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: validKeyBindings,
+					},
+					{
+						Name: "agent-gcp",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: validKeyBindings,
+					},
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "invalid segment with empty agent name",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: validKeyBindings,
+					},
+				},
+			},
+			wantErr: ErrAgentNameEmpty,
+		},
+		{
+			name: "invalid segment with empty key bindings at index 1",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: validKeyBindings,
+					},
+					{
+						Name: "agent-gcp",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{},
+					},
+				},
+			},
+			wantErr: ErrKeyBindingsEmpty,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.topology.Validate()
 			if tt.wantErr == nil {
 				assert.NoError(t, err)
 			} else {

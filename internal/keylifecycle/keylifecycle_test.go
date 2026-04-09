@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/keylifecycle"
-	"github.com/openkcm/krypton/internal/model"
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 var allKeyStates = []keylifecycle.State{
@@ -19,11 +19,11 @@ var allKeyStates = []keylifecycle.State{
 	keylifecycle.StateDestroyed,
 }
 
-var allKeyOperations = []model.KeyUsage{
-	model.KeyUsageEncrypt,
-	model.KeyUsageDecrypt,
-	model.KeyUsageUnwrap,
-	model.KeyUsageWrap,
+var allKeyOperations = []spec.KeyUsage{
+	spec.KeyUsageEncrypt,
+	spec.KeyUsageDecrypt,
+	spec.KeyUsageUnwrap,
+	spec.KeyUsageWrap,
 }
 
 func TestKeyLifecycleStateTransitions(t *testing.T) {
@@ -132,35 +132,35 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 
 	tts := []struct {
 		state           keylifecycle.State
-		validOperations model.KeyUsage
+		validOperations spec.KeyUsage
 	}{
 		{
 			state:           keylifecycle.StatePreActivation,
-			validOperations: model.KeyUsageNone,
+			validOperations: spec.KeyUsageNone,
 		},
 		{
 			state:           keylifecycle.StateActive,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageEncrypt | model.KeyUsageWrap | model.KeyUsageUnwrap,
+			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageEncrypt | spec.KeyUsageWrap | spec.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateSuspended,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateDeactivated,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateCompromised,
-			validOperations: model.KeyUsageDecrypt | model.KeyUsageUnwrap,
+			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
 			state:           keylifecycle.StateDestroyed,
-			validOperations: model.KeyUsageNone,
+			validOperations: spec.KeyUsageNone,
 		},
 		{
 			state:           "invalid-state",
-			validOperations: model.KeyUsageNone,
+			validOperations: spec.KeyUsageNone,
 		},
 	}
 

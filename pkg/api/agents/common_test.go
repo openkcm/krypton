@@ -8,8 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/model"
-	"github.com/openkcm/krypton/internal/models"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api"
 	"github.com/openkcm/krypton/pkg/api/agents"
 )
@@ -55,36 +54,36 @@ func TestAgentRegister(t *testing.T) {
 	expAgentName := "agent-aws"
 
 	t.Run("actual server", func(t *testing.T) {
-		expSegment := models.TopologySegment{
+		expSegment := spec.TopologySegment{
 			Name:   expAgentName,
 			Labels: map[string]string{"region": "us-west"},
-			Segment: models.HierarchySegment{
+			Segment: spec.HierarchySegment{
 				StartKind: "K2",
 				EndKind:   "K2",
 			},
-			KeyBindings: map[string]models.KeyBinding{
+			KeyBindings: map[string]spec.KeyBinding{
 				"binding1": {
-					Vault:             models.VaultSpec{},
-					ParentKeyProvider: &models.ParentKeyProviderRef{},
-					Labels:            models.Labels{},
+					Vault:             spec.VaultSpec{},
+					ParentKeyProvider: &spec.ParentKeyProviderRef{},
+					Labels:            spec.Labels{},
 				},
 			},
 		}
-		topology := models.Topology{
-			Segments: []models.TopologySegment{expSegment},
+		topology := spec.Topology{
+			Segments: []spec.TopologySegment{expSegment},
 		}
 
-		expHierarchy := model.KeyHierarchy{
+		expHierarchy := spec.KeyHierarchy{
 			Name: "some-hierarchy",
-			KeySpecs: []model.KeySpec{
+			KeySpecs: []spec.KeySpec{
 				{
 					Kind:      "K1",
-					Role:      model.KeyRoleRoot,
+					Role:      spec.KeyRoleRoot,
 					Algorithm: "",
 				},
 				{
 					Kind:      "K2",
-					Role:      model.KeyRoleDek,
+					Role:      spec.KeyRoleDek,
 					Algorithm: "",
 				},
 			},
@@ -106,12 +105,12 @@ func TestAgentRegister(t *testing.T) {
 			// then
 			assert.NoError(t, err)
 			assert.Equal(t, agents.RegisterResponse{
-				Config: model.AgentConfig{
+				Config: spec.AgentConfig{
 					Name:        expSegment.Name,
 					KeyBindings: expSegment.KeyBindings,
 					Segment:     expSegment.Segment,
 					Labels:      expSegment.Labels,
-					Role:        model.DefaultRole,
+					Role:        spec.DefaultRole,
 					Hierarchy:   expHierarchy,
 					KeepAlive:   30,
 				},
