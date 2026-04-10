@@ -30,17 +30,17 @@ var (
 
 // New creates a [Scheduler] that executes task every interval.
 // Returns an error if task is nil or interval is not positive.
-func New(interval time.Duration, task TaskFn) (*Scheduler, error) {
-	if task == nil {
+func New(d time.Duration, t TaskFn) (*Scheduler, error) {
+	if t == nil {
 		return nil, ErrTaskFnNil
 	}
-	if interval <= 0 {
+	if d <= 0 {
 		return nil, ErrInvalidInterval
 	}
 
 	return &Scheduler{
-		interval: interval,
-		task:     task,
+		interval: d,
+		task:     t,
 		done:     make(chan struct{}),
 	}, nil
 }
