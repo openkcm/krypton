@@ -140,7 +140,7 @@ func newTestStore(t *testing.T) store.Store {
 		assert.FailNowf(t, "failed to connect to test database", "error: %v", err)
 	}
 
-	s, err := storesql.NewPostgreSQL(ctx, testDB)
+	s, err := storesql.NewTenant(ctx, testDB)
 	if err != nil {
 		testDB.Close()
 		assert.FailNowf(t, "failed to create test store", "error: %v", err)

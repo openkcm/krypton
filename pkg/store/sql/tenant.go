@@ -9,14 +9,14 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-type PostgreSQL struct {
+type Tenant struct {
 	db *sql.DB
 }
 
-var _ store.Store = &PostgreSQL{}
+var _ store.Store = &Tenant{}
 
-func NewPostgreSQL(ctx context.Context, db *sql.DB) (*PostgreSQL, error) {
-	ps := &PostgreSQL{
+func NewTenant(ctx context.Context, db *sql.DB) (*Tenant, error) {
+	ps := &Tenant{
 		db: db,
 	}
 
@@ -38,7 +38,7 @@ func NewPostgreSQL(ctx context.Context, db *sql.DB) (*PostgreSQL, error) {
 	return ps, nil
 }
 
-func (ps *PostgreSQL) CreateTenant(ctx context.Context, query store.CreateTenantQuery) (store.CreateTenantResult, error) {
+func (ps *Tenant) CreateTenant(ctx context.Context, query store.CreateTenantQuery) (store.CreateTenantResult, error) {
 	stmt := `
 		INSERT INTO tenants (id, name, labels, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -66,7 +66,7 @@ func (ps *PostgreSQL) CreateTenant(ctx context.Context, query store.CreateTenant
 	}, nil
 }
 
-func (ps *PostgreSQL) GetTenant(ctx context.Context, query store.GetTenantQuery) (store.GetTenantResult, error) {
+func (ps *Tenant) GetTenant(ctx context.Context, query store.GetTenantQuery) (store.GetTenantResult, error) {
 	stmt := `
 		SELECT id, name, labels, created_at, updated_at
 		FROM tenants
@@ -96,7 +96,7 @@ func (ps *PostgreSQL) GetTenant(ctx context.Context, query store.GetTenantQuery)
 	}, nil
 }
 
-func (ps *PostgreSQL) ListTenants(ctx context.Context, _ store.ListTenantsQuery) (store.ListTenantsResult, error) {
+func (ps *Tenant) ListTenants(ctx context.Context, _ store.ListTenantsQuery) (store.ListTenantsResult, error) {
 	stmt := `
 		SELECT id, name, labels, created_at, updated_at
 		FROM tenants

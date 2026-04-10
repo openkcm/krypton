@@ -30,7 +30,7 @@ func main() {
 	handleErr(err, "failed to connect to database")
 	defer db.Close()
 
-	store, err := storesql.NewPostgreSQL(context.Background(), db)
+	store, err := storesql.NewTenant(context.Background(), db)
 	handleErr(err, "failed to initialize store")
 
 	err = http.ListenAndServe(addr, admin.NewServerMux(store))
