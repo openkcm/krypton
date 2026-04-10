@@ -29,7 +29,10 @@ func createTenantCmd() *cobra.Command {
 		Use:   "tenant",
 		Short: "Create a new tenant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c := admin.NewClient(serverURL)
+			c, err := admin.NewClient(serverURL)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
 
 			resp, err := c.CreateTenant(cmd.Context(), admin.CreateTenantRequest{
 				Name:   name,

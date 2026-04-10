@@ -21,7 +21,6 @@ type Client struct {
 var (
 	ErrAgentNameEmpty = errors.New("agent name cannot be empty")
 	ErrAgentNotFound  = errors.New("agent not found in topology")
-	ErrBaseURLEmpty   = errors.New("base URL cannot be empty")
 )
 
 // NewClient creates a new Client with the given base URL and agent name.
@@ -30,7 +29,7 @@ func NewClient(baseURL, agentName string) (*Client, error) {
 		return nil, ErrAgentNameEmpty
 	}
 	if baseURL == "" {
-		return nil, ErrBaseURLEmpty
+		return nil, api.ErrBaseURLEmpty
 	}
 	return &Client{
 		baseURL:   baseURL,
