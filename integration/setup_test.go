@@ -116,7 +116,7 @@ func newCLICommand(ctx context.Context, homeDir string, args ...string) *exec.Cm
 
 // newTestStore creates a new isolated database and store for testing.
 // The database is automatically dropped when the test completes.
-func newTestStore(t *testing.T) store.Store {
+func newTestStore(t *testing.T) store.Tenant {
 	t.Helper()
 	ctx := t.Context()
 
@@ -140,7 +140,7 @@ func newTestStore(t *testing.T) store.Store {
 		assert.FailNowf(t, "failed to connect to test database", "error: %v", err)
 	}
 
-	s, err := storesql.NewTenant(ctx, testDB)
+	s, err := storesql.NewTenantStore(ctx, testDB)
 	if err != nil {
 		testDB.Close()
 		assert.FailNowf(t, "failed to create test store", "error: %v", err)

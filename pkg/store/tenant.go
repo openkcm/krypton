@@ -9,7 +9,7 @@ import (
 
 var ErrTenantNotFound = errors.New("tenant not found")
 
-type Store interface {
+type Tenant interface {
 	CreateTenant(ctx context.Context, query CreateTenantQuery) (CreateTenantResult, error)
 	GetTenant(ctx context.Context, query GetTenantQuery) (GetTenantResult, error)
 	ListTenants(ctx context.Context, query ListTenantsQuery) (ListTenantsResult, error)
@@ -31,8 +31,7 @@ type GetTenantResult struct {
 	Tenant model.Tenant
 }
 
-type ListTenantsQuery struct {
-}
+type ListTenantsQuery struct{}
 
 type ListTenantsResult struct {
 	Tenants []model.Tenant

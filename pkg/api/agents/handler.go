@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/openkcm/krypton/internal/clock"
+	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/store"
-	"github.com/openkcm/krypton/pkg/store/sql"
 )
 
 type (
@@ -25,13 +25,13 @@ const (
 )
 
 type agent struct {
-	store     *sql.Registry
+	store     store.Agent
 	hierarchy spec.KeyHierarchy
 	topology  spec.Topology
 }
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(mux *http.ServeMux, store *sql.Registry, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
+func NewServerMux(mux *http.ServeMux, store store.Agent, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
@@ -65,17 +65,17 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 
 	cfg := spec.NewAgentConfig(a.hierarchy, seg)
 
-	_, err := a.store.Upsert(r.Context(), store.UpsertRegistryQuery{
-		Registry: spec.Registry{
+	_, err := a.store.Register(r.Context(), store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
 			Name:          xAgentName,
 			InstanceID:    xAgentID,
-			Status:        spec.RegistryStatusHealthy,
+			Status:        core.AgentRegistrationStatusHealthy,
 			LastHeartbeat: clock.Now(),
 		},
 	})
 	if err != nil {
-		log.Printf("failed to upsert registry: %v", err)
-		http.Error(w, "failed to upsert registry", http.StatusInternalServerError)
+		log.Printf("failed to register agent: %v", err)
+		http.Error(w, "failed to register agent", http.StatusInternalServerError)
 		return
 	}
 

@@ -15,6 +15,7 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api"
 	"github.com/openkcm/krypton/pkg/api/agents"
@@ -94,7 +95,7 @@ func TestAgentRegister(t *testing.T) {
 		db.Close()
 	})
 
-	regStore, err := storesql.NewRegistrySQL(ctx, db)
+	agentStore, err := storesql.NewAgentStore(ctx, db)
 	require.NoError(t, err)
 
 	t.Run("actual server", func(t *testing.T) {
@@ -134,7 +135,7 @@ func TestAgentRegister(t *testing.T) {
 		}
 
 		// given
-		handler := agents.NewServerMux(nil, regStore, expHierarchy, topology)
+		handler := agents.NewServerMux(nil, agentStore, expHierarchy, topology)
 		srv := httptest.NewServer(handler)
 		t.Cleanup(srv.Close)
 
@@ -172,20 +173,20 @@ func TestAgentRegister(t *testing.T) {
 			// then
 			assert.NoError(t, err)
 
-			result, err := regStore.Get(t.Context(), store.GetRegistryQuery{
+			result, err := agentStore.Get(t.Context(), store.GetAgentQuery{
 				Name:       expAgentName,
 				InstanceID: expAgentID,
 			})
 
 			assert.NoError(t, err)
-			assert.Equal(t, spec.Registry{
+			assert.Equal(t, core.AgentRegistration{
 				Name:          expAgentName,
 				InstanceID:    expAgentID,
-				Status:        spec.RegistryStatusHealthy,
-				LastHeartbeat: result.Registry.LastHeartbeat,
-				CreatedAt:     result.Registry.CreatedAt,
-				UpdatedAt:     result.Registry.UpdatedAt,
-			}, result.Registry)
+				Status:        core.AgentRegistrationStatusHealthy,
+				LastHeartbeat: result.Registration.LastHeartbeat,
+				CreatedAt:     result.Registration.CreatedAt,
+				UpdatedAt:     result.Registration.UpdatedAt,
+			}, result.Registration)
 		})
 
 		t.Run("agent client should return error if agent name is not found in topology", func(t *testing.T) {

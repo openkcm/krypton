@@ -5,23 +5,23 @@ import (
 	"database/sql"
 
 	"github.com/openkcm/krypton/internal/clock"
-	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-type Registry struct {
+type AgentStore struct {
 	db *sql.DB
 }
 
-var _ store.Registry = &Registry{}
+var _ store.Agent = &AgentStore{}
 
-func NewRegistrySQL(ctx context.Context, db *sql.DB) (*Registry, error) {
-	reg := &Registry{
+func NewAgentStore(ctx context.Context, db *sql.DB) (*AgentStore, error) {
+	reg := &AgentStore{
 		db: db,
 	}
 
 	stmt := `
-	CREATE TABLE IF NOT EXISTS registry (
+	CREATE TABLE IF NOT EXISTS agent_registrations (
 		name TEXT NOT NULL,
 		instance_id UUID,
 		status TEXT NOT NULL,
@@ -40,14 +40,14 @@ func NewRegistrySQL(ctx context.Context, db *sql.DB) (*Registry, error) {
 	return reg, nil
 }
 
-func (s *Registry) Upsert(ctx context.Context, in store.UpsertRegistryQuery) (store.UpsertRegistryResult, error) {
-	r := in.Registry
+func (s *AgentStore) Register(ctx context.Context, q store.RegisterAgentQuery) (store.RegisterAgentResult, error) {
+	r := q.Registration
 	now := clock.Now()
 	r.UpdatedAt = now
 	r.CreatedAt = now
 
 	stmt := `
-	INSERT INTO registry (name, instance_id, status, last_heartbeat, created_at, updated_at)
+	INSERT INTO agent_registrations (name, instance_id, status, last_heartbeat, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6)
 	ON CONFLICT (name, instance_id)
 	DO UPDATE SET
@@ -56,7 +56,7 @@ func (s *Registry) Upsert(ctx context.Context, in store.UpsertRegistryQuery) (st
     updated_at = EXCLUDED.updated_at
 	RETURNING name, instance_id, status, last_heartbeat, created_at, updated_at
  `
-	var result spec.Registry
+	var result core.AgentRegistration
 	err := s.db.QueryRowContext(ctx, stmt,
 		r.Name,
 		r.InstanceID,
@@ -73,39 +73,39 @@ func (s *Registry) Upsert(ctx context.Context, in store.UpsertRegistryQuery) (st
 		&result.UpdatedAt,
 	)
 	if err != nil {
-		return store.UpsertRegistryResult{}, err
+		return store.RegisterAgentResult{}, err
 	}
 
-	return store.UpsertRegistryResult{
-		Registry: result,
+	return store.RegisterAgentResult{
+		Registration: result,
 	}, nil
 }
 
-func (s *Registry) Get(ctx context.Context, query store.GetRegistryQuery) (store.GetRegistryResult, error) {
+func (s *AgentStore) Get(ctx context.Context, q store.GetAgentQuery) (store.GetAgentResult, error) {
 	stmt := `
 		SELECT name, instance_id, status, last_heartbeat, created_at, updated_at
-		FROM registry
+		FROM agent_registrations
 		WHERE name = $1 AND instance_id = $2
 	`
-	row := s.db.QueryRowContext(ctx, stmt, query.Name, query.InstanceID)
-
-	var registry spec.Registry
-	err := row.Scan(
-		&registry.Name,
-		&registry.InstanceID,
-		&registry.Status,
-		&registry.LastHeartbeat,
-		&registry.CreatedAt,
-		&registry.UpdatedAt,
+	var reg core.AgentRegistration
+	err := s.db.QueryRowContext(ctx, stmt,
+		q.Name,
+		q.InstanceID).Scan(
+		&reg.Name,
+		&reg.InstanceID,
+		&reg.Status,
+		&reg.LastHeartbeat,
+		&reg.CreatedAt,
+		&reg.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return store.GetRegistryResult{}, store.ErrRegistryNotFound
+			return store.GetAgentResult{}, store.ErrAgentRegistrationNotFound
 		}
-		return store.GetRegistryResult{}, err
+		return store.GetAgentResult{}, err
 	}
 
-	return store.GetRegistryResult{
-		Registry: registry,
+	return store.GetAgentResult{
+		Registration: reg,
 	}, nil
 }
