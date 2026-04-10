@@ -183,8 +183,8 @@ func TestStart(t *testing.T) {
 	})
 }
 
-func TestStop(t *testing.T) {
-	t.Run("should stop executing the task function when Stop is called", func(t *testing.T) {
+func TestKill(t *testing.T) {
+	t.Run("should kill executing the task function when Kill is called", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			// given
 			ctx := t.Context()
@@ -206,8 +206,8 @@ func TestStop(t *testing.T) {
 
 			time.Sleep(11 * time.Second) // wait for the task to execute at least twice
 			synctest.Wait()
-			subj.Stop()
-			time.Sleep(11 * time.Second) // wait to ensure no more executions after Stop is called
+			subj.Kill()
+			time.Sleep(11 * time.Second) // wait to ensure no more executions after Kill is called
 			synctest.Wait()
 
 			// then
@@ -215,7 +215,7 @@ func TestStop(t *testing.T) {
 		})
 	})
 
-	t.Run("should be safe to call Stop multiple times", func(t *testing.T) {
+	t.Run("should be safe to call Kill multiple times", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			// given
 			ctx := t.Context()
@@ -237,10 +237,10 @@ func TestStop(t *testing.T) {
 
 			time.Sleep(11 * time.Second) // wait for the task to execute at least twice
 			synctest.Wait()
-			// call Stop multiple times
-			subj.Stop()
-			subj.Stop()
-			time.Sleep(11 * time.Second) // wait to ensure no more executions after Stop is called
+			// call Kill multiple times
+			subj.Kill()
+			subj.Kill()
+			time.Sleep(11 * time.Second) // wait to ensure no more executions after Kill is called
 			synctest.Wait()
 
 			// then

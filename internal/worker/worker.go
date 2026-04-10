@@ -13,7 +13,7 @@ import (
 // TaskFn is a function executed by a [Scheduler] on each tick.
 type TaskFn func(context.Context) error
 
-// Scheduler runs a [TaskFn] at a fixed interval until stopped via context cancellation or [Scheduler.Stop].
+// Scheduler runs a [TaskFn] at a fixed interval until stopped via context cancellation or [Scheduler.Kill].
 // [Scheduler.Start] may only be called once; subsequent calls are no-ops.
 type Scheduler struct {
 	interval  time.Duration
@@ -45,7 +45,7 @@ func New(d time.Duration, t TaskFn) (*Scheduler, error) {
 	}, nil
 }
 
-// Start blocks, running the task on each tick until ctx is cancelled or [Scheduler.Stop] is called.
+// Start blocks, running the task on each tick until ctx is cancelled or [Scheduler.Kill] is called.
 // Task errors are logged but do not stop the scheduler.
 func (w *Scheduler) Start(ctx context.Context) {
 	if !w.isStarted.CompareAndSwap(false, true) {
@@ -70,8 +70,8 @@ func (w *Scheduler) Start(ctx context.Context) {
 	}
 }
 
-// Stop signals the scheduler to stop. It is safe to call multiple times.
-func (w *Scheduler) Stop() {
+// Kill signals the scheduler to stop. It is safe to call multiple times.
+func (w *Scheduler) Kill() {
 	w.stopOnce.Do(func() {
 		close(w.done)
 	})
