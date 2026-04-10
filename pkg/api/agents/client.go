@@ -22,7 +22,7 @@ type Client struct {
 var (
 	ErrAgentNameEmpty = errors.New("agent name cannot be empty")
 	ErrAgentNotFound  = errors.New("agent not found in topology")
-	ErrBaseURLEmpty   = errors.New("base URL cannot be empty")
+	ErrAgentIDEmpty   = errors.New("agent ID cannot be empty")
 )
 
 // NewClient creates a new Client with the given base URL and agent name.
