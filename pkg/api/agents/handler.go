@@ -5,7 +5,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/openkcm/krypton/internal/clock"
+	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/store"
 )
 
 type (
@@ -18,19 +21,21 @@ type (
 const (
 	PathRegister    = "/api/v1/agents/register"
 	AgentNameHeader = "X-Agent-Name"
+	AgentIDHeader   = "X-Agent-Id"
 )
 
 type agent struct {
+	store     store.Agent
 	hierarchy spec.KeyHierarchy
 	topology  spec.Topology
 }
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(mux *http.ServeMux, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
+func NewServerMux(mux *http.ServeMux, store store.Agent, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	a := &agent{hierarchy: hierarchy, topology: topology}
+	a := &agent{hierarchy: hierarchy, store: store, topology: topology}
 	mux.HandleFunc("POST "+PathRegister, a.register)
 	return mux
 }
@@ -44,6 +49,13 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	xAgentID := r.Header.Get(AgentIDHeader)
+	if xAgentID == "" {
+		log.Println("missing X-Agent-Id header")
+		http.Error(w, "missing X-Agent-Id header", http.StatusBadRequest)
+		return
+	}
+
 	seg, ok := a.topologySegment(xAgentName)
 	if !ok {
 		log.Printf("agent '%s' not found in topology", xAgentName)
@@ -53,7 +65,23 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 
 	cfg := spec.NewAgentConfig(a.hierarchy, seg)
 
-	err := json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
+	_, err := a.store.Register(r.Context(), store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          xAgentName,
+			InstanceID:    xAgentID,
+			Status:        core.AgentRegistrationStatusHealthy,
+			LastHeartbeat: clock.Now(),
+		},
+	})
+	if err != nil {
+		log.Printf("failed to register agent: %v", err)
+		http.Error(w, "failed to register agent", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)

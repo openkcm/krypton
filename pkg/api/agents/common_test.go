@@ -2,21 +2,44 @@ package agents_test
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
+	_ "github.com/lib/pq"
+
+	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api"
 	"github.com/openkcm/krypton/pkg/api/agents"
+	"github.com/openkcm/krypton/pkg/store"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+var pgConnStr string
+
+func TestMain(m *testing.M) {
+	pgCleanup, err := setupPostgres()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	exitCode := m.Run()
+	pgCleanup()
+	os.Exit(exitCode)
+}
 
 func TestClient(t *testing.T) {
 	t.Run("agent client should return error if agent name is empty", func(t *testing.T) {
 		// given when
-		subj, err := agents.NewClient("some-url", "")
+		subj, err := agents.NewClient("some-url", "", "agent-id")
 
 		// then
 		assert.ErrorIs(t, err, agents.ErrAgentNameEmpty)
@@ -25,10 +48,19 @@ func TestClient(t *testing.T) {
 
 	t.Run("agent client should return error if baseURL is empty", func(t *testing.T) {
 		// given when
-		subj, err := agents.NewClient("", "agent-aws")
+		subj, err := agents.NewClient("", "agent-aws", "agent-id")
 
 		// then
 		assert.ErrorIs(t, err, api.ErrBaseURLEmpty)
+		assert.Nil(t, subj)
+	})
+
+	t.Run("agent client should return error if agent ID is empty", func(t *testing.T) {
+		// given when
+		subj, err := agents.NewClient("some-url", "agent-aws", "")
+
+		// then
+		assert.ErrorIs(t, err, agents.ErrAgentIDEmpty)
 		assert.Nil(t, subj)
 	})
 
@@ -37,7 +69,7 @@ func TestClient(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
-		subj, err := agents.NewClient("http://example.com", "agent-aws")
+		subj, err := agents.NewClient("http://example.com", "agent-aws", "agent-id")
 		assert.NoError(t, err)
 
 		// when
@@ -51,7 +83,20 @@ func TestClient(t *testing.T) {
 }
 
 func TestAgentRegister(t *testing.T) {
+	// given
+	ctx := t.Context()
 	expAgentName := "agent-aws"
+	expAgentID := uuid.NewString()
+
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	agentStore, err := storesql.NewAgentStore(ctx, db)
+	require.NoError(t, err)
 
 	t.Run("actual server", func(t *testing.T) {
 		expSegment := spec.TopologySegment{
@@ -90,13 +135,13 @@ func TestAgentRegister(t *testing.T) {
 		}
 
 		// given
-		handler := agents.NewServerMux(nil, expHierarchy, topology)
+		handler := agents.NewServerMux(nil, agentStore, expHierarchy, topology)
 		srv := httptest.NewServer(handler)
 		t.Cleanup(srv.Close)
 
 		t.Run("agent client should sent a successful request to the server", func(t *testing.T) {
 			// given
-			subj, err := agents.NewClient(srv.URL, expAgentName)
+			subj, err := agents.NewClient(srv.URL, expAgentName, expAgentID)
 			assert.NoError(t, err)
 
 			// when
@@ -117,9 +162,36 @@ func TestAgentRegister(t *testing.T) {
 			}, resp)
 		})
 
+		t.Run("agent client should sent a successful request and the server should register the client in the registry store", func(t *testing.T) {
+			// given
+			subj, err := agents.NewClient(srv.URL, expAgentName, expAgentID)
+			assert.NoError(t, err)
+
+			// when
+			_, err = subj.Register(t.Context(), agents.RegisterRequest{})
+
+			// then
+			assert.NoError(t, err)
+
+			result, err := agentStore.Get(t.Context(), store.GetAgentQuery{
+				Name:       expAgentName,
+				InstanceID: expAgentID,
+			})
+
+			assert.NoError(t, err)
+			assert.Equal(t, core.AgentRegistration{
+				Name:          expAgentName,
+				InstanceID:    expAgentID,
+				Status:        core.AgentRegistrationStatusHealthy,
+				LastHeartbeat: result.Registration.LastHeartbeat,
+				CreatedAt:     result.Registration.CreatedAt,
+				UpdatedAt:     result.Registration.UpdatedAt,
+			}, result.Registration)
+		})
+
 		t.Run("agent client should return error if agent name is not found in topology", func(t *testing.T) {
 			// given
-			subj, err := agents.NewClient(srv.URL, "non-existent-agent")
+			subj, err := agents.NewClient(srv.URL, "non-existent-agent", expAgentID)
 			assert.NoError(t, err)
 
 			// when
@@ -133,12 +205,32 @@ func TestAgentRegister(t *testing.T) {
 		t.Run("server should return error if X-Agent-Name header is missing", func(t *testing.T) {
 			// given
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+agents.PathRegister, nil)
+			req.Header.Set(agents.AgentIDHeader, uuid.NewString())
 			assert.NoError(t, err)
 
 			// when
 			httpResp, err := http.DefaultClient.Do(req)
 			assert.NoError(t, err)
-			defer httpResp.Body.Close()
+			t.Cleanup(func() {
+				httpResp.Body.Close()
+			})
+
+			// then
+			assert.Equal(t, http.StatusBadRequest, httpResp.StatusCode)
+		})
+
+		t.Run("server should return error if X-Agent-ID header is missing", func(t *testing.T) {
+			// given
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+agents.PathRegister, nil)
+			req.Header.Set(agents.AgentNameHeader, expAgentName)
+			assert.NoError(t, err)
+
+			// when
+			httpResp, err := http.DefaultClient.Do(req)
+			assert.NoError(t, err)
+			t.Cleanup(func() {
+				httpResp.Body.Close()
+			})
 
 			// then
 			assert.Equal(t, http.StatusBadRequest, httpResp.StatusCode)
@@ -147,16 +239,58 @@ func TestAgentRegister(t *testing.T) {
 		t.Run("server should return error if X-Agent-Name header is empty", func(t *testing.T) {
 			// given
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+agents.PathRegister, nil)
-			req.Header.Set("X-Agent-Name", "")
+			req.Header.Set(agents.AgentNameHeader, "")
+			req.Header.Set(agents.AgentIDHeader, uuid.NewString())
 			assert.NoError(t, err)
 
 			// when
 			httpResp, err := http.DefaultClient.Do(req)
 			assert.NoError(t, err)
-			defer httpResp.Body.Close()
+			t.Cleanup(func() {
+				httpResp.Body.Close()
+			})
 
 			// then
 			assert.Equal(t, http.StatusBadRequest, httpResp.StatusCode)
+		})
+
+		t.Run("server should return error if X-Agent-ID header is empty", func(t *testing.T) {
+			// given
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+agents.PathRegister, nil)
+			req.Header.Set(agents.AgentNameHeader, expAgentName)
+			req.Header.Set(agents.AgentIDHeader, "")
+			assert.NoError(t, err)
+
+			// when
+			httpResp, err := http.DefaultClient.Do(req)
+			assert.NoError(t, err)
+
+			t.Cleanup(func() {
+				httpResp.Body.Close()
+			})
+
+			// then
+			assert.Equal(t, http.StatusBadRequest, httpResp.StatusCode)
+		})
+
+		t.Run("server should return proper Content-Type", func(t *testing.T) {
+			// given
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+agents.PathRegister, nil)
+			req.Header.Set(agents.AgentNameHeader, expAgentName)
+			req.Header.Set(agents.AgentIDHeader, expAgentID)
+			assert.NoError(t, err)
+
+			// when
+			httpResp, err := http.DefaultClient.Do(req)
+			assert.NoError(t, err)
+
+			t.Cleanup(func() {
+				httpResp.Body.Close()
+			})
+
+			// then
+			assert.Equal(t, http.StatusOK, httpResp.StatusCode)
+			assert.Equal(t, "application/json", httpResp.Header.Get("Content-Type"))
 		})
 	})
 
@@ -188,7 +322,7 @@ func TestAgentRegister(t *testing.T) {
 				faultySrv := httptest.NewServer(tt.handler)
 				t.Cleanup(faultySrv.Close)
 
-				subj, err := agents.NewClient(faultySrv.URL, expAgentName)
+				subj, err := agents.NewClient(faultySrv.URL, expAgentName, expAgentID)
 				assert.NoError(t, err)
 
 				resp, err := subj.Register(t.Context(), agents.RegisterRequest{})
@@ -198,4 +332,24 @@ func TestAgentRegister(t *testing.T) {
 			})
 		}
 	})
+}
+
+func setupPostgres() (func(), error) {
+	ctx := context.Background()
+
+	pgContainer, err := postgres.Run(ctx,
+		"postgres:18-alpine",
+		postgres.WithDatabase("postgres"),
+		postgres.WithUsername("testuser"),
+		postgres.WithPassword("testpass"),
+		postgres.BasicWaitStrategies(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	cleanUp := func() { _ = pgContainer.Terminate(ctx) }
+
+	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
+
+	return cleanUp, err
 }

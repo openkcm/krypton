@@ -15,25 +15,32 @@ import (
 type Client struct {
 	baseURL   string
 	agentName string
+	agentID   string
 	cli       *krhttp.Client
 }
 
 var (
 	ErrAgentNameEmpty = errors.New("agent name cannot be empty")
 	ErrAgentNotFound  = errors.New("agent not found in topology")
+	ErrAgentIDEmpty   = errors.New("agent ID cannot be empty")
 )
 
 // NewClient creates a new Client with the given base URL and agent name.
-func NewClient(baseURL, agentName string) (*Client, error) {
+func NewClient(baseURL, agentName, agentID string) (*Client, error) {
 	if agentName == "" {
 		return nil, ErrAgentNameEmpty
 	}
+	if agentID == "" {
+		return nil, ErrAgentIDEmpty
+	}
+
 	if baseURL == "" {
 		return nil, api.ErrBaseURLEmpty
 	}
 	return &Client{
 		baseURL:   baseURL,
 		agentName: agentName,
+		agentID:   agentID,
 		cli:       krhttp.NewClient(),
 	}, nil
 }
@@ -51,6 +58,7 @@ func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterRes
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(AgentNameHeader, c.agentName)
+	httpReq.Header.Set(AgentIDHeader, c.agentID)
 
 	httpResp, err := c.cli.Do(httpReq)
 	if err != nil {

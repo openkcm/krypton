@@ -16,7 +16,7 @@ const (
 )
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(s store.Store) http.Handler {
+func NewServerMux(s store.Tenant) http.Handler {
 	mux := http.NewServeMux()
 	a := &admin{store: s}
 	mux.HandleFunc("POST "+PathTenants, a.createTenant)
@@ -26,7 +26,7 @@ func NewServerMux(s store.Store) http.Handler {
 }
 
 type admin struct {
-	store store.Store
+	store store.Tenant
 }
 
 type (
