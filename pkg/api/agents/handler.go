@@ -16,10 +16,13 @@ type (
 	RegisterResponse struct {
 		Config spec.AgentConfig `json:"config"`
 	}
+	SendHeartbeatRequest  struct{}
+	SendHeartbeatResponse struct{}
 )
 
 const (
 	PathRegister    = "/api/v1/agents/register"
+	PathHeartbeat   = "/api/v1/agents/heartbeat"
 	AgentNameHeader = "X-Agent-Name"
 	AgentIDHeader   = "X-Agent-Id"
 )
@@ -37,6 +40,7 @@ func NewServerMux(mux *http.ServeMux, store store.Agent, hierarchy spec.KeyHiera
 	}
 	a := &agent{hierarchy: hierarchy, store: store, topology: topology}
 	mux.HandleFunc("POST "+PathRegister, a.register)
+	mux.HandleFunc("POST "+PathHeartbeat, a.heartbeat)
 	return mux
 }
 
@@ -82,6 +86,51 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	err = json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
+	if err != nil {
+		log.Printf("failed to encode response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *agent) heartbeat(w http.ResponseWriter, r *http.Request) {
+	xAgentName := r.Header.Get(AgentNameHeader)
+	if xAgentName == "" {
+		log.Println("missing X-Agent-Name header")
+		http.Error(w, "missing X-Agent-Name header", http.StatusBadRequest)
+		return
+	}
+
+	xAgentID := r.Header.Get(AgentIDHeader)
+	if xAgentID == "" {
+		log.Println("missing X-Agent-Id header")
+		http.Error(w, "missing X-Agent-Id header", http.StatusBadRequest)
+		return
+	}
+
+	_, ok := a.topologySegment(xAgentName)
+	if !ok {
+		log.Printf("agent '%s' not found in topology", xAgentName)
+		http.Error(w, "agent not found in topology", http.StatusNotFound)
+		return
+	}
+
+	_, err := a.store.Register(r.Context(), store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          xAgentName,
+			InstanceID:    xAgentID,
+			Status:        core.AgentRegistrationStatusHealthy,
+			LastHeartbeat: clock.Now(),
+		},
+	})
+	if err != nil {
+		log.Printf("failed to update heartbeat: %v", err)
+		http.Error(w, "failed to update heartbeat", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(SendHeartbeatResponse{})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)

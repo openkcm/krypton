@@ -2,14 +2,14 @@ package core
 
 import "github.com/openkcm/krypton/internal/clock"
 
-// AgentRegistrationStatus represents the status of a registry entry.
+// AgentRegistrationStatus represents the status of a registration entry.
 type AgentRegistrationStatus string
 
 const (
-	// AgentRegistrationStatusHealthy indicates that the registry is active and healthy.
+	// AgentRegistrationStatusHealthy indicates that the registration is active and healthy.
 	AgentRegistrationStatusHealthy AgentRegistrationStatus = "healthy"
 
-	// AgentRegistrationStatusUnhealthy indicates that the registry is active but unhealthy.
+	// AgentRegistrationStatusUnhealthy indicates that the registration is active but unhealthy.
 	AgentRegistrationStatusUnhealthy AgentRegistrationStatus = "unhealthy"
 )
 
