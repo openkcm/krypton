@@ -85,8 +85,8 @@ func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterRes
 	}
 }
 
-// Heartbeat sends a heartbeat to signal the agent is alive.
-func (c *Client) Heartbeat(ctx context.Context, req HeartbeatRequest) (HeartbeatResponse, error) {
+// SendHeartbeat sends a heartbeat to signal the agent is alive.
+func (c *Client) SendHeartbeat(ctx context.Context, req HeartbeatRequest) (HeartbeatResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return HeartbeatResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)

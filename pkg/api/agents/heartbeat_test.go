@@ -18,7 +18,7 @@ import (
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-func TestHeartbeat(t *testing.T) {
+func TestSendHeartbeat(t *testing.T) {
 	// given
 	ctx := t.Context()
 	expAgentName := "agent-aws"
@@ -81,7 +81,7 @@ func TestHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			resp, err := subj.Heartbeat(t.Context(), agents.HeartbeatRequest{})
+			resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
@@ -105,7 +105,7 @@ func TestHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			_, err = subj.Heartbeat(t.Context(), agents.HeartbeatRequest{})
+			_, err = subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			_, err = subj.Heartbeat(t.Context(), agents.HeartbeatRequest{})
+			_, err = subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
@@ -166,7 +166,7 @@ func TestHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			resp, err := subj.Heartbeat(t.Context(), agents.HeartbeatRequest{})
+			resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
 
 			// then
 			assert.Error(t, err)
@@ -306,7 +306,7 @@ func TestHeartbeat(t *testing.T) {
 				subj, err := agents.NewClient(faultySrv.URL, expAgentName, expAgentID)
 				assert.NoError(t, err)
 
-				resp, err := subj.Heartbeat(t.Context(), agents.HeartbeatRequest{})
+				resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
 
 				assert.ErrorIs(t, err, tt.expError)
 				assert.Equal(t, agents.HeartbeatResponse{}, resp)
