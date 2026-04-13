@@ -167,7 +167,7 @@ func TestAgentRegister(t *testing.T) {
 			assert.Equal(t, core.AgentRegistration{
 				Name:          expAgentName,
 				InstanceID:    expAgentID,
-				Status:        core.AgentRegistrationStatusHealthy,
+				Status:        core.AgentRegistrationStatusRegistered,
 				LastHeartbeat: result.Registration.LastHeartbeat,
 				CreatedAt:     result.Registration.CreatedAt,
 				UpdatedAt:     result.Registration.UpdatedAt,

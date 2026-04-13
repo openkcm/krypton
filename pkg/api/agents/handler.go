@@ -73,7 +73,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		Registration: core.AgentRegistration{
 			Name:          xAgentName,
 			InstanceID:    xAgentID,
-			Status:        core.AgentRegistrationStatusHealthy,
+			Status:        core.AgentRegistrationStatusRegistered,
 			LastHeartbeat: clock.Now(),
 		},
 	})
