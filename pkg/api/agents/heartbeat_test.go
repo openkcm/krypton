@@ -81,11 +81,11 @@ func TestSendHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
+			resp, err := subj.SendHeartbeat(t.Context(), agents.SendHeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
-			assert.Equal(t, agents.HeartbeatResponse{}, resp)
+			assert.Equal(t, agents.SendHeartbeatResponse{}, resp)
 		})
 
 		t.Run("agent client should update the last heartbeat timestamp and status of the agent if it is already registered", func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSendHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			_, err = subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
+			_, err = subj.SendHeartbeat(t.Context(), agents.SendHeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestSendHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			_, err = subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
+			_, err = subj.SendHeartbeat(t.Context(), agents.SendHeartbeatRequest{})
 
 			// then
 			assert.NoError(t, err)
@@ -166,12 +166,12 @@ func TestSendHeartbeat(t *testing.T) {
 			assert.NoError(t, err)
 
 			// when
-			resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
+			resp, err := subj.SendHeartbeat(t.Context(), agents.SendHeartbeatRequest{})
 
 			// then
 			assert.Error(t, err)
 			assert.ErrorIs(t, err, agents.ErrAgentTopologyNotFound)
-			assert.Equal(t, agents.HeartbeatResponse{}, resp)
+			assert.Equal(t, agents.SendHeartbeatResponse{}, resp)
 
 			_, err = agentStore.Get(t.Context(), store.GetAgentQuery{
 				Name:       nonExistingAgentName,
@@ -306,10 +306,10 @@ func TestSendHeartbeat(t *testing.T) {
 				subj, err := agents.NewClient(faultySrv.URL, expAgentName, expAgentID)
 				assert.NoError(t, err)
 
-				resp, err := subj.SendHeartbeat(t.Context(), agents.HeartbeatRequest{})
+				resp, err := subj.SendHeartbeat(t.Context(), agents.SendHeartbeatRequest{})
 
 				assert.ErrorIs(t, err, tt.expError)
-				assert.Equal(t, agents.HeartbeatResponse{}, resp)
+				assert.Equal(t, agents.SendHeartbeatResponse{}, resp)
 			})
 		}
 	})

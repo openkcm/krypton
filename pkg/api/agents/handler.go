@@ -16,8 +16,8 @@ type (
 	RegisterResponse struct {
 		Config spec.AgentConfig `json:"config"`
 	}
-	HeartbeatRequest  struct{}
-	HeartbeatResponse struct{}
+	SendHeartbeatRequest  struct{}
+	SendHeartbeatResponse struct{}
 )
 
 const (
@@ -130,7 +130,7 @@ func (a *agent) heartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(HeartbeatResponse{})
+	err = json.NewEncoder(w).Encode(SendHeartbeatResponse{})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
