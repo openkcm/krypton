@@ -5,13 +5,11 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	_ "github.com/lib/pq"
 
@@ -22,19 +20,6 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
-
-var pgConnStr string
-
-func TestMain(m *testing.M) {
-	pgCleanup, err := setupPostgres()
-	if err != nil {
-		os.Exit(1)
-	}
-
-	exitCode := m.Run()
-	pgCleanup()
-	os.Exit(exitCode)
-}
 
 func TestClient(t *testing.T) {
 	t.Run("agent client should return error if agent name is empty", func(t *testing.T) {
@@ -198,7 +183,7 @@ func TestAgentRegister(t *testing.T) {
 			resp, err := subj.Register(t.Context(), agents.RegisterRequest{})
 
 			// then
-			assert.ErrorIs(t, err, agents.ErrAgentNotFound)
+			assert.ErrorIs(t, err, agents.ErrAgentTopologyNotFound)
 			assert.Equal(t, agents.RegisterResponse{}, resp)
 		})
 
@@ -332,24 +317,4 @@ func TestAgentRegister(t *testing.T) {
 			})
 		}
 	})
-}
-
-func setupPostgres() (func(), error) {
-	ctx := context.Background()
-
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:18-alpine",
-		postgres.WithDatabase("postgres"),
-		postgres.WithUsername("testuser"),
-		postgres.WithPassword("testpass"),
-		postgres.BasicWaitStrategies(),
-	)
-	if err != nil {
-		return nil, err
-	}
-	cleanUp := func() { _ = pgContainer.Terminate(ctx) }
-
-	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
-
-	return cleanUp, err
 }
