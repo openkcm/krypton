@@ -51,71 +51,56 @@ func NewClient(baseURL, agentName, agentID string) (*Client, error) {
 
 // Register sends an agent registration request to the server.
 func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterResponse, error) {
-	httpResp, err := c.doCall(ctx, PathRegister, req)
+	var resp RegisterResponse
+	hResp, err := c.doCall(ctx, PathRegister, req, &resp)
 	if err != nil {
 		return RegisterResponse{}, err
 	}
-	defer httpResp.Body.Close()
 
-	switch httpResp.StatusCode {
+	switch hResp.StatusCode {
 	case http.StatusOK:
-		var resp RegisterResponse
-		err = json.NewDecoder(httpResp.Body).Decode(&resp)
-		if err != nil {
-			return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
-		}
 		return resp, nil
 	case http.StatusNotFound:
 		return RegisterResponse{}, ErrAgentTopologyNotFound
 	default:
-		return RegisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
+		return RegisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, hResp.StatusCode)
 	}
 }
 
 // SendHeartbeat sends a heartbeat to signal the agent is alive.
 func (c *Client) SendHeartbeat(ctx context.Context, req SendHeartbeatRequest) (SendHeartbeatResponse, error) {
-	httpResp, err := c.doCall(ctx, PathHeartbeat, req)
+	var resp SendHeartbeatResponse
+	hResp, err := c.doCall(ctx, PathHeartbeat, req, &resp)
 	if err != nil {
 		return SendHeartbeatResponse{}, err
 	}
-	defer httpResp.Body.Close()
 
-	switch httpResp.StatusCode {
+	switch hResp.StatusCode {
 	case http.StatusOK:
-		var resp SendHeartbeatResponse
-		err = json.NewDecoder(httpResp.Body).Decode(&resp)
-		if err != nil {
-			return SendHeartbeatResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
-		}
 		return resp, nil
 	case http.StatusNotFound:
 		return SendHeartbeatResponse{}, ErrAgentTopologyNotFound
 	default:
-		return SendHeartbeatResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
+		return SendHeartbeatResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, hResp.StatusCode)
 	}
 }
 
 func (c *Client) Deregister(ctx context.Context, req DeregisterRequest) (DeregisterResponse, error) {
-	httpResp, err := c.doCall(ctx, PathDeregister, req)
+	var resp DeregisterResponse
+	hResp, err := c.doCall(ctx, PathDeregister, req, &resp)
 	if err != nil {
 		return DeregisterResponse{}, err
 	}
-	defer httpResp.Body.Close()
 
-	switch httpResp.StatusCode {
+	switch hResp.StatusCode {
 	case http.StatusOK:
-		var resp DeregisterResponse
-		err = json.NewDecoder(httpResp.Body).Decode(&resp)
-		if err != nil {
-			return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
-		}
 		return resp, nil
 	default:
-		return DeregisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
+		return DeregisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, hResp.StatusCode)
 	}
 }
 
-func (c *Client) doCall(ctx context.Context, path string, body any) (*http.Response, error) {
+func (c *Client) doCall(ctx context.Context, path string, body any, rec any) (*http.Response, error) {
 	bBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
@@ -134,5 +119,13 @@ func (c *Client) doCall(ctx context.Context, path string, body any) (*http.Respo
 		return nil, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
 	}
 
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		err = json.NewDecoder(resp.Body).Decode(rec)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
+		}
+	}
 	return resp, nil
 }
