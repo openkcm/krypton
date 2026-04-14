@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/core"
@@ -108,4 +109,31 @@ func (s *AgentStore) Get(ctx context.Context, q store.GetAgentQuery) (store.GetA
 	return store.GetAgentResult{
 		Registration: reg,
 	}, nil
+}
+
+// UpdateRegistrationStatus implements [store.Agent].
+func (s *AgentStore) UpdateRegistrationStatus(ctx context.Context, query store.UpdateRegistrationStatusQuery) error {
+	var sb strings.Builder
+	now := clock.Now()
+	sb.WriteString(`UPDATE agent_registrations
+	SET status = $1, updated_at = $2
+	WHERE name = $3 AND instance_id = $4
+	AND status = ANY($5)`)
+	args := []any{
+		query.ToStatus,
+		now,
+		query.Name,
+		query.InstanceID,
+		query.FromStatus,
+	}
+	if query.HeartbeatThreshold != 0 {
+		sb.WriteString(` AND ($6 - last_heartbeat) > $7`)
+		args = append(args, now)
+		args = append(args, query.HeartbeatThreshold.Nanoseconds())
+	}
+
+	_, err := s.db.ExecContext(ctx, sb.String(),
+		args...,
+	)
+	return err
 }
