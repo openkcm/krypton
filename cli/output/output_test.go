@@ -565,3 +565,83 @@ func TestBuilder_Chaining(t *testing.T) {
 		assert.EqualValues(t, 100, got[0]["Age"])
 	})
 }
+
+func TestSelect_ErrNoRows(t *testing.T) {
+	// given
+	builder, err := output.From([]Person{})
+	assert.NoError(t, err)
+
+	mockSel := func(rows output.Rows) (int, error) {
+		return 0, nil
+	}
+
+	// when
+	idx, err := builder.Select(mockSel)
+
+	// then
+	assert.ErrorIs(t, err, output.ErrNoRows)
+	assert.Equal(t, -1, idx)
+}
+
+func TestSelect_CallsSelector(t *testing.T) {
+	// given
+	builder, err := output.From([]Person{{Name: "alice"}, {Name: "bob"}})
+	assert.NoError(t, err)
+
+	var capturedRows output.Rows
+	mockSel := func(rows output.Rows) (int, error) {
+		capturedRows = rows
+		return 1, nil
+	}
+
+	// when
+	idx, err := builder.Select(mockSel)
+
+	// then
+	assert.NoError(t, err)
+	assert.Equal(t, 1, idx)
+	assert.Len(t, capturedRows, 2)
+	assert.Equal(t, "alice", capturedRows[0][0].Value)
+	assert.Equal(t, "bob", capturedRows[1][0].Value)
+}
+
+func TestSelect_PropagatesSelectorError(t *testing.T) {
+	// given
+	builder, err := output.From(Person{Name: "alice"})
+	assert.NoError(t, err)
+
+	mockSel := func(rows output.Rows) (int, error) {
+		return -1, assert.AnError
+	}
+
+	// when
+	idx, err := builder.Select(mockSel)
+
+	// then
+	assert.ErrorIs(t, err, assert.AnError)
+	assert.Equal(t, -1, idx)
+}
+
+func TestSelect_AppliesFormatters(t *testing.T) {
+	// given
+	builder, err := output.From(Person{Name: "alice"})
+	assert.NoError(t, err)
+
+	builder.Format(output.ForName("Name", func(v any) any {
+		s, _ := v.(string)
+		return s + "!"
+	}))
+
+	var capturedRows output.Rows
+	mockSel := func(rows output.Rows) (int, error) {
+		capturedRows = rows
+		return 0, nil
+	}
+
+	// when
+	_, err = builder.Select(mockSel)
+
+	// then
+	assert.NoError(t, err)
+	assert.Equal(t, "alice!", capturedRows[0][0].Value)
+}
