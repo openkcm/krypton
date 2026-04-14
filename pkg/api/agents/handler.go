@@ -86,14 +86,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(RegisterResponse{Config: cfg})
-	if err != nil {
-		log.Printf("failed to encode response: %v", err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	writeJSONResponse(w, RegisterResponse{Config: cfg})
 }
 
 func (a *agent) heartbeat(w http.ResponseWriter, r *http.Request) {
@@ -123,14 +116,7 @@ func (a *agent) heartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(SendHeartbeatResponse{})
-	if err != nil {
-		log.Printf("failed to encode response: %v", err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	writeJSONResponse(w, SendHeartbeatResponse{})
 }
 
 func (a *agent) deregister(w http.ResponseWriter, r *http.Request) {
@@ -155,14 +141,7 @@ func (a *agent) deregister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(DeregisterResponse{})
-	if err != nil {
-		log.Printf("failed to encode response: %v", err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	writeJSONResponse(w, DeregisterResponse{})
 }
 
 func extractAgentHeaders(w http.ResponseWriter, r *http.Request) (agentHeader, error) {
@@ -180,6 +159,17 @@ func extractAgentHeaders(w http.ResponseWriter, r *http.Request) (agentHeader, e
 		return agentHeader{}, errHeaderMissing
 	}
 	return agentHeader{agentName: agentName, agentID: agentID}, nil
+}
+
+func writeJSONResponse(w http.ResponseWriter, body any) {
+	w.Header().Set("Content-Type", "application/json")
+
+	err := json.NewEncoder(w).Encode(body)
+	if err != nil {
+		log.Printf("failed to encode response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (a *agent) topologySegment(agentName string) (spec.TopologySegment, bool) {
