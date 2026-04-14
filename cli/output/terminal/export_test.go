@@ -1,10 +1,6 @@
 package terminal
 
-import (
-	"io"
-
-	"github.com/openkcm/krypton/cli/output"
-)
+import "io"
 
 // Export key type and constants for testing.
 type Key = key
@@ -18,24 +14,16 @@ const (
 	KeyEsc     = keyEsc
 )
 
-// ReadKey exports readKey for testing.
-func ReadKey(in io.Reader) Key {
-	return readKey(in)
-}
+var (
+	ReadKey    = readKey
+	RenderRows = renderRows
+)
 
-// Truncate exports truncate for testing.
-func Truncate(s string, maxWidth int) string {
-	return truncate(s, maxWidth)
-}
-
-// RenderRows exports renderRows for testing.
-func RenderRows(rows output.Rows, maxWidth int) []string {
-	return renderRows(rows, maxWidth)
-}
+type Selection = selection
 
 // NewSelection creates a selection for testing.
-func NewSelection(items []string, cursor, scrollOffset, viewHeight int) *selection {
-	return &selection{
+func NewSelection(items []string, cursor, scrollOffset, viewHeight int) *Selection {
+	return &Selection{
 		items:        items,
 		cursor:       cursor,
 		scrollOffset: scrollOffset,
@@ -43,7 +31,10 @@ func NewSelection(items []string, cursor, scrollOffset, viewHeight int) *selecti
 	}
 }
 
-// Render exports render for testing.
-func (s *selection) Render(out io.Writer) {
+func (s *Selection) Render(out io.Writer) {
 	s.render(out)
+}
+
+func (s *Selection) Run(out io.Writer, in io.Reader) (int, error) {
+	return s.run(out, in)
 }

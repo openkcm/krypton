@@ -1,4 +1,3 @@
-// Package terminal provides interactive terminal-based selection.
 package terminal
 
 import (
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 
 	"github.com/openkcm/krypton/cli/output"
@@ -59,16 +57,16 @@ func Selector(out io.Writer, in io.Reader) output.Selector {
 			return -1, ErrNotFile
 		}
 
-		viewWidth := 80 // fallback
-		if w, _, err := term.GetSize(fd); err == nil {
-			viewWidth = w
-		}
-
 		restore, err := setupRawMode(fd, out)
 		if err != nil {
 			return -1, err
 		}
 		defer restore()
+
+		viewWidth := 80 // fallback
+		if w, _, err := term.GetSize(fd); err == nil {
+			viewWidth = w
+		}
 
 		maxItemWidth := viewWidth - itemPrefixLen - 1 // -1 to avoid edge wrapping
 
@@ -157,7 +155,6 @@ func renderRows(rows output.Rows, maxWidth int) []string {
 		return []string{}
 	}
 
-	// Format with tabwriter for alignment
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 
@@ -170,7 +167,6 @@ func renderRows(rows output.Rows, maxWidth int) []string {
 	}
 	tw.Flush()
 
-	// Split into lines and truncate each
 	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
 	for i, line := range lines {
 		lines[i] = truncate(line, maxWidth)
@@ -194,7 +190,6 @@ func truncate(s string, maxWidth int) string {
 }
 
 // setupRawMode enables raw terminal mode and returns a restore function.
-// It flushes pending input and hides the cursor.
 // The restore function re-enables the cursor and restores the original terminal state.
 func setupRawMode(fd int, out io.Writer) (restore func(), err error) {
 	if !term.IsTerminal(fd) {
@@ -205,8 +200,6 @@ func setupRawMode(fd int, out io.Writer) (restore func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-
-	flushInput(fd)
 
 	return func() {
 		fmt.Fprint(out, showCursor)
@@ -263,20 +256,4 @@ func readKey(in io.Reader) key {
 	}
 
 	return keyUnknown
-}
-
-// flushInput discards pending input from the terminal buffer to prevent
-// stale keystrokes from being processed as selection commands.
-func flushInput(fd int) {
-	buf := make([]byte, 256)
-	for {
-		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
-		n, err := unix.Poll(fds, 10)
-		if err != nil || n == 0 {
-			break
-		}
-		if _, err = unix.Read(fd, buf); err != nil {
-			break
-		}
-	}
 }
