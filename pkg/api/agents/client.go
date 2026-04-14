@@ -51,22 +51,9 @@ func NewClient(baseURL, agentName, agentID string) (*Client, error) {
 
 // Register sends an agent registration request to the server.
 func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterResponse, error) {
-	body, err := json.Marshal(req)
+	httpResp, err := c.doCall(ctx, PathRegister, req)
 	if err != nil {
-		return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+PathRegister, bytes.NewReader(body))
-	if err != nil {
-		return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(AgentNameHeader, c.agentName)
-	httpReq.Header.Set(AgentIDHeader, c.agentID)
-
-	httpResp, err := c.cli.Do(httpReq)
-	if err != nil {
-		return RegisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
+		return RegisterResponse{}, err
 	}
 	defer httpResp.Body.Close()
 
@@ -87,22 +74,9 @@ func (c *Client) Register(ctx context.Context, req RegisterRequest) (RegisterRes
 
 // SendHeartbeat sends a heartbeat to signal the agent is alive.
 func (c *Client) SendHeartbeat(ctx context.Context, req SendHeartbeatRequest) (SendHeartbeatResponse, error) {
-	body, err := json.Marshal(req)
+	httpResp, err := c.doCall(ctx, PathHeartbeat, req)
 	if err != nil {
-		return SendHeartbeatResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+PathHeartbeat, bytes.NewReader(body))
-	if err != nil {
-		return SendHeartbeatResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(AgentNameHeader, c.agentName)
-	httpReq.Header.Set(AgentIDHeader, c.agentID)
-
-	httpResp, err := c.cli.Do(httpReq)
-	if err != nil {
-		return SendHeartbeatResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
+		return SendHeartbeatResponse{}, err
 	}
 	defer httpResp.Body.Close()
 
@@ -122,22 +96,9 @@ func (c *Client) SendHeartbeat(ctx context.Context, req SendHeartbeatRequest) (S
 }
 
 func (c *Client) Deregister(ctx context.Context, req DeregisterRequest) (DeregisterResponse, error) {
-	body, err := json.Marshal(req)
+	httpResp, err := c.doCall(ctx, PathDeregister, req)
 	if err != nil {
-		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+PathDeregister, bytes.NewReader(body))
-	if err != nil {
-		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(AgentNameHeader, c.agentName)
-	httpReq.Header.Set(AgentIDHeader, c.agentID)
-
-	httpResp, err := c.cli.Do(httpReq)
-	if err != nil {
-		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
+		return DeregisterResponse{}, err
 	}
 	defer httpResp.Body.Close()
 
@@ -152,4 +113,26 @@ func (c *Client) Deregister(ctx context.Context, req DeregisterRequest) (Deregis
 	default:
 		return DeregisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
 	}
+}
+
+func (c *Client) doCall(ctx context.Context, path string, body any) (*http.Response, error) {
+	bBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(bBytes))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(AgentNameHeader, c.agentName)
+	req.Header.Set(AgentIDHeader, c.agentID)
+
+	resp, err := c.cli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
+	}
+
+	return resp, nil
 }
