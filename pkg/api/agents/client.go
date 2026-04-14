@@ -120,3 +120,36 @@ func (c *Client) SendHeartbeat(ctx context.Context, req SendHeartbeatRequest) (S
 		return SendHeartbeatResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
 	}
 }
+
+func (c *Client) Deregister(ctx context.Context, req DeregisterRequest) (DeregisterResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToEncodeRequest, err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+PathDeregister, bytes.NewReader(body))
+	if err != nil {
+		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToCreateRequest, err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(AgentNameHeader, c.agentName)
+	httpReq.Header.Set(AgentIDHeader, c.agentID)
+
+	httpResp, err := c.cli.Do(httpReq)
+	if err != nil {
+		return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToSendRequest, err)
+	}
+	defer httpResp.Body.Close()
+
+	switch httpResp.StatusCode {
+	case http.StatusOK:
+		var resp DeregisterResponse
+		err = json.NewDecoder(httpResp.Body).Decode(&resp)
+		if err != nil {
+			return DeregisterResponse{}, fmt.Errorf("%w: %w", api.ErrFailedToDecodeResponse, err)
+		}
+		return resp, nil
+	default:
+		return DeregisterResponse{}, fmt.Errorf("%w: expected %d Created, got %d", api.ErrUnexpectedStatusCode, http.StatusOK, httpResp.StatusCode)
+	}
+}

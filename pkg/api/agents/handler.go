@@ -18,11 +18,14 @@ type (
 	}
 	SendHeartbeatRequest  struct{}
 	SendHeartbeatResponse struct{}
+	DeregisterRequest     struct{}
+	DeregisterResponse    struct{}
 )
 
 const (
 	PathRegister    = "/api/v1/agents/register"
 	PathHeartbeat   = "/api/v1/agents/heartbeat"
+	PathDeregister  = "/api/v1/agents/deregister"
 	AgentNameHeader = "X-Agent-Name"
 	AgentIDHeader   = "X-Agent-Id"
 )
@@ -41,6 +44,7 @@ func NewServerMux(mux *http.ServeMux, store store.Agent, hierarchy spec.KeyHiera
 	a := &agent{hierarchy: hierarchy, store: store, topology: topology}
 	mux.HandleFunc("POST "+PathRegister, a.register)
 	mux.HandleFunc("POST "+PathHeartbeat, a.heartbeat)
+	mux.HandleFunc("POST "+PathDeregister, a.deregister)
 	return mux
 }
 
@@ -131,6 +135,46 @@ func (a *agent) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(SendHeartbeatResponse{})
+	if err != nil {
+		log.Printf("failed to encode response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *agent) deregister(w http.ResponseWriter, r *http.Request) {
+	xAgentName := r.Header.Get(AgentNameHeader)
+	if xAgentName == "" {
+		log.Println("missing X-Agent-Name header")
+		http.Error(w, "missing X-Agent-Name header", http.StatusBadRequest)
+		return
+	}
+
+	xAgentID := r.Header.Get(AgentIDHeader)
+	if xAgentID == "" {
+		log.Println("missing X-Agent-Id header")
+		http.Error(w, "missing X-Agent-Id header", http.StatusBadRequest)
+		return
+	}
+
+	err := a.store.UpdateRegistrationStatus(r.Context(), store.UpdateRegistrationStatusQuery{
+		Name:       xAgentName,
+		InstanceID: xAgentID,
+		FromStatus: []core.AgentRegistrationStatus{
+			core.AgentRegistrationStatusRegistered,
+			core.AgentRegistrationStatusHealthy,
+			core.AgentRegistrationStatusUnhealthy,
+		},
+		ToStatus: core.AgentRegistrationStatusDeregistered,
+	})
+	if err != nil {
+		log.Printf("failed to update agent status to deregistered : %v", err)
+		http.Error(w, "failed to update agent status to deregistered ", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(DeregisterResponse{})
 	if err != nil {
 		log.Printf("failed to encode response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
