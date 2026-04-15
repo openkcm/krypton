@@ -6,21 +6,16 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
-// TaskFn is a function executed by a [Scheduler] on each tick.
 type TaskFn func(context.Context) error
 
-// Scheduler runs a [TaskFn] at a fixed interval until stopped via context cancellation or [Scheduler.Kill].
-// [Scheduler.Start] may only be called once; subsequent calls are no-ops.
 type Scheduler struct {
-	interval  time.Duration
-	task      TaskFn
-	isStarted atomic.Bool
-	stopOnce  sync.Once
-	done      chan struct{}
+	interval time.Duration
+	task     TaskFn
+	cFn      context.CancelFunc
+	mu       sync.Mutex
 }
 
 var (
@@ -28,8 +23,6 @@ var (
 	ErrInvalidInterval = errors.New("interval must be greater than zero")
 )
 
-// New creates a [Scheduler] that executes task every interval.
-// Returns an error if task is nil or interval is not positive.
 func New(d time.Duration, t TaskFn) (*Scheduler, error) {
 	if t == nil {
 		return nil, ErrTaskFnNil
@@ -41,15 +34,12 @@ func New(d time.Duration, t TaskFn) (*Scheduler, error) {
 	return &Scheduler{
 		interval: d,
 		task:     t,
-		done:     make(chan struct{}),
 	}, nil
 }
 
-// Start blocks, running the task on each tick until ctx is cancelled or [Scheduler.Kill] is called.
-// Task errors are logged but do not stop the scheduler.
 func (w *Scheduler) Start(ctx context.Context) {
-	if !w.isStarted.CompareAndSwap(false, true) {
-		slog.Warn("Worker already started")
+	nCtx, ok := w.canStart(ctx)
+	if !ok {
 		return
 	}
 
@@ -59,20 +49,32 @@ func (w *Scheduler) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := w.task(ctx); err != nil {
+			if err := w.task(nCtx); err != nil {
 				slog.Error("Worker task", slog.String("error", err.Error()))
 			}
-		case <-ctx.Done():
-			return
-		case <-w.done:
+		case <-nCtx.Done():
 			return
 		}
 	}
 }
 
-// Kill signals the scheduler to stop. It is safe to call multiple times.
-func (w *Scheduler) Kill() {
-	w.stopOnce.Do(func() {
-		close(w.done)
-	})
+func (w *Scheduler) Stop() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.cFn != nil {
+		w.cFn()
+		w.cFn = nil
+	}
+}
+
+func (w *Scheduler) canStart(ctx context.Context) (context.Context, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.cFn != nil {
+		slog.Warn("Scheduler already started; ignoring duplicate Start call")
+		return nil, false
+	}
+	nCtx, cancel := context.WithCancel(ctx)
+	w.cFn = cancel
+	return nCtx, true
 }
