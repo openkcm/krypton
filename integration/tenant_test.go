@@ -3,12 +3,15 @@ package integration
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/cli/config"
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
@@ -210,6 +213,80 @@ func TestListTenants(t *testing.T) {
 			_, found := actTenantNames[tenantName]
 			assert.True(t, found)
 		}
+	})
+}
+
+// TestSelectTenant tests the `kr select tenant` command.
+//
+// Note: Interactive mode (-i flag) cannot be tested here because the terminal selector
+// requires a real TTY (it checks term.IsTerminal and uses term.MakeRaw for raw mode).
+// Integration tests use exec.Command which provides piped stdin, not a real TTY.
+// Interactive selection is covered by unit tests in cli/output/terminal/.
+func TestSelectTenant(t *testing.T) {
+	store := newTestStore(t)
+	handler := admin.NewServerMux(store)
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	t.Run("selects tenant by ID and persists config", func(t *testing.T) {
+		// given
+		homeDir := t.TempDir()
+		tenantName := "tenant-" + uuid.NewString()
+		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", server.URL)
+		createOutput, err := createCmd.CombinedOutput()
+		assert.NoError(t, err)
+		tenants := decode(t, createOutput)
+
+		// when `kr select tenant <tenant-id> --server <server-url>`
+		selectCmd := newCLICommand(t.Context(), homeDir, "select", "tenant", tenants[0].ID, "--server", server.URL)
+		selectOutput, err := selectCmd.CombinedOutput()
+
+		// then
+		assert.NoError(t, err, "command should succeed, output: %s", string(selectOutput))
+		assert.Contains(t, string(selectOutput), "Selected tenant:")
+		assert.Contains(t, string(selectOutput), tenantName)
+
+		// and config file was created with correct content
+		configPath := filepath.Join(homeDir, config.Directory, config.ConfigFileName)
+		configData, err := os.ReadFile(configPath)
+		assert.NoError(t, err)
+
+		var cfg config.Config
+		err = json.Unmarshal(configData, &cfg)
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg.Tenant)
+		assert.Equal(t, tenants[0].ID, cfg.Tenant.ID)
+		assert.Equal(t, tenantName, cfg.Tenant.Name)
+	})
+
+	t.Run("fails for non-existent tenant", func(t *testing.T) {
+		// when `kr select tenant <non-existent-id> --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", uuid.NewString(), "--server", server.URL)
+		output, err := cmd.CombinedOutput()
+
+		// then
+		assert.Error(t, err)
+		assert.Contains(t, string(output), "not found")
+	})
+
+	t.Run("fails when both ID and interactive flag provided", func(t *testing.T) {
+		// when `kr select tenant <id> -i --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "some-id", "-i", "--server", server.URL)
+		output, err := cmd.CombinedOutput()
+
+		// then
+		assert.Error(t, err)
+		assert.Contains(t, string(output), "cannot use both")
+	})
+
+	t.Run("fails when no ID and not interactive", func(t *testing.T) {
+		// when `kr select tenant --server <server-url>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "--server", server.URL)
+		output, err := cmd.CombinedOutput()
+
+		// then
+		assert.Error(t, err)
+		assert.Contains(t, string(output), "tenant ID required")
 	})
 }
 
