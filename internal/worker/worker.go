@@ -9,8 +9,13 @@ import (
 	"time"
 )
 
+// TaskFn is a function executed periodically by the Scheduler.
+// It receives a context that is cancelled when the scheduler stops.
 type TaskFn func(context.Context) error
 
+// Scheduler runs a TaskFn at a fixed interval. It is safe for concurrent use.
+// Use [New] to create a Scheduler, [Scheduler.Start] to begin execution in a
+// goroutine, and [Scheduler.Stop] to shut down.
 type Scheduler struct {
 	interval time.Duration
 	task     TaskFn
@@ -23,6 +28,7 @@ var (
 	ErrInvalidInterval = errors.New("interval must be greater than zero")
 )
 
+// New creates a Scheduler that calls t [TaskFn] every d [time.Duration].
 func New(d time.Duration, t TaskFn) (*Scheduler, error) {
 	if t == nil {
 		return nil, ErrTaskFnNil
@@ -37,6 +43,9 @@ func New(d time.Duration, t TaskFn) (*Scheduler, error) {
 	}, nil
 }
 
+// Start begins periodic execution of the task. It blocks until the scheduler
+// is stopped via [Scheduler.Stop] or the parent ctx is cancelled. Intended to
+// be called in a goroutine. Duplicate calls while running are no-ops.
 func (w *Scheduler) Start(ctx context.Context) {
 	nCtx, ok := w.canStart(ctx)
 	if !ok {
@@ -58,6 +67,7 @@ func (w *Scheduler) Start(ctx context.Context) {
 	}
 }
 
+// Stop cancels the running scheduler. It is safe to call multiple times.
 func (w *Scheduler) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -67,6 +77,8 @@ func (w *Scheduler) Stop() {
 	}
 }
 
+// canStart guards against duplicate starts. Returns a derived context and true
+// if the scheduler was not already running.
 func (w *Scheduler) canStart(ctx context.Context) (context.Context, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
