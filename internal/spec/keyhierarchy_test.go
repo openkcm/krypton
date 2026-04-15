@@ -477,18 +477,16 @@ func TestKeyHierarchy(t *testing.T) {
 			name     string
 			kind     spec.KeyKind
 			expIndex int
-			expFound bool
 		}{
-			{name: "found at index 0", kind: "K0", expIndex: 0, expFound: true},
-			{name: "found at middle index", kind: "K2", expIndex: 2, expFound: true},
-			{name: "found at last index", kind: "K4", expIndex: 4, expFound: true},
-			{name: "not found", kind: "nonexistent", expIndex: -1, expFound: false},
+			{name: "found at index 0", kind: "K0", expIndex: 0},
+			{name: "found at middle index", kind: "K2", expIndex: 2},
+			{name: "found at last index", kind: "K4", expIndex: 4},
+			{name: "not found", kind: "nonexistent", expIndex: -1},
 		}
 
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
-				idx, ok := hierarchy.IndexOf(tt.kind)
-				assert.Equal(t, tt.expFound, ok)
+				idx := hierarchy.IndexOf(tt.kind)
 				assert.Equal(t, tt.expIndex, idx)
 			})
 		}

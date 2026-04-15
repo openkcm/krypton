@@ -95,27 +95,26 @@ func (h KeyHierarchy) FindKeySpec(kind KeyKind) (KeySpec, bool) {
 	return KeySpec{}, false
 }
 
-// IndexOf returns the position of the given kind in the hierarchy's KeySpecs slice.
-// Returns the index and true if found, or -1 and false if not found.
-func (h KeyHierarchy) IndexOf(kind KeyKind) (int, bool) {
+// IndexOf returns the position of the given kind in the hierarchy's KeySpecs slice. Returns -1 if not found.
+func (h KeyHierarchy) IndexOf(kind KeyKind) int {
 	for i, k := range h.KeySpecs {
 		if k.Kind == kind {
-			return i, true
+			return i
 		}
 	}
 
-	return -1, false
+	return -1
 }
 
 // KindsBetween returns the sub-slice of KeySpecs from start to end (inclusive).
 // Returns an error if either kind is not found or if start comes after end in the hierarchy.
 func (h KeyHierarchy) KindsBetween(start, end KeyKind) ([]KeySpec, error) {
-	startIdx, ok := h.IndexOf(start)
-	if !ok {
+	startIdx := h.IndexOf(start)
+	if startIdx < 0 {
 		return nil, fmt.Errorf("%w: %q", ErrKeyHierarchyKindNotFound, start)
 	}
-	endIdx, ok := h.IndexOf(end)
-	if !ok {
+	endIdx := h.IndexOf(end)
+	if endIdx < 0 {
 		return nil, fmt.Errorf("%w: %q", ErrKeyHierarchyKindNotFound, end)
 	}
 	if startIdx > endIdx {

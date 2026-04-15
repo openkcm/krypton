@@ -27,15 +27,14 @@ var (
 	ErrParentKeyProviderKeyNotInParentSegment = errors.New("parent key provider's segment does not contain the parent key kind")
 )
 
-// ValidateSegmentAgainstHierarchy checks that a segment's endpoints exist in the hierarchy are in the correct order,
-// and that bindings cover exactly the segment range.
+// ValidateSegmentAgainstHierarchy checks that a segment's endpoints exist in the hierarchy are in the correct order, and that bindings cover exactly the segment range.
 func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding) error {
-	startIdx, ok := h.IndexOf(KeyKind(seg.StartKind))
-	if !ok {
+	startIdx := h.IndexOf(KeyKind(seg.StartKind))
+	if startIdx < 0 {
 		return fmt.Errorf("%w: %q", ErrSegmentStartKindNotInHierarchy, seg.StartKind)
 	}
-	endIdx, ok := h.IndexOf(KeyKind(seg.EndKind))
-	if !ok {
+	endIdx := h.IndexOf(KeyKind(seg.EndKind))
+	if endIdx < 0 {
 		return fmt.Errorf("%w: %q", ErrSegmentEndKindNotInHierarchy, seg.EndKind)
 	}
 	if startIdx > endIdx {
@@ -62,14 +61,13 @@ func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindi
 	return nil
 }
 
-// ValidateRootSegment validates the root's segment against the hierarchy,
-// enforcing root-specific constraints.
+// ValidateRootSegment validates the root's segment against the hierarchy, enforcing root-specific constraints.
 func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding) error {
 	if err := ValidateSegmentAgainstHierarchy(h, seg, bindings); err != nil {
 		return err
 	}
 
-	startIdx, _ := h.IndexOf(KeyKind(seg.StartKind))
+	startIdx := h.IndexOf(KeyKind(seg.StartKind))
 	if startIdx != 0 {
 		return ErrRootSegmentStartNotFirst
 	}
@@ -126,24 +124,24 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 
 // ValidateTopologyAgainstHierarchy validates the entire topology against the hierarchy checking agent segment rules,
 // name uniqueness, and parent key provider resolution.
-func ValidateTopologyAgainstHierarchy(h KeyHierarchy, topology Topology, rootSeg HierarchySegment, rootBindings map[string]KeyBinding) error {
-	segmentMap := make(map[string]TopologySegment, len(topology.Segments))
-	for _, seg := range topology.Segments {
-		if _, exists := segmentMap[seg.Name]; exists {
+func ValidateTopologyAgainstHierarchy(h KeyHierarchy, t Topology, rootSeg HierarchySegment, rootBindings map[string]KeyBinding) error {
+	uniqSegs := make(map[string]struct{}, len(t.Segments))
+	for _, seg := range t.Segments {
+		if _, exists := uniqSegs[seg.Name]; exists {
 			return fmt.Errorf("%w: %q", ErrTopologyDuplicateSegmentName, seg.Name)
 		}
-		segmentMap[seg.Name] = seg
+		uniqSegs[seg.Name] = struct{}{}
 	}
 
-	for i, seg := range topology.Segments {
+	for i, seg := range t.Segments {
 		if err := ValidateAgentSegment(h, seg.Segment, seg.KeyBindings); err != nil {
 			return fmt.Errorf("segment %q (index %d): %w", seg.Name, i, err)
 		}
 	}
 
-	providers := make(map[string]HierarchySegment, len(topology.Segments)+1)
+	providers := make(map[string]HierarchySegment, len(t.Segments)+1)
 	providers["root"] = rootSeg
-	for _, seg := range topology.Segments {
+	for _, seg := range t.Segments {
 		providers[seg.Name] = seg.Segment
 	}
 
@@ -151,7 +149,7 @@ func ValidateTopologyAgainstHierarchy(h KeyHierarchy, topology Topology, rootSeg
 		return fmt.Errorf("root bindings: %w", err)
 	}
 
-	for _, seg := range topology.Segments {
+	for _, seg := range t.Segments {
 		if err := validateBindingsParentProviders(h, seg.KeyBindings, seg.Segment, providers); err != nil {
 			return fmt.Errorf("segment %q: %w", seg.Name, err)
 		}
@@ -160,8 +158,7 @@ func ValidateTopologyAgainstHierarchy(h KeyHierarchy, topology Topology, rootSeg
 	return nil
 }
 
-// validateBindingsParentProviders checks that all ParentKeyProvider references in a set of bindings
-// resolve to known providers and that the parent key falls within the provider's segment.
+// validateBindingsParentProviders checks that all ParentKeyProvider references in a set of bindings resolve to known providers and that the parent key falls within the provider's segment.
 func validateBindingsParentProviders(h KeyHierarchy, bindings map[string]KeyBinding, ownerSeg HierarchySegment, providers map[string]HierarchySegment) error {
 	for kind, binding := range bindings {
 		if binding.ParentKeyProvider == nil {
@@ -173,16 +170,16 @@ func validateBindingsParentProviders(h KeyHierarchy, bindings map[string]KeyBind
 			return fmt.Errorf("%w: %q (referenced by key kind %q)", ErrParentKeyProviderNotResolvable, providerName, kind)
 		}
 
-		kindIdx, ok := h.IndexOf(KeyKind(kind))
-		if !ok || kindIdx == 0 {
+		kindIdx := h.IndexOf(KeyKind(kind))
+		if kindIdx <= 0 {
 			continue
 		}
 
 		parentKind := h.KeySpecs[kindIdx-1].Kind
-		parentIdx, _ := h.IndexOf(parentKind)
-		providerStartIdx, providerStartOk := h.IndexOf(KeyKind(providerSeg.StartKind))
-		providerEndIdx, providerEndOk := h.IndexOf(KeyKind(providerSeg.EndKind))
-		if providerStartOk && providerEndOk {
+		parentIdx := h.IndexOf(parentKind)
+		providerStartIdx := h.IndexOf(KeyKind(providerSeg.StartKind))
+		providerEndIdx := h.IndexOf(KeyKind(providerSeg.EndKind))
+		if providerStartIdx >= 0 && providerEndIdx >= 0 {
 			if parentIdx < providerStartIdx || parentIdx > providerEndIdx {
 				return fmt.Errorf("%w: parent key kind %q not in segment %q (%s→%s)",
 					ErrParentKeyProviderKeyNotInParentSegment, parentKind, providerName, providerSeg.StartKind, providerSeg.EndKind)
