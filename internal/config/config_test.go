@@ -23,6 +23,10 @@ func validRootConfig() *RootConfig {
 			"K0": {
 				Vault: spec.VaultSpec{Name: "v", Type: "aws-kms"},
 			},
+			"K1": {
+				Vault:             spec.VaultSpec{Name: "v2", Type: "open-bao"},
+				ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
+			},
 		},
 		Hierarchy: spec.KeyHierarchy{
 			Name: "h",
@@ -119,6 +123,108 @@ func TestValidateRootConfig(t *testing.T) {
 			modify:  func(c *RootConfig) { c.Topology = spec.Topology{} },
 			wantErr: nil,
 		},
+		{
+			name: "cross-validation: root start not hierarchy first key",
+			modify: func(c *RootConfig) {
+				c.Hierarchy = spec.KeyHierarchy{
+					Name: "h",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+					},
+				}
+				c.Segment = spec.HierarchySegment{StartKind: "K1", EndKind: "K2"}
+				c.KeyBindings = map[string]spec.KeyBinding{
+					"K1": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
+					"K2": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+				}
+				c.Topology = spec.Topology{}
+			},
+			wantErr: spec.ErrRootSegmentStartNotFirst,
+		},
+		{
+			name: "cross-validation: root end kind is tek",
+			modify: func(c *RootConfig) {
+				c.Hierarchy = spec.KeyHierarchy{
+					Name: "h",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K1", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+					},
+				}
+				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
+				c.KeyBindings = map[string]spec.KeyBinding{
+					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
+					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+				}
+				c.Topology = spec.Topology{}
+			},
+			wantErr: spec.ErrRootSegmentEndIsTek,
+		},
+		{
+			name: "cross-validation: agent start not tek",
+			modify: func(c *RootConfig) {
+				c.Hierarchy = spec.KeyHierarchy{
+					Name: "h",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+					},
+				}
+				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
+				c.KeyBindings = map[string]spec.KeyBinding{
+					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
+					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				}
+				c.Topology = spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name:    "agent-bad",
+							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"}, // K2 is dek, not tek
+							KeyBindings: map[string]spec.KeyBinding{
+								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+							},
+						},
+					},
+				}
+			},
+			wantErr: spec.ErrAgentSegmentStartNotTek,
+		},
+		{
+			name: "cross-validation: valid full config with topology",
+			modify: func(c *RootConfig) {
+				c.Hierarchy = spec.KeyHierarchy{
+					Name: "h",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+					},
+				}
+				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
+				c.KeyBindings = map[string]spec.KeyBinding{
+					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
+					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				}
+				c.Topology = spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name:    "agent-aws",
+							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
+							KeyBindings: map[string]spec.KeyBinding{
+								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K3": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+							},
+						},
+					},
+				}
+			},
+			wantErr: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -208,6 +314,9 @@ hierarchy:
       role: "kek"
       algorithm: "AES256"
     - kind: "K2"
+      role: "tek"
+      algorithm: "AES256"
+    - kind: "K3"
       role: "dek"
       algorithm: "AES256"
 topology:
@@ -215,7 +324,7 @@ topology:
     - name: "agent-aws"
       segment:
         start_kind: "K2"
-        end_kind: "K2"
+        end_kind: "K3"
       key_bindings:
         K2:
           vault:
@@ -223,6 +332,10 @@ topology:
             type: "aws-kms"
           parent_key_provider:
             agent_name: "root"
+        K3:
+          vault:
+            name: "aws-dek-vault"
+            type: "aws-kms"
       labels:
         cloud: "aws"
 `
@@ -249,7 +362,7 @@ topology:
 				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].Vault.Name)
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
 				assert.Equal(t, "production-hierarchy", cfg.Hierarchy.Name)
-				assert.Len(t, cfg.Hierarchy.KeySpecs, 3)
+				assert.Len(t, cfg.Hierarchy.KeySpecs, 4)
 				assert.Equal(t, spec.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)

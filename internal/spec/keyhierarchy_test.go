@@ -460,4 +460,90 @@ func TestKeyHierarchy(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("IndexOf", func(t *testing.T) {
+		hierarchy := &spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+			},
+		}
+
+		tts := []struct {
+			name     string
+			kind     spec.KeyKind
+			expIndex int
+			expFound bool
+		}{
+			{name: "found at index 0", kind: "K0", expIndex: 0, expFound: true},
+			{name: "found at middle index", kind: "K2", expIndex: 2, expFound: true},
+			{name: "found at last index", kind: "K4", expIndex: 4, expFound: true},
+			{name: "not found", kind: "nonexistent", expIndex: -1, expFound: false},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				idx, ok := hierarchy.IndexOf(tt.kind)
+				assert.Equal(t, tt.expFound, ok)
+				assert.Equal(t, tt.expIndex, idx)
+			})
+		}
+	})
+
+	t.Run("KindsBetween", func(t *testing.T) {
+		hierarchy := &spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+			},
+		}
+
+		t.Run("valid range returns correct sub-slice", func(t *testing.T) {
+			specs, err := hierarchy.KindsBetween("K1", "K3")
+			assert.NoError(t, err)
+			assert.Len(t, specs, 3)
+			assert.Equal(t, spec.KeyKind("K1"), specs[0].Kind)
+			assert.Equal(t, spec.KeyKind("K2"), specs[1].Kind)
+			assert.Equal(t, spec.KeyKind("K3"), specs[2].Kind)
+		})
+
+		t.Run("single element range", func(t *testing.T) {
+			specs, err := hierarchy.KindsBetween("K2", "K2")
+			assert.NoError(t, err)
+			assert.Len(t, specs, 1)
+			assert.Equal(t, spec.KeyKind("K2"), specs[0].Kind)
+		})
+
+		t.Run("full range returns entire slice", func(t *testing.T) {
+			specs, err := hierarchy.KindsBetween("K0", "K4")
+			assert.NoError(t, err)
+			assert.Len(t, specs, 5)
+		})
+
+		t.Run("start kind not found", func(t *testing.T) {
+			_, err := hierarchy.KindsBetween("nonexistent", "K3")
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, spec.ErrKeyHierarchyKindNotFound)
+		})
+
+		t.Run("end kind not found", func(t *testing.T) {
+			_, err := hierarchy.KindsBetween("K0", "nonexistent")
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, spec.ErrKeyHierarchyKindNotFound)
+		})
+
+		t.Run("start after end", func(t *testing.T) {
+			_, err := hierarchy.KindsBetween("K3", "K1")
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, spec.ErrKeyHierarchyInvalidRange)
+		})
+	})
 }

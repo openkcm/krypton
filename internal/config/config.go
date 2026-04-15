@@ -74,6 +74,14 @@ func (cfg *RootConfig) Validate() error {
 	if len(cfg.KeyBindings) == 0 {
 		return ErrConfigKeyBindingsEmpty
 	}
+
+	if err := spec.ValidateRootSegment(cfg.Hierarchy, cfg.Segment, cfg.KeyBindings); err != nil {
+		return fmt.Errorf("root segment: %w", err)
+	}
+	if err := spec.ValidateTopologyAgainstHierarchy(cfg.Hierarchy, cfg.Topology, cfg.Segment, cfg.KeyBindings); err != nil {
+		return fmt.Errorf("topology: %w", err)
+	}
+
 	return nil
 }
 
