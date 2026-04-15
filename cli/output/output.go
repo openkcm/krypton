@@ -29,7 +29,7 @@ const (
 // and true if it applied, or nil and false if it doesn't apply.
 type Formatter func(name string, value any) (any, bool)
 
-// Selector is a function that handles interactive selection from rows.
+// Selector is a function that handles selection from rows.
 // Returns the selected index or -1 and an error if selection is cancelled or fails.
 type Selector func(rows Rows) (int, error)
 
@@ -191,8 +191,12 @@ func (b *Builder) renderTabular(w io.Writer) error {
 	}
 	fmt.Fprintln(tw, strings.Join(headers, "\t"))
 
-	for _, line := range b.rows.Tabular() {
-		fmt.Fprintln(tw, line)
+	for _, row := range b.rows {
+		values := make([]string, len(row))
+		for j, c := range row {
+			values[j] = fmt.Sprintf("%v", c.Value)
+		}
+		fmt.Fprintln(tw, strings.Join(values, "\t"))
 	}
 
 	return tw.Flush()
