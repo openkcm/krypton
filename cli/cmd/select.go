@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/openkcm/krypton/cli/config"
 	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/cli/output/terminal"
+	"github.com/openkcm/krypton/cli/state"
 	"github.com/openkcm/krypton/pkg/api/admin"
 	"github.com/openkcm/krypton/pkg/model"
 )
@@ -34,9 +34,9 @@ func selectTenantCmd() *cobra.Command {
 		Long:  "Select a tenant by ID, or use -i for interactive selection.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			configStore, err := config.NewStore()
+			stateStore, err := state.NewStore()
 			if err != nil {
-				return fmt.Errorf("failed to initialize config store: %w", err)
+				return fmt.Errorf("failed to initialize state store: %w", err)
 			}
 
 			client, err := admin.NewClient(serverURL)
@@ -61,14 +61,14 @@ func selectTenantCmd() *cobra.Command {
 				return err
 			}
 
-			err = configStore.Save(&config.Config{
-				Tenant: &config.TenantSelection{
+			err = stateStore.Save(&state.State{
+				Tenant: &state.TenantSelection{
 					ID:   tenant.ID,
 					Name: tenant.Name,
 				},
 			})
 			if err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
+				return fmt.Errorf("failed to save state: %w", err)
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Selected tenant: %s (%s)\n", tenant.Name, tenant.ID)

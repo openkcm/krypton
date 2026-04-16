@@ -1,4 +1,4 @@
-package config_test
+package state_test
 
 import (
 	"os"
@@ -7,26 +7,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/cli/config"
+	"github.com/openkcm/krypton/cli/state"
 )
 
 func TestStore_SaveAndLoad(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
-	cfg := &config.Config{
-		Tenant: &config.TenantSelection{
+	s := state.NewStoreWithDir(dir)
+	st := &state.State{
+		Tenant: &state.TenantSelection{
 			ID:   "tenant-123",
 			Name: "my-tenant",
 		},
 	}
 
 	// when
-	err := s.Save(cfg)
+	err := s.Save(st)
 
 	// then
 	assert.NoError(t, err)
-	_, err = os.Stat(filepath.Join(dir, config.ConfigFileName))
+	_, err = os.Stat(filepath.Join(dir, state.StateFileName))
 	assert.NoError(t, err)
 
 	// when
@@ -34,31 +34,31 @@ func TestStore_SaveAndLoad(t *testing.T) {
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, cfg.Tenant.ID, got.Tenant.ID)
-	assert.Equal(t, cfg.Tenant.Name, got.Tenant.Name)
+	assert.Equal(t, st.Tenant.ID, got.Tenant.ID)
+	assert.Equal(t, st.Tenant.Name, got.Tenant.Name)
 }
 
-func TestStore_Save_NilConfig(t *testing.T) {
+func TestStore_Save_NilState(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
+	s := state.NewStoreWithDir(dir)
 
 	// when
 	err := s.Save(nil)
 
 	// then
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, config.ErrConfigNil)
+	assert.ErrorIs(t, err, state.ErrStateNil)
 }
 
-func TestStore_Save_EmptyConfig(t *testing.T) {
+func TestStore_Save_EmptyState(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
-	cfg := &config.Config{}
+	s := state.NewStoreWithDir(dir)
+	st := &state.State{}
 
 	// when
-	err := s.Save(cfg)
+	err := s.Save(st)
 
 	// then
 	assert.NoError(t, err)
@@ -74,20 +74,20 @@ func TestStore_Save_EmptyConfig(t *testing.T) {
 func TestStore_Load_NotFound(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
+	s := state.NewStoreWithDir(dir)
 
 	// when
 	_, err := s.Load()
 
 	// then
-	assert.ErrorIs(t, err, config.ErrConfigNotFound)
+	assert.ErrorIs(t, err, state.ErrStateNotFound)
 }
 
 func TestStore_Load_InvalidJSON(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
-	err := os.WriteFile(filepath.Join(dir, config.ConfigFileName), []byte("invalid json"), 0600)
+	s := state.NewStoreWithDir(dir)
+	err := os.WriteFile(filepath.Join(dir, state.StateFileName), []byte("invalid json"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -103,11 +103,11 @@ func TestStore_Clear(t *testing.T) {
 		saveFirst bool
 	}{
 		{
-			name:      "clears existing config",
+			name:      "clears existing state",
 			saveFirst: true,
 		},
 		{
-			name:      "succeeds when config does not exist",
+			name:      "succeeds when state does not exist",
 			saveFirst: false,
 		},
 	}
@@ -116,11 +116,11 @@ func TestStore_Clear(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
 			dir := t.TempDir()
-			s := config.NewStoreWithDir(dir)
+			s := state.NewStoreWithDir(dir)
 
 			if tt.saveFirst {
-				err := s.Save(&config.Config{
-					Tenant: &config.TenantSelection{ID: "test-id"},
+				err := s.Save(&state.State{
+					Tenant: &state.TenantSelection{ID: "test-id"},
 				})
 				assert.NoError(t, err)
 			}
@@ -131,7 +131,7 @@ func TestStore_Clear(t *testing.T) {
 			// then
 			assert.NoError(t, err)
 			_, err = s.Load()
-			assert.ErrorIs(t, err, config.ErrConfigNotFound)
+			assert.ErrorIs(t, err, state.ErrStateNotFound)
 		})
 	}
 }
@@ -139,25 +139,25 @@ func TestStore_Clear(t *testing.T) {
 func TestStore_Save_OverwritesExisting(t *testing.T) {
 	// given
 	dir := t.TempDir()
-	s := config.NewStoreWithDir(dir)
+	s := state.NewStoreWithDir(dir)
 
-	cfg1 := &config.Config{
-		Tenant: &config.TenantSelection{
+	st1 := &state.State{
+		Tenant: &state.TenantSelection{
 			ID:   "tenant-1",
 			Name: "first-tenant",
 		},
 	}
-	cfg2 := &config.Config{
-		Tenant: &config.TenantSelection{
+	st2 := &state.State{
+		Tenant: &state.TenantSelection{
 			ID:   "tenant-2",
 			Name: "second-tenant",
 		},
 	}
 
 	// when
-	err := s.Save(cfg1)
+	err := s.Save(st1)
 	assert.NoError(t, err)
-	err = s.Save(cfg2)
+	err = s.Save(st2)
 	assert.NoError(t, err)
 
 	// then

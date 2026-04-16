@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/cli/config"
+	"github.com/openkcm/krypton/cli/state"
 	"github.com/openkcm/krypton/pkg/api/admin"
 )
 
@@ -246,17 +246,17 @@ func TestSelectTenant(t *testing.T) {
 		assert.Contains(t, string(selectOutput), "Selected tenant:")
 		assert.Contains(t, string(selectOutput), tenantName)
 
-		// and config file was created with correct content
-		configPath := filepath.Join(homeDir, config.Directory, config.ConfigFileName)
-		configData, err := os.ReadFile(configPath)
+		// and state file was created with correct content
+		statePath := filepath.Join(homeDir, ".krypton", "state.lock")
+		stateData, err := os.ReadFile(statePath)
 		assert.NoError(t, err)
 
-		var cfg config.Config
-		err = json.Unmarshal(configData, &cfg)
+		var st state.State
+		err = json.Unmarshal(stateData, &st)
 		assert.NoError(t, err)
-		assert.NotNil(t, cfg.Tenant)
-		assert.Equal(t, tenants[0].ID, cfg.Tenant.ID)
-		assert.Equal(t, tenantName, cfg.Tenant.Name)
+		assert.NotNil(t, st.Tenant)
+		assert.Equal(t, tenants[0].ID, st.Tenant.ID)
+		assert.Equal(t, tenantName, st.Tenant.Name)
 	})
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
