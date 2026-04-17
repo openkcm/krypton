@@ -8,12 +8,17 @@ import (
 	"github.com/openkcm/krypton/internal/core"
 )
 
-var ErrAgentRegistrationNotFound = errors.New("agent registration not found")
+var (
+	ErrAgentNotFound     = errors.New("agent registration not found")
+	ErrAgentQueryInvalid = errors.New("agent registration query invalid required field")
+)
 
 type Agent interface {
-	Register(ctx context.Context, query RegisterAgentQuery) (RegisterAgentResult, error)
-	Get(ctx context.Context, query GetAgentQuery) (GetAgentResult, error)
-	UpdateRegistrationStatus(ctx context.Context, query UpdateRegistrationStatusQuery) error
+	Register(ctx context.Context, q RegisterAgentQuery) (RegisterAgentResult, error)
+	Get(ctx context.Context, q GetAgentQuery) (GetAgentResult, error)
+	UpdateStatus(ctx context.Context, q UpdateAgentStatusQuery) error
+	Delete(ctx context.Context, q DeleteAgentQuery) error
+	List(ctx context.Context, q ListAgentQuery) (ListAgentResult, error)
 }
 
 type (
@@ -34,11 +39,24 @@ type (
 		Registration core.AgentRegistration
 	}
 
-	UpdateRegistrationStatusQuery struct {
+	UpdateAgentStatusQuery struct {
 		Name               string
 		InstanceID         string
 		FromStatus         []core.AgentRegistrationStatus
 		ToStatus           core.AgentRegistrationStatus
 		HeartbeatThreshold time.Duration
+	}
+
+	DeleteAgentQuery struct {
+		Status             core.AgentRegistrationStatus
+		HeartbeatThreshold time.Duration
+	}
+
+	ListAgentQuery struct {
+		Name string
+	}
+
+	ListAgentResult struct {
+		Registrations []core.AgentRegistration
 	}
 )

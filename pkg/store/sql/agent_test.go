@@ -50,7 +50,7 @@ func TestRegister(t *testing.T) {
 	t.Run("should insert new agent registration", func(t *testing.T) {
 		// given
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -74,7 +74,7 @@ func TestRegister(t *testing.T) {
 	t.Run("should update existing agent registration", func(t *testing.T) {
 		// given
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -108,22 +108,22 @@ func TestRegister(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	// given
 	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	t.Run("should get existing agent registration", func(t *testing.T) {
 		// given
-		db, err := sql.Open("postgres", pgConnStr)
-		require.NoError(t, err)
-
-		t.Cleanup(func() {
-			db.Close()
-		})
-
 		subj, err := storesql.NewAgentStore(ctx, db)
 		require.NoError(t, err)
 
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -152,13 +152,6 @@ func TestGet(t *testing.T) {
 
 	t.Run("should return error if agent registration not found", func(t *testing.T) {
 		// given
-		db, err := sql.Open("postgres", pgConnStr)
-		require.NoError(t, err)
-
-		t.Cleanup(func() {
-			db.Close()
-		})
-
 		subj, err := storesql.NewAgentStore(ctx, db)
 		require.NoError(t, err)
 
@@ -169,12 +162,12 @@ func TestGet(t *testing.T) {
 		})
 
 		// then
-		assert.ErrorIs(t, err, store.ErrAgentRegistrationNotFound)
+		assert.ErrorIs(t, err, store.ErrAgentNotFound)
 		assert.Zero(t, getResult.Registration)
 	})
 }
 
-func TestUpdateRegistrationStatus(t *testing.T) {
+func TestUpdateStatus(t *testing.T) {
 	// given
 	ctx := t.Context()
 
@@ -188,239 +181,790 @@ func TestUpdateRegistrationStatus(t *testing.T) {
 	subj, err := storesql.NewAgentStore(ctx, db)
 	require.NoError(t, err)
 
-	t.Run("UpdateRegistrationStatus", func(t *testing.T) {
+	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
+		// given
 		tests := []struct {
-			name                string
-			sleepDuration       time.Duration
-			expectStatusChanged bool
+			name        string
+			updateQuery store.UpdateAgentStatusQuery
 		}{
 			{
-				name:                "should update status when heartbeat threshold exceeded",
-				sleepDuration:       21 * time.Second, // threshold + 1s
-				expectStatusChanged: true,
+				name: "missing to status",
+				updateQuery: store.UpdateAgentStatusQuery{
+					Name:       agentName(),
+					InstanceID: uuid.New().String(),
+					FromStatus: []core.AgentRegistrationStatus{
+						core.AgentRegistrationStatusHealthy,
+					},
+				},
 			},
 			{
-				name:          "should not update status when heartbeat threshold not exceeded",
-				sleepDuration: 10 * time.Second, // threshold - 10s
-
-				expectStatusChanged: false,
+				name: "missing from status",
+				updateQuery: store.UpdateAgentStatusQuery{
+					Name:       agentName(),
+					InstanceID: uuid.New().String(),
+					ToStatus:   core.AgentRegistrationStatusDeregistered,
+				},
 			},
 		}
-		heartbeatThreshold := 15 * time.Second
-
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				synctest.Test(t, func(t *testing.T) {
-					// given
-					registration := core.AgentRegistration{
+				// when
+				err := subj.UpdateStatus(ctx, tt.updateQuery)
+
+				// then
+				assert.ErrorIs(t, err, store.ErrAgentQueryInvalid)
+			})
+		}
+	})
+
+	t.Run("UpdateStatus", func(t *testing.T) {
+		// given
+		tests := []struct {
+			name          string
+			inputs        func() (reg1 core.AgentRegistration, reg2 core.AgentRegistration, query store.UpdateAgentStatusQuery)
+			isReg1Changed bool
+			isReg2Changed bool
+		}{
+			{
+				name: "should update status of both registration for the same name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          "test-agent",
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
 						Name:          "test-agent",
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 
-					prevResult, err := subj.Register(ctx, store.RegisterAgentQuery{
-						Registration: registration,
-					})
-
-					require.NoError(t, err)
-
-					time.Sleep(tt.sleepDuration)
-					synctest.Wait()
-
-					updateQuery := store.UpdateRegistrationStatusQuery{
-						Name:       registration.Name,
-						InstanceID: registration.InstanceID,
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						Name: "test-agent",
 						FromStatus: []core.AgentRegistrationStatus{
 							core.AgentRegistrationStatusHealthy,
 						},
-						ToStatus:           core.AgentRegistrationStatusUnhealthy,
-						HeartbeatThreshold: heartbeatThreshold,
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg1Changed: true,
+				isReg2Changed: true,
+			},
+
+			{
+				name: "should update status of only registration with matching name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
 					}
 
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						Name: reg2.Name,
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg2Changed: true,
+			},
+
+			{
+				name: "should not update status of any registration for an unknown name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						Name: "unknown-agent",
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+			},
+
+			{
+				name: "should update status of only registration with a matching instanceID",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						InstanceID: reg2.InstanceID,
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg2Changed: true,
+			},
+			{
+				name: "should not update status of any registration for an unknown instanceID",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						InstanceID: uuid.New().String(),
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+			},
+			{
+				name: "should update status of only registration with matching instanceID and name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						InstanceID: reg1.InstanceID,
+						Name:       reg1.Name,
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg1Changed: true,
+			},
+			{
+				name: "should update status of only registration with heartbeat threshold exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.UnixNano(time.Now().Add(-1 * time.Minute).UnixNano()),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Second,
+					}
+				},
+				isReg1Changed: true,
+			},
+			{
+				name: "should not update status of any registration when heartbeat threshold not exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Minute,
+					}
+				},
+			},
+			{
+				name: "should update status of both registration when heartbeat threshold exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Second,
+					}
+				},
+				isReg1Changed: true,
+				isReg2Changed: true,
+			},
+			{
+				name: "should update status of only registration with heartbeat threshold exceeded and matching name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						Name:               reg2.Name,
+						HeartbeatThreshold: 30 * time.Second,
+					}
+				},
+				isReg2Changed: true,
+			},
+			{
+				name: "should update status of only registration with heartbeat threshold exceeded and matching instanceID",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						InstanceID:         reg1.InstanceID,
+						HeartbeatThreshold: 30 * time.Second,
+					}
+				},
+				isReg1Changed: true,
+			},
+			{
+				name: "should update status of only registration with heartbeat threshold exceeded, matching instanceID and name",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus:           core.AgentRegistrationStatusDeregistered,
+						InstanceID:         reg2.InstanceID,
+						Name:               reg2.Name,
+						HeartbeatThreshold: 30 * time.Second,
+					}
+				},
+				isReg2Changed: true,
+			},
+			{
+				name: "should update status of both registration for the same from status",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg1Changed: true,
+				isReg2Changed: true,
+			},
+			{
+				name: "should not update the status of any registration when the from status does not match",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusRegistered,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+			},
+			{
+				name: "should update the status of one registration when the from status match",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusRegistered,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg2Changed: true,
+			},
+			{
+				name: "should update the status of all registration when the from status match",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusRegistered,
+						LastHeartbeat: clock.Now(),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now(),
+					}
+
+					return reg1, reg2, store.UpdateAgentStatusQuery{
+						FromStatus: []core.AgentRegistrationStatus{
+							core.AgentRegistrationStatusHealthy,
+							core.AgentRegistrationStatusRegistered,
+						},
+						ToStatus: core.AgentRegistrationStatusDeregistered,
+					}
+				},
+				isReg1Changed: true,
+				isReg2Changed: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					// given
+					reg1, reg2, query := tt.inputs()
+
+					reg1Before, err := subj.Register(ctx, store.RegisterAgentQuery{
+						Registration: reg1,
+					})
+					require.NoError(t, err)
+
+					reg2Before, err := subj.Register(ctx, store.RegisterAgentQuery{
+						Registration: reg2,
+					})
+					require.NoError(t, err)
+
 					// when
-					err = subj.UpdateRegistrationStatus(ctx, updateQuery)
+					time.Sleep(1 * time.Second) // ensure the updatedAt timestamp will be different after update
+					synctest.Wait()
+					err = subj.UpdateStatus(ctx, query)
 
 					// then
 					assert.NoError(t, err)
 
-					getResult, err := subj.Get(ctx, store.GetAgentQuery{
-						Name:       registration.Name,
-						InstanceID: registration.InstanceID,
+					reg1After, err := subj.Get(ctx, store.GetAgentQuery{
+						Name:       reg1.Name,
+						InstanceID: reg1.InstanceID,
 					})
 					require.NoError(t, err)
 
-					assert.Equal(t, prevResult.Registration.Name, getResult.Registration.Name)
-					assert.Equal(t, prevResult.Registration.InstanceID, getResult.Registration.InstanceID)
-					assert.Equal(t, prevResult.Registration.LastHeartbeat, getResult.Registration.LastHeartbeat)
-					assert.Equal(t, prevResult.Registration.CreatedAt, getResult.Registration.CreatedAt)
-					if tt.expectStatusChanged {
-						assert.Equal(t, updateQuery.ToStatus, getResult.Registration.Status)
-						assert.NotEqual(t, prevResult.Registration.UpdatedAt, getResult.Registration.UpdatedAt)
-						assert.Greater(t, getResult.Registration.UpdatedAt, prevResult.Registration.UpdatedAt)
+					reg2After, err := subj.Get(ctx, store.GetAgentQuery{
+						Name:       reg2.Name,
+						InstanceID: reg2.InstanceID,
+					})
+					require.NoError(t, err)
+
+					if tt.isReg1Changed {
+						assert.Equal(t, query.ToStatus, reg1After.Registration.Status)
+						assert.Greater(t, reg1After.Registration.UpdatedAt, reg1Before.Registration.UpdatedAt)
 					} else {
-						assert.Equal(t, prevResult.Registration.Status, getResult.Registration.Status)
-						assert.Equal(t, prevResult.Registration.UpdatedAt, getResult.Registration.UpdatedAt)
+						assert.Equal(t, reg1Before.Registration, reg1After.Registration)
+					}
+
+					if tt.isReg2Changed {
+						assert.Equal(t, query.ToStatus, reg2After.Registration.Status)
+						assert.Greater(t, reg2After.Registration.UpdatedAt, reg2Before.Registration.UpdatedAt)
+					} else {
+						assert.Equal(t, reg2Before.Registration, reg2After.Registration)
 					}
 				})
 			})
 		}
 	})
+}
 
-	t.Run("should deregister without a LastHeartbeat threshold", func(t *testing.T) {
-		tests := []struct {
-			name       string
-			fromStatus core.AgentRegistrationStatus
+func TestDelete(t *testing.T) {
+	// given
+	ctx := t.Context()
+
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+	subj, err := storesql.NewAgentStore(ctx, db)
+	require.NoError(t, err)
+
+	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
+		// given
+		tts := []struct {
+			name        string
+			deleteQuery store.DeleteAgentQuery
 		}{
 			{
-				name:       "from healthy",
-				fromStatus: core.AgentRegistrationStatusHealthy,
+				name: "missing status",
+				deleteQuery: store.DeleteAgentQuery{
+					HeartbeatThreshold: 30 * time.Second,
+				},
 			},
 			{
-				name:       "from unhealthy",
-				fromStatus: core.AgentRegistrationStatusUnhealthy,
+				name: "missing heartbeat threshold",
+				deleteQuery: store.DeleteAgentQuery{
+					Status: core.AgentRegistrationStatusDeregistered,
+				},
 			},
 			{
-				name:       "from registered",
-				fromStatus: core.AgentRegistrationStatusRegistered,
+				name: "negative heartbeat threshold",
+				deleteQuery: store.DeleteAgentQuery{
+					Status:             core.AgentRegistrationStatusDeregistered,
+					HeartbeatThreshold: -1 * time.Second,
+				},
 			},
 		}
-		for _, tt := range tests {
+
+		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
-				// given
-				registration := core.AgentRegistration{
-					Name:          "test-agent",
-					InstanceID:    uuid.New().String(),
-					Status:        tt.fromStatus,
-					LastHeartbeat: clock.Now(),
-				}
-
-				prevResult, err := subj.Register(ctx, store.RegisterAgentQuery{
-					Registration: registration,
-				})
-				require.NoError(t, err)
-
-				updateQuery := store.UpdateRegistrationStatusQuery{
-					Name:       registration.Name,
-					InstanceID: registration.InstanceID,
-					FromStatus: []core.AgentRegistrationStatus{
-						tt.fromStatus,
-					},
-					ToStatus: core.AgentRegistrationStatusDeregistered,
-				}
-
 				// when
-				err = subj.UpdateRegistrationStatus(ctx, updateQuery)
+				err = subj.Delete(ctx, tt.deleteQuery)
 
 				// then
-				assert.NoError(t, err)
-
-				getResult, err := subj.Get(ctx, store.GetAgentQuery{
-					Name:       registration.Name,
-					InstanceID: registration.InstanceID,
-				})
-				require.NoError(t, err)
-
-				assert.Equal(t, updateQuery.ToStatus, getResult.Registration.Status)
-				assert.Greater(t, getResult.Registration.UpdatedAt, prevResult.Registration.UpdatedAt)
-
-				assert.Equal(t, prevResult.Registration.Name, getResult.Registration.Name)
-				assert.Equal(t, prevResult.Registration.InstanceID, getResult.Registration.InstanceID)
-				assert.Equal(t, prevResult.Registration.LastHeartbeat, getResult.Registration.LastHeartbeat)
-				assert.Equal(t, prevResult.Registration.CreatedAt, getResult.Registration.CreatedAt)
+				assert.ErrorIs(t, err, store.ErrAgentQueryInvalid)
 			})
 		}
 	})
 
-	t.Run("should not update status if query does not match registration", func(t *testing.T) {
+	t.Run("Delete", func(t *testing.T) {
 		// given
-		registration := core.AgentRegistration{
-			Name:          "test-agent",
-			InstanceID:    uuid.New().String(),
-			Status:        core.AgentRegistrationStatusHealthy,
-			LastHeartbeat: clock.Now(),
-		}
-
-		prevResult, err := subj.Register(ctx, store.RegisterAgentQuery{
-			Registration: registration,
-		})
-
-		require.NoError(t, err)
-
 		tts := []struct {
-			name        string
-			updateQuery store.UpdateRegistrationStatusQuery
+			name          string
+			inputs        func() (reg1 core.AgentRegistration, reg2 core.AgentRegistration, query store.DeleteAgentQuery)
+			isReg1Deleted bool
+			isReg2Deleted bool
 		}{
 			{
-				name: "non-existent name",
-				updateQuery: store.UpdateRegistrationStatusQuery{
-					Name:       "non-existent-agent",
-					InstanceID: registration.InstanceID,
-					FromStatus: []core.AgentRegistrationStatus{
-						registration.Status,
-					},
-					ToStatus: core.AgentRegistrationStatusDeregistered,
+				name: "should delete both registration for the same status and heartbeat threshold exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					return reg1, reg2, store.DeleteAgentQuery{
+						Status:             core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Second,
+					}
 				},
+				isReg1Deleted: true,
+				isReg2Deleted: true,
 			},
 			{
-				name: "non-existent instance ID",
-				updateQuery: store.UpdateRegistrationStatusQuery{
-					Name:       registration.Name,
-					InstanceID: uuid.New().String(),
-					FromStatus: []core.AgentRegistrationStatus{
-						registration.Status,
-					},
-					ToStatus: core.AgentRegistrationStatusDeregistered,
+				name: "should not delete any registration when status matches and the heartbeat threshold not exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now(),
+					}
+					return reg1, reg2, store.DeleteAgentQuery{
+						Status:             core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Minute,
+					}
 				},
+				isReg1Deleted: false,
+				isReg2Deleted: false,
 			},
 			{
-				name: "from status does not match",
-				updateQuery: store.UpdateRegistrationStatusQuery{
-					Name:       registration.Name,
-					InstanceID: registration.InstanceID,
-					FromStatus: []core.AgentRegistrationStatus{
-						core.AgentRegistrationStatusUnhealthy,
-					},
-					ToStatus: core.AgentRegistrationStatusDeregistered,
+				name: "should not delete any registration when the status does not match even if the heartbeat threshold exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					return reg1, reg2, store.DeleteAgentQuery{
+						Status:             core.AgentRegistrationStatusRegistered,
+						HeartbeatThreshold: 30 * time.Second,
+					}
 				},
+				isReg1Deleted: false,
+				isReg2Deleted: false,
 			},
 			{
-				name: "heartbeat threshold not exceeded",
-				updateQuery: store.UpdateRegistrationStatusQuery{
-					Name:       registration.Name,
-					InstanceID: registration.InstanceID,
-					FromStatus: []core.AgentRegistrationStatus{
-						registration.Status,
-					},
-					ToStatus:           core.AgentRegistrationStatusDeregistered,
-					HeartbeatThreshold: 100 * time.Second,
+				name: "should delete only registration with matching status and heartbeat threshold exceeded",
+				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
+					reg1 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusDeregistered,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					reg2 := core.AgentRegistration{
+						Name:          agentName(),
+						InstanceID:    uuid.New().String(),
+						Status:        core.AgentRegistrationStatusHealthy,
+						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+					}
+					return reg1, reg2, store.DeleteAgentQuery{
+						Status:             core.AgentRegistrationStatusDeregistered,
+						HeartbeatThreshold: 30 * time.Second,
+					}
 				},
+				isReg1Deleted: true,
+				isReg2Deleted: false,
 			},
 		}
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
+				// given
+				reg1, reg2, query := tt.inputs()
+
+				_, err = subj.Register(ctx, store.RegisterAgentQuery{
+					Registration: reg1,
+				})
+				require.NoError(t, err)
+
+				_, err = subj.Register(ctx, store.RegisterAgentQuery{
+					Registration: reg2,
+				})
+				require.NoError(t, err)
+
 				// when
-				err = subj.UpdateRegistrationStatus(ctx, tt.updateQuery)
+				err = subj.Delete(ctx, query)
 
 				// then
 				assert.NoError(t, err)
 
-				getResult, err := subj.Get(ctx, store.GetAgentQuery{
-					Name:       registration.Name,
-					InstanceID: registration.InstanceID,
+				_, err = subj.Get(ctx, store.GetAgentQuery{
+					Name:       reg1.Name,
+					InstanceID: reg1.InstanceID,
 				})
 
-				require.NoError(t, err)
+				if tt.isReg1Deleted {
+					assert.ErrorIs(t, err, store.ErrAgentNotFound)
+				} else {
+					assert.NoError(t, err)
+				}
 
-				assert.Equal(t, registration.Status, getResult.Registration.Status)
-				assert.Equal(t, prevResult.Registration.Name, getResult.Registration.Name)
-				assert.Equal(t, prevResult.Registration.InstanceID, getResult.Registration.InstanceID)
-				assert.Equal(t, prevResult.Registration.LastHeartbeat, getResult.Registration.LastHeartbeat)
-				assert.Equal(t, prevResult.Registration.CreatedAt, getResult.Registration.CreatedAt)
-				assert.Equal(t, prevResult.Registration.UpdatedAt, getResult.Registration.UpdatedAt)
+				_, err = subj.Get(ctx, store.GetAgentQuery{
+					Name:       reg2.Name,
+					InstanceID: reg2.InstanceID,
+				})
+				if tt.isReg2Deleted {
+					assert.ErrorIs(t, err, store.ErrAgentNotFound)
+				} else {
+					assert.NoError(t, err)
+				}
 			})
 		}
 	})
+}
+
+func TestList(t *testing.T) {
+	// given
+	ctx := t.Context()
+
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+	subj, err := storesql.NewAgentStore(ctx, db)
+	require.NoError(t, err)
+
+	name1 := uuid.New().String()
+	name2 := uuid.New().String()
+
+	_, err = subj.Register(ctx, store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          name1,
+			InstanceID:    uuid.New().String(),
+			Status:        core.AgentRegistrationStatusDeregistered,
+			LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+		},
+	})
+	assert.NoError(t, err)
+
+	_, err = subj.Register(ctx, store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          name2,
+			InstanceID:    uuid.New().String(),
+			Status:        core.AgentRegistrationStatusDeregistered,
+			LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+		},
+	})
+	assert.NoError(t, err)
+
+	_, err = subj.Register(ctx, store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          name1,
+			InstanceID:    uuid.New().String(),
+			Status:        core.AgentRegistrationStatusDeregistered,
+			LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
+		},
+	})
+	assert.NoError(t, err)
+
+	t.Run("should filter agent registrations by name", func(t *testing.T) {
+		// when
+		listResult, err := subj.List(ctx, store.ListAgentQuery{
+			Name: name1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, listResult.Registrations, 2)
+
+		for _, reg := range listResult.Registrations {
+			assert.Equal(t, name1, reg.Name)
+		}
+	})
+}
+
+func agentName() string {
+	return "test-agent-" + uuid.New().String()
 }
 
 func setupPostgres() (func(), error) {

@@ -178,7 +178,7 @@ func TestSendHeartbeat(t *testing.T) {
 				InstanceID: expAgentID,
 			})
 
-			assert.ErrorIs(t, err, store.ErrAgentRegistrationNotFound)
+			assert.ErrorIs(t, err, store.ErrAgentNotFound)
 		})
 
 		t.Run("server should return error if X-Agent-Name header is missing", func(t *testing.T) {

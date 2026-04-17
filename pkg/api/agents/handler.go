@@ -125,7 +125,7 @@ func (a *agent) deregister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.store.UpdateRegistrationStatus(r.Context(), store.UpdateRegistrationStatusQuery{
+	err = a.store.UpdateStatus(r.Context(), store.UpdateAgentStatusQuery{
 		Name:       ah.agentName,
 		InstanceID: ah.agentID,
 		FromStatus: []core.AgentRegistrationStatus{
@@ -137,7 +137,7 @@ func (a *agent) deregister(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("failed to update agent status to deregistered : %v", err)
-		http.Error(w, "failed to update agent status to deregistered ", http.StatusInternalServerError)
+		http.Error(w, "failed to update agent status to deregistered", http.StatusInternalServerError)
 		return
 	}
 
