@@ -50,7 +50,7 @@ func TestRegister(t *testing.T) {
 	t.Run("should insert new agent registration", func(t *testing.T) {
 		// given
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -74,7 +74,7 @@ func TestRegister(t *testing.T) {
 	t.Run("should update existing agent registration", func(t *testing.T) {
 		// given
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -123,7 +123,7 @@ func TestGet(t *testing.T) {
 		require.NoError(t, err)
 
 		registration := core.AgentRegistration{
-			Name:       "test-agent",
+			Name:       agentName(),
 			InstanceID: uuid.New().String(),
 			Status:     core.AgentRegistrationStatusHealthy,
 		}
@@ -190,7 +190,7 @@ func TestUpdateStatus(t *testing.T) {
 			{
 				name: "missing to status",
 				updateQuery: store.UpdateAgentStatusQuery{
-					Name:       "test-agent",
+					Name:       agentName(),
 					InstanceID: uuid.New().String(),
 					FromStatus: []core.AgentRegistrationStatus{
 						core.AgentRegistrationStatusHealthy,
@@ -200,7 +200,7 @@ func TestUpdateStatus(t *testing.T) {
 			{
 				name: "missing from status",
 				updateQuery: store.UpdateAgentStatusQuery{
-					Name:       "test-agent",
+					Name:       agentName(),
 					InstanceID: uuid.New().String(),
 					ToStatus:   core.AgentRegistrationStatusDeregistered,
 				},
@@ -257,13 +257,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with matching name",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent-1",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent-2",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -284,13 +284,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should not update status of any registration for an unknown name",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent-1",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -310,13 +310,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with a matching instanceID",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -336,13 +336,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should not update status of any registration for an unknown instanceID",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -361,13 +361,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with matching instanceID and name",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -388,13 +388,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with heartbeat threshold exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.UnixNano(time.Now().Add(-1 * time.Minute).UnixNano()),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -414,13 +414,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should not update status of any registration when heartbeat threshold not exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -439,13 +439,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of both registration when heartbeat threshold exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -466,13 +466,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with heartbeat threshold exceeded and matching name",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent-1",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent-2",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -493,13 +493,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with heartbeat threshold exceeded and matching instanceID",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent-1",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent-2",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -520,13 +520,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of only registration with heartbeat threshold exceeded, matching instanceID and name",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent-1",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent-2",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -548,13 +548,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update status of both registration for the same from status",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -574,13 +574,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should not update the status of any registration when the from status does not match",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -598,13 +598,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update the status of one registration when the from status match",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusRegistered,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -623,13 +623,13 @@ func TestUpdateStatus(t *testing.T) {
 				name: "should update the status of all registration when the from status match",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.UpdateAgentStatusQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusRegistered,
 						LastHeartbeat: clock.Now(),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now(),
@@ -766,13 +766,13 @@ func TestDelete(t *testing.T) {
 				name: "should delete both registration for the same status and heartbeat threshold exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -789,13 +789,13 @@ func TestDelete(t *testing.T) {
 				name: "should not delete any registration when status matches and the heartbeat threshold not exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now(),
@@ -812,13 +812,13 @@ func TestDelete(t *testing.T) {
 				name: "should not delete any registration when the status does not match even if the heartbeat threshold exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -835,13 +835,13 @@ func TestDelete(t *testing.T) {
 				name: "should delete only registration with matching status and heartbeat threshold exceeded",
 				inputs: func() (core.AgentRegistration, core.AgentRegistration, store.DeleteAgentQuery) {
 					reg1 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusDeregistered,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
 					}
 					reg2 := core.AgentRegistration{
-						Name:          "test-agent",
+						Name:          agentName(),
 						InstanceID:    uuid.New().String(),
 						Status:        core.AgentRegistrationStatusHealthy,
 						LastHeartbeat: clock.Now() - clock.UnixNano(time.Minute),
@@ -961,6 +961,10 @@ func TestList(t *testing.T) {
 			assert.Equal(t, name1, reg.Name)
 		}
 	})
+}
+
+func agentName() string {
+	return "test-agent-" + uuid.New().String()
 }
 
 func setupPostgres() (func(), error) {
