@@ -183,7 +183,7 @@ func TestDeregister(t *testing.T) {
 			assert.NoError(t, err)
 
 			// directly update the status to unhealthy to simulate the scenario where the agent becomes unhealthy before sending the deregister request
-			err = agentStore.UpdateRegistrationStatus(t.Context(), store.UpdateRegistrationStatusQuery{
+			err = agentStore.UpdateStatus(t.Context(), store.UpdateAgentStatusQuery{
 				Name:       expAgentName,
 				InstanceID: expAgentID,
 				FromStatus: []core.AgentRegistrationStatus{core.AgentRegistrationStatusRegistered},
@@ -239,7 +239,7 @@ func TestDeregister(t *testing.T) {
 				InstanceID: expAgentID,
 			})
 
-			assert.ErrorIs(t, err, store.ErrAgentRegistrationNotFound)
+			assert.ErrorIs(t, err, store.ErrAgentNotFound)
 		})
 
 		t.Run("server should return error if X-Agent-Name header is missing", func(t *testing.T) {

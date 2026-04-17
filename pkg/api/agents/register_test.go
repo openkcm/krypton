@@ -124,7 +124,7 @@ func TestAgentRegister(t *testing.T) {
 		srv := httptest.NewServer(handler)
 		t.Cleanup(srv.Close)
 
-		t.Run("agent client should sent a successful request to the server", func(t *testing.T) {
+		t.Run("agent client should send a successful request to the server", func(t *testing.T) {
 			// given
 			subj, err := agents.NewClient(srv.URL, expAgentName, expAgentID)
 			assert.NoError(t, err)
@@ -147,7 +147,7 @@ func TestAgentRegister(t *testing.T) {
 			}, resp)
 		})
 
-		t.Run("agent client should sent a successful request and the server should register the client in the registry store", func(t *testing.T) {
+		t.Run("agent client should send a successful request and the server should register the client in the registry store", func(t *testing.T) {
 			// given
 			subj, err := agents.NewClient(srv.URL, expAgentName, expAgentID)
 			assert.NoError(t, err)

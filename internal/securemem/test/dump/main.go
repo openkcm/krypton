@@ -34,7 +34,7 @@ func main() {
 	// Run the secret runner and the exposed secret in parallel to simulate a real-world scenario
 	handlerResponse := securememRunner()
 
-	// Simulate an un unsecured secret read that is not protected by securemem
+	// Simulate an unsecured secret read that is not protected by securemem
 	unSecuredSecretReader()
 
 	// Create a trigger file to keep the container running for analysis
