@@ -1,5 +1,4 @@
 export GOEXPERIMENT := runtimesecret
-export ROOT_SERVER_PORT := :8080
 
 .PHONY: clean
 clean:
@@ -64,9 +63,11 @@ postgres:
 postgres-stop:
 	docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 
+ROOT_SERVER_PORT := :8080
+
 .PHONY: agent
 agent:
-	go run ./cmd/agent
+	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" go run ./cmd/agent
 
 .PHONY: root
 root:

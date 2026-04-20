@@ -67,13 +67,17 @@ func handleErr(err error, msg string) {
 func loadConfig() *config.AgentBootstrapConfig {
 	cfg, err := config.LoadAgentBootstrapConfig(os.Getenv("AGENT_BOOTSTRAP_CONFIG_PATH"))
 	if err != nil {
+		port := os.Getenv("ROOT_SERVER_PORT")
+		if port == "" {
+			port = ":8080"
+		}
 		return &config.AgentBootstrapConfig{
 			Name: "agent-k1",
 			Role: spec.DefaultRole,
 			KryptonRoot: config.KryptonRoot{
 				Address: config.Address{
 					Type: config.AddressTypeHTTP,
-					URL:  "http://localhost:8080",
+					URL:  "http://localhost" + port,
 				},
 			},
 		}
