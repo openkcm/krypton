@@ -34,7 +34,7 @@ const (
 
 type agent struct {
 	store store.Agent
-	root  config.RootConfig
+	cfg   config.RootConfig
 }
 
 type agentHeader struct {
@@ -49,7 +49,7 @@ func NewServerMux(mux *http.ServeMux, store store.Agent, root config.RootConfig)
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	a := &agent{store: store, root: root}
+	a := &agent{store: store, cfg: root}
 	mux.HandleFunc("POST "+PathRegister, a.register)
 	mux.HandleFunc("POST "+PathHeartbeat, a.heartbeat)
 	mux.HandleFunc("POST "+PathDeregister, a.deregister)
@@ -70,7 +70,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := spec.NewAgentConfig(a.root.Hierarchy, seg)
+	cfg := spec.NewAgentConfig(a.cfg.Hierarchy, seg)
 
 	_, err = a.store.Register(r.Context(), store.RegisterAgentQuery{
 		Registration: core.AgentRegistration{
@@ -173,7 +173,7 @@ func writeJSONResponse(w http.ResponseWriter, body any) {
 }
 
 func (a *agent) topologySegment(agentName string) (spec.TopologySegment, bool) {
-	for _, seg := range a.root.Topology.Segments {
+	for _, seg := range a.cfg.Topology.Segments {
 		if seg.Name == agentName {
 			return seg, true
 		}
