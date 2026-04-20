@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/openkcm/krypton/internal/clock"
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/store"
@@ -32,9 +33,8 @@ const (
 )
 
 type agent struct {
-	store     store.Agent
-	hierarchy spec.KeyHierarchy
-	topology  spec.Topology
+	store store.Agent
+	root  config.RootConfig
 }
 
 type agentHeader struct {
@@ -45,11 +45,11 @@ type agentHeader struct {
 var errHeaderMissing = errors.New("required header is missing")
 
 // NewServerMux creates the admin API multiplexer with all routes registered.
-func NewServerMux(mux *http.ServeMux, store store.Agent, hierarchy spec.KeyHierarchy, topology spec.Topology) http.Handler {
+func NewServerMux(mux *http.ServeMux, store store.Agent, root config.RootConfig) *http.ServeMux {
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
-	a := &agent{hierarchy: hierarchy, store: store, topology: topology}
+	a := &agent{store: store, root: root}
 	mux.HandleFunc("POST "+PathRegister, a.register)
 	mux.HandleFunc("POST "+PathHeartbeat, a.heartbeat)
 	mux.HandleFunc("POST "+PathDeregister, a.deregister)
@@ -70,7 +70,7 @@ func (a *agent) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := spec.NewAgentConfig(a.hierarchy, seg)
+	cfg := spec.NewAgentConfig(a.root.Hierarchy, seg)
 
 	_, err = a.store.Register(r.Context(), store.RegisterAgentQuery{
 		Registration: core.AgentRegistration{
@@ -173,7 +173,7 @@ func writeJSONResponse(w http.ResponseWriter, body any) {
 }
 
 func (a *agent) topologySegment(agentName string) (spec.TopologySegment, bool) {
-	for _, seg := range a.topology.Segments {
+	for _, seg := range a.root.Topology.Segments {
 		if seg.Name == agentName {
 			return seg, true
 		}
