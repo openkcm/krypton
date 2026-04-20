@@ -39,7 +39,7 @@ func main() {
 	defer db.Close()
 
 	// load root configuration
-	rCfg := loadConfig()
+	cfg := loadConfig()
 
 	// tenant store initialization
 	tenantStore, err := storesql.NewTenantStore(context.Background(), db)
@@ -51,7 +51,7 @@ func main() {
 
 	// API server setup
 	mux := admin.NewServerMux(nil, tenantStore)
-	mux = agents.NewServerMux(mux, agentStore, *rCfg)
+	mux = agents.NewServerMux(mux, agentStore, *cfg)
 
 	// worker initialization
 	wrkr := initAgentWorker(agentStore)

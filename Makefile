@@ -66,7 +66,7 @@ postgres-stop:
 
 .PHONY: agent
 agent:
-	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" go run ./cmd/agent
+	go run ./cmd/agent
 
 .PHONY: root
 root:

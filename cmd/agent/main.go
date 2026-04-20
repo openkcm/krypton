@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/agents"
 )
@@ -18,22 +20,14 @@ import (
 // This is a simple agent that registers itself with the root server,
 // sends periodic heartbeats, and deregisters on shutdown.
 func main() {
-	rootSrvPort := os.Getenv("ROOT_SERVER_PORT")
-	if rootSrvPort == "" {
-		rootSrvPort = ":8080"
-	}
-
-	agentName := os.Getenv("AGENT_NAME")
-	if agentName == "" {
-		agentName = "agent-k1"
-	}
-
 	agentID := os.Getenv("AGENT_ID")
 	if agentID == "" {
 		agentID = uuid.New().String()
 	}
 
-	agentClient, err := agents.NewClient("http://localhost"+rootSrvPort, agentName, agentID)
+	cfg := loadConfig()
+
+	agentClient, err := agents.NewClient(cfg.KryptonRoot.Address.URL, cfg.Name, agentID)
 	handleErr(err, "failed to create agent client")
 
 	// Example usage: register the agent
@@ -68,4 +62,22 @@ func handleErr(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %v", msg, err)
 	}
+}
+
+func loadConfig() *config.AgentBootstrapConfig {
+	cfg, err := config.LoadAgentBootstrapConfig(os.Getenv("AGENT_BOOTSTRAP_CONFIG_PATH"))
+	if err != nil {
+		return &config.AgentBootstrapConfig{
+			Name: "agent-k1",
+			Role: spec.DefaultRole,
+			KryptonRoot: config.KryptonRoot{
+				Address: config.Address{
+					Type: config.AddressTypeHTTP,
+					URL:  "http://localhost:8080",
+				},
+			},
+		}
+	}
+
+	return cfg
 }
