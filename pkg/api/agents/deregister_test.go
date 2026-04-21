@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api"
@@ -70,8 +71,13 @@ func TestDeregister(t *testing.T) {
 			},
 		}
 
+		rootConfig := config.RootConfig{
+			Hierarchy: expHierarchy,
+			Topology:  topology,
+		}
+
 		// given
-		handler := agents.NewServerMux(nil, agentStore, expHierarchy, topology)
+		handler := agents.NewServerMux(nil, agentStore, rootConfig)
 		srv := httptest.NewServer(handler)
 		t.Cleanup(srv.Close)
 

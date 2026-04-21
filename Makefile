@@ -63,9 +63,15 @@ postgres:
 postgres-stop:
 	docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 
-.PHONY: server
-server:
-	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/server
+ROOT_SERVER_PORT := 8080
+
+.PHONY: agent
+agent:
+	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" go run ./cmd/agent
+
+.PHONY: root
+root:
+	SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
 
 .PHONY: dev
-dev: postgres server
+dev: postgres root

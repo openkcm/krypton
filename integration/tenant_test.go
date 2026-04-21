@@ -26,8 +26,8 @@ type expTenant struct {
 
 func TestCreateTenant(t *testing.T) {
 	store := newTestStore(t)
-	handler := admin.NewServerMux(store)
-	server := httptest.NewServer(handler)
+	mux := admin.NewServerMux(nil, store)
+	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
 	t.Run("creates tenant with name only", func(t *testing.T) {
@@ -104,8 +104,8 @@ func TestCreateTenant(t *testing.T) {
 
 func TestGetTenant(t *testing.T) {
 	store := newTestStore(t)
-	handler := admin.NewServerMux(store)
-	server := httptest.NewServer(handler)
+	mux := admin.NewServerMux(nil, store)
+	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
 	t.Run("gets tenant by id", func(t *testing.T) {
@@ -164,8 +164,8 @@ func TestListTenants(t *testing.T) {
 	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
 		// given
 		store := newTestStore(t)
-		handler := admin.NewServerMux(store)
-		server := httptest.NewServer(handler)
+		mux := admin.NewServerMux(nil, store)
+		server := httptest.NewServer(mux)
 		t.Cleanup(server.Close)
 
 		// when `kr get tenants --json --server <server-url>`
@@ -181,8 +181,8 @@ func TestListTenants(t *testing.T) {
 	t.Run("lists created tenants", func(t *testing.T) {
 		// given
 		store := newTestStore(t)
-		handler := admin.NewServerMux(store)
-		server := httptest.NewServer(handler)
+		mux := admin.NewServerMux(nil, store)
+		server := httptest.NewServer(mux)
 		t.Cleanup(server.Close)
 
 		tenant1Name := "tenant-" + uuid.NewString()
@@ -224,7 +224,7 @@ func TestListTenants(t *testing.T) {
 // Interactive selection is covered by unit tests in cli/output/terminal/.
 func TestSelectTenant(t *testing.T) {
 	store := newTestStore(t)
-	handler := admin.NewServerMux(store)
+	handler := admin.NewServerMux(nil, store)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
