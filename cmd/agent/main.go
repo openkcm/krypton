@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -69,15 +70,18 @@ func loadConfig() *config.AgentBootstrapConfig {
 	if err != nil {
 		port := os.Getenv("ROOT_SERVER_PORT")
 		if port == "" {
-			port = ":8080"
+			port = "8080"
 		}
+		_, err := strconv.Atoi(port)
+		handleErr(err, "invalid ROOT_SERVER_PORT")
+
 		return &config.AgentBootstrapConfig{
 			Name: "agent-k1",
 			Role: spec.DefaultRole,
 			KryptonRoot: config.KryptonRoot{
 				Address: config.Address{
 					Type: config.AddressTypeHTTP,
-					URL:  "http://localhost" + port,
+					URL:  "http://localhost:" + port,
 				},
 			},
 		}

@@ -63,7 +63,7 @@ postgres:
 postgres-stop:
 	docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 
-ROOT_SERVER_PORT := :8080
+ROOT_SERVER_PORT := 8080
 
 .PHONY: agent
 agent:

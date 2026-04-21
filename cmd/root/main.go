@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -26,8 +27,10 @@ import (
 func main() {
 	srvPort := os.Getenv("SERVER_PORT")
 	if srvPort == "" {
-		srvPort = ":8080"
+		srvPort = "8080"
 	}
+	_, err := strconv.Atoi(srvPort)
+	handleErr(err, "invalid SERVER_PORT value")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -58,7 +61,7 @@ func main() {
 	go wrkr.Start(context.Background())
 	defer wrkr.Stop()
 
-	err = http.ListenAndServe(srvPort, mux)
+	err = http.ListenAndServe(":"+srvPort, mux)
 	handleErr(err, "failed to start server")
 }
 
