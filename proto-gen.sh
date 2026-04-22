@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
-protoc \
-  --proto_path="$1" \
-  --go_out=. \
-  --go_opt=module=github.com/openkcm/krypton \
-  --go-grpc_out=. \
-  --go-grpc_opt=module=github.com/openkcm/krypton \
-  "$1"/*.proto
+for dir in "$@"; do
+  protoc \
+    --proto_path="$dir" \
+    --go_out=. \
+    --go_opt=module=github.com/openkcm/krypton \
+    --go-grpc_out=. \
+    --go-grpc_opt=module=github.com/openkcm/krypton \
+    "$dir"/*.proto
+done
