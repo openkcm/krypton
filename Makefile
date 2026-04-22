@@ -85,5 +85,3 @@ proto-gen:
 go-format:
 	goimports -w .
 	gofmt -s -w .
-
-

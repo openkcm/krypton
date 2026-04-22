@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"google.golang.org/grpc"
 
 	_ "github.com/lib/pq"
 
@@ -16,7 +19,8 @@ import (
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
-	"github.com/openkcm/krypton/pkg/api/admin"
+	"github.com/openkcm/krypton/pkg/api/admin/v1"
+	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -31,6 +35,13 @@ func main() {
 	}
 	_, err := strconv.Atoi(srvPort)
 	handleErr(err, "invalid SERVER_PORT value")
+
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "9090"
+	}
+	_, err = strconv.Atoi(grpcPort)
+	handleErr(err, "invalid GRPC_PORT value")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -52,15 +63,30 @@ func main() {
 	agentStore, err := storesql.NewAgentStore(context.Background(), db)
 	handleErr(err, "failed to initialize store")
 
-	// API server setup
-	mux := admin.NewServerMux(nil, tenantStore)
-	mux = agents.NewServerMux(mux, agentStore, *cfg)
+	// gRPC server setup for admin API
+	grpcServer := grpc.NewServer()
+	admingrpc.RegisterServiceServer(grpcServer, admin.NewService(tenantStore))
+
+	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+grpcPort)
+	handleErr(err, "failed to listen on gRPC port")
+
+	go func() {
+		log.Printf("gRPC server listening on :%s", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve gRPC: %v", err)
+		}
+	}()
+	defer grpcServer.GracefulStop()
+
+	// HTTP API server setup (for agents API which is still HTTP-based)
+	mux := agents.NewServerMux(nil, agentStore, *cfg)
 
 	// worker initialization
 	wrkr := initAgentWorker(agentStore)
 	go wrkr.Start(context.Background())
 	defer wrkr.Stop()
 
+	log.Printf("HTTP server listening on :%s", srvPort)
 	err = http.ListenAndServe(":"+srvPort, mux)
 	handleErr(err, "failed to start server")
 }

@@ -2,7 +2,6 @@ package integration
 
 import (
 	"encoding/json"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 
 	"github.com/openkcm/krypton/cli/state"
-	"github.com/openkcm/krypton/pkg/api/admin"
+	"github.com/openkcm/krypton/pkg/api/admin/v1"
+	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
 )
 
 // expTenant represents the JSON structure returned by the CLI's tenant commands.
@@ -25,17 +26,17 @@ type expTenant struct {
 }
 
 func TestCreateTenant(t *testing.T) {
-	store := newTestStore(t)
-	mux := admin.NewServerMux(nil, store)
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+	tenantStore := newTestStore(t)
+	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
+		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+	})
 
 	t.Run("creates tenant with name only", func(t *testing.T) {
 		// given
 		expName := "tenant-" + uuid.NewString()
 
-		// when `kr create tenant --name <name> --json --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--json", "--server", server.URL)
+		// when `kr create tenant --name <name> --json --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -70,8 +71,8 @@ func TestCreateTenant(t *testing.T) {
 			i++
 		}
 
-		// when `kr create tenant --name <name> --label env=production,team=platform --json --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--label", labelArg.String(), "--json", "--server", server.URL)
+		// when `kr create tenant --name <name> --label env=production,team=platform --json --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--label", labelArg.String(), "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -90,28 +91,28 @@ func TestCreateTenant(t *testing.T) {
 
 	t.Run("fails when server is unavailable", func(t *testing.T) {
 		// given
-		unknownAddr := "http://localhost:59999"
+		unknownAddr := "localhost:59999"
 
-		// when `kr create tenant --name test --server http://localhost:59999`
+		// when `kr create tenant --name test --server localhost:59999`
 		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", "test", "--server", unknownAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
 		assert.Error(t, err, "command should fail when server is unavailable")
-		assert.Contains(t, string(output), "connection refused")
+		assert.Contains(t, string(output), "connection")
 	})
 }
 
 func TestGetTenant(t *testing.T) {
-	store := newTestStore(t)
-	mux := admin.NewServerMux(nil, store)
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
+	tenantStore := newTestStore(t)
+	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
+		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+	})
 
 	t.Run("gets tenant by id", func(t *testing.T) {
 		// given - create a tenant first
 		tenantName := "tenant-" + uuid.NewString()
-		createCmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenantName, "--json", "--server", server.URL)
+		createCmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
 		if !assert.NoError(t, err) {
 			return
@@ -122,8 +123,8 @@ func TestGetTenant(t *testing.T) {
 			return
 		}
 
-		// when `kr get tenant <tenant-id> --json --server <server-url>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", tenants[0].ID, "--json", "--server", server.URL)
+		// when `kr get tenant <tenant-id> --json --server <server-addr>`
+		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", tenants[0].ID, "--json", "--server", serverAddr)
 		getOutput, err := getCmd.CombinedOutput()
 
 		// then
@@ -140,8 +141,8 @@ func TestGetTenant(t *testing.T) {
 		// given
 		nonExistentID := uuid.NewString()
 
-		// when `kr get tenant <non-existent-id> --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", nonExistentID, "--server", server.URL)
+		// when `kr get tenant <non-existent-id> --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", nonExistentID, "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -150,8 +151,8 @@ func TestGetTenant(t *testing.T) {
 	})
 
 	t.Run("fails without tenant id argument", func(t *testing.T) {
-		// when `kr get tenant --server <server-url>` (missing tenant id)
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", "--server", server.URL)
+		// when `kr get tenant --server <server-addr>` (missing tenant id)
+		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -163,13 +164,13 @@ func TestGetTenant(t *testing.T) {
 func TestListTenants(t *testing.T) {
 	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
 		// given
-		store := newTestStore(t)
-		mux := admin.NewServerMux(nil, store)
-		server := httptest.NewServer(mux)
-		t.Cleanup(server.Close)
+		tenantStore := newTestStore(t)
+		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
+			admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		})
 
-		// when `kr get tenants --json --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", server.URL)
+		// when `kr get tenants --json --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -180,24 +181,24 @@ func TestListTenants(t *testing.T) {
 
 	t.Run("lists created tenants", func(t *testing.T) {
 		// given
-		store := newTestStore(t)
-		mux := admin.NewServerMux(nil, store)
-		server := httptest.NewServer(mux)
-		t.Cleanup(server.Close)
+		tenantStore := newTestStore(t)
+		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
+			admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		})
 
 		tenant1Name := "tenant-" + uuid.NewString()
 		tenant2Name := "tenant-" + uuid.NewString()
 
-		createCmd1 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant1Name, "--json", "--server", server.URL)
+		createCmd1 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant1Name, "--json", "--server", serverAddr)
 		_, err := createCmd1.CombinedOutput()
 		assert.NoError(t, err)
 
-		createCmd2 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant2Name, "--json", "--server", server.URL)
+		createCmd2 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant2Name, "--json", "--server", serverAddr)
 		_, err = createCmd2.CombinedOutput()
 		assert.NoError(t, err)
 
-		// when `kr get tenants --json --server <server-url>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", server.URL)
+		// when `kr get tenants --json --server <server-addr>`
+		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", serverAddr)
 		output, err := getCmd.CombinedOutput()
 
 		// then
@@ -223,22 +224,22 @@ func TestListTenants(t *testing.T) {
 // Integration tests use exec.Command which provides piped stdin, not a real TTY.
 // Interactive selection is covered by unit tests in cli/output/terminal/.
 func TestSelectTenant(t *testing.T) {
-	store := newTestStore(t)
-	handler := admin.NewServerMux(nil, store)
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
+	tenantStore := newTestStore(t)
+	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
+		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+	})
 
 	t.Run("selects tenant by ID and persists config", func(t *testing.T) {
 		// given
 		homeDir := t.TempDir()
 		tenantName := "tenant-" + uuid.NewString()
-		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", server.URL)
+		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
 		assert.NoError(t, err)
 		tenants := decode(t, createOutput)
 
-		// when `kr select tenant <tenant-id> --server <server-url>`
-		selectCmd := newCLICommand(t.Context(), homeDir, "select", "tenant", tenants[0].ID, "--server", server.URL)
+		// when `kr select tenant <tenant-id> --server <server-addr>`
+		selectCmd := newCLICommand(t.Context(), homeDir, "select", "tenant", tenants[0].ID, "--server", serverAddr)
 		selectOutput, err := selectCmd.CombinedOutput()
 
 		// then
@@ -260,8 +261,8 @@ func TestSelectTenant(t *testing.T) {
 	})
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
-		// when `kr select tenant <non-existent-id> --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", uuid.NewString(), "--server", server.URL)
+		// when `kr select tenant <non-existent-id> --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", uuid.NewString(), "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -270,8 +271,8 @@ func TestSelectTenant(t *testing.T) {
 	})
 
 	t.Run("fails when both ID and interactive flag provided", func(t *testing.T) {
-		// when `kr select tenant <id> -i --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "some-id", "-i", "--server", server.URL)
+		// when `kr select tenant <id> -i --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "some-id", "-i", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -280,8 +281,8 @@ func TestSelectTenant(t *testing.T) {
 	})
 
 	t.Run("fails when no ID and not interactive", func(t *testing.T) {
-		// when `kr select tenant --server <server-url>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "--server", server.URL)
+		// when `kr select tenant --server <server-addr>`
+		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then

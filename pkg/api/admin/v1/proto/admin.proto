@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/admin/v1/proto";
+
+message Tenant {
+  string id = 1;
+  string name = 2;
+  map<string, string> labels = 3;
+  int64 created_at = 4;
+  int64 updated_at = 5;
+}
+
+message CreateTenantRequest {
+  string name = 1;
+  map<string, string> labels = 2;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+}
+
+message GetTenantRequest {
+  string id = 1;
+}
+
+message GetTenantResponse {
+  Tenant tenant = 1;
+}
+
+message ListTenantsRequest {}
+
+message ListTenantsResponse {
+  repeated Tenant tenants = 1;
+}
+
+service Service {
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+}

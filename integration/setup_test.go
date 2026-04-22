@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"google.golang.org/grpc"
 
 	_ "github.com/lib/pq"
 
@@ -167,4 +169,34 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 		}
 	})
 	return sqlDB, pgConStr
+}
+
+// RegisterFunc is a function that registers services to a gRPC server.
+type RegisterFunc func(*grpc.Server)
+
+// startGRPCServer starts a gRPC server and returns the server address.
+// The register function is called to register services to the server.
+// The server is automatically stopped when the test completes.
+func startGRPCServer(t *testing.T, register RegisterFunc) string {
+	t.Helper()
+
+	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+
+	srv := grpc.NewServer()
+	register(srv)
+
+	go func() {
+		if err := srv.Serve(lis); err != nil {
+			t.Logf("server stopped: %v", err)
+		}
+	}()
+
+	t.Cleanup(func() {
+		srv.GracefulStop()
+	})
+
+	return lis.Addr().String()
 }

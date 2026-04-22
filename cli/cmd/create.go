@@ -4,9 +4,12 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/cli/output"
-	"github.com/openkcm/krypton/pkg/api/admin"
+	"github.com/openkcm/krypton/pkg/api/admin/v1"
+	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
 )
 
 func createCmd() *cobra.Command {
@@ -29,12 +32,19 @@ func createTenantCmd() *cobra.Command {
 		Use:   "tenant",
 		Short: "Create a new tenant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := admin.NewClient(serverURL)
+			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
+			conn, err := grpc.NewClient(
+				serverAddr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
 			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
+				return fmt.Errorf("failed to connect: %w", err)
 			}
+			defer conn.Close()
 
-			resp, err := c.CreateTenant(cmd.Context(), admin.CreateTenantRequest{
+			client := admingrpc.NewServiceClient(conn)
+
+			resp, err := client.CreateTenant(cmd.Context(), &admingrpc.CreateTenantRequest{
 				Name:   name,
 				Labels: labels,
 			})
@@ -42,7 +52,9 @@ func createTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to create tenant: %w", err)
 			}
 
-			builder, err := output.From(resp.Tenant)
+			tenant := admin.TenantFromProto(resp.GetTenant())
+
+			builder, err := output.From(tenant)
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
