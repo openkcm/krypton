@@ -26,7 +26,9 @@ var (
 )
 
 // Postgres test globals
-var pgConnStr string
+var (
+	pgConnStr string
+)
 
 func TestMain(m *testing.M) {
 	var cleanups []func()
@@ -120,6 +122,21 @@ func newTestStore(t *testing.T) store.Tenant {
 	t.Helper()
 	ctx := t.Context()
 
+	testDB, _ := createDatabase(t)
+	s, err := storesql.NewTenantStore(ctx, testDB)
+	if err != nil {
+		testDB.Close()
+		assert.FailNowf(t, "failed to create test store", "error: %v", err)
+	}
+
+	return s
+}
+
+// createDatabase creates a new PostgreSQL database for testing and returns a connection to it.
+func createDatabase(t *testing.T) (*sql.DB, string) {
+	t.Helper()
+	ctx := t.Context()
+
 	db, err := sql.Open("postgres", pgConnStr)
 	if err != nil {
 		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
@@ -134,20 +151,14 @@ func newTestStore(t *testing.T) store.Tenant {
 	}
 	db.Close()
 
-	testConnStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
-	testDB, err := sql.Open("postgres", testConnStr)
+	pgConStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
+	sqlDB, err := sql.Open("postgres", pgConStr)
 	if err != nil {
 		assert.FailNowf(t, "failed to connect to test database", "error: %v", err)
 	}
 
-	s, err := storesql.NewTenantStore(ctx, testDB)
-	if err != nil {
-		testDB.Close()
-		assert.FailNowf(t, "failed to create test store", "error: %v", err)
-	}
-
 	t.Cleanup(func() {
-		testDB.Close()
+		sqlDB.Close()
 
 		db, err := sql.Open("postgres", pgConnStr)
 		if err == nil {
@@ -155,6 +166,5 @@ func newTestStore(t *testing.T) store.Tenant {
 			db.Close()
 		}
 	})
-
-	return s
+	return sqlDB, pgConStr
 }
