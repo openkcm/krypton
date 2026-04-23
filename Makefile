@@ -75,3 +75,15 @@ root:
 
 .PHONY: dev
 dev: postgres root
+
+.PHONY: proto-gen
+proto-gen:
+	 ./proto-gen.sh "pkg/api/agents/v1/proto"
+	$(MAKE) go-format
+
+.PHONY: go-format
+go-format:
+	goimports -w .
+	gofmt -s -w .
+
+

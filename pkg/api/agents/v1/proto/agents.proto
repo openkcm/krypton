@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+
+package proto;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/openkcm/krypton/pkg/api/agents/v1/proto";
+
+service AgentService {
+  rpc Register(RegisterAgentRequest) returns (RegisterAgentResponse) {}
+  rpc SendHeartbeat(SendHeartbeatRequest) returns (SendHeartbeatResponse) {}
+  rpc Deregister(DeregisterAgentRequest) returns (DeregisterAgentResponse) {}
+}
+
+message RegisterAgentRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message RegisterAgentResponse {
+  AgentConfig config = 1;
+}
+
+message SendHeartbeatRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message SendHeartbeatResponse {
+}
+
+message DeregisterAgentRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message DeregisterAgentResponse {
+}
+
+
+message AgentConfig {
+  string name = 1;
+  map<string, KeyBinding> key_bindings = 2;
+  HierarchySegment segment = 3;
+  map<string, string> labels = 4;
+  string role = 5;
+  KeyHierarchy hierarchy = 6;
+  int32 keep_alive = 7;
+}
+
+message KeyBinding {
+  VaultSpec vault = 1;
+  ParentKeyProviderRef parent_key_provider = 2; // optional in proto3 by nature
+  map<string, string> labels = 3;
+}
+
+message VaultSpec {
+  string name = 1;
+  string type = 2;
+  google.protobuf.Struct params = 3;
+}
+
+message ParentKeyProviderRef {
+  string agent_name = 1;
+}
+
+message HierarchySegment {
+  string start_kind = 1;
+  string end_kind = 2;
+}
+
+message KeyHierarchy {
+  string name = 1;
+  repeated KeySpec key_specs = 2;
+}
+
+message KeySpec {
+  string kind = 1;
+  string role = 2;
+  string algorithm = 3;
+}
