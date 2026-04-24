@@ -555,3 +555,177 @@ config:
 		assert.Error(t, err)
 	})
 }
+
+func TestDeriveSubAgents(t *testing.T) {
+	tests := []struct {
+		name            string
+		topology        Topology
+		expSegSubAgents map[string][]string // segment name -> expected sub-agents
+	}{
+		{
+			name:            "empty topology",
+			topology:        Topology{},
+			expSegSubAgents: map[string][]string{},
+		},
+		{
+			name: "single agent with root as parent",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+						},
+					},
+				},
+			},
+			expSegSubAgents: map[string][]string{
+				"agent-aws": nil,
+			},
+		},
+		{
+			name: "chain: root -> agent-aws -> agent-leaf",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+						},
+					},
+					{
+						Name: "agent-leaf",
+						Segment: HierarchySegment{
+							StartKind: "K4",
+							EndKind:   "K4",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K4": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "agent-aws"},
+							},
+						},
+					},
+				},
+			},
+			expSegSubAgents: map[string][]string{
+				"agent-aws":  {"agent-leaf"},
+				"agent-leaf": nil,
+			},
+		},
+		{
+			name: "multiple sub-agents for root",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-aws",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+						},
+					},
+					{
+						Name: "agent-gcp",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+						},
+					},
+				},
+			},
+			expSegSubAgents: map[string][]string{
+				"agent-aws": nil,
+				"agent-gcp": nil,
+			},
+		},
+		{
+			name: "multiple bindings referencing same parent should not duplicate",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-multi",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K3",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+							"K3": {
+								Vault:             VaultSpec{Name: "v", Type: "t"},
+								ParentKeyProvider: &ParentKeyProviderRef{AgentName: "root"},
+							},
+						},
+					},
+				},
+			},
+			expSegSubAgents: map[string][]string{
+				"agent-multi": nil,
+			},
+		},
+		{
+			name: "binding without parent key provider",
+			topology: Topology{
+				Segments: []TopologySegment{
+					{
+						Name: "agent-no-parent",
+						Segment: HierarchySegment{
+							StartKind: "K2",
+							EndKind:   "K2",
+						},
+						KeyBindings: map[string]KeyBinding{
+							"K2": {
+								Vault: VaultSpec{Name: "v", Type: "t"},
+								// no ParentKeyProvider
+							},
+						},
+					},
+				},
+			},
+			expSegSubAgents: map[string][]string{
+				"agent-no-parent": nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			tt.topology.DeriveSubAgents()
+
+			// then
+			for _, seg := range tt.topology.Segments {
+				exp := tt.expSegSubAgents[seg.Name]
+				assert.ElementsMatch(t, exp, seg.SubAgents, "sub-agents mismatch for segment %s", seg.Name)
+			}
+		})
+	}
+}

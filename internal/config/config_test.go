@@ -426,6 +426,104 @@ reconciler:
 			},
 		},
 		{
+			name: "derives SubAgents from ParentKeyProvider",
+			yaml: `name: "root"
+role: "root"
+segment:
+  start_kind: "K0"
+  end_kind: "K1"
+key_bindings:
+  K0:
+    vault:
+      name: "v"
+      type: "open-bao"
+  K1:
+    vault:
+      name: "v"
+      type: "open-bao"
+    parent_key_provider:
+      agent_name: "root"
+hierarchy:
+  name: "h"
+  key_specs:
+    - kind: "K0"
+      role: "root"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+    - kind: "K1"
+      role: "kek"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+    - kind: "K2"
+      role: "tek"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+    - kind: "K3"
+      role: "kek"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+    - kind: "K4"
+      role: "tek"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+    - kind: "K5"
+      role: "dek"
+      algorithm: "AES256"
+      labels_spec:
+        allow_user_labels: true
+topology:
+  segments:
+    - name: "agent-aws"
+      segment:
+        start_kind: "K2"
+        end_kind: "K3"
+      key_bindings:
+        K2:
+          vault:
+            name: "v"
+            type: "open-bao"
+          parent_key_provider:
+            agent_name: "root"
+        K3:
+          vault:
+            name: "v"
+            type: "open-bao"
+    - name: "agent-leaf"
+      segment:
+        start_kind: "K4"
+        end_kind: "K5"
+      key_bindings:
+        K4:
+          vault:
+            name: "v"
+            type: "open-bao"
+          parent_key_provider:
+            agent_name: "agent-aws"
+        K5:
+          vault:
+            name: "v"
+            type: "open-bao"
+`,
+			validate: func(t *testing.T, cfg *RootConfig) {
+				t.Helper()
+				// Verify SubAgents were derived from ParentKeyProvider references
+				assert.Len(t, cfg.Topology.Segments, 2)
+
+				// agent-aws should have agent-leaf as sub-agent
+				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
+				assert.ElementsMatch(t, []string{"agent-leaf"}, cfg.Topology.Segments[0].SubAgents)
+
+				// agent-leaf should have no sub-agents
+				assert.Equal(t, "agent-leaf", cfg.Topology.Segments[1].Name)
+				assert.Empty(t, cfg.Topology.Segments[1].SubAgents)
+			},
+		},
+		{
 			name:       "malformed YAML",
 			yaml:       "this is: [not valid yaml: {{",
 			wantErr:    true,

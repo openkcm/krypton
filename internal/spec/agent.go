@@ -20,6 +20,7 @@ type AgentConfig struct {
 	Role           AgentRole             `json:"role"`
 	Hierarchy      KeyHierarchy          `json:"hierarchy"`
 	KeepAlive      KeepAliveConfig       `json:"keep_alive"`
+	SubAgents      []string              `json:"subagents,omitempty"`
 }
 
 // NewAgentConfig creates a new AgentConfig based on the provided KeyHierarchy and TopologySegment.
@@ -32,5 +33,6 @@ func NewAgentConfig(h KeyHierarchy, seg TopologySegment) AgentConfig {
 		Role:           DefaultRole,
 		Hierarchy:      h,
 		KeepAlive:      30,
+		SubAgents:      seg.SubAgents,
 	}
 }

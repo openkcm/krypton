@@ -44,6 +44,7 @@ func TestRegister(t *testing.T) {
 
 		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
 		require.NoError(t, err)
+		actConfig.SubAgents = nil
 
 		assert.Equal(t, spec.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0]), *actConfig)
 

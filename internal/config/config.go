@@ -120,6 +120,9 @@ func LoadRootConfig(path string) (*RootConfig, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	cfg.Topology.DeriveSubAgents()
+
 	return &cfg, nil
 }
 
