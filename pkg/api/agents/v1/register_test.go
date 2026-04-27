@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
-	v1 "github.com/openkcm/krypton/pkg/api/agents/v1"
 	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -47,7 +47,11 @@ func TestRegister(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		actConfig := v1.ProtoToAgentConfig(resp.GetConfig())
+
+		actConfig := spec.AgentConfig{}
+		err = yaml.Unmarshal(resp.GetConfig(), &actConfig)
+		require.NoError(t, err)
+
 		assert.Equal(t, spec.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0]), actConfig)
 
 		result, err := agentStore.Get(ctx, store.GetAgentQuery{
@@ -125,41 +129,6 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err), err.Error())
-	})
-
-	t.Run("should return error if we have wrong yaml config - invalid key binding params", func(t *testing.T) {
-		// given
-		expInstanceID := uuid.NewString()
-		rootCfg := validRootConfig(expAgentName)
-		rootCfg.Topology.Segments[0].KeyBindings = map[string]spec.KeyBinding{
-			"binding1": {
-				Vault: spec.VaultSpec{
-					Params: map[string]any{
-						"list": []string{"1", "2", "3"}, // this will cause an error during proto conversion because structpb does not support []string
-					},
-				},
-			},
-		}
-
-		cli := setupServerAndClient(t, agentStore, rootCfg)
-
-		// when
-		resp, err := cli.Register(ctx, &proto.RegisterAgentRequest{
-			AgentName:  expAgentName,
-			InstanceId: expInstanceID,
-		})
-
-		// then
-		assert.Error(t, err)
-		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
-		assert.Nil(t, resp)
-
-		_, err = agentStore.Get(ctx, store.GetAgentQuery{
-			Name:       expAgentName,
-			InstanceID: expInstanceID,
-		})
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, store.ErrAgentNotFound)
 	})
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {

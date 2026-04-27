@@ -13,7 +13,6 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -77,7 +76,7 @@ func (x *RegisterAgentRequest) GetInstanceId() string {
 
 type RegisterAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Config        *AgentConfig           `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	Config        []byte                 `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -112,7 +111,7 @@ func (*RegisterAgentResponse) Descriptor() ([]byte, []int) {
 	return file_agents_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *RegisterAgentResponse) GetConfig() *AgentConfig {
+func (x *RegisterAgentResponse) GetConfig() []byte {
 	if x != nil {
 		return x.Config
 	}
@@ -295,438 +294,18 @@ func (*DeregisterAgentResponse) Descriptor() ([]byte, []int) {
 	return file_agents_proto_rawDescGZIP(), []int{5}
 }
 
-type AgentConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	KeyBindings   map[string]*KeyBinding `protobuf:"bytes,2,rep,name=key_bindings,json=keyBindings,proto3" json:"key_bindings,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Segment       *HierarchySegment      `protobuf:"bytes,3,opt,name=segment,proto3" json:"segment,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
-	Hierarchy     *KeyHierarchy          `protobuf:"bytes,6,opt,name=hierarchy,proto3" json:"hierarchy,omitempty"`
-	KeepAlive     int32                  `protobuf:"varint,7,opt,name=keep_alive,json=keepAlive,proto3" json:"keep_alive,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AgentConfig) Reset() {
-	*x = AgentConfig{}
-	mi := &file_agents_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AgentConfig) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AgentConfig) ProtoMessage() {}
-
-func (x *AgentConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AgentConfig.ProtoReflect.Descriptor instead.
-func (*AgentConfig) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *AgentConfig) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *AgentConfig) GetKeyBindings() map[string]*KeyBinding {
-	if x != nil {
-		return x.KeyBindings
-	}
-	return nil
-}
-
-func (x *AgentConfig) GetSegment() *HierarchySegment {
-	if x != nil {
-		return x.Segment
-	}
-	return nil
-}
-
-func (x *AgentConfig) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-func (x *AgentConfig) GetRole() string {
-	if x != nil {
-		return x.Role
-	}
-	return ""
-}
-
-func (x *AgentConfig) GetHierarchy() *KeyHierarchy {
-	if x != nil {
-		return x.Hierarchy
-	}
-	return nil
-}
-
-func (x *AgentConfig) GetKeepAlive() int32 {
-	if x != nil {
-		return x.KeepAlive
-	}
-	return 0
-}
-
-type KeyBinding struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Vault             *VaultSpec             `protobuf:"bytes,1,opt,name=vault,proto3" json:"vault,omitempty"`
-	ParentKeyProvider *ParentKeyProviderRef  `protobuf:"bytes,2,opt,name=parent_key_provider,json=parentKeyProvider,proto3" json:"parent_key_provider,omitempty"` // optional in proto3 by nature
-	Labels            map[string]string      `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *KeyBinding) Reset() {
-	*x = KeyBinding{}
-	mi := &file_agents_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *KeyBinding) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*KeyBinding) ProtoMessage() {}
-
-func (x *KeyBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use KeyBinding.ProtoReflect.Descriptor instead.
-func (*KeyBinding) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *KeyBinding) GetVault() *VaultSpec {
-	if x != nil {
-		return x.Vault
-	}
-	return nil
-}
-
-func (x *KeyBinding) GetParentKeyProvider() *ParentKeyProviderRef {
-	if x != nil {
-		return x.ParentKeyProvider
-	}
-	return nil
-}
-
-func (x *KeyBinding) GetLabels() map[string]string {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-type VaultSpec struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Params        *structpb.Struct       `protobuf:"bytes,3,opt,name=params,proto3" json:"params,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *VaultSpec) Reset() {
-	*x = VaultSpec{}
-	mi := &file_agents_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *VaultSpec) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VaultSpec) ProtoMessage() {}
-
-func (x *VaultSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VaultSpec.ProtoReflect.Descriptor instead.
-func (*VaultSpec) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *VaultSpec) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *VaultSpec) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *VaultSpec) GetParams() *structpb.Struct {
-	if x != nil {
-		return x.Params
-	}
-	return nil
-}
-
-type ParentKeyProviderRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentName     string                 `protobuf:"bytes,1,opt,name=agent_name,json=agentName,proto3" json:"agent_name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ParentKeyProviderRef) Reset() {
-	*x = ParentKeyProviderRef{}
-	mi := &file_agents_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ParentKeyProviderRef) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ParentKeyProviderRef) ProtoMessage() {}
-
-func (x *ParentKeyProviderRef) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ParentKeyProviderRef.ProtoReflect.Descriptor instead.
-func (*ParentKeyProviderRef) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *ParentKeyProviderRef) GetAgentName() string {
-	if x != nil {
-		return x.AgentName
-	}
-	return ""
-}
-
-type HierarchySegment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StartKind     string                 `protobuf:"bytes,1,opt,name=start_kind,json=startKind,proto3" json:"start_kind,omitempty"`
-	EndKind       string                 `protobuf:"bytes,2,opt,name=end_kind,json=endKind,proto3" json:"end_kind,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HierarchySegment) Reset() {
-	*x = HierarchySegment{}
-	mi := &file_agents_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HierarchySegment) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HierarchySegment) ProtoMessage() {}
-
-func (x *HierarchySegment) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HierarchySegment.ProtoReflect.Descriptor instead.
-func (*HierarchySegment) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *HierarchySegment) GetStartKind() string {
-	if x != nil {
-		return x.StartKind
-	}
-	return ""
-}
-
-func (x *HierarchySegment) GetEndKind() string {
-	if x != nil {
-		return x.EndKind
-	}
-	return ""
-}
-
-type KeyHierarchy struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	KeySpecs      []*KeySpec             `protobuf:"bytes,2,rep,name=key_specs,json=keySpecs,proto3" json:"key_specs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *KeyHierarchy) Reset() {
-	*x = KeyHierarchy{}
-	mi := &file_agents_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *KeyHierarchy) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*KeyHierarchy) ProtoMessage() {}
-
-func (x *KeyHierarchy) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use KeyHierarchy.ProtoReflect.Descriptor instead.
-func (*KeyHierarchy) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *KeyHierarchy) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *KeyHierarchy) GetKeySpecs() []*KeySpec {
-	if x != nil {
-		return x.KeySpecs
-	}
-	return nil
-}
-
-type KeySpec struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Algorithm     string                 `protobuf:"bytes,3,opt,name=algorithm,proto3" json:"algorithm,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *KeySpec) Reset() {
-	*x = KeySpec{}
-	mi := &file_agents_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *KeySpec) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*KeySpec) ProtoMessage() {}
-
-func (x *KeySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use KeySpec.ProtoReflect.Descriptor instead.
-func (*KeySpec) Descriptor() ([]byte, []int) {
-	return file_agents_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *KeySpec) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *KeySpec) GetRole() string {
-	if x != nil {
-		return x.Role
-	}
-	return ""
-}
-
-func (x *KeySpec) GetAlgorithm() string {
-	if x != nil {
-		return x.Algorithm
-	}
-	return ""
-}
-
 var File_agents_proto protoreflect.FileDescriptor
 
 const file_agents_proto_rawDesc = "" +
 	"\n" +
-	"\fagents.proto\x12\x05proto\x1a\x1cgoogle/protobuf/struct.proto\"V\n" +
+	"\fagents.proto\x12\x05proto\"V\n" +
 	"\x14RegisterAgentRequest\x12\x1d\n" +
 	"\n" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
-	"instanceId\"C\n" +
-	"\x15RegisterAgentResponse\x12*\n" +
-	"\x06config\x18\x01 \x01(\v2\x12.proto.AgentConfigR\x06config\"V\n" +
+	"instanceId\"/\n" +
+	"\x15RegisterAgentResponse\x12\x16\n" +
+	"\x06config\x18\x01 \x01(\fR\x06config\"V\n" +
 	"\x14SendHeartbeatRequest\x12\x1d\n" +
 	"\n" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12\x1f\n" +
@@ -738,48 +317,7 @@ const file_agents_proto_rawDesc = "" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
 	"instanceId\"\x19\n" +
-	"\x17DeregisterAgentResponse\"\xc8\x03\n" +
-	"\vAgentConfig\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12F\n" +
-	"\fkey_bindings\x18\x02 \x03(\v2#.proto.AgentConfig.KeyBindingsEntryR\vkeyBindings\x121\n" +
-	"\asegment\x18\x03 \x01(\v2\x17.proto.HierarchySegmentR\asegment\x126\n" +
-	"\x06labels\x18\x04 \x03(\v2\x1e.proto.AgentConfig.LabelsEntryR\x06labels\x12\x12\n" +
-	"\x04role\x18\x05 \x01(\tR\x04role\x121\n" +
-	"\thierarchy\x18\x06 \x01(\v2\x13.proto.KeyHierarchyR\thierarchy\x12\x1d\n" +
-	"\n" +
-	"keep_alive\x18\a \x01(\x05R\tkeepAlive\x1aQ\n" +
-	"\x10KeyBindingsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12'\n" +
-	"\x05value\x18\x02 \x01(\v2\x11.proto.KeyBindingR\x05value:\x028\x01\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf3\x01\n" +
-	"\n" +
-	"KeyBinding\x12&\n" +
-	"\x05vault\x18\x01 \x01(\v2\x10.proto.VaultSpecR\x05vault\x12K\n" +
-	"\x13parent_key_provider\x18\x02 \x01(\v2\x1b.proto.ParentKeyProviderRefR\x11parentKeyProvider\x125\n" +
-	"\x06labels\x18\x03 \x03(\v2\x1d.proto.KeyBinding.LabelsEntryR\x06labels\x1a9\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
-	"\tVaultSpec\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x12/\n" +
-	"\x06params\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x06params\"5\n" +
-	"\x14ParentKeyProviderRef\x12\x1d\n" +
-	"\n" +
-	"agent_name\x18\x01 \x01(\tR\tagentName\"L\n" +
-	"\x10HierarchySegment\x12\x1d\n" +
-	"\n" +
-	"start_kind\x18\x01 \x01(\tR\tstartKind\x12\x19\n" +
-	"\bend_kind\x18\x02 \x01(\tR\aendKind\"O\n" +
-	"\fKeyHierarchy\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12+\n" +
-	"\tkey_specs\x18\x02 \x03(\v2\x0e.proto.KeySpecR\bkeySpecs\"O\n" +
-	"\aKeySpec\x12\x12\n" +
-	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
-	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1c\n" +
-	"\talgorithm\x18\x03 \x01(\tR\talgorithm2\xf4\x01\n" +
+	"\x17DeregisterAgentResponse2\xf4\x01\n" +
 	"\fAgentService\x12G\n" +
 	"\bRegister\x12\x1b.proto.RegisterAgentRequest\x1a\x1c.proto.RegisterAgentResponse\"\x00\x12L\n" +
 	"\rSendHeartbeat\x12\x1b.proto.SendHeartbeatRequest\x1a\x1c.proto.SendHeartbeatResponse\"\x00\x12M\n" +
@@ -798,7 +336,7 @@ func file_agents_proto_rawDescGZIP() []byte {
 	return file_agents_proto_rawDescData
 }
 
-var file_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_agents_proto_goTypes = []any{
 	(*RegisterAgentRequest)(nil),    // 0: proto.RegisterAgentRequest
 	(*RegisterAgentResponse)(nil),   // 1: proto.RegisterAgentResponse
@@ -806,41 +344,19 @@ var file_agents_proto_goTypes = []any{
 	(*SendHeartbeatResponse)(nil),   // 3: proto.SendHeartbeatResponse
 	(*DeregisterAgentRequest)(nil),  // 4: proto.DeregisterAgentRequest
 	(*DeregisterAgentResponse)(nil), // 5: proto.DeregisterAgentResponse
-	(*AgentConfig)(nil),             // 6: proto.AgentConfig
-	(*KeyBinding)(nil),              // 7: proto.KeyBinding
-	(*VaultSpec)(nil),               // 8: proto.VaultSpec
-	(*ParentKeyProviderRef)(nil),    // 9: proto.ParentKeyProviderRef
-	(*HierarchySegment)(nil),        // 10: proto.HierarchySegment
-	(*KeyHierarchy)(nil),            // 11: proto.KeyHierarchy
-	(*KeySpec)(nil),                 // 12: proto.KeySpec
-	nil,                             // 13: proto.AgentConfig.KeyBindingsEntry
-	nil,                             // 14: proto.AgentConfig.LabelsEntry
-	nil,                             // 15: proto.KeyBinding.LabelsEntry
-	(*structpb.Struct)(nil),         // 16: google.protobuf.Struct
 }
 var file_agents_proto_depIdxs = []int32{
-	6,  // 0: proto.RegisterAgentResponse.config:type_name -> proto.AgentConfig
-	13, // 1: proto.AgentConfig.key_bindings:type_name -> proto.AgentConfig.KeyBindingsEntry
-	10, // 2: proto.AgentConfig.segment:type_name -> proto.HierarchySegment
-	14, // 3: proto.AgentConfig.labels:type_name -> proto.AgentConfig.LabelsEntry
-	11, // 4: proto.AgentConfig.hierarchy:type_name -> proto.KeyHierarchy
-	8,  // 5: proto.KeyBinding.vault:type_name -> proto.VaultSpec
-	9,  // 6: proto.KeyBinding.parent_key_provider:type_name -> proto.ParentKeyProviderRef
-	15, // 7: proto.KeyBinding.labels:type_name -> proto.KeyBinding.LabelsEntry
-	16, // 8: proto.VaultSpec.params:type_name -> google.protobuf.Struct
-	12, // 9: proto.KeyHierarchy.key_specs:type_name -> proto.KeySpec
-	7,  // 10: proto.AgentConfig.KeyBindingsEntry.value:type_name -> proto.KeyBinding
-	0,  // 11: proto.AgentService.Register:input_type -> proto.RegisterAgentRequest
-	2,  // 12: proto.AgentService.SendHeartbeat:input_type -> proto.SendHeartbeatRequest
-	4,  // 13: proto.AgentService.Deregister:input_type -> proto.DeregisterAgentRequest
-	1,  // 14: proto.AgentService.Register:output_type -> proto.RegisterAgentResponse
-	3,  // 15: proto.AgentService.SendHeartbeat:output_type -> proto.SendHeartbeatResponse
-	5,  // 16: proto.AgentService.Deregister:output_type -> proto.DeregisterAgentResponse
-	14, // [14:17] is the sub-list for method output_type
-	11, // [11:14] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	0, // 0: proto.AgentService.Register:input_type -> proto.RegisterAgentRequest
+	2, // 1: proto.AgentService.SendHeartbeat:input_type -> proto.SendHeartbeatRequest
+	4, // 2: proto.AgentService.Deregister:input_type -> proto.DeregisterAgentRequest
+	1, // 3: proto.AgentService.Register:output_type -> proto.RegisterAgentResponse
+	3, // 4: proto.AgentService.SendHeartbeat:output_type -> proto.SendHeartbeatResponse
+	5, // 5: proto.AgentService.Deregister:output_type -> proto.DeregisterAgentResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_agents_proto_init() }
@@ -854,7 +370,7 @@ func file_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agents_proto_rawDesc), len(file_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

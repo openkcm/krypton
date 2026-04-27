@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/config"
@@ -24,6 +25,7 @@ type AgentService struct {
 	config config.RootConfig
 }
 
+// NewAgentService creates a new AgentService with the given store and config.
 func NewAgentService(store store.Agent, config config.RootConfig) *AgentService {
 	return &AgentService{
 		store:  store,
@@ -31,7 +33,9 @@ func NewAgentService(store store.Agent, config config.RootConfig) *AgentService 
 	}
 }
 
-// Register implements [proto.AgentServiceServer].
+// Register registers an agent and returns its configuration.
+// It validates the input, checks if the agent is defined in the topology, creates the
+// agent config, stores the registration, and returns the config as YAML.
 func (a *AgentService) Register(ctx context.Context, r *proto.RegisterAgentRequest) (*proto.RegisterAgentResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
@@ -48,10 +52,10 @@ func (a *AgentService) Register(ctx context.Context, r *proto.RegisterAgentReque
 
 	cfg := spec.NewAgentConfig(a.config.Hierarchy, seg)
 
-	pCfg, err := AgentConfigToProto(cfg)
+	pCfg, err := yaml.Marshal(cfg)
 	if err != nil {
-		slog.Error("failed to convert agent config to proto", "agentName", agentName, "error", err)
-		return nil, status.Error(codes.Internal, "failed to convert agent config to proto")
+		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
+		return nil, status.Error(codes.Internal, "failed to marshal agent config to yaml")
 	}
 
 	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
@@ -72,7 +76,7 @@ func (a *AgentService) Register(ctx context.Context, r *proto.RegisterAgentReque
 	}, nil
 }
 
-// SendHeartbeat implements [proto.AgentServiceServer].
+// SendHeartbeat updates the last heartbeat time of the agent.
 func (a *AgentService) SendHeartbeat(ctx context.Context, r *proto.SendHeartbeatRequest) (*proto.SendHeartbeatResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
@@ -103,7 +107,7 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *proto.SendHeartbeat
 	return &proto.SendHeartbeatResponse{}, nil
 }
 
-// Deregister implements [proto.AgentServiceServer].
+// Deregister updates the agent status to deregistered.
 func (a *AgentService) Deregister(ctx context.Context, r *proto.DeregisterAgentRequest) (*proto.DeregisterAgentResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
