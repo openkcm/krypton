@@ -2,7 +2,7 @@ package spec
 
 // LabelRequirement defines whether a label is required and how to validate its value.
 type LabelRequirement struct {
-	IsRequired bool            `yaml:"isRequired"`          // If true, the label must be present
+	IsRequired bool            `yaml:"is_required"`         // If true, the label must be present
 	Validator  *LabelValidator `yaml:"validator,omitempty"` // Optional value validator
 }
 

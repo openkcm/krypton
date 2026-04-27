@@ -83,7 +83,6 @@ func TestValidateKeyBinding(t *testing.T) {
 				ParentKeyProvider: &ParentKeyProviderRef{
 					AgentName: "root",
 				},
-				Labels: Labels{"env": "prod"},
 			},
 			wantErr: nil,
 		},
@@ -174,8 +173,8 @@ func TestValidateTopologySegment(t *testing.T) {
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
-				KeyBindings: validKeyBindings,
-				Labels:      Labels{"cloud": "aws"},
+				KeyBindings:    validKeyBindings,
+				SelectorLabels: SelectorLabels{"cloud": "aws"},
 			},
 			wantErr: nil,
 		},

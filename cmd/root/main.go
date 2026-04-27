@@ -99,7 +99,7 @@ func loadConfig() *config.RootConfig {
 				StartKind: "K0",
 				EndKind:   "K1",
 			},
-			Labels: spec.Labels{
+			SelectorLabels: spec.SelectorLabels{
 				"environment": "production",
 			},
 			KeyBindings: map[string]spec.KeyBinding{
@@ -153,7 +153,7 @@ func loadConfig() *config.RootConfig {
 								},
 							},
 						},
-						Labels: spec.Labels{
+						SelectorLabels: spec.SelectorLabels{
 							"cloud": "aws",
 						},
 					},

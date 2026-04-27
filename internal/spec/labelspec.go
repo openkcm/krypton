@@ -3,9 +3,11 @@ package spec
 import (
 	"errors"
 	"fmt"
+
+	"github.com/openkcm/krypton/pkg/model"
 )
 
-// LabelSpec defines validation requirements for labels attached to topology segments.
+// LabelSpecs defines validation requirements for labels attached to topology segments.
 // It enforces both structural constraints (required vs optional) and value constraints
 // (regex patterns or enum values).
 //
@@ -16,23 +18,23 @@ import (
 //
 // Example YAML configuration:
 //
-//	allowUserLabels: false
+//	allow_user_labels: false
 //	requirements:
 //	  env:
-//	    isRequired: true
+//	    is_required: true
 //	    validator:
 //	      type: regex
 //	      params:
 //	        pattern: "^(production|staging|development)$"
 //	  region:
-//	    isRequired: false
+//	    is_required: false
 //	    validator:
 //	      type: enum
 //	      params:
 //	        values: "us-east-1,us-west-2,eu-west-1"
-type LabelSpec struct {
+type LabelSpecs struct {
 	Requirements    map[string]LabelRequirement `yaml:"requirements,omitempty"`
-	AllowUserLabels bool                        `yaml:"allowUserLabels"`
+	AllowUserLabels bool                        `yaml:"allow_user_labels"`
 }
 
 var (
@@ -44,7 +46,7 @@ var (
 // It validates all validator configurations but does not validate label values.
 // When AllowUserLabels is false, at least one requirement must be defined;
 // otherwise an empty Requirements map is accepted.
-func (ls *LabelSpec) Validate() error {
+func (ls *LabelSpecs) Validate() error {
 	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
 		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
 	}
@@ -64,7 +66,7 @@ func (ls *LabelSpec) Validate() error {
 //
 // When AllowUserLabels is true, labels that do not match any requirement are
 // silently accepted without validation.
-func (ls *LabelSpec) ValidateLabels(l Labels) error {
+func (ls *LabelSpecs) ValidateLabels(l model.Labels) error {
 	for reqName, req := range ls.Requirements {
 		value, exists := l[reqName]
 		if req.IsRequired && !exists {
