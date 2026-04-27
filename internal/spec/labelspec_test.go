@@ -125,7 +125,7 @@ func TestLabelSpecValidate(t *testing.T) {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// when
-				err := tt.subj.Validate()
+				err := spec.InitLabelSpecs(&tt.subj)
 
 				// then
 				assert.ErrorIs(t, err, tt.expErr)
@@ -372,7 +372,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// when
-				err := tt.subj.ValidateLabels(tt.labels)
+				err := tt.subj.Validate(tt.labels)
 
 				// then
 				assert.ErrorIs(t, err, tt.expErr)

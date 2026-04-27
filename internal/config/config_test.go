@@ -352,7 +352,7 @@ hierarchy:
         allow_user_labels: true
         requirements:
           type:
-            isRequired: true
+            is_required: true
             validator:
               type: enum
               params:
@@ -364,7 +364,7 @@ hierarchy:
         allow_user_labels: true
         requirements:
           env:
-            isRequired: true
+            is_required: true
             validator:
               type: regex
               params:

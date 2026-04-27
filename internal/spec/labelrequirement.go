@@ -6,10 +6,10 @@ type LabelRequirement struct {
 	Validator  *LabelValidator `yaml:"validator,omitempty"` // Optional value validator
 }
 
-// Validate checks that the requirement's validator configuration is valid.
-func (lr *LabelRequirement) Validate() error {
+// init performs initialization and validation of the LabelRequirement.
+func (lr *LabelRequirement) init() error {
 	if lr.Validator != nil {
-		return lr.Validator.Validate()
+		return lr.Validator.init()
 	}
 	return nil
 }

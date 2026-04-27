@@ -50,7 +50,7 @@ func TestLabelRequirementValidate(t *testing.T) {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// when
-				err := tt.subj.Validate()
+				err := spec.InitLabelRequirement(tt.subj)
 
 				// then
 				assert.ErrorIs(t, err, tt.expErr)

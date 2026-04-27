@@ -42,23 +42,7 @@ var (
 	ErrLabelsSpecRequirementEmpty = errors.New("label spec requirement is empty")
 )
 
-// Validate checks that the LabelSpec configuration itself is valid.
-// It validates all validator configurations but does not validate label values.
-// When AllowUserLabels is false, at least one requirement must be defined;
-// otherwise an empty Requirements map is accepted.
-func (ls *LabelSpecs) Validate() error {
-	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
-		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
-	}
-	for _, req := range ls.Requirements {
-		if err := req.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ValidateLabels validates actual label values against the spec requirements.
+// Validate validates actual label values against the spec requirements.
 // It checks that:
 //   - All required labels are present
 //   - All label values pass their validator constraints
@@ -66,7 +50,7 @@ func (ls *LabelSpecs) Validate() error {
 //
 // When AllowUserLabels is true, labels that do not match any requirement are
 // silently accepted without validation.
-func (ls *LabelSpecs) ValidateLabels(l model.Labels) error {
+func (ls *LabelSpecs) Validate(l model.Labels) error {
 	for reqName, req := range ls.Requirements {
 		value, exists := l[reqName]
 		if req.IsRequired && !exists {
@@ -78,7 +62,7 @@ func (ls *LabelSpecs) ValidateLabels(l model.Labels) error {
 
 		validator := req.Validator
 		if validator != nil {
-			if err := validator.ValidateValue(value); err != nil {
+			if err := validator.validate(value); err != nil {
 				return fmt.Errorf("label '%s': %w", reqName, err)
 			}
 		}
@@ -92,5 +76,20 @@ func (ls *LabelSpecs) ValidateLabels(l model.Labels) error {
 		}
 	}
 
+	return nil
+}
+
+// init performs initialization and validation of the LabelSpecs.
+// It checks that if AllowUserLabels is false, at least one requirement is defined.
+// It also validates each individual LabelRequirement.
+func (ls *LabelSpecs) init() error {
+	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
+		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
+	}
+	for _, req := range ls.Requirements {
+		if err := req.init(); err != nil {
+			return err
+		}
+	}
 	return nil
 }

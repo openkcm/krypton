@@ -44,9 +44,8 @@ var (
 	ErrLabelValidatorRegexFailed         = errors.New("regex validation failed")
 )
 
-// Validate checks the validator configuration and compiles patterns (lazily, once).
-// Returns an error if the validator type or parameters are invalid.
-func (lv *LabelValidator) Validate() error {
+// init initializes the validator by compiling regex patterns or parsing enum values.
+func (lv *LabelValidator) init() error {
 	if lv == nil {
 		return nil
 	}
@@ -82,13 +81,13 @@ func (lv *LabelValidator) Validate() error {
 	return lv.validateErr
 }
 
-// ValidateValue validates a label value against this validator's constraints.
-// The validator configuration is validated first if not already done.
-func (lv *LabelValidator) ValidateValue(value string) error {
+// validate validates the given value against the validator's constraints.
+// It returns an error if the value does not satisfy the constraints or if the validator is misconfigured.
+func (lv *LabelValidator) validate(value string) error {
 	if lv == nil {
 		return nil
 	}
-	if err := lv.Validate(); err != nil {
+	if err := lv.init(); err != nil {
 		return err
 	}
 
@@ -102,6 +101,7 @@ func (lv *LabelValidator) ValidateValue(value string) error {
 	}
 }
 
+// validateEnum checks if the value is one of the allowed enum values.
 func (lv *LabelValidator) validateEnum(value string) error {
 	if len(lv.enums) == 0 {
 		return ErrLabelValidatorMissingEnumValues
@@ -113,6 +113,7 @@ func (lv *LabelValidator) validateEnum(value string) error {
 	return nil
 }
 
+// validateRegex checks if the value matches the compiled regex pattern.
 func (lv *LabelValidator) validateRegex(value string) error {
 	if lv.regex == nil {
 		return ErrLabelValidatorMissingRegexPattern

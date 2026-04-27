@@ -88,7 +88,7 @@ func (k KeySpec) Validate() error {
 		return ErrKeySpecAlgorithmInvalid
 	}
 
-	if err := k.LabelSpecs.Validate(); err != nil {
+	if err := k.LabelSpecs.init(); err != nil {
 		return err
 	}
 
