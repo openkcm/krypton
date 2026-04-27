@@ -86,6 +86,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "",
 					Role:      spec.KeyRoleRoot,
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecKindEmpty,
 			},
@@ -95,6 +96,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      "invalid-role",
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecRoleInvalid,
 			},
@@ -104,6 +106,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleRoot,
 					Algorithm: "",
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecAlgorithmInvalid,
 			},
@@ -113,6 +116,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleRoot,
 					Algorithm: "some-invalid-algorithm",
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecAlgorithmInvalid,
 			},
@@ -122,6 +126,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleRoot,
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 			},
 			{
@@ -130,6 +135,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleKek,
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 			},
 			{
@@ -138,6 +144,7 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleDek,
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
 			},
 			{
@@ -146,7 +153,18 @@ func TestKeySpec(t *testing.T) {
 					Kind:      "K0",
 					Role:      spec.KeyRoleTek,
 					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
 				},
+			},
+			{
+				name: "should return error if LabelSpec validate fails",
+				input: spec.KeySpec{
+					Kind:      "K0",
+					Role:      spec.KeyRoleTek,
+					Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: false},
+				},
+				expErr: spec.ErrLabelsSpecRequirementEmpty,
 			},
 		}
 

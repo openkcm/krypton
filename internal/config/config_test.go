@@ -31,8 +31,20 @@ func validRootConfig() *RootConfig {
 		Hierarchy: spec.KeyHierarchy{
 			Name: "h",
 			KeySpecs: []spec.KeySpec{
-				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K1", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+				{
+					Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{AllowUserLabels: true},
+				},
+				{
+					Kind: "K1", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256,
+					LabelSpec: spec.LabelSpec{
+						Requirements: map[string]spec.LabelRequirement{
+							"env": {
+								IsRequired: true,
+							},
+						},
+					},
+				},
 			},
 		},
 		Topology: spec.Topology{},
@@ -104,6 +116,22 @@ func TestValidateRootConfig(t *testing.T) {
 			wantErr: spec.ErrAgentNameEmpty,
 		},
 		{
+			name: "invalid LabelSpec in hierarchy",
+			modify: func(c *RootConfig) {
+				c.Hierarchy.KeySpecs[0].LabelSpec = spec.LabelSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+							Validator: &spec.LabelValidator{
+								Type: "invalid",
+							},
+						},
+					},
+				}
+			},
+			wantErr: spec.ErrLabelValidatorInvalidType,
+		},
+		{
 			name:    "invalid segment",
 			modify:  func(c *RootConfig) { c.Segment.StartKind = "" },
 			wantErr: spec.ErrStartKindEmpty,
@@ -129,9 +157,9 @@ func TestValidateRootConfig(t *testing.T) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
-						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
 					},
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K1", EndKind: "K2"}
@@ -149,9 +177,9 @@ func TestValidateRootConfig(t *testing.T) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
-						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K1", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K1", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
 					},
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
@@ -169,9 +197,9 @@ func TestValidateRootConfig(t *testing.T) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
-						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K2", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
 					},
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
@@ -199,10 +227,10 @@ func TestValidateRootConfig(t *testing.T) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
-						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
-						{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
+						{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256, LabelSpec: validLabelSpec()},
 					},
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
@@ -310,15 +338,30 @@ hierarchy:
     - kind: "K0"
       role: "root"
       algorithm: "AES256"
+      labelSpec:
+        allowUserLabels: true
     - kind: "K1"
       role: "kek"
       algorithm: "AES256"
+      labelSpec:
+        allowUserLabels: true
     - kind: "K2"
       role: "tek"
       algorithm: "AES256"
+      labelSpec:
+        allowUserLabels: true
     - kind: "K3"
       role: "dek"
       algorithm: "AES256"
+      labelSpec:
+        allowUserLabels: true
+        requirements:
+          env:
+            isRequired: true
+            validator:
+              type: regex
+              params:
+                pattern: "^(production|staging|development)$"
 topology:
   segments:
     - name: "agent-aws"
@@ -510,4 +553,10 @@ krypton_root:
 		assert.Nil(t, cfg)
 		assert.Contains(t, err.Error(), "failed to read file")
 	})
+}
+
+func validLabelSpec() spec.LabelSpec {
+	return spec.LabelSpec{
+		AllowUserLabels: true,
+	}
 }

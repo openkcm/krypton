@@ -53,6 +53,7 @@ type KeySpec struct {
 	Kind      KeyKind      `yaml:"kind"`
 	Role      KeyRole      `yaml:"role"`
 	Algorithm KeyAlgorithm `yaml:"algorithm"`
+	LabelSpec LabelSpec    `yaml:"labelSpec"`
 }
 
 // Usage returns the KeyUsage associated with the KeySpec's role.
@@ -85,6 +86,10 @@ func (k KeySpec) Validate() error {
 
 	if !IsSupportedAlgorithm(k.Algorithm) {
 		return ErrKeySpecAlgorithmInvalid
+	}
+
+	if err := k.LabelSpec.Validate(); err != nil {
+		return err
 	}
 
 	return nil
