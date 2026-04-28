@@ -3,7 +3,7 @@ package spec
 var (
 	ValidKeyUsageNames     = validKeyUsageNames
 	ValidKeyUsages         = validKeyUsages
-	InitLabelSpecs         = (*LabelSpecs).init
+	InitLabelsSpec         = (*LabelsSpec).init
 	InitLabelRequirement   = (*LabelRequirement).init
 	InitLabelValidator     = (*LabelValidator).init
 	ValidateLabelValidator = (*LabelValidator).validate

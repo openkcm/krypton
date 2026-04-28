@@ -134,8 +134,8 @@ func createDatabase(t *testing.T) *sql.DB {
 
 func validRootConfig(agentName string) config.RootConfig {
 	expSegment := spec.TopologySegment{
-		Name:   agentName,
-		Labels: map[string]string{"region": "us-west"},
+		Name:           agentName,
+		SelectorLabels: map[string]string{"region": "us-west"},
 		Segment: spec.HierarchySegment{
 			StartKind: "K2",
 			EndKind:   "K2",
@@ -151,10 +151,6 @@ func validRootConfig(agentName string) config.RootConfig {
 				},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: agentName,
-				},
-				Labels: spec.Labels{
-					"env": "prod",
-					"app": "myapp",
 				},
 			},
 		},

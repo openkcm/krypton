@@ -9,31 +9,31 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
-func TestLabelSpecValidate(t *testing.T) {
+func TestLabelsSpecValidate(t *testing.T) {
 	t.Run("Validate", func(t *testing.T) {
 		// given
 		tts := []struct {
 			name   string
-			subj   spec.LabelSpecs
+			subj   spec.LabelsSpec
 			expErr error
 		}{
 			{
 				name: "should return error for label spec with empty requirements and allowUserLabels is false",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{},
 				},
 				expErr: spec.ErrLabelsSpecRequirementEmpty,
 			},
 			{
 				name: "should return error for label spec with nil requirements and allowUserLabels is false",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: nil,
 				},
 				expErr: spec.ErrLabelsSpecRequirementEmpty,
 			},
 			{
 				name: "should return nil for label spec with no requirements but allowUserLabels is true",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					AllowUserLabels: true,
 					Requirements:    map[string]spec.LabelRequirement{},
 				},
@@ -41,7 +41,7 @@ func TestLabelSpecValidate(t *testing.T) {
 			},
 			{
 				name: "should return error for invalid validator even when allowUserLabels is true",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					AllowUserLabels: true,
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
@@ -56,7 +56,7 @@ func TestLabelSpecValidate(t *testing.T) {
 			},
 			{
 				name: "should return error for invalid validator type in label requirement",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"": {
 							IsRequired: false,
@@ -70,12 +70,12 @@ func TestLabelSpecValidate(t *testing.T) {
 			},
 			{
 				name:   "should return error for empty label spec",
-				subj:   spec.LabelSpecs{},
+				subj:   spec.LabelsSpec{},
 				expErr: spec.ErrLabelsSpecRequirementEmpty,
 			},
 			{
 				name: "should return nil for valid label spec",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -92,7 +92,7 @@ func TestLabelSpecValidate(t *testing.T) {
 			},
 			{
 				name: "should return nil for label spec with no validators",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -106,7 +106,7 @@ func TestLabelSpecValidate(t *testing.T) {
 			},
 			{
 				name: "should return error for label spec with invalid regex pattern in validator",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -125,7 +125,7 @@ func TestLabelSpecValidate(t *testing.T) {
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// when
-				err := spec.InitLabelSpecs(&tt.subj)
+				err := spec.InitLabelsSpec(&tt.subj)
 
 				// then
 				assert.ErrorIs(t, err, tt.expErr)
@@ -134,17 +134,17 @@ func TestLabelSpecValidate(t *testing.T) {
 	})
 }
 
-func TestLabelSpecValidateLabels(t *testing.T) {
+func TestLabelsSpecValidateLabels(t *testing.T) {
 	t.Run("ValidateLabels", func(t *testing.T) {
 		tts := []struct {
 			name   string
-			subj   spec.LabelSpecs
+			subj   spec.LabelsSpec
 			labels model.Labels
 			expErr error
 		}{
 			{
 				name: "should return error for missing required label",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -157,7 +157,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil for missing optional label",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: false,
@@ -170,7 +170,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil if an unexpected label is present and allowUserLabels is true",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					AllowUserLabels: true,
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
@@ -185,7 +185,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return error if an unexpected label is present and allowUserLabels is false",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					AllowUserLabels: false,
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
@@ -201,7 +201,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return error if the regex validation fails",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -221,7 +221,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil if the regex validation passes",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -241,7 +241,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return error for invalid regex pattern in validator",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -261,7 +261,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return error if enum validation fails",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -281,7 +281,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil if enum validation succeeds",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -300,7 +300,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil for valid labels with multiple requirements",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -330,7 +330,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil for valid labels",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -344,7 +344,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return error for nil labels when required label exists",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
 							IsRequired: true,
@@ -356,7 +356,7 @@ func TestLabelSpecValidateLabels(t *testing.T) {
 			},
 			{
 				name: "should return nil for nil labels when no required labels exist",
-				subj: spec.LabelSpecs{
+				subj: spec.LabelsSpec{
 					AllowUserLabels: true,
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {

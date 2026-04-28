@@ -7,7 +7,7 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
-// LabelSpecs defines validation requirements for labels attached to topology segments.
+// LabelsSpec defines validation requirements for labels attached to topology segments.
 // It enforces both structural constraints (required vs optional) and value constraints
 // (regex patterns or enum values).
 //
@@ -32,7 +32,7 @@ import (
 //	      type: enum
 //	      params:
 //	        values: "us-east-1,us-west-2,eu-west-1"
-type LabelSpecs struct {
+type LabelsSpec struct {
 	Requirements    map[string]LabelRequirement `yaml:"requirements,omitempty"`
 	AllowUserLabels bool                        `yaml:"allow_user_labels"`
 }
@@ -50,7 +50,7 @@ var (
 //
 // When AllowUserLabels is true, labels that do not match any requirement are
 // silently accepted without validation.
-func (ls *LabelSpecs) Validate(l model.Labels) error {
+func (ls *LabelsSpec) Validate(l model.Labels) error {
 	for reqName, req := range ls.Requirements {
 		value, exists := l[reqName]
 		if req.IsRequired && !exists {
@@ -79,10 +79,10 @@ func (ls *LabelSpecs) Validate(l model.Labels) error {
 	return nil
 }
 
-// init performs initialization and validation of the LabelSpecs.
+// init performs initialization and validation of the LabelsSpec.
 // It checks that if AllowUserLabels is false, at least one requirement is defined.
 // It also validates each individual LabelRequirement.
-func (ls *LabelSpecs) init() error {
+func (ls *LabelsSpec) init() error {
 	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
 		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
 	}
