@@ -556,11 +556,13 @@ config:
 	})
 }
 
-func TestDeriveSubAgents(t *testing.T) {
+func TestDeriveSubAgentIDs(t *testing.T) {
+	const trustDomain = "acme-corp"
+
 	tests := []struct {
 		name            string
 		topology        Topology
-		expSegSubAgents map[string][]string // segment name -> expected sub-agents
+		expSegSubAgents map[string][]string // segment name -> expected sub-agent names
 	}{
 		{
 			name:            "empty topology",
@@ -719,12 +721,16 @@ func TestDeriveSubAgents(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			tt.topology.DeriveSubAgents()
+			tt.topology.DeriveSubAgentIDs(trustDomain)
 
 			// then
 			for _, seg := range tt.topology.Segments {
-				exp := tt.expSegSubAgents[seg.Name]
-				assert.ElementsMatch(t, exp, seg.SubAgents, "sub-agents mismatch for segment %s", seg.Name)
+				expNames := tt.expSegSubAgents[seg.Name]
+				gotNames := make([]string, len(seg.SubAgentIDs))
+				for i, id := range seg.SubAgentIDs {
+					gotNames[i] = id.Name
+				}
+				assert.ElementsMatch(t, expNames, gotNames, "sub-agents mismatch for segment %s", seg.Name)
 			}
 		})
 	}

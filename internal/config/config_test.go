@@ -12,8 +12,9 @@ import (
 
 func validRootConfig() *RootConfig {
 	return &RootConfig{
-		Name: "root",
-		Role: "root",
+		Name:        "root",
+		TrustDomain: "acme-corp",
+		Role:        "root",
 		Segment: spec.HierarchySegment{
 			StartKind: "K0",
 			EndKind:   "K1",
@@ -84,6 +85,11 @@ func TestValidateRootConfig(t *testing.T) {
 			name:    "empty name",
 			modify:  func(c *RootConfig) { c.Name = "" },
 			wantErr: ErrConfigNameEmpty,
+		},
+		{
+			name:    "empty trust domain",
+			modify:  func(c *RootConfig) { c.TrustDomain = "" },
+			wantErr: ErrConfigTrustDomainEmpty,
 		},
 		{
 			name:    "wrong role",
@@ -315,6 +321,7 @@ func TestValidateAgentBootstrapConfig(t *testing.T) {
 
 func TestLoadRootConfig(t *testing.T) {
 	const validYAML = `name: "root"
+trust_domain: "acme-corp"
 role: "root"
 segment:
   start_kind: "K0"
@@ -408,6 +415,7 @@ reconciler:
 			validate: func(t *testing.T, cfg *RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
+				assert.Equal(t, "acme-corp", cfg.TrustDomain)
 				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
@@ -428,6 +436,7 @@ reconciler:
 		{
 			name: "derives SubAgents from ParentKeyProvider",
 			yaml: `name: "root"
+trust_domain: "acme-corp"
 role: "root"
 segment:
   start_kind: "K0"
@@ -511,16 +520,17 @@ topology:
 `,
 			validate: func(t *testing.T, cfg *RootConfig) {
 				t.Helper()
-				// Verify SubAgents were derived from ParentKeyProvider references
+				// Verify SubAgentIDs were derived from ParentKeyProvider references
 				assert.Len(t, cfg.Topology.Segments, 2)
 
 				// agent-aws should have agent-leaf as sub-agent
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
-				assert.ElementsMatch(t, []string{"agent-leaf"}, cfg.Topology.Segments[0].SubAgents)
+				assert.Len(t, cfg.Topology.Segments[0].SubAgentIDs, 1)
+				assert.Equal(t, "kryptonid://acme-corp/agent/agent-leaf", cfg.Topology.Segments[0].SubAgentIDs[0].URI())
 
 				// agent-leaf should have no sub-agents
 				assert.Equal(t, "agent-leaf", cfg.Topology.Segments[1].Name)
-				assert.Empty(t, cfg.Topology.Segments[1].SubAgents)
+				assert.Empty(t, cfg.Topology.Segments[1].SubAgentIDs)
 			},
 		},
 		{
@@ -532,6 +542,7 @@ topology:
 		{
 			name: "valid YAML but fails validation",
 			yaml: `name: ""
+trust_domain: "acme-corp"
 role: "root"
 segment:
   start_kind: "K0"
