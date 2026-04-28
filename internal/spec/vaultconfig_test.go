@@ -3,8 +3,9 @@ package spec_test
 import (
 	"testing"
 
-	"github.com/openkcm/krypton/internal/spec"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/krypton/internal/spec"
 )
 
 func TestOpenBaoVaultConfig(t *testing.T) {
