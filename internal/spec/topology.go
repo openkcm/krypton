@@ -3,6 +3,8 @@ package spec
 import (
 	"errors"
 	"fmt"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -19,6 +21,14 @@ var (
 // Labels is a key-value map for metadata
 type Labels map[string]string
 
+// VaultType defines the type of vault (e.g., "open-bao", "aws-kms", "gcp-kms")
+type VaultType string
+
+const (
+	VaultTypeInMemory VaultType = "in-memory"
+	VaultTypeOpenBAO  VaultType = "open-bao"
+)
+
 // HierarchySegment represents a contiguous range of key kinds in the hierarchy
 type HierarchySegment struct {
 	StartKind string `yaml:"start_kind"` // First key kind in segment (e.g., "K2")
@@ -30,11 +40,16 @@ type ParentKeyProviderRef struct {
 	AgentName string `yaml:"agent_name"` // Agent name that provides parent keys
 }
 
+var (
+	_ yaml.Unmarshaler = (*VaultSpec)(nil)
+	_ yaml.Marshaler   = VaultSpec{}
+)
+
 // VaultSpec holds storage backend configuration
 type VaultSpec struct {
-	Name   string         `yaml:"name"`             // Vault identifier
-	Type   string         `yaml:"type"`             // Vault type (e.g., "open-bao", "aws-kms", "gcp-kms")
-	Params map[string]any `yaml:"params,omitempty"` // Type-specific configuration
+	Name   string      `yaml:"name"` // Vault identifier
+	Type   VaultType   `yaml:"type"` // Vault type (e.g., "open-bao", "aws-kms", "gcp-kms")
+	Config VaultConfig `yaml:"-"`    // Decoded vault config (not from YAML)
 }
 
 // KeyBinding encapsulates all dependencies needed to implement a key kind
@@ -108,5 +123,50 @@ func (t *Topology) Validate() error {
 			return fmt.Errorf("segment at index %d: %w", i, err)
 		}
 	}
+	return nil
+}
+
+// MarshalYAML implements [yaml.Marshaler].
+// Required because Config is tagged yaml:"-" to prevent interface decode issues.
+func (v VaultSpec) MarshalYAML() (any, error) {
+	type alias VaultSpec
+	return struct {
+		alias `yaml:",inline"`
+
+		Config VaultConfig `yaml:"config"`
+	}{
+		alias:  alias(v),
+		Config: v.Config,
+	}, nil
+}
+
+// UnmarshalYAML implements [yaml.Unmarshaler].
+func (v *VaultSpec) UnmarshalYAML(node *yaml.Node) error {
+	type alias VaultSpec
+	var raw struct {
+		alias `yaml:",inline"`
+
+		Config yaml.Node `yaml:"config"`
+	}
+	if err := node.Decode(&raw); err != nil {
+		return fmt.Errorf("failed to decode vault spec: %w", err)
+	}
+
+	var config VaultConfig
+	switch raw.Type {
+	case VaultTypeOpenBAO:
+		config = &OpenBAOConfig{}
+	case VaultTypeInMemory:
+		config = &InMemoryConfig{}
+	default:
+		return fmt.Errorf("unsupported vault type '%s': %w", raw.Type, ErrVaultConfigInvalid)
+	}
+
+	if err := raw.Config.Decode(config); err != nil {
+		return fmt.Errorf("failed to decode vault config: %w", err)
+	}
+
+	*v = VaultSpec(raw.alias)
+	v.Config = config
 	return nil
 }
