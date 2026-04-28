@@ -297,7 +297,7 @@ key_bindings:
   K0:
     vault:
       name: "root-hsm-vault"
-      type: "aws-kms"
+      type: "open-bao"
   K1:
     vault:
       name: "root-vault"
@@ -329,13 +329,13 @@ topology:
         K2:
           vault:
             name: "aws-vault"
-            type: "aws-kms"
+            type: "open-bao"
           parent_key_provider:
             agent_name: "root"
         K3:
           vault:
             name: "aws-dek-vault"
-            type: "aws-kms"
+            type: "in-memory"
       labels:
         cloud: "aws"
 `
@@ -385,7 +385,7 @@ key_bindings:
   K0:
     vault:
       name: "vault"
-      type: "aws-kms"
+      type: "open-bao"
 hierarchy:
   name: "h"
   key_specs:
