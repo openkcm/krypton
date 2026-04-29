@@ -143,9 +143,9 @@ func validRootConfig(agentName string) config.RootConfig {
 			"binding1": {
 				Vault: spec.VaultSpec{
 					Name: "vault1",
-					Type: "aws-kms",
-					Params: map[string]any{
-						"region": "us-west-2",
+					Type: spec.VaultTypeInMemory,
+					Config: &spec.InMemoryConfig{
+						Prefix: "vault1",
 					},
 				},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{
