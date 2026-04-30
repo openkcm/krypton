@@ -1,4 +1,4 @@
-package v1
+package agents
 
 import (
 	"context"
@@ -12,14 +12,13 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-var _ proto.AgentServiceServer = (*AgentService)(nil)
+var _ AgentServiceServer = (*AgentService)(nil)
 
 type AgentService struct {
-	proto.UnimplementedAgentServiceServer
+	UnimplementedAgentServiceServer
 
 	store  store.Agent
 	config config.RootConfig
@@ -36,7 +35,7 @@ func NewAgentService(store store.Agent, config config.RootConfig) *AgentService 
 // Register registers an agent and returns its configuration.
 // It validates the input, checks if the agent is defined in the topology, creates the
 // agent config, stores the registration, and returns the config as YAML.
-func (a *AgentService) Register(ctx context.Context, r *proto.RegisterAgentRequest) (*proto.RegisterAgentResponse, error) {
+func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*RegisterAgentResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -71,13 +70,13 @@ func (a *AgentService) Register(ctx context.Context, r *proto.RegisterAgentReque
 		return nil, status.Error(codes.Internal, "failed to register agent")
 	}
 
-	return &proto.RegisterAgentResponse{
+	return &RegisterAgentResponse{
 		Config: pCfg,
 	}, nil
 }
 
 // SendHeartbeat updates the last heartbeat time of the agent.
-func (a *AgentService) SendHeartbeat(ctx context.Context, r *proto.SendHeartbeatRequest) (*proto.SendHeartbeatResponse, error) {
+func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -104,11 +103,11 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *proto.SendHeartbeat
 		return nil, status.Error(codes.Internal, "failed to update heartbeat")
 	}
 
-	return &proto.SendHeartbeatResponse{}, nil
+	return &SendHeartbeatResponse{}, nil
 }
 
 // Deregister updates the agent status to deregistered.
-func (a *AgentService) Deregister(ctx context.Context, r *proto.DeregisterAgentRequest) (*proto.DeregisterAgentResponse, error) {
+func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -131,7 +130,7 @@ func (a *AgentService) Deregister(ctx context.Context, r *proto.DeregisterAgentR
 		return nil, status.Error(codes.Internal, "failed to update agent status to deregistered")
 	}
 
-	return &proto.DeregisterAgentResponse{}, nil
+	return &DeregisterAgentResponse{}, nil
 }
 
 func (a *AgentService) topologySegment(agentName string) (spec.TopologySegment, bool) {

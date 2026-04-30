@@ -1,4 +1,4 @@
-package v1_test
+package agents_test
 
 import (
 	"database/sql"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -36,7 +36,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -50,7 +50,7 @@ func TestDeregister(t *testing.T) {
 		assert.Equal(t, core.AgentRegistrationStatusRegistered, prevRes.Registration.Status, "expected initial status to be Registered")
 
 		// when
-		resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -81,7 +81,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err = cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		_, err = cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -95,7 +95,7 @@ func TestDeregister(t *testing.T) {
 		assert.Equal(t, core.AgentRegistrationStatusHealthy, prevRes.Registration.Status, "expected initial status to be Healthy")
 
 		// when
-		resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -125,7 +125,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -147,7 +147,7 @@ func TestDeregister(t *testing.T) {
 		assert.Equal(t, core.AgentRegistrationStatusUnhealthy, prevRes.Registration.Status, "expected status to be Unhealthy after heartbeat timeout")
 
 		// when
-		resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -185,7 +185,7 @@ func TestDeregister(t *testing.T) {
 		assert.Equal(t, store.ErrAgentNotFound, err, "expected error to be ErrAgentNotFound")
 
 		// when
-		resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -207,7 +207,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -215,7 +215,7 @@ func TestDeregister(t *testing.T) {
 
 		// when
 		for range 3 {
-			resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+			resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 				AgentName:  expAgentName,
 				InstanceId: expInstanceID,
 			})
@@ -241,7 +241,7 @@ func TestDeregister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		resp, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		resp, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -257,7 +257,7 @@ func TestDeregister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		_, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			InstanceId: uuid.NewString(),
 		})
 
@@ -271,7 +271,7 @@ func TestDeregister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.Deregister(ctx, &proto.DeregisterAgentRequest{
+		_, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
 			AgentName: expAgentName,
 		})
 

@@ -1,4 +1,4 @@
-package v1_test
+package agents_test
 
 import (
 	"database/sql"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -36,7 +36,7 @@ func TestSendHeartbeat(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -50,7 +50,7 @@ func TestSendHeartbeat(t *testing.T) {
 		assert.Equal(t, core.AgentRegistrationStatusRegistered, prevRes.Registration.Status, "expected initial status to be Registered")
 
 		// when
-		resp, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		resp, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -90,7 +90,7 @@ func TestSendHeartbeat(t *testing.T) {
 		assert.Equal(t, store.ErrAgentNotFound, err, "expected error to be ErrAgentNotFound")
 
 		// when
-		resp, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		resp, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -119,7 +119,7 @@ func TestSendHeartbeat(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -127,7 +127,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 		// when
 		for range 3 {
-			resp, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+			resp, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 				AgentName:  expAgentName,
 				InstanceId: expInstanceID,
 			})
@@ -144,7 +144,7 @@ func TestSendHeartbeat(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		resp, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		resp, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  "unknown-agent",
 			InstanceId: expInstanceID,
 		})
@@ -170,7 +170,7 @@ func TestSendHeartbeat(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		resp, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		resp, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -186,7 +186,7 @@ func TestSendHeartbeat(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		_, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			InstanceId: uuid.NewString(),
 		})
 
@@ -200,7 +200,7 @@ func TestSendHeartbeat(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.SendHeartbeat(ctx, &proto.SendHeartbeatRequest{
+		_, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName: expAgentName,
 		})
 

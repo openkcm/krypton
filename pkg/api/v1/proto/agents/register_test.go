@@ -1,4 +1,4 @@
-package v1_test
+package agents_test
 
 import (
 	"database/sql"
@@ -13,7 +13,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -40,7 +40,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, rootCfg)
 
 		// when
-		resp, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		resp, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -76,7 +76,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// register first time
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -89,7 +89,7 @@ func TestRegister(t *testing.T) {
 		assert.NoError(t, err)
 
 		// when - register second time
-		_, err = cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err = cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -121,7 +121,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.Register(t.Context(), &proto.RegisterAgentRequest{
+		_, err := cli.Register(t.Context(), &agents.RegisterAgentRequest{
 			AgentName:  "unknown-agent",
 			InstanceId: uuid.NewString(),
 		})
@@ -146,7 +146,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		resp, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		resp, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -162,7 +162,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			InstanceId: uuid.NewString(),
 		})
 
@@ -176,7 +176,7 @@ func TestRegister(t *testing.T) {
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
-		_, err := cli.Register(ctx, &proto.RegisterAgentRequest{
+		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
 			AgentName: expAgentName,
 		})
 

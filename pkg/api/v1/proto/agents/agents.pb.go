@@ -4,7 +4,7 @@
 // 	protoc        v6.33.2
 // source: agents.proto
 
-package proto
+package agents
 
 import (
 	reflect "reflect"
@@ -322,7 +322,7 @@ const file_agents_proto_rawDesc = "" +
 	"\bRegister\x12\x1b.proto.RegisterAgentRequest\x1a\x1c.proto.RegisterAgentResponse\"\x00\x12L\n" +
 	"\rSendHeartbeat\x12\x1b.proto.SendHeartbeatRequest\x1a\x1c.proto.SendHeartbeatResponse\"\x00\x12M\n" +
 	"\n" +
-	"Deregister\x12\x1d.proto.DeregisterAgentRequest\x1a\x1e.proto.DeregisterAgentResponse\"\x00B4Z2github.com/openkcm/krypton/pkg/api/agents/v1/protob\x06proto3"
+	"Deregister\x12\x1d.proto.DeregisterAgentRequest\x1a\x1e.proto.DeregisterAgentResponse\"\x00B4Z2github.com/openkcm/krypton/pkg/api/v1/proto/agentsb\x06proto3"
 
 var (
 	file_agents_proto_rawDescOnce sync.Once

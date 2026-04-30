@@ -4,7 +4,7 @@
 // - protoc             v6.33.2
 // source: agents.proto
 
-package proto
+package agents
 
 import (
 	context "context"

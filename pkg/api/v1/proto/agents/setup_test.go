@@ -1,4 +1,4 @@
-package v1_test
+package agents_test
 
 import (
 	"context"
@@ -20,8 +20,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/spec"
-	v1 "github.com/openkcm/krypton/pkg/api/agents/v1"
-	"github.com/openkcm/krypton/pkg/api/agents/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
@@ -58,12 +57,12 @@ func setupPostgres() (func(), error) {
 	return cleanUp, err
 }
 
-func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig) proto.AgentServiceClient {
+func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig) agents.AgentServiceClient {
 	t.Helper()
 
 	srv := grpc.NewServer()
-	agentSvc := v1.NewAgentService(store, cfg)
-	proto.RegisterAgentServiceServer(srv, agentSvc)
+	agentSvc := agents.NewAgentService(store, cfg)
+	agents.RegisterAgentServiceServer(srv, agentSvc)
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -92,7 +91,7 @@ func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig
 		conn.Close()
 	})
 
-	client := proto.NewAgentServiceClient(conn)
+	client := agents.NewAgentServiceClient(conn)
 	return client
 }
 
