@@ -10,8 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/cli/output"
-	"github.com/openkcm/krypton/pkg/api/admin/v1"
-	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 func getCmd() *cobra.Command {
@@ -44,9 +43,9 @@ func getTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admingrpc.NewServiceClient(conn)
+			client := admin.NewServiceClient(conn)
 
-			resp, err := client.GetTenant(cmd.Context(), &admingrpc.GetTenantRequest{
+			resp, err := client.GetTenant(cmd.Context(), &admin.GetTenantRequest{
 				Id: args[0],
 			})
 			if err != nil {
@@ -90,9 +89,9 @@ func getTenantsCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admingrpc.NewServiceClient(conn)
+			client := admin.NewServiceClient(conn)
 
-			resp, err := client.ListTenants(cmd.Context(), &admingrpc.ListTenantsRequest{})
+			resp, err := client.ListTenants(cmd.Context(), &admin.ListTenantsRequest{})
 			if err != nil {
 				return fmt.Errorf("failed to list tenants: %w", err)
 			}

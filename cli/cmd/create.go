@@ -8,8 +8,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/cli/output"
-	"github.com/openkcm/krypton/pkg/api/admin/v1"
-	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 func createCmd() *cobra.Command {
@@ -42,9 +41,9 @@ func createTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admingrpc.NewServiceClient(conn)
+			client := admin.NewServiceClient(conn)
 
-			resp, err := client.CreateTenant(cmd.Context(), &admingrpc.CreateTenantRequest{
+			resp, err := client.CreateTenant(cmd.Context(), &admin.CreateTenantRequest{
 				Name:   name,
 				Labels: labels,
 			})

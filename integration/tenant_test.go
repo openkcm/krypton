@@ -12,8 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/openkcm/krypton/cli/state"
-	"github.com/openkcm/krypton/pkg/api/admin/v1"
-	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 // expTenant represents the JSON structure returned by the CLI's tenant commands.
@@ -28,7 +27,7 @@ type expTenant struct {
 func TestCreateTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
 	})
 
 	t.Run("creates tenant with name only", func(t *testing.T) {
@@ -106,7 +105,7 @@ func TestCreateTenant(t *testing.T) {
 func TestGetTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
 	})
 
 	t.Run("gets tenant by id", func(t *testing.T) {
@@ -166,7 +165,7 @@ func TestListTenants(t *testing.T) {
 		// given
 		tenantStore := newTestStore(t)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-			admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+			admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
 		})
 
 		// when `kr get tenants --json --server <server-addr>`
@@ -183,7 +182,7 @@ func TestListTenants(t *testing.T) {
 		// given
 		tenantStore := newTestStore(t)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-			admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+			admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
 		})
 
 		tenant1Name := "tenant-" + uuid.NewString()
@@ -226,7 +225,7 @@ func TestListTenants(t *testing.T) {
 func TestSelectTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admingrpc.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
 	})
 
 	t.Run("selects tenant by ID and persists config", func(t *testing.T) {

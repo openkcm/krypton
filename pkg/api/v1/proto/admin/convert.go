@@ -2,13 +2,12 @@ package admin
 
 import (
 	"github.com/openkcm/krypton/internal/clock"
-	pb "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
 // TenantToProto converts a model.Tenant to a proto Tenant.
-func TenantToProto(t model.Tenant) *pb.Tenant {
-	return &pb.Tenant{
+func TenantToProto(t model.Tenant) *Tenant {
+	return &Tenant{
 		Id:        t.ID,
 		Name:      t.Name,
 		Labels:    t.Labels,
@@ -18,7 +17,7 @@ func TenantToProto(t model.Tenant) *pb.Tenant {
 }
 
 // TenantFromProto converts a proto Tenant to a model.Tenant.
-func TenantFromProto(t *pb.Tenant) model.Tenant {
+func TenantFromProto(t *Tenant) model.Tenant {
 	return model.Tenant{
 		ID:        t.GetId(),
 		Name:      t.GetName(),
@@ -29,8 +28,8 @@ func TenantFromProto(t *pb.Tenant) model.Tenant {
 }
 
 // TenantsToProto converts a slice of model.Tenant to proto Tenants.
-func TenantsToProto(tenants []model.Tenant) []*pb.Tenant {
-	result := make([]*pb.Tenant, len(tenants))
+func TenantsToProto(tenants []model.Tenant) []*Tenant {
+	result := make([]*Tenant, len(tenants))
 	for i, t := range tenants {
 		result[i] = TenantToProto(t)
 	}
@@ -38,7 +37,7 @@ func TenantsToProto(tenants []model.Tenant) []*pb.Tenant {
 }
 
 // TenantsFromProto converts a slice of proto Tenants to model.Tenant.
-func TenantsFromProto(tenants []*pb.Tenant) []model.Tenant {
+func TenantsFromProto(tenants []*Tenant) []model.Tenant {
 	result := make([]model.Tenant, len(tenants))
 	for i, t := range tenants {
 		result[i] = TenantFromProto(t)

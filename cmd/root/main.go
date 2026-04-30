@@ -19,9 +19,8 @@ import (
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
-	"github.com/openkcm/krypton/pkg/api/admin/v1"
-	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -65,7 +64,7 @@ func main() {
 
 	// gRPC server setup for admin API
 	grpcServer := grpc.NewServer()
-	admingrpc.RegisterServiceServer(grpcServer, admin.NewService(tenantStore))
+	admin.RegisterServiceServer(grpcServer, admin.NewService(tenantStore))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+grpcPort)
 	handleErr(err, "failed to listen on gRPC port")

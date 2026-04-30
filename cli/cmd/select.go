@@ -14,8 +14,7 @@ import (
 	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/cli/output/terminal"
 	"github.com/openkcm/krypton/cli/state"
-	"github.com/openkcm/krypton/pkg/api/admin/v1"
-	admingrpc "github.com/openkcm/krypton/pkg/api/admin/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 func selectCmd() *cobra.Command {
@@ -53,9 +52,9 @@ func selectTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admingrpc.NewServiceClient(conn)
+			client := admin.NewServiceClient(conn)
 
-			var tenant *admingrpc.Tenant
+			var tenant *admin.Tenant
 
 			switch {
 			case len(args) == 1 && interactive:
@@ -92,8 +91,8 @@ func selectTenantCmd() *cobra.Command {
 	return cmd
 }
 
-func getTenantByID(ctx context.Context, client admingrpc.ServiceClient, id string) (*admingrpc.Tenant, error) {
-	resp, err := client.GetTenant(ctx, &admingrpc.GetTenantRequest{
+func getTenantByID(ctx context.Context, client admin.ServiceClient, id string) (*admin.Tenant, error) {
+	resp, err := client.GetTenant(ctx, &admin.GetTenantRequest{
 		Id: id,
 	})
 	if err != nil {
@@ -105,8 +104,8 @@ func getTenantByID(ctx context.Context, client admingrpc.ServiceClient, id strin
 	return resp.GetTenant(), nil
 }
 
-func selectTenantInteractive(cmd *cobra.Command, client admingrpc.ServiceClient) (*admingrpc.Tenant, error) {
-	resp, err := client.ListTenants(cmd.Context(), &admingrpc.ListTenantsRequest{})
+func selectTenantInteractive(cmd *cobra.Command, client admin.ServiceClient) (*admin.Tenant, error) {
+	resp, err := client.ListTenants(cmd.Context(), &admin.ListTenantsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tenants: %w", err)
 	}
