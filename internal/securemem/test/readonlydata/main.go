@@ -32,7 +32,7 @@ func main() {
 	}()
 
 	// copy the secret data into the secure memory region
-	copy(data.Bytes(), []byte(SecretData))
+	copy(data.SecureBytes(), []byte(SecretData))
 
 	// make the memory region read-only
 	err = data.MarkReadOnly()
@@ -41,8 +41,8 @@ func main() {
 	}
 
 	// print the secret data
-	slog.Info(string(data.Bytes()))
+	slog.Info(string(data.SecureBytes()))
 
 	// attempt to modify the read-only memory region, which should cause a panic due to the read-only protection
-	data.Bytes()[0] = 's' // panic: runtime error: invalid memory address or nil pointer dereference
+	data.SecureBytes()[0] = 's' // panic: runtime error: invalid memory address or nil pointer dereference
 }
