@@ -1,0 +1,153 @@
+package agents
+
+import (
+	"context"
+	"log/slog"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
+
+	"github.com/openkcm/krypton/internal/clock"
+	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/core"
+	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/store"
+)
+
+var _ AgentServiceServer = (*AgentService)(nil)
+
+type AgentService struct {
+	UnimplementedAgentServiceServer
+
+	store  store.Agent
+	config config.RootConfig
+}
+
+// NewAgentService creates a new AgentService with the given store and config.
+func NewAgentService(store store.Agent, config config.RootConfig) *AgentService {
+	return &AgentService{
+		store:  store,
+		config: config,
+	}
+}
+
+// Register registers an agent and returns its configuration.
+// It validates the input, checks if the agent is defined in the topology, creates the
+// agent config, stores the registration, and returns the config as YAML.
+func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*RegisterAgentResponse, error) {
+	agentName := r.GetAgentName()
+	instanceID := r.GetInstanceId()
+	err := validateInput(agentName, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	seg, ok := a.topologySegment(agentName)
+	if !ok {
+		slog.Error("agent not found in topology", "agentName", agentName)
+		return nil, status.Error(codes.NotFound, "agent not found in topology")
+	}
+
+	cfg := spec.NewAgentConfig(a.config.Hierarchy, seg)
+
+	pCfg, err := yaml.Marshal(cfg)
+	if err != nil {
+		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
+		return nil, status.Error(codes.Internal, "failed to marshal agent config to yaml")
+	}
+
+	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          agentName,
+			InstanceID:    instanceID,
+			Status:        core.AgentRegistrationStatusRegistered,
+			LastHeartbeat: clock.Now(),
+		},
+	})
+	if err != nil {
+		slog.Error("failed to register agent", "agentName", agentName, "instanceID", instanceID, "error", err)
+		return nil, status.Error(codes.Internal, "failed to register agent")
+	}
+
+	return &RegisterAgentResponse{
+		Config: pCfg,
+	}, nil
+}
+
+// SendHeartbeat updates the last heartbeat time of the agent.
+func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
+	agentName := r.GetAgentName()
+	instanceID := r.GetInstanceId()
+	err := validateInput(agentName, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, ok := a.topologySegment(agentName)
+	if !ok {
+		slog.Error("agent not found in topology", "agentName", agentName)
+		return nil, status.Error(codes.NotFound, "agent not found in topology")
+	}
+
+	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
+		Registration: core.AgentRegistration{
+			Name:          agentName,
+			InstanceID:    instanceID,
+			Status:        core.AgentRegistrationStatusHealthy,
+			LastHeartbeat: clock.Now(),
+		},
+	})
+	if err != nil {
+		slog.Error("failed to update agent heartbeat", "agentName", agentName, "instanceID", instanceID, "error", err)
+		return nil, status.Error(codes.Internal, "failed to update heartbeat")
+	}
+
+	return &SendHeartbeatResponse{}, nil
+}
+
+// Deregister updates the agent status to deregistered.
+func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
+	agentName := r.GetAgentName()
+	instanceID := r.GetInstanceId()
+	err := validateInput(agentName, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = a.store.UpdateStatus(ctx, store.UpdateAgentStatusQuery{
+		Name:       agentName,
+		InstanceID: instanceID,
+		FromStatus: []core.AgentRegistrationStatus{
+			core.AgentRegistrationStatusRegistered,
+			core.AgentRegistrationStatusHealthy,
+			core.AgentRegistrationStatusUnhealthy,
+		},
+		ToStatus: core.AgentRegistrationStatusDeregistered,
+	})
+	if err != nil {
+		slog.Error("failed to update agent status to deregistered", "agentName", agentName, "instanceID", instanceID, "error", err)
+		return nil, status.Error(codes.Internal, "failed to update agent status to deregistered")
+	}
+
+	return &DeregisterAgentResponse{}, nil
+}
+
+func (a *AgentService) topologySegment(agentName string) (spec.TopologySegment, bool) {
+	for _, seg := range a.config.Topology.Segments {
+		if seg.Name == agentName {
+			return seg, true
+		}
+	}
+	return spec.TopologySegment{}, false
+}
+
+func validateInput(agentName, instanceID string) error {
+	if agentName == "" {
+		return status.Error(codes.InvalidArgument, "agent name is required")
+	}
+	if instanceID == "" {
+		return status.Error(codes.InvalidArgument, "instance ID is required")
+	}
+	return nil
+}

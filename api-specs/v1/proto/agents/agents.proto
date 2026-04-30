@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+
+package proto;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents";
+
+service AgentService {
+  rpc Register(RegisterAgentRequest) returns (RegisterAgentResponse) {}
+  rpc SendHeartbeat(SendHeartbeatRequest) returns (SendHeartbeatResponse) {}
+  rpc Deregister(DeregisterAgentRequest) returns (DeregisterAgentResponse) {}
+}
+
+message RegisterAgentRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message RegisterAgentResponse {
+  bytes config = 1;
+}
+
+message SendHeartbeatRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message SendHeartbeatResponse {
+}
+
+message DeregisterAgentRequest {
+  string agent_name = 1;
+  string instance_id = 2;
+}
+
+message DeregisterAgentResponse {
+}
