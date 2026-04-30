@@ -77,7 +77,7 @@ func main() {
 	}()
 	defer grpcServer.GracefulStop()
 
-	// HTTP API server setup (for agents API which is still HTTP-based)
+	// HTTP API server setup (for agents API where http client is still used in tests)
 	mux := agents.NewServerMux(nil, agentStore, *cfg)
 
 	// worker initialization

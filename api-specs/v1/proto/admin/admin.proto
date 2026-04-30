@@ -5,6 +5,12 @@ package proto;
 
 option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin";
 
+service Service {
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+}
+
 message Tenant {
   string id = 1;
   string name = 2;
@@ -34,10 +40,4 @@ message ListTenantsRequest {}
 
 message ListTenantsResponse {
   repeated Tenant tenants = 1;
-}
-
-service Service {
-  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
-  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
-  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
 }
