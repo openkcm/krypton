@@ -6,12 +6,15 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/cli/output/terminal"
 	"github.com/openkcm/krypton/cli/state"
-	"github.com/openkcm/krypton/pkg/api/admin"
-	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 func selectCmd() *cobra.Command {
@@ -39,12 +42,19 @@ func selectTenantCmd() *cobra.Command {
 				return fmt.Errorf("failed to initialize state store: %w", err)
 			}
 
-			client, err := admin.NewClient(serverURL)
+			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
+			conn, err := grpc.NewClient(
+				serverAddr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
 			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
+				return fmt.Errorf("failed to connect: %w", err)
 			}
+			defer conn.Close()
 
-			var tenant model.Tenant
+			client := admin.NewServiceClient(conn)
+
+			var tenant *admin.Tenant
 
 			switch {
 			case len(args) == 1 && interactive:
@@ -63,15 +73,15 @@ func selectTenantCmd() *cobra.Command {
 
 			err = stateStore.Save(&state.State{
 				Tenant: &state.TenantSelection{
-					ID:   tenant.ID,
-					Name: tenant.Name,
+					ID:   tenant.GetId(),
+					Name: tenant.GetName(),
 				},
 			})
 			if err != nil {
 				return fmt.Errorf("failed to save state: %w", err)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Selected tenant: %s (%s)\n", tenant.Name, tenant.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "Selected tenant: %s (%s)\n", tenant.GetName(), tenant.GetId())
 			return nil
 		},
 	}
@@ -81,40 +91,44 @@ func selectTenantCmd() *cobra.Command {
 	return cmd
 }
 
-func getTenantByID(ctx context.Context, client *admin.Client, id string) (model.Tenant, error) {
-	resp, err := client.GetTenant(ctx, admin.GetTenantRequest{ID: id})
+func getTenantByID(ctx context.Context, client admin.ServiceClient, id string) (*admin.Tenant, error) {
+	resp, err := client.GetTenant(ctx, &admin.GetTenantRequest{
+		Id: id,
+	})
 	if err != nil {
-		if errors.Is(err, admin.ErrTenantNotFound) {
-			return model.Tenant{}, fmt.Errorf("tenant %q not found", id)
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			return nil, fmt.Errorf("tenant %q not found", id)
 		}
-		return model.Tenant{}, fmt.Errorf("failed to get tenant: %w", err)
+		return nil, fmt.Errorf("failed to get tenant: %w", err)
 	}
-	return resp.Tenant, nil
+	return resp.GetTenant(), nil
 }
 
-func selectTenantInteractive(cmd *cobra.Command, client *admin.Client) (model.Tenant, error) {
-	resp, err := client.ListTenants(cmd.Context(), admin.ListTenantsRequest{})
+func selectTenantInteractive(cmd *cobra.Command, client admin.ServiceClient) (*admin.Tenant, error) {
+	resp, err := client.ListTenants(cmd.Context(), &admin.ListTenantsRequest{})
 	if err != nil {
-		return model.Tenant{}, fmt.Errorf("failed to list tenants: %w", err)
+		return nil, fmt.Errorf("failed to list tenants: %w", err)
 	}
 
-	if len(resp.Tenants) == 0 {
-		return model.Tenant{}, errors.New("no tenants found")
+	if len(resp.GetTenants()) == 0 {
+		return nil, errors.New("no tenants found")
 	}
 
-	builder, err := output.From(resp.Tenants)
+	tenants := admin.TenantsFromProto(resp.GetTenants())
+
+	builder, err := output.From(tenants)
 	if err != nil {
-		return model.Tenant{}, fmt.Errorf("failed to format output: %w", err)
+		return nil, fmt.Errorf("failed to format output: %w", err)
 	}
 
 	sel := terminal.Selector(cmd.OutOrStdout(), cmd.InOrStdin())
 	idx, err := formatOutput(builder, false).Select(sel)
 	if err != nil {
 		if errors.Is(err, terminal.ErrInterrupt) {
-			return model.Tenant{}, errors.New("selection cancelled")
+			return nil, errors.New("selection cancelled")
 		}
-		return model.Tenant{}, fmt.Errorf("selection failed: %w", err)
+		return nil, fmt.Errorf("selection failed: %w", err)
 	}
 
-	return resp.Tenants[idx], nil
+	return resp.GetTenants()[idx], nil
 }

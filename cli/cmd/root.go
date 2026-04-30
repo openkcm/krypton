@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var serverURL string
+var serverAddr string
 
 var rootCmd = &cobra.Command{
 	Use:   "kr",
@@ -17,7 +17,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "http://localhost:8080", "Krypton server URL")
+	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "localhost:8080", "Krypton gRPC server address")
 
 	rootCmd.AddCommand(loginCmd())
 	rootCmd.AddCommand(createCmd())

@@ -78,12 +78,11 @@ dev: postgres root
 
 .PHONY: proto-gen
 proto-gen:
-	 ./scripts/proto-gen.sh "api-specs/v1/proto/agents"
+	./scripts/proto-gen.sh "api-specs/v1/proto/agents"
+	./scripts/proto-gen.sh "api-specs/v1/proto/admin"
 	$(MAKE) go-format
 
 .PHONY: go-format
 go-format:
 	goimports -w .
 	gofmt -s -w .
-
-
