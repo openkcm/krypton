@@ -23,6 +23,8 @@ type AddressType string
 const (
 	// AddressTypeHTTP represents HTTP/HTTPS transport.
 	AddressTypeHTTP AddressType = "http"
+	// AddressTypeGRPC represents gRPC transport.
+	AddressTypeGRPC AddressType = "grpc"
 )
 
 // Address represents a network address for inter-service communication.

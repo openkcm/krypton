@@ -1,7 +1,6 @@
 package agents_test
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -23,12 +22,7 @@ func TestRegister(t *testing.T) {
 	ctx := t.Context()
 	expAgentName := "agent-aws"
 
-	db, err := sql.Open("postgres", pgConnStr)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		db.Close()
-	})
+	db := createDatabase(t)
 
 	agentStore, err := storesql.NewAgentStore(ctx, db)
 	require.NoError(t, err)
@@ -48,11 +42,10 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 
-		actConfig := spec.AgentConfig{}
-		err = yaml.Unmarshal(resp.GetConfig(), &actConfig)
+		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
 		require.NoError(t, err)
 
-		assert.Equal(t, spec.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0]), actConfig)
+		assert.Equal(t, spec.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0]), *actConfig)
 
 		result, err := agentStore.Get(ctx, store.GetAgentQuery{
 			Name:       expAgentName,
@@ -129,18 +122,19 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {
 		// given
 		expInstanceID := uuid.NewString()
-		db := createDatabase(t)
+		tmpDB := createDatabase(t)
 
-		agentStore, err := storesql.NewAgentStore(ctx, db)
+		agentStore, err := storesql.NewAgentStore(ctx, tmpDB)
 		require.NoError(t, err)
 
 		// drop the table to cause an error in the agent store during register processing
-		_, err = db.ExecContext(ctx, "DROP TABLE agent_registrations")
+		_, err = tmpDB.ExecContext(ctx, "DROP TABLE agent_registrations")
 		require.NoError(t, err)
 
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
@@ -155,6 +149,8 @@ func TestRegister(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
+
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
 	})
 
 	t.Run("should return error if agent name is empty", func(t *testing.T) {
@@ -169,6 +165,7 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
 	t.Run("should return error if InstanceID is empty", func(t *testing.T) {
@@ -183,5 +180,6 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 }

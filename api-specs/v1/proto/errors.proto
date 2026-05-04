@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+
+package proto;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto";
+
+
+message ErrorDetails {
+  Code code = 1;
+}
+
+
+enum Code {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_ABORT = 1;
+  ERROR_CODE_RETRY = 2;
+}

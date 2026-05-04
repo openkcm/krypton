@@ -6,9 +6,10 @@ import (
 	"errors"
 	"log"
 	"net"
-	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -19,8 +20,8 @@ import (
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
-	"github.com/openkcm/krypton/pkg/api/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -34,13 +35,6 @@ func main() {
 	}
 	_, err := strconv.Atoi(srvPort)
 	handleErr(err, "invalid SERVER_PORT value")
-
-	grpcPort := os.Getenv("GRPC_PORT")
-	if grpcPort == "" {
-		grpcPort = "9090"
-	}
-	_, err = strconv.Atoi(grpcPort)
-	handleErr(err, "invalid GRPC_PORT value")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -66,28 +60,32 @@ func main() {
 	grpcServer := grpc.NewServer()
 	admin.RegisterServiceServer(grpcServer, admin.NewService(tenantStore))
 
-	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+grpcPort)
+	// gRPC server setup for agent API
+	agents.RegisterAgentServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
+
+	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
 
 	go func() {
-		log.Printf("gRPC server listening on :%s", grpcPort)
+		log.Printf("gRPC server listening on :%s", srvPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("failed to serve gRPC: %v", err)
 		}
 	}()
 	defer grpcServer.GracefulStop()
 
-	// HTTP API server setup (for agents API where http client is still used in tests)
-	mux := agents.NewServerMux(nil, agentStore, *cfg)
-
 	// worker initialization
 	wrkr := initAgentWorker(agentStore)
 	go wrkr.Start(context.Background())
-	defer wrkr.Stop()
 
-	log.Printf("HTTP server listening on :%s", srvPort)
-	err = http.ListenAndServe(":"+srvPort, mux)
-	handleErr(err, "failed to start server")
+	// graceful shutdown on SIGINT/SIGTERM
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	<-signalChan
+	log.Println("Received shutdown signal, stopping server...")
+	wrkr.Stop()
+	log.Println("Shutting down gracefully...")
 }
 
 // For simplicity, we hardcode a sample root configuration here.
@@ -108,7 +106,7 @@ func loadConfig() *config.RootConfig {
 				"K0": {
 					Vault: spec.VaultSpec{
 						Name: "root-hsm-vault",
-						Type: "aws-kms",
+						Type: spec.VaultTypeInMemory,
 					},
 				},
 				"K1": {
@@ -142,7 +140,7 @@ func loadConfig() *config.RootConfig {
 							"K2": {
 								Vault: spec.VaultSpec{
 									Name: "aws-vault",
-									Type: "aws-kms",
+									Type: spec.VaultTypeInMemory,
 								},
 								ParentKeyProvider: &spec.ParentKeyProviderRef{
 									AgentName: "root",
@@ -151,7 +149,7 @@ func loadConfig() *config.RootConfig {
 							"K3": {
 								Vault: spec.VaultSpec{
 									Name: "aws-dek-vault",
-									Type: "aws-kms",
+									Type: spec.VaultTypeInMemory,
 								},
 							},
 						},

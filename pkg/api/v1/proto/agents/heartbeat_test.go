@@ -1,7 +1,6 @@
 package agents_test
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/google/uuid"
@@ -11,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/core"
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -21,12 +21,7 @@ func TestSendHeartbeat(t *testing.T) {
 	ctx := t.Context()
 	expAgentName := "agent-aws"
 
-	db, err := sql.Open("postgres", pgConnStr)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		db.Close()
-	})
+	db := createDatabase(t)
 
 	agentStore, err := storesql.NewAgentStore(ctx, db)
 	require.NoError(t, err)
@@ -153,18 +148,19 @@ func TestSendHeartbeat(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Equal(t, codes.NotFound, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {
 		// given
 		expInstanceID := uuid.NewString()
-		db := createDatabase(t)
+		tmpDB := createDatabase(t)
 
-		agentStore, err := storesql.NewAgentStore(ctx, db)
+		agentStore, err := storesql.NewAgentStore(ctx, tmpDB)
 		require.NoError(t, err)
 
 		// drop the table to cause an error in the agent store during heartbeat processing
-		_, err = db.ExecContext(ctx, "DROP TABLE agent_registrations")
+		_, err = tmpDB.ExecContext(ctx, "DROP TABLE agent_registrations")
 		require.NoError(t, err)
 
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
@@ -179,6 +175,7 @@ func TestSendHeartbeat(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
 	})
 
 	t.Run("should return error if agent name is empty", func(t *testing.T) {
@@ -193,6 +190,7 @@ func TestSendHeartbeat(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
 	t.Run("should return error if InstanceID is empty", func(t *testing.T) {
@@ -207,5 +205,6 @@ func TestSendHeartbeat(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 }
