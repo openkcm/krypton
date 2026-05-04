@@ -26,7 +26,7 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// then
-		data := subj.Bytes()
+		data := subj.SecureBytes()
 		assert.Len(t, data, 64)
 
 		// mmap'd anonymous memory should be zeroed
@@ -68,10 +68,10 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// when
-		copy(subj.Bytes(), secret)
+		copy(subj.SecureBytes(), secret)
 
 		// then
-		assert.Equal(t, secret, subj.Bytes())
+		assert.Equal(t, securemem.SecureBytes(secret), subj.SecureBytes())
 	})
 
 	t.Run("should allocate larger sizes", func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestNewWithSize(t *testing.T) {
 		})
 
 		// then
-		data := subj.Bytes()
+		data := subj.SecureBytes()
 		assert.Len(t, data, expectedSize)
 
 		for _, b := range data {
@@ -97,7 +97,93 @@ func TestNewWithSize(t *testing.T) {
 	})
 }
 
-func TestAvoidLogPrints(t *testing.T) {
+func TestAvoidLogSecureBytesPrints(t *testing.T) {
+	// given
+	secret := []byte("super-secret-key")
+	data, err := securemem.NewData("test-key", len(secret))
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := data.Destroy()
+		assert.NoError(t, err)
+	})
+
+	copy(data.SecureBytes(), secret)
+
+	subj := data.SecureBytes()
+
+	t.Run("should not leak data when printing with fmt.Printf", func(t *testing.T) {
+		tts := []struct {
+			format string
+		}{
+			{format: "%s"},
+			{format: "%v"},
+			{format: "%+v"},
+			{format: "%#v"},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.format, func(t *testing.T) {
+				var buf bytes.Buffer
+
+				// when
+				fmt.Fprintf(&buf, tt.format, subj)
+
+				got, err := io.ReadAll(&buf)
+
+				// then
+				require.NoError(t, err)
+				actString := string(got)
+				assert.Contains(t, actString, securemem.Redacted)
+				assert.NotContains(t, actString, string(secret))
+			})
+		}
+	})
+
+	t.Run("should not leak data in slog output", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+		// when
+		logger.Info("vault", "data", subj)
+
+		got, err := io.ReadAll(&buf)
+
+		// then
+		require.NoError(t, err)
+		actString := string(got)
+		assert.Contains(t, actString, securemem.Redacted)
+		assert.NotContains(t, actString, string(secret))
+	})
+
+	t.Run("should not leak data in MarshalJSON()", func(t *testing.T) {
+		// when
+		got, err := json.Marshal(subj)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, json.Valid(got))
+
+		var decoded string
+		err = json.Unmarshal(got, &decoded)
+		require.NoError(t, err)
+		assert.Contains(t, decoded, securemem.Redacted)
+		assert.NotContains(t, decoded, string(secret))
+	})
+
+	t.Run("should not leak data in MarshalText()", func(t *testing.T) {
+		// when
+		got, err := subj.MarshalText()
+
+		// then
+		require.NoError(t, err)
+		actString := string(got)
+		assert.Contains(t, actString, securemem.Redacted)
+		assert.NotContains(t, actString, string(secret))
+	})
+}
+
+func TestAvoidLogDataPrints(t *testing.T) {
 	// given
 	secret := []byte("super-secret-key")
 	subj, err := securemem.NewData("test-key", len(secret))
@@ -108,7 +194,7 @@ func TestAvoidLogPrints(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	copy(subj.Bytes(), secret)
+	copy(subj.SecureBytes(), secret)
 
 	t.Run("should not leak data when printing with fmt.Printf", func(t *testing.T) {
 		tts := []struct {
@@ -196,7 +282,7 @@ func TestDestroy(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Nil(t, subj.Bytes())
+		assert.Nil(t, subj.SecureBytes())
 	})
 
 	t.Run("should be idempotent", func(t *testing.T) {
@@ -215,7 +301,7 @@ func TestDestroy(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Nil(t, subj.Bytes())
+		assert.Nil(t, subj.SecureBytes())
 	})
 }
 
@@ -295,7 +381,7 @@ func TestReadonly(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		assert.Nil(t, subj.Bytes())
+		assert.Nil(t, subj.SecureBytes())
 	})
 
 	t.Run("should preserve data after marking read-only", func(t *testing.T) {
@@ -309,14 +395,14 @@ func TestReadonly(t *testing.T) {
 			assert.NoError(t, err)
 		})
 
-		copy(subj.Bytes(), secret)
+		copy(subj.SecureBytes(), secret)
 
 		// when
 		err = subj.MarkReadOnly()
 		assert.NoError(t, err)
 
 		// then
-		assert.Equal(t, secret, subj.Bytes())
+		assert.Equal(t, securemem.SecureBytes(secret), subj.SecureBytes())
 	})
 }
 

@@ -11,6 +11,11 @@ import (
 
 const Redacted = "<<REDACTED>>"
 
+// SecureBytes is a byte slice that implements various stringer and marshaler interfaces to prevent
+// accidental logging or printing of sensitive data. It always returns a redacted string representation,
+// regardless of the actual contents of the byte slice.
+type SecureBytes []byte
+
 // Data is a named, secure memory region backed by mmap'd anonymous memory
 // that is locked to physical RAM to prevent swapping. It supports toggling the
 // underlying memory between read-write and read-only modes via mprotect, and
@@ -18,7 +23,7 @@ const Redacted = "<<REDACTED>>"
 // the memory.
 type Data struct {
 	name       string
-	data       []byte
+	data       SecureBytes
 	isReadOnly bool
 	mux        sync.RWMutex
 }
@@ -27,14 +32,19 @@ var (
 	// This is to ensure that data secret is not accidentally logged or printed in any way.
 	// Ensure covers %s, %v, %+v
 	_ fmt.Stringer = (*Data)(nil)
+	_ fmt.Stringer = (SecureBytes)(nil)
 	// covers %#v
 	_ fmt.GoStringer = (*Data)(nil)
+	_ fmt.GoStringer = (SecureBytes)(nil)
 	// covers slog
 	_ slog.LogValuer = (*Data)(nil)
+	_ slog.LogValuer = (SecureBytes)(nil)
 	// covers structured loggers
 	_ encoding.TextMarshaler = (*Data)(nil)
+	_ encoding.TextMarshaler = (SecureBytes)(nil)
 	// covers JSON serialization
 	_ json.Marshaler = (*Data)(nil)
+	_ json.Marshaler = (SecureBytes)(nil)
 )
 
 // ErrInvalidSize is returned by NewData when the requested allocation
@@ -61,10 +71,10 @@ func NewData(name string, size int) (*Data, error) {
 	}, nil
 }
 
-// Bytes returns the underlying byte slice of the secure memory region. If the
+// SecureBytes returns the underlying byte slice of the secure memory region. If the
 // vault has been destroyed, it returns nil. The returned slice points directly
 // to the locked memory; callers must not hold references after Destroy is called.
-func (m *Data) Bytes() []byte {
+func (m *Data) SecureBytes() SecureBytes {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 
@@ -140,7 +150,7 @@ func (m *Data) IsReadOnly() bool {
 
 // String implements [fmt.Stringer].
 func (m *Data) String() string {
-	return fmt.Sprintf(`{"Name":"%s", "Value":"%s"}`, m.name, Redacted)
+	return fmt.Sprintf(`{"Name":"%s", "Value":"%s"}`, m.name, m.data.String())
 }
 
 // GoString implements [fmt.GoStringer].
@@ -161,4 +171,29 @@ func (m *Data) MarshalJSON() ([]byte, error) {
 // MarshalText implements [encoding.TextMarshaler].
 func (m *Data) MarshalText() (text []byte, err error) {
 	return []byte(m.String()), nil
+}
+
+// String implements [fmt.Stringer].
+func (s SecureBytes) String() string {
+	return Redacted
+}
+
+// GoString implements [fmt.GoStringer].
+func (s SecureBytes) GoString() string {
+	return Redacted
+}
+
+// LogValue implements [slog.LogValuer].
+func (s SecureBytes) LogValue() slog.Value {
+	return slog.StringValue(Redacted)
+}
+
+// MarshalText implements [encoding.TextMarshaler].
+func (s SecureBytes) MarshalText() (text []byte, err error) {
+	return []byte(Redacted), nil
+}
+
+// MarshalJSON implements [json.Marshaler].
+func (s SecureBytes) MarshalJSON() ([]byte, error) {
+	return json.Marshal(Redacted)
 }

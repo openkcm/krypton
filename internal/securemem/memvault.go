@@ -23,8 +23,8 @@ func NewMemVault() *MemVault {
 	}
 }
 
-// Reserve creates a new Data instance with the given name and size, and stores it in the vault.
-func (v *MemVault) Reserve(name string, size int) ([]byte, error) {
+// Reserve creates a new Data instance with the given name and size, stores it in the vault, and returns its SecureBytes.
+func (v *MemVault) Reserve(name string, size int) (SecureBytes, error) {
 	v.mux.Lock()
 	defer v.mux.Unlock()
 
@@ -41,11 +41,12 @@ func (v *MemVault) Reserve(name string, size int) ([]byte, error) {
 	}
 
 	v.store[name] = data
-	return data.Bytes(), nil
+	return data.SecureBytes(), nil
 }
 
-// Get retrieves the byte slice associated with the given name from the vault.
-func (v *MemVault) Get(name string) ([]byte, bool) {
+// Get retrieves the SecureBytes associated with the given name from the vault.
+// It returns the SecureBytes and a boolean indicating whether the data was found.
+func (v *MemVault) Get(name string) (SecureBytes, bool) {
 	v.mux.RLock()
 	defer v.mux.RUnlock()
 
@@ -55,7 +56,7 @@ func (v *MemVault) Get(name string) ([]byte, bool) {
 		return nil, false
 	}
 
-	return data.Bytes(), true
+	return data.SecureBytes(), true
 }
 
 // Destroy securely destroys the Data instance associated with the given name and removes it from the vault.
