@@ -338,6 +338,11 @@ topology:
             type: "in-memory"
       labels:
         cloud: "aws"
+reconciler:
+  maxReconcileCount: 7
+  targets:
+    - name: agent-aws
+      address: localhost:9091
 `
 
 	tests := []struct {
@@ -366,6 +371,8 @@ topology:
 				assert.Equal(t, spec.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
+				assert.Equal(t, uint64(7), cfg.Reconciler.MaxReconcileCount)
+				assert.Equal(t, "localhost:9091", cfg.Reconciler.Targets[0].Address)
 			},
 		},
 		{
