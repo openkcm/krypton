@@ -298,7 +298,7 @@ var File_agents_proto protoreflect.FileDescriptor
 
 const file_agents_proto_rawDesc = "" +
 	"\n" +
-	"\fagents.proto\x12\x05proto\"V\n" +
+	"\fagents.proto\x12\x11krypton.v1.agents\"V\n" +
 	"\x14RegisterAgentRequest\x12\x1d\n" +
 	"\n" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12\x1f\n" +
@@ -317,12 +317,12 @@ const file_agents_proto_rawDesc = "" +
 	"agent_name\x18\x01 \x01(\tR\tagentName\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
 	"instanceId\"\x19\n" +
-	"\x17DeregisterAgentResponse2\xf4\x01\n" +
-	"\fAgentService\x12G\n" +
-	"\bRegister\x12\x1b.proto.RegisterAgentRequest\x1a\x1c.proto.RegisterAgentResponse\"\x00\x12L\n" +
-	"\rSendHeartbeat\x12\x1b.proto.SendHeartbeatRequest\x1a\x1c.proto.SendHeartbeatResponse\"\x00\x12M\n" +
+	"\x17DeregisterAgentResponse2\xb7\x02\n" +
+	"\aService\x12_\n" +
+	"\bRegister\x12'.krypton.v1.agents.RegisterAgentRequest\x1a(.krypton.v1.agents.RegisterAgentResponse\"\x00\x12d\n" +
+	"\rSendHeartbeat\x12'.krypton.v1.agents.SendHeartbeatRequest\x1a(.krypton.v1.agents.SendHeartbeatResponse\"\x00\x12e\n" +
 	"\n" +
-	"Deregister\x12\x1d.proto.DeregisterAgentRequest\x1a\x1e.proto.DeregisterAgentResponse\"\x00B4Z2github.com/openkcm/krypton/pkg/api/v1/proto/agentsb\x06proto3"
+	"Deregister\x12).krypton.v1.agents.DeregisterAgentRequest\x1a*.krypton.v1.agents.DeregisterAgentResponse\"\x00B4Z2github.com/openkcm/krypton/pkg/api/v1/proto/agentsb\x06proto3"
 
 var (
 	file_agents_proto_rawDescOnce sync.Once
@@ -338,20 +338,20 @@ func file_agents_proto_rawDescGZIP() []byte {
 
 var file_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_agents_proto_goTypes = []any{
-	(*RegisterAgentRequest)(nil),    // 0: proto.RegisterAgentRequest
-	(*RegisterAgentResponse)(nil),   // 1: proto.RegisterAgentResponse
-	(*SendHeartbeatRequest)(nil),    // 2: proto.SendHeartbeatRequest
-	(*SendHeartbeatResponse)(nil),   // 3: proto.SendHeartbeatResponse
-	(*DeregisterAgentRequest)(nil),  // 4: proto.DeregisterAgentRequest
-	(*DeregisterAgentResponse)(nil), // 5: proto.DeregisterAgentResponse
+	(*RegisterAgentRequest)(nil),    // 0: krypton.v1.agents.RegisterAgentRequest
+	(*RegisterAgentResponse)(nil),   // 1: krypton.v1.agents.RegisterAgentResponse
+	(*SendHeartbeatRequest)(nil),    // 2: krypton.v1.agents.SendHeartbeatRequest
+	(*SendHeartbeatResponse)(nil),   // 3: krypton.v1.agents.SendHeartbeatResponse
+	(*DeregisterAgentRequest)(nil),  // 4: krypton.v1.agents.DeregisterAgentRequest
+	(*DeregisterAgentResponse)(nil), // 5: krypton.v1.agents.DeregisterAgentResponse
 }
 var file_agents_proto_depIdxs = []int32{
-	0, // 0: proto.AgentService.Register:input_type -> proto.RegisterAgentRequest
-	2, // 1: proto.AgentService.SendHeartbeat:input_type -> proto.SendHeartbeatRequest
-	4, // 2: proto.AgentService.Deregister:input_type -> proto.DeregisterAgentRequest
-	1, // 3: proto.AgentService.Register:output_type -> proto.RegisterAgentResponse
-	3, // 4: proto.AgentService.SendHeartbeat:output_type -> proto.SendHeartbeatResponse
-	5, // 5: proto.AgentService.Deregister:output_type -> proto.DeregisterAgentResponse
+	0, // 0: krypton.v1.agents.Service.Register:input_type -> krypton.v1.agents.RegisterAgentRequest
+	2, // 1: krypton.v1.agents.Service.SendHeartbeat:input_type -> krypton.v1.agents.SendHeartbeatRequest
+	4, // 2: krypton.v1.agents.Service.Deregister:input_type -> krypton.v1.agents.DeregisterAgentRequest
+	1, // 3: krypton.v1.agents.Service.Register:output_type -> krypton.v1.agents.RegisterAgentResponse
+	3, // 4: krypton.v1.agents.Service.SendHeartbeat:output_type -> krypton.v1.agents.SendHeartbeatResponse
+	5, // 5: krypton.v1.agents.Service.Deregister:output_type -> krypton.v1.agents.DeregisterAgentResponse
 	3, // [3:6] is the sub-list for method output_type
 	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

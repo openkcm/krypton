@@ -12,13 +12,14 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-var _ AgentServiceServer = (*AgentService)(nil)
+var _ ServiceServer = (*AgentService)(nil)
 
 type AgentService struct {
-	UnimplementedAgentServiceServer
+	UnimplementedServiceServer
 
 	store  store.Agent
 	config config.RootConfig
@@ -46,7 +47,10 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	seg, ok := a.topologySegment(agentName)
 	if !ok {
 		slog.Error("agent not found in topology", "agentName", agentName)
-		return nil, status.Error(codes.NotFound, "agent not found in topology")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.NotFound, "agent not found in topology"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	}
 
 	cfg := spec.NewAgentConfig(a.config.Hierarchy, seg)
@@ -54,7 +58,9 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	pCfg, err := yaml.Marshal(cfg)
 	if err != nil {
 		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
-		return nil, status.Error(codes.Internal, "failed to marshal agent config to yaml")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to marshal agent config to yaml"),
+			proto.Code_ERROR_CODE_RETRY)
 	}
 
 	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
@@ -67,7 +73,10 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	})
 	if err != nil {
 		slog.Error("failed to register agent", "agentName", agentName, "instanceID", instanceID, "error", err)
-		return nil, status.Error(codes.Internal, "failed to register agent")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to register agent"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &RegisterAgentResponse{
@@ -87,7 +96,10 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 	_, ok := a.topologySegment(agentName)
 	if !ok {
 		slog.Error("agent not found in topology", "agentName", agentName)
-		return nil, status.Error(codes.NotFound, "agent not found in topology")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.NotFound, "agent not found in topology"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	}
 
 	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
@@ -100,7 +112,10 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 	})
 	if err != nil {
 		slog.Error("failed to update agent heartbeat", "agentName", agentName, "instanceID", instanceID, "error", err)
-		return nil, status.Error(codes.Internal, "failed to update heartbeat")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to update heartbeat"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &SendHeartbeatResponse{}, nil
@@ -127,7 +142,10 @@ func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest
 	})
 	if err != nil {
 		slog.Error("failed to update agent status to deregistered", "agentName", agentName, "instanceID", instanceID, "error", err)
-		return nil, status.Error(codes.Internal, "failed to update agent status to deregistered")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to update agent status to deregistered"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &DeregisterAgentResponse{}, nil
@@ -144,10 +162,28 @@ func (a *AgentService) topologySegment(agentName string) (spec.TopologySegment, 
 
 func validateInput(agentName, instanceID string) error {
 	if agentName == "" {
-		return status.Error(codes.InvalidArgument, "agent name is required")
+		slog.Error("agent name is required")
+		return proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, "agent name is required"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	}
 	if instanceID == "" {
-		return status.Error(codes.InvalidArgument, "instance ID is required")
+		slog.Error("instance ID is required")
+		return proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, "instance ID is required"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	}
 	return nil
+}
+
+func UnmarshalAgentConfig(b []byte) (*spec.AgentConfig, error) {
+	var cfg spec.AgentConfig
+	err := yaml.Unmarshal(b, &cfg)
+	if err != nil {
+		slog.Error("failed to unmarshal agent config from yaml", "error", err)
+		return nil, err
+	}
+	return &cfg, nil
 }

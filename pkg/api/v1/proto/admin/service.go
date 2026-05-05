@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -31,7 +32,10 @@ func (s *Service) CreateTenant(ctx context.Context, req *CreateTenantRequest) (*
 		Tenant: tenant,
 	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to create tenant")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to create tenant"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &CreateTenantResponse{
@@ -46,9 +50,15 @@ func (s *Service) GetTenant(ctx context.Context, req *GetTenantRequest) (*GetTen
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "tenant not found"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
 		}
-		return nil, status.Error(codes.Internal, "failed to get tenant")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to get tenant"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &GetTenantResponse{
@@ -60,7 +70,10 @@ func (s *Service) GetTenant(ctx context.Context, req *GetTenantRequest) (*GetTen
 func (s *Service) ListTenants(ctx context.Context, _ *ListTenantsRequest) (*ListTenantsResponse, error) {
 	result, err := s.store.ListTenants(ctx, store.ListTenantsQuery{})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to list tenants")
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to list tenants"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &ListTenantsResponse{

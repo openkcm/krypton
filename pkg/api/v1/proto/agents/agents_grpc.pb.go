@@ -20,177 +20,177 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Register_FullMethodName      = "/proto.AgentService/Register"
-	AgentService_SendHeartbeat_FullMethodName = "/proto.AgentService/SendHeartbeat"
-	AgentService_Deregister_FullMethodName    = "/proto.AgentService/Deregister"
+	Service_Register_FullMethodName      = "/krypton.v1.agents.Service/Register"
+	Service_SendHeartbeat_FullMethodName = "/krypton.v1.agents.Service/SendHeartbeat"
+	Service_Deregister_FullMethodName    = "/krypton.v1.agents.Service/Deregister"
 )
 
-// AgentServiceClient is the client API for AgentService service.
+// ServiceClient is the client API for Service service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AgentServiceClient interface {
+type ServiceClient interface {
 	Register(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error)
 	SendHeartbeat(ctx context.Context, in *SendHeartbeatRequest, opts ...grpc.CallOption) (*SendHeartbeatResponse, error)
 	Deregister(ctx context.Context, in *DeregisterAgentRequest, opts ...grpc.CallOption) (*DeregisterAgentResponse, error)
 }
 
-type agentServiceClient struct {
+type serviceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAgentServiceClient(cc grpc.ClientConnInterface) AgentServiceClient {
-	return &agentServiceClient{cc}
+func NewServiceClient(cc grpc.ClientConnInterface) ServiceClient {
+	return &serviceClient{cc}
 }
 
-func (c *agentServiceClient) Register(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error) {
+func (c *serviceClient) Register(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterAgentResponse)
-	err := c.cc.Invoke(ctx, AgentService_Register_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_Register_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *agentServiceClient) SendHeartbeat(ctx context.Context, in *SendHeartbeatRequest, opts ...grpc.CallOption) (*SendHeartbeatResponse, error) {
+func (c *serviceClient) SendHeartbeat(ctx context.Context, in *SendHeartbeatRequest, opts ...grpc.CallOption) (*SendHeartbeatResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SendHeartbeatResponse)
-	err := c.cc.Invoke(ctx, AgentService_SendHeartbeat_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_SendHeartbeat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *agentServiceClient) Deregister(ctx context.Context, in *DeregisterAgentRequest, opts ...grpc.CallOption) (*DeregisterAgentResponse, error) {
+func (c *serviceClient) Deregister(ctx context.Context, in *DeregisterAgentRequest, opts ...grpc.CallOption) (*DeregisterAgentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeregisterAgentResponse)
-	err := c.cc.Invoke(ctx, AgentService_Deregister_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Service_Deregister_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AgentServiceServer is the server API for AgentService service.
-// All implementations must embed UnimplementedAgentServiceServer
+// ServiceServer is the server API for Service service.
+// All implementations must embed UnimplementedServiceServer
 // for forward compatibility.
-type AgentServiceServer interface {
+type ServiceServer interface {
 	Register(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error)
 	SendHeartbeat(context.Context, *SendHeartbeatRequest) (*SendHeartbeatResponse, error)
 	Deregister(context.Context, *DeregisterAgentRequest) (*DeregisterAgentResponse, error)
-	mustEmbedUnimplementedAgentServiceServer()
+	mustEmbedUnimplementedServiceServer()
 }
 
-// UnimplementedAgentServiceServer must be embedded to have
+// UnimplementedServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedAgentServiceServer struct{}
+type UnimplementedServiceServer struct{}
 
-func (UnimplementedAgentServiceServer) Register(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error) {
+func (UnimplementedServiceServer) Register(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
 }
-func (UnimplementedAgentServiceServer) SendHeartbeat(context.Context, *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
+func (UnimplementedServiceServer) SendHeartbeat(context.Context, *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendHeartbeat not implemented")
 }
-func (UnimplementedAgentServiceServer) Deregister(context.Context, *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
+func (UnimplementedServiceServer) Deregister(context.Context, *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Deregister not implemented")
 }
-func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
-func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
+func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
+func (UnimplementedServiceServer) testEmbeddedByValue()                 {}
 
-// UnsafeAgentServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AgentServiceServer will
+// UnsafeServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ServiceServer will
 // result in compilation errors.
-type UnsafeAgentServiceServer interface {
-	mustEmbedUnimplementedAgentServiceServer()
+type UnsafeServiceServer interface {
+	mustEmbedUnimplementedServiceServer()
 }
 
-func RegisterAgentServiceServer(s grpc.ServiceRegistrar, srv AgentServiceServer) {
-	// If the following call panics, it indicates UnimplementedAgentServiceServer was
+func RegisterServiceServer(s grpc.ServiceRegistrar, srv ServiceServer) {
+	// If the following call panics, it indicates UnimplementedServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&AgentService_ServiceDesc, srv)
+	s.RegisterService(&Service_ServiceDesc, srv)
 }
 
-func _AgentService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).Register(ctx, in)
+		return srv.(ServiceServer).Register(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_Register_FullMethodName,
+		FullMethod: Service_Register_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).Register(ctx, req.(*RegisterAgentRequest))
+		return srv.(ServiceServer).Register(ctx, req.(*RegisterAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AgentService_SendHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_SendHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendHeartbeatRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).SendHeartbeat(ctx, in)
+		return srv.(ServiceServer).SendHeartbeat(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_SendHeartbeat_FullMethodName,
+		FullMethod: Service_SendHeartbeat_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).SendHeartbeat(ctx, req.(*SendHeartbeatRequest))
+		return srv.(ServiceServer).SendHeartbeat(ctx, req.(*SendHeartbeatRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AgentService_Deregister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Service_Deregister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeregisterAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AgentServiceServer).Deregister(ctx, in)
+		return srv.(ServiceServer).Deregister(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AgentService_Deregister_FullMethodName,
+		FullMethod: Service_Deregister_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentServiceServer).Deregister(ctx, req.(*DeregisterAgentRequest))
+		return srv.(ServiceServer).Deregister(ctx, req.(*DeregisterAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
+// Service_ServiceDesc is the grpc.ServiceDesc for Service service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var AgentService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.AgentService",
-	HandlerType: (*AgentServiceServer)(nil),
+var Service_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "krypton.v1.agents.Service",
+	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Register",
-			Handler:    _AgentService_Register_Handler,
+			Handler:    _Service_Register_Handler,
 		},
 		{
 			MethodName: "SendHeartbeat",
-			Handler:    _AgentService_SendHeartbeat_Handler,
+			Handler:    _Service_SendHeartbeat_Handler,
 		},
 		{
 			MethodName: "Deregister",
-			Handler:    _AgentService_Deregister_Handler,
+			Handler:    _Service_Deregister_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

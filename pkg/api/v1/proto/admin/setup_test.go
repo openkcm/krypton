@@ -1,4 +1,4 @@
-package agents_test
+package admin_test
 
 import (
 	"context"
@@ -19,10 +19,8 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
@@ -59,19 +57,19 @@ func setupPostgres() (func(), error) {
 	return cleanUp, err
 }
 
-func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig) agents.ServiceClient {
+func setupServerAndClient(t *testing.T, store store.Tenant) admin.ServiceClient {
 	t.Helper()
 
 	srv := grpc.NewServer()
-	agentSvc := agents.NewAgentService(store, cfg)
-	agents.RegisterServiceServer(srv, agentSvc)
+	adminSvc := admin.NewService(store)
+	admin.RegisterServiceServer(srv, adminSvc)
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
 	go func() {
 		if err := srv.Serve(lis); err != nil {
 			// Serve returns error on graceful stop; ignore it.
-			assert.Fail(t, "agent service server error", err)
+			assert.Fail(t, "admin service server error", err)
 		}
 	}()
 	dialer := func(context.Context, string) (net.Conn, error) {
@@ -93,7 +91,7 @@ func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig
 		conn.Close()
 	})
 
-	client := agents.NewServiceClient(conn)
+	client := admin.NewServiceClient(conn)
 	return client
 }
 
@@ -130,60 +128,6 @@ func createDatabase(t *testing.T) *sql.DB {
 		}
 	})
 	return sqlDB
-}
-
-func validRootConfig(agentName string) config.RootConfig {
-	expSegment := spec.TopologySegment{
-		Name:   agentName,
-		Labels: map[string]string{"region": "us-west"},
-		Segment: spec.HierarchySegment{
-			StartKind: "K2",
-			EndKind:   "K2",
-		},
-		KeyBindings: map[string]spec.KeyBinding{
-			"binding1": {
-				Vault: spec.VaultSpec{
-					Name: "vault1",
-					Type: spec.VaultTypeInMemory,
-					Config: &spec.InMemoryConfig{
-						Prefix: "vault1",
-					},
-				},
-				ParentKeyProvider: &spec.ParentKeyProviderRef{
-					AgentName: agentName,
-				},
-				Labels: spec.Labels{
-					"env": "prod",
-					"app": "myapp",
-				},
-			},
-		},
-	}
-	topology := spec.Topology{
-		Segments: []spec.TopologySegment{expSegment},
-	}
-
-	expHierarchy := spec.KeyHierarchy{
-		Name: "some-hierarchy",
-		KeySpecs: []spec.KeySpec{
-			{
-				Kind:      "K1",
-				Role:      spec.KeyRoleRoot,
-				Algorithm: "",
-			},
-			{
-				Kind:      "K2",
-				Role:      spec.KeyRoleDek,
-				Algorithm: "",
-			},
-		},
-	}
-
-	rootConfig := config.RootConfig{
-		Hierarchy: expHierarchy,
-		Topology:  topology,
-	}
-	return rootConfig
 }
 
 func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {

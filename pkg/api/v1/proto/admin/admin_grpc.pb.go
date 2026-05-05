@@ -20,9 +20,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Service_CreateTenant_FullMethodName = "/proto.Service/CreateTenant"
-	Service_GetTenant_FullMethodName    = "/proto.Service/GetTenant"
-	Service_ListTenants_FullMethodName  = "/proto.Service/ListTenants"
+	Service_CreateTenant_FullMethodName = "/krypton.v1.admin.Service/CreateTenant"
+	Service_GetTenant_FullMethodName    = "/krypton.v1.admin.Service/GetTenant"
+	Service_ListTenants_FullMethodName  = "/krypton.v1.admin.Service/ListTenants"
 )
 
 // ServiceClient is the client API for Service service.
@@ -177,7 +177,7 @@ func _Service_ListTenants_Handler(srv interface{}, ctx context.Context, dec func
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Service_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.Service",
+	ServiceName: "krypton.v1.admin.Service",
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

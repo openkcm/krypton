@@ -11,16 +11,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
-	"github.com/openkcm/krypton/pkg/api/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 )
 
 // This is a simple agent that registers itself with the root server,
 // sends periodic heartbeats, and deregisters on shutdown.
 func main() {
+	ctx := context.Background()
+
 	agentID := os.Getenv("AGENT_ID")
 	if agentID == "" {
 		agentID = uuid.New().String()
@@ -28,35 +32,59 @@ func main() {
 
 	cfg := loadConfig()
 
-	agentClient, err := agents.NewClient(cfg.KryptonRoot.Address.URL, cfg.Name, agentID)
-	handleErr(err, "failed to create agent client")
+	conn, err := grpc.NewClient(
+		cfg.KryptonRoot.Address.URL,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	handleErr(err, "failed to connect to root server")
+	defer conn.Close()
+
+	agentsCli := agents.NewServiceClient(conn)
 
 	// Example usage: register the agent
-	registerResp, err := agentClient.Register(context.Background(), agents.RegisterRequest{})
+	log.Printf("Registering agent %s with ID %s", cfg.Name, agentID)
+	reg, err := agentsCli.Register(ctx, &agents.RegisterAgentRequest{
+		AgentName:  cfg.Name,
+		InstanceId: agentID,
+	})
 	handleErr(err, "failed to register agent")
 
-	keepAliveInterval := time.Duration(registerResp.Config.KeepAlive) * time.Second
+	agentCfg, err := agents.UnmarshalAgentConfig(reg.GetConfig())
+	handleErr(err, "failed to unmarshal agent config")
+
+	keepAliveInterval := time.Duration(agentCfg.KeepAlive) * time.Second
 	wrkr, err := worker.New(keepAliveInterval, func(ctx context.Context) error {
-		_, err := agentClient.SendHeartbeat(ctx, agents.SendHeartbeatRequest{})
+		log.Printf("Sending heartbeat for agent %s (ID: %s)", cfg.Name, agentID)
+		_, err := agentsCli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
+			InstanceId: agentID,
+			AgentName:  cfg.Name,
+		})
 		return err
 	})
 
 	handleErr(err, "failed to create heartbeat worker")
-	go wrkr.Start(context.Background())
+	go wrkr.Start(ctx)
 
 	// graceful shutdown on SIGINT/SIGTERM
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-signalChan
+	fmt.Println("Received termination signal, shutting down...")
 	wrkr.Stop()
 
-	_, err = agentClient.Deregister(context.Background(), agents.DeregisterRequest{})
+	log.Println("Deregistering agent...")
+	dCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = agentsCli.Deregister(dCtx, &agents.DeregisterAgentRequest{
+		InstanceId: agentID,
+		AgentName:  cfg.Name,
+	})
 	if err != nil {
 		log.Printf("failed to deregister agent: %v", err)
 	}
 
-	fmt.Println("Received termination signal, shutting down...")
+	log.Println("Agent shutdown complete")
 }
 
 func handleErr(err error, msg string) {
@@ -80,8 +108,8 @@ func loadConfig() *config.AgentBootstrapConfig {
 			Role: spec.DefaultRole,
 			KryptonRoot: config.KryptonRoot{
 				Address: config.Address{
-					Type: config.AddressTypeHTTP,
-					URL:  "http://localhost:" + port,
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:" + port,
 				},
 			},
 		}
