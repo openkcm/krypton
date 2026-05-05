@@ -73,7 +73,7 @@ func (Code) EnumDescriptor() ([]byte, []int) {
 
 type ErrorDetails struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          Code                   `protobuf:"varint,1,opt,name=code,proto3,enum=proto.Code" json:"code,omitempty"`
+	Code          Code                   `protobuf:"varint,1,opt,name=code,proto3,enum=krypton.v1.Code" json:"code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -119,9 +119,10 @@ var File_errors_proto protoreflect.FileDescriptor
 
 const file_errors_proto_rawDesc = "" +
 	"\n" +
-	"\ferrors.proto\x12\x05proto\"/\n" +
-	"\fErrorDetails\x12\x1f\n" +
-	"\x04code\x18\x01 \x01(\x0e2\v.proto.CodeR\x04code*N\n" +
+	"\ferrors.proto\x12\n" +
+	"krypton.v1\"4\n" +
+	"\fErrorDetails\x12$\n" +
+	"\x04code\x18\x01 \x01(\x0e2\x10.krypton.v1.CodeR\x04code*N\n" +
 	"\x04Code\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ERROR_CODE_ABORT\x10\x01\x12\x14\n" +
@@ -142,11 +143,11 @@ func file_errors_proto_rawDescGZIP() []byte {
 var file_errors_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_errors_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_errors_proto_goTypes = []any{
-	(Code)(0),            // 0: proto.Code
-	(*ErrorDetails)(nil), // 1: proto.ErrorDetails
+	(Code)(0),            // 0: krypton.v1.Code
+	(*ErrorDetails)(nil), // 1: krypton.v1.ErrorDetails
 }
 var file_errors_proto_depIdxs = []int32{
-	0, // 0: proto.ErrorDetails.code:type_name -> proto.Code
+	0, // 0: krypton.v1.ErrorDetails.code:type_name -> krypton.v1.Code
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

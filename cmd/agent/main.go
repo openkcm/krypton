@@ -39,7 +39,7 @@ func main() {
 	handleErr(err, "failed to connect to root server")
 	defer conn.Close()
 
-	agentsCli := agents.NewAgentServiceClient(conn)
+	agentsCli := agents.NewServiceClient(conn)
 
 	// Example usage: register the agent
 	log.Printf("Registering agent %s with ID %s", cfg.Name, agentID)

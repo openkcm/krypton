@@ -16,10 +16,10 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-var _ AgentServiceServer = (*AgentService)(nil)
+var _ ServiceServer = (*AgentService)(nil)
 
 type AgentService struct {
-	UnimplementedAgentServiceServer
+	UnimplementedServiceServer
 
 	store  store.Agent
 	config config.RootConfig

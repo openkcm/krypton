@@ -366,37 +366,37 @@ var File_admin_proto protoreflect.FileDescriptor
 
 const file_admin_proto_rawDesc = "" +
 	"\n" +
-	"\vadmin.proto\x12\x05proto\"\xd8\x01\n" +
+	"\vadmin.proto\x12\x10krypton.v1.admin\"\xe3\x01\n" +
 	"\x06Tenant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x121\n" +
-	"\x06labels\x18\x03 \x03(\v2\x19.proto.Tenant.LabelsEntryR\x06labels\x12\x1d\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12<\n" +
+	"\x06labels\x18\x03 \x03(\v2$.krypton.v1.admin.Tenant.LabelsEntryR\x06labels\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\x04 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa4\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\x01\n" +
 	"\x13CreateTenantRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12>\n" +
-	"\x06labels\x18\x02 \x03(\v2&.proto.CreateTenantRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12I\n" +
+	"\x06labels\x18\x02 \x03(\v21.krypton.v1.admin.CreateTenantRequest.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"=\n" +
-	"\x14CreateTenantResponse\x12%\n" +
-	"\x06tenant\x18\x01 \x01(\v2\r.proto.TenantR\x06tenant\"\"\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"H\n" +
+	"\x14CreateTenantResponse\x120\n" +
+	"\x06tenant\x18\x01 \x01(\v2\x18.krypton.v1.admin.TenantR\x06tenant\"\"\n" +
 	"\x10GetTenantRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\":\n" +
-	"\x11GetTenantResponse\x12%\n" +
-	"\x06tenant\x18\x01 \x01(\v2\r.proto.TenantR\x06tenant\"\x14\n" +
-	"\x12ListTenantsRequest\">\n" +
-	"\x13ListTenantsResponse\x12'\n" +
-	"\atenants\x18\x01 \x03(\v2\r.proto.TenantR\atenants2\xd8\x01\n" +
-	"\aService\x12G\n" +
-	"\fCreateTenant\x12\x1a.proto.CreateTenantRequest\x1a\x1b.proto.CreateTenantResponse\x12>\n" +
-	"\tGetTenant\x12\x17.proto.GetTenantRequest\x1a\x18.proto.GetTenantResponse\x12D\n" +
-	"\vListTenants\x12\x19.proto.ListTenantsRequest\x1a\x1a.proto.ListTenantsResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
+	"\x02id\x18\x01 \x01(\tR\x02id\"E\n" +
+	"\x11GetTenantResponse\x120\n" +
+	"\x06tenant\x18\x01 \x01(\v2\x18.krypton.v1.admin.TenantR\x06tenant\"\x14\n" +
+	"\x12ListTenantsRequest\"I\n" +
+	"\x13ListTenantsResponse\x122\n" +
+	"\atenants\x18\x01 \x03(\v2\x18.krypton.v1.admin.TenantR\atenants2\x9a\x02\n" +
+	"\aService\x12]\n" +
+	"\fCreateTenant\x12%.krypton.v1.admin.CreateTenantRequest\x1a&.krypton.v1.admin.CreateTenantResponse\x12T\n" +
+	"\tGetTenant\x12\".krypton.v1.admin.GetTenantRequest\x1a#.krypton.v1.admin.GetTenantResponse\x12Z\n" +
+	"\vListTenants\x12$.krypton.v1.admin.ListTenantsRequest\x1a%.krypton.v1.admin.ListTenantsResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
 
 var (
 	file_admin_proto_rawDescOnce sync.Once
@@ -412,28 +412,28 @@ func file_admin_proto_rawDescGZIP() []byte {
 
 var file_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_admin_proto_goTypes = []any{
-	(*Tenant)(nil),               // 0: proto.Tenant
-	(*CreateTenantRequest)(nil),  // 1: proto.CreateTenantRequest
-	(*CreateTenantResponse)(nil), // 2: proto.CreateTenantResponse
-	(*GetTenantRequest)(nil),     // 3: proto.GetTenantRequest
-	(*GetTenantResponse)(nil),    // 4: proto.GetTenantResponse
-	(*ListTenantsRequest)(nil),   // 5: proto.ListTenantsRequest
-	(*ListTenantsResponse)(nil),  // 6: proto.ListTenantsResponse
-	nil,                          // 7: proto.Tenant.LabelsEntry
-	nil,                          // 8: proto.CreateTenantRequest.LabelsEntry
+	(*Tenant)(nil),               // 0: krypton.v1.admin.Tenant
+	(*CreateTenantRequest)(nil),  // 1: krypton.v1.admin.CreateTenantRequest
+	(*CreateTenantResponse)(nil), // 2: krypton.v1.admin.CreateTenantResponse
+	(*GetTenantRequest)(nil),     // 3: krypton.v1.admin.GetTenantRequest
+	(*GetTenantResponse)(nil),    // 4: krypton.v1.admin.GetTenantResponse
+	(*ListTenantsRequest)(nil),   // 5: krypton.v1.admin.ListTenantsRequest
+	(*ListTenantsResponse)(nil),  // 6: krypton.v1.admin.ListTenantsResponse
+	nil,                          // 7: krypton.v1.admin.Tenant.LabelsEntry
+	nil,                          // 8: krypton.v1.admin.CreateTenantRequest.LabelsEntry
 }
 var file_admin_proto_depIdxs = []int32{
-	7, // 0: proto.Tenant.labels:type_name -> proto.Tenant.LabelsEntry
-	8, // 1: proto.CreateTenantRequest.labels:type_name -> proto.CreateTenantRequest.LabelsEntry
-	0, // 2: proto.CreateTenantResponse.tenant:type_name -> proto.Tenant
-	0, // 3: proto.GetTenantResponse.tenant:type_name -> proto.Tenant
-	0, // 4: proto.ListTenantsResponse.tenants:type_name -> proto.Tenant
-	1, // 5: proto.Service.CreateTenant:input_type -> proto.CreateTenantRequest
-	3, // 6: proto.Service.GetTenant:input_type -> proto.GetTenantRequest
-	5, // 7: proto.Service.ListTenants:input_type -> proto.ListTenantsRequest
-	2, // 8: proto.Service.CreateTenant:output_type -> proto.CreateTenantResponse
-	4, // 9: proto.Service.GetTenant:output_type -> proto.GetTenantResponse
-	6, // 10: proto.Service.ListTenants:output_type -> proto.ListTenantsResponse
+	7, // 0: krypton.v1.admin.Tenant.labels:type_name -> krypton.v1.admin.Tenant.LabelsEntry
+	8, // 1: krypton.v1.admin.CreateTenantRequest.labels:type_name -> krypton.v1.admin.CreateTenantRequest.LabelsEntry
+	0, // 2: krypton.v1.admin.CreateTenantResponse.tenant:type_name -> krypton.v1.admin.Tenant
+	0, // 3: krypton.v1.admin.GetTenantResponse.tenant:type_name -> krypton.v1.admin.Tenant
+	0, // 4: krypton.v1.admin.ListTenantsResponse.tenants:type_name -> krypton.v1.admin.Tenant
+	1, // 5: krypton.v1.admin.Service.CreateTenant:input_type -> krypton.v1.admin.CreateTenantRequest
+	3, // 6: krypton.v1.admin.Service.GetTenant:input_type -> krypton.v1.admin.GetTenantRequest
+	5, // 7: krypton.v1.admin.Service.ListTenants:input_type -> krypton.v1.admin.ListTenantsRequest
+	2, // 8: krypton.v1.admin.Service.CreateTenant:output_type -> krypton.v1.admin.CreateTenantResponse
+	4, // 9: krypton.v1.admin.Service.GetTenant:output_type -> krypton.v1.admin.GetTenantResponse
+	6, // 10: krypton.v1.admin.Service.ListTenants:output_type -> krypton.v1.admin.ListTenantsResponse
 	8, // [8:11] is the sub-list for method output_type
 	5, // [5:8] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name

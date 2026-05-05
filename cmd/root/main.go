@@ -61,7 +61,7 @@ func main() {
 	admin.RegisterServiceServer(grpcServer, admin.NewService(tenantStore))
 
 	// gRPC server setup for agent API
-	agents.RegisterAgentServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
+	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")

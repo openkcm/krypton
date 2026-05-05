@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 
-package proto;
+package krypton.v1.agents;
 
 option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents";
 
-service AgentService {
+service Service {
   rpc Register(RegisterAgentRequest) returns (RegisterAgentResponse) {}
   rpc SendHeartbeat(SendHeartbeatRequest) returns (SendHeartbeatResponse) {}
   rpc Deregister(DeregisterAgentRequest) returns (DeregisterAgentResponse) {}

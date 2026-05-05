@@ -59,12 +59,12 @@ func setupPostgres() (func(), error) {
 	return cleanUp, err
 }
 
-func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig) agents.AgentServiceClient {
+func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig) agents.ServiceClient {
 	t.Helper()
 
 	srv := grpc.NewServer()
 	agentSvc := agents.NewAgentService(store, cfg)
-	agents.RegisterAgentServiceServer(srv, agentSvc)
+	agents.RegisterServiceServer(srv, agentSvc)
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -93,7 +93,7 @@ func setupServerAndClient(t *testing.T, store store.Agent, cfg config.RootConfig
 		conn.Close()
 	})
 
-	client := agents.NewAgentServiceClient(conn)
+	client := agents.NewServiceClient(conn)
 	return client
 }
 
