@@ -47,7 +47,7 @@ type RootConfig struct {
 	KeyBindings    map[string]spec.KeyBinding `yaml:"key_bindings"`
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
-	Reconciler  ReconcilerConfig           `yaml:"reconciler"`
+	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.

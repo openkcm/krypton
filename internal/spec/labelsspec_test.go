@@ -380,3 +380,146 @@ func TestLabelsSpecValidateLabels(t *testing.T) {
 		}
 	})
 }
+
+func TestLabelsSpecMerge(t *testing.T) {
+	t.Run("Merge", func(t *testing.T) {
+		tts := []struct {
+			name string
+			dst  spec.LabelsSpec
+			src  spec.LabelsSpec
+			exp  spec.LabelsSpec
+		}{
+			{
+				name: "should merge requirements and allowUserLabels from src to dst",
+				dst: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+					},
+					AllowUserLabels: false,
+				},
+				src: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"region": {
+							IsRequired: false,
+						},
+					},
+					AllowUserLabels: true,
+				},
+				exp: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+						"region": {
+							IsRequired: false,
+						},
+					},
+					AllowUserLabels: true,
+				},
+			},
+			{
+				name: "should initialize dst requirements map if it is nil before merging",
+				dst: spec.LabelsSpec{
+					Requirements:    nil,
+					AllowUserLabels: false,
+				},
+				src: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+					},
+					AllowUserLabels: false,
+				},
+				exp: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+					},
+					AllowUserLabels: false,
+				},
+			},
+			{
+				name: "should overwrite dst requirements and allowUserLabels with src values",
+				dst: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+							Validator: &spec.LabelValidator{
+								Type: spec.ValidatorTypeEnum,
+								Params: map[string]string{
+									spec.ValidatorTypeEnumKey: "production,staging",
+								},
+							},
+						},
+					},
+					AllowUserLabels: false,
+				},
+				src: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: false,
+							Validator: &spec.LabelValidator{
+								Type: spec.ValidatorTypeEnum,
+								Params: map[string]string{
+									spec.ValidatorTypeEnumKey: "development,acceptance",
+								},
+							},
+						},
+					},
+					AllowUserLabels: true,
+				},
+				exp: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: false,
+							Validator: &spec.LabelValidator{
+								Type: spec.ValidatorTypeEnum,
+								Params: map[string]string{
+									spec.ValidatorTypeEnumKey: "development,acceptance",
+								},
+							},
+						},
+					},
+					AllowUserLabels: true,
+				},
+			},
+			{
+				name: "should merge if the src requirement is nil and allowUserLabels is false",
+				dst: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+					},
+					AllowUserLabels: true,
+				},
+				src: spec.LabelsSpec{
+					Requirements:    nil,
+					AllowUserLabels: false,
+				},
+				exp: spec.LabelsSpec{
+					Requirements: map[string]spec.LabelRequirement{
+						"env": {
+							IsRequired: true,
+						},
+					},
+					AllowUserLabels: false,
+				},
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// when
+				tt.dst.Merge(tt.src)
+
+				// then
+				assert.Equal(t, tt.exp, tt.dst)
+			})
+		}
+	})
+}

@@ -3,6 +3,7 @@ package spec
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/openkcm/krypton/pkg/model"
 )
@@ -77,6 +78,15 @@ func (ls *LabelsSpec) Validate(l model.Labels) error {
 	}
 
 	return nil
+}
+
+// Merge merges another LabelsSpec into the current one.
+func (ls *LabelsSpec) Merge(src LabelsSpec) {
+	if ls.Requirements == nil {
+		ls.Requirements = make(map[string]LabelRequirement)
+	}
+	maps.Copy(ls.Requirements, src.Requirements)
+	ls.AllowUserLabels = src.AllowUserLabels
 }
 
 // init performs initialization and validation of the LabelsSpec.
