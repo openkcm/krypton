@@ -19,7 +19,7 @@ import (
 
 func TestNewManager(t *testing.T) {
 	var createdTargets []config.ReconcilerTarget
-	factory := TargetClientFactoryFunc(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
+	targetProvider := TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
 		createdTargets = append(createdTargets, target)
 		return &fakeInitiator{}, nil
 	})
@@ -27,7 +27,7 @@ func TestNewManager(t *testing.T) {
 	cfg := config.ReconcilerConfig{MaxReconcileCount: 6}
 	cfg.Targets = []config.ReconcilerTarget{validTarget("agent-aws"), validTarget("agent-gcp")}
 
-	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), factory, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
+	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
 	require.NoError(t, err)
 
 	assert.Equal(t, cfg.MaxReconcileCount, manager.orbitalManager.Config.MaxPendingReconciles)
@@ -70,12 +70,12 @@ func TestNewManagerOptions(t *testing.T) {
 
 func TestNewManagerValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		cfg      *config.ReconcilerConfig
-		repo     *orbital.Repository
-		factory  TargetClientFactory
-		handlers []JobHandler
-		wantErr  error
+		name           string
+		cfg            *config.ReconcilerConfig
+		repo           *orbital.Repository
+		targetProvider TargetProvider
+		handlers       []JobHandler
+		wantErr        error
 	}{
 		{
 			name:     "nil config",
@@ -120,7 +120,7 @@ func TestNewManagerValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewManager(t.Context(), tt.cfg, tt.repo, tt.factory, tt.handlers)
+			_, err := NewManager(t.Context(), tt.cfg, tt.repo, tt.targetProvider, tt.handlers)
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
@@ -170,29 +170,29 @@ func TestManagerUnknownJobTypeCancels(t *testing.T) {
 
 func TestBuildTargetsClosesCreatedClientsOnError(t *testing.T) {
 	first := &fakeInitiator{}
-	factoryErr := errors.New("boom")
-	factory := TargetClientFactoryFunc(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
+	providerErr := errors.New("boom")
+	targetProvider := TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
 		if target.Name == "first" {
 			return first, nil
 		}
-		return nil, factoryErr
+		return nil, providerErr
 	})
 
 	targets := []config.ReconcilerTarget{validTarget("first"), validTarget("second")}
-	_, err := buildTargets(t.Context(), targets, factory)
+	_, err := buildTargets(t.Context(), targets, targetProvider)
 
-	assert.ErrorIs(t, err, factoryErr)
+	assert.ErrorIs(t, err, providerErr)
 	assert.True(t, first.closed)
 }
 
 func TestStopClosesTargetsWhenOrbitalWasNotStarted(t *testing.T) {
 	initiator := &fakeInitiator{}
-	factory := TargetClientFactoryFunc(func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error) {
+	targetProvider := TargetProvider(func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error) {
 		return initiator, nil
 	})
 
 	cfg := config.ReconcilerConfig{Targets: []config.ReconcilerTarget{validTarget("agent-aws")}}
-	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), factory, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
+	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
 	require.NoError(t, err)
 
 	err = manager.Stop(t.Context())

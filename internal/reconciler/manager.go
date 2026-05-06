@@ -26,16 +26,7 @@ var (
 	ErrJobHandlerNotFound    = errors.New(noJobHandlerRegisteredMessage)
 )
 
-// TargetClientFactory builds Orbital initiators from reconciler targets.
-type TargetClientFactory interface {
-	NewInitiator(ctx context.Context, target config.ReconcilerTarget) (orbital.Initiator, error)
-}
-
-type TargetClientFactoryFunc func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error)
-
-func (f TargetClientFactoryFunc) NewInitiator(ctx context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
-	return f(ctx, target)
-}
+type TargetProvider func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error)
 
 // Manager owns the Orbital manager lifecycle for a Krypton process.
 type Manager struct {
@@ -49,7 +40,7 @@ func NewManager(
 	ctx context.Context,
 	cfg *config.ReconcilerConfig,
 	repo *orbital.Repository,
-	targetFactory TargetClientFactory,
+	targetProvider TargetProvider,
 	handlers []JobHandler,
 	options ...Option,
 ) (*Manager, error) {
@@ -69,7 +60,7 @@ func NewManager(
 		return nil, err
 	}
 
-	targets, err := buildTargets(ctx, cfg.Targets, targetFactory)
+	targets, err := buildTargets(ctx, cfg.Targets, targetProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -184,17 +175,17 @@ func buildHandlerMap(handlers []JobHandler) (map[string]JobHandler, error) {
 	return result, nil
 }
 
-func buildTargets(ctx context.Context, targetConfigs []config.ReconcilerTarget, factory TargetClientFactory) (map[string]orbital.TargetManager, error) {
+func buildTargets(ctx context.Context, targetConfigs []config.ReconcilerTarget, targetProvider TargetProvider) (map[string]orbital.TargetManager, error) {
 	targets := make(map[string]orbital.TargetManager, len(targetConfigs))
 	if len(targetConfigs) == 0 {
 		return targets, nil
 	}
-	if factory == nil {
+	if targetProvider == nil {
 		return nil, ErrTargetFactoryRequired
 	}
 
 	for _, targetConfig := range targetConfigs {
-		client, err := factory.NewInitiator(ctx, targetConfig)
+		client, err := targetProvider(ctx, targetConfig)
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("create target %s client: %w", targetConfig.Name, err), closeTargets(ctx, targets))
 		}
