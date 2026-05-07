@@ -18,8 +18,8 @@ var (
 	ErrKeyBindingsEmpty            = errors.New("key bindings cannot be empty")
 )
 
-// Labels is a key-value map for metadata
-type Labels map[string]string
+// SelectorLabels is a key-value map for metadata
+type SelectorLabels map[string]string
 
 // VaultType defines the type of vault (e.g., "open-bao", "aws-kms", "gcp-kms")
 type VaultType string
@@ -56,15 +56,14 @@ type VaultSpec struct {
 type KeyBinding struct {
 	Vault             VaultSpec             `yaml:"vault"`                         // Storage backend configuration
 	ParentKeyProvider *ParentKeyProviderRef `yaml:"parent_key_provider,omitempty"` // Where to get parent keys for unwrapping
-	Labels            Labels                `yaml:"labels,omitempty"`              // Per-binding labels
 }
 
 // TopologySegment defines an agent's portion of the hierarchy
 type TopologySegment struct {
-	Name        string                `yaml:"name"`         // Agent name (must match cert CN)
-	Segment     HierarchySegment      `yaml:"segment"`      // Keys this agent manages
-	KeyBindings map[string]KeyBinding `yaml:"key_bindings"` // All dependencies per key kind (key = kind name)
-	Labels      Labels                `yaml:"labels,omitempty"`
+	Name           string                `yaml:"name"`         // Agent name (must match cert CN)
+	Segment        HierarchySegment      `yaml:"segment"`      // Keys this agent manages
+	KeyBindings    map[string]KeyBinding `yaml:"key_bindings"` // All dependencies per key kind (key = kind name)
+	SelectorLabels SelectorLabels        `yaml:"selector_labels,omitempty"`
 }
 
 // Topology defines the deployment layout

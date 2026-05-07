@@ -50,9 +50,10 @@ var (
 
 // KeySpec defines the properties of a key within a hierarchy, including its kind, role, and algorithm.
 type KeySpec struct {
-	Kind      KeyKind      `yaml:"kind"`
-	Role      KeyRole      `yaml:"role"`
-	Algorithm KeyAlgorithm `yaml:"algorithm"`
+	Kind       KeyKind      `yaml:"kind"`
+	Role       KeyRole      `yaml:"role"`
+	Algorithm  KeyAlgorithm `yaml:"algorithm"`
+	LabelsSpec LabelsSpec   `yaml:"labels_spec"`
 }
 
 // Usage returns the KeyUsage associated with the KeySpec's role.
@@ -85,6 +86,10 @@ func (k KeySpec) Validate() error {
 
 	if !IsSupportedAlgorithm(k.Algorithm) {
 		return ErrKeySpecAlgorithmInvalid
+	}
+
+	if err := k.LabelsSpec.init(); err != nil {
+		return err
 	}
 
 	return nil

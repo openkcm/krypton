@@ -40,14 +40,14 @@ type KryptonRoot struct {
 
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
-	Name        string                     `yaml:"name"`
-	Role        spec.AgentRole             `yaml:"role"`
-	Segment     spec.HierarchySegment      `yaml:"segment"`
-	Labels      spec.Labels                `yaml:"labels,omitempty"`
-	KeyBindings map[string]spec.KeyBinding `yaml:"key_bindings"`
-	Hierarchy   spec.KeyHierarchy          `yaml:"hierarchy"`
-	Topology    spec.Topology              `yaml:"topology"`
-	Reconciler  ReconcilerConfig           `yaml:"reconciler"`
+	Name           string                     `yaml:"name"`
+	Role           spec.AgentRole             `yaml:"role"`
+	Segment        spec.HierarchySegment      `yaml:"segment"`
+	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
+	KeyBindings    map[string]spec.KeyBinding `yaml:"key_bindings"`
+	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
+	Topology       spec.Topology              `yaml:"topology"`
+	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
