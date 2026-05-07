@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -102,8 +103,8 @@ func setupPostgres() ([]func(), error) {
 }
 
 func runCleanups(cleanups []func()) {
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
+	for _, v := range slices.Backward(cleanups) {
+		v()
 	}
 }
 

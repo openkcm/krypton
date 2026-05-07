@@ -47,6 +47,7 @@ type RootConfig struct {
 	KeyBindings map[string]spec.KeyBinding `yaml:"key_bindings"`
 	Hierarchy   spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology    spec.Topology              `yaml:"topology"`
+	Reconciler  ReconcilerConfig           `yaml:"reconciler"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
@@ -60,6 +61,9 @@ type AgentBootstrapConfig struct {
 func (cfg *RootConfig) Validate() error {
 	if cfg.Name == "" {
 		return ErrConfigNameEmpty
+	}
+	if err := cfg.Reconciler.Validate(); err != nil {
+		return fmt.Errorf("reconciler: %w", err)
 	}
 	if cfg.Role != spec.RootRole {
 		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.RootRole)

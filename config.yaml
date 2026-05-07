@@ -7,6 +7,12 @@ status:
   address: ":8888"
   profiling: true
 
+reconciler:
+  maxReconcileCount: 10
+  targets:
+    - name: agent-aws
+      address: localhost:9091
+
 kmip:
   tcp:
     enabled: true
