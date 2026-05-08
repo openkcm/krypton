@@ -128,8 +128,6 @@ func LoadRootConfig(path string) (*RootConfig, error) {
 		return nil, err
 	}
 
-	cfg.Topology.DeriveSubAgentIDs(cfg.TrustDomain)
-
 	return &cfg, nil
 }
 

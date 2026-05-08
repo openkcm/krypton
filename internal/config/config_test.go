@@ -523,14 +523,8 @@ topology:
 				// Verify SubAgentIDs were derived from ParentKeyProvider references
 				assert.Len(t, cfg.Topology.Segments, 2)
 
-				// agent-aws should have agent-leaf as sub-agent
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
-				assert.Len(t, cfg.Topology.Segments[0].SubAgentIDs, 1)
-				assert.Equal(t, "kryptonid://acme-corp/agent/agent-leaf", cfg.Topology.Segments[0].SubAgentIDs[0].URI())
-
-				// agent-leaf should have no sub-agents
 				assert.Equal(t, "agent-leaf", cfg.Topology.Segments[1].Name)
-				assert.Empty(t, cfg.Topology.Segments[1].SubAgentIDs)
 			},
 		},
 		{

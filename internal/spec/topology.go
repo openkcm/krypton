@@ -64,7 +64,6 @@ type TopologySegment struct {
 	Segment        HierarchySegment      `yaml:"segment"`      // Keys this agent manages
 	KeyBindings    map[string]KeyBinding `yaml:"key_bindings"` // All dependencies per key kind (key = kind name)
 	SelectorLabels SelectorLabels        `yaml:"selector_labels,omitempty"`
-	SubAgentIDs    []KryptonID           `yaml:"-"` // Derived by DeriveSubAgentIDs(), not from config
 }
 
 // Topology defines the deployment layout
@@ -169,26 +168,4 @@ func (v *VaultSpec) UnmarshalYAML(node *yaml.Node) error {
 	*v = VaultSpec(raw.alias)
 	v.Config = config
 	return nil
-}
-
-// DeriveSubAgentIDs populates each segment's SubAgentID list by scanning all key bindings
-// to find which segments reference it as their ParentKeyProvider.
-func (t *Topology) DeriveSubAgentIDs(trustDomain string) {
-	agentToSubAgents := make(map[string][]KryptonID)
-
-	for _, seg := range t.Segments {
-		for _, binding := range seg.KeyBindings {
-			if binding.ParentKeyProvider != nil {
-				name := binding.ParentKeyProvider.AgentName
-				if agentToSubAgents[name] == nil {
-					agentToSubAgents[name] = make([]KryptonID, 0)
-				}
-				agentToSubAgents[name] = append(agentToSubAgents[name], AgentID(trustDomain, seg.Name))
-			}
-		}
-	}
-
-	for i := range t.Segments {
-		t.Segments[i].SubAgentIDs = agentToSubAgents[t.Segments[i].Name]
-	}
 }

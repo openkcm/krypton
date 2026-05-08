@@ -23,7 +23,6 @@ func TestNewAgentConfig(t *testing.T) {
 				ParentKeyProvider: &spec.ParentKeyProviderRef{},
 			},
 		},
-		SubAgentIDs: []spec.KryptonID{spec.AgentID("acme-corp", "agent-leaf")},
 	}
 	expHierarchy := spec.KeyHierarchy{
 		Name: "some-hierarchy",
@@ -49,7 +48,6 @@ func TestNewAgentConfig(t *testing.T) {
 		Role:           spec.DefaultRole,
 		Hierarchy:      expHierarchy,
 		KeepAlive:      30,
-		SubAgentIDs:    []spec.KryptonID{spec.AgentID("acme-corp", "agent-leaf")},
 	}
 
 	// when
