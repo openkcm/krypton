@@ -31,7 +31,7 @@ type IdentityPattern struct {
 // "*" in a segment's Name matches any name for that kind.
 // "**" as a trailing kind matches zero or more remaining segments of any kind.
 // Pattern and value must have the same segment count unless pattern ends with "**".
-func (p IdentityPattern) Matches(id authn.Identity) bool {
+func (p *IdentityPattern) Matches(id authn.Identity) bool {
 	if p.TrustDomain != id.TrustDomain {
 		return false
 	}
@@ -52,7 +52,7 @@ func (p IdentityPattern) Matches(id authn.Identity) bool {
 }
 
 // String returns the kryptonid:// URI representation of the pattern.
-func (p IdentityPattern) String() string {
+func (p *IdentityPattern) String() string {
 	var b strings.Builder
 
 	b.WriteString(authn.Scheme)
@@ -74,7 +74,7 @@ func (p IdentityPattern) String() string {
 }
 
 // MarshalJSON serializes IdentityPattern as a URI string.
-func (p IdentityPattern) MarshalJSON() ([]byte, error) {
+func (p *IdentityPattern) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.String())
 }
 

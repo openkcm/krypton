@@ -39,7 +39,7 @@ type Segment struct {
 }
 
 // URI returns the kryptonid:// string representation.
-func (id Identity) URI() string {
+func (id *Identity) URI() string {
 	var b strings.Builder
 
 	b.WriteString(Scheme)
@@ -57,7 +57,7 @@ func (id Identity) URI() string {
 }
 
 // MarshalJSON serializes Identity as a URI string.
-func (id Identity) MarshalJSON() ([]byte, error) {
+func (id *Identity) MarshalJSON() ([]byte, error) {
 	return json.Marshal(id.URI())
 }
 

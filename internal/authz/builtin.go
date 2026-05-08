@@ -80,8 +80,8 @@ func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error)
 		}
 
 		policies = append(policies, Policy{
-			ID:   fmt.Sprintf("topology:sub-agent-%s", sub.Segments[0].Name),
-			Name: fmt.Sprintf("sub-agent-%s-calls-parent", sub.Segments[0].Name),
+			ID:   "topology:sub-agent-" + sub.Segments[0].Name,
+			Name: "sub-agent-" + sub.Segments[0].Name + "-calls-parent",
 			Statements: []Statement{
 				{
 					Effect: EffectAllow,
