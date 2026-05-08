@@ -19,11 +19,11 @@ var (
 	// ErrInvalidDomain is returned when a domain contains invalid characters.
 	ErrInvalidDomain = errors.New("domain must not contain '*', '/', or whitespace")
 
-	// ErrInvalidPath is returned when the path has an incomplete kind/name pair.
-	ErrInvalidPath = errors.New("invalid path: must have even number of segments (kind/name pairs)")
+	// ErrInvalidPath is returned when the path has an incomplete type/name pair.
+	ErrInvalidPath = errors.New("invalid path: must have even number of fields (type/name pairs)")
 
-	// ErrInvalidSegment is returned when a segment kind or name contains invalid characters.
-	ErrInvalidSegment = errors.New("segment kind and name must be non-empty and must not contain '*', '/', or whitespace")
+	// ErrInvalidField is returned when a field type or name contains invalid characters.
+	ErrInvalidField = errors.New("field type and name must be non-empty and must not contain '*', '/', or whitespace")
 )
 
 // Domain identifies a trust boundary for identities.
@@ -46,22 +46,22 @@ func (d Domain) Validate() error {
 
 // Identity is a kryptonid:// URI representing any entity in Krypton.
 type Identity struct {
-	Domain   Domain
-	Segments []Segment
+	Domain Domain
+	Fields []Field
 }
 
-// Segment represents a kind/name pair in the identity path.
-type Segment struct {
-	Kind string
+// Field represents a type/name pair in the identity path.
+type Field struct {
+	Type string
 	Name string
 }
 
-// Validate checks that kind and name are non-empty and do not contain
+// Validate checks that type and name are non-empty and do not contain
 // glob characters ('*'), slashes, or whitespace.
-func (s Segment) Validate() error {
-	for _, v := range []string{s.Kind, s.Name} {
+func (f Field) Validate() error {
+	for _, v := range []string{f.Type, f.Name} {
 		if v == "" || strings.ContainsAny(v, "*/\t\n\r ") {
-			return ErrInvalidSegment
+			return ErrInvalidField
 		}
 	}
 	return nil
@@ -75,11 +75,11 @@ func (id *Identity) URI() string {
 	b.WriteString("://")
 	b.WriteString(id.Domain.String())
 
-	for _, s := range id.Segments {
+	for _, f := range id.Fields {
 		b.WriteByte('/')
-		b.WriteString(s.Kind)
+		b.WriteString(f.Type)
 		b.WriteByte('/')
-		b.WriteString(s.Name)
+		b.WriteString(f.Name)
 	}
 
 	return b.String()
@@ -108,7 +108,7 @@ func (id *Identity) UnmarshalJSON(data []byte) error {
 
 // Parse parses a kryptonid:// URI string into an Identity.
 // Returns an error if the scheme is wrong, domain is empty or invalid,
-// or the path has an odd number of segments (incomplete kind/name pair).
+// or the path has an odd number of fields (incomplete type/name pair).
 func Parse(uri string) (Identity, error) {
 	after, found := strings.CutPrefix(uri, Scheme+"://")
 	if !found {
@@ -131,17 +131,17 @@ func Parse(uri string) (Identity, error) {
 		return Identity{}, ErrInvalidPath
 	}
 
-	segments := make([]Segment, 0, len(parts)/2)
+	fields := make([]Field, 0, len(parts)/2)
 	for i := 0; i < len(parts); i += 2 {
-		seg := Segment{Kind: parts[i], Name: parts[i+1]}
-		if err := seg.Validate(); err != nil {
+		f := Field{Type: parts[i], Name: parts[i+1]}
+		if err := f.Validate(); err != nil {
 			return Identity{}, err
 		}
-		segments = append(segments, seg)
+		fields = append(fields, f)
 	}
 
 	return Identity{
-		Domain:   Domain(d),
-		Segments: segments,
+		Domain: Domain(d),
+		Fields: fields,
 	}, nil
 }

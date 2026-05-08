@@ -11,38 +11,38 @@ var (
 	ErrInvalidSelectorScheme = errors.New("invalid selector scheme: must be 'kryptonid'")
 
 	// ErrInvalidSelectorPath is returned when the selector path is malformed.
-	ErrInvalidSelectorPath = errors.New("invalid selector path: must have kind/name pairs, optionally ending with **")
+	ErrInvalidSelectorPath = errors.New("invalid selector path: must have type/name pairs, optionally ending with **")
 )
 
 // Selector matches Identity values using wildcards.
 type Selector struct {
-	Domain   Domain
-	Segments []SegmentSelector
+	Domain Domain
+	Fields []FieldSelector
 }
 
 // Matches checks if a concrete Identity matches this selector.
 // Domain is always matched literally.
-// "*" in a segment's Name matches any name for that kind.
-// "**" as a trailing kind matches zero or more remaining segments of any kind.
-// Selector and value must have the same segment count unless selector ends with "**".
+// "*" in a field's Name matches any name for that type.
+// "**" as a trailing type matches zero or more remaining fields of any type.
+// Selector and value must have the same field count unless selector ends with "**".
 func (s *Selector) Matches(id Identity) bool {
 	if s.Domain != id.Domain {
 		return false
 	}
 
-	for i, ss := range s.Segments {
-		if ss.Kind == "**" {
+	for i, fs := range s.Fields {
+		if fs.Type == "**" {
 			return true
 		}
-		if i >= len(id.Segments) {
+		if i >= len(id.Fields) {
 			return false
 		}
-		if !ss.Matches(id.Segments[i]) {
+		if !fs.Matches(id.Fields[i]) {
 			return false
 		}
 	}
 
-	return len(s.Segments) == len(id.Segments)
+	return len(s.Fields) == len(id.Fields)
 }
 
 // String returns the kryptonid:// URI representation of the selector.
@@ -53,15 +53,15 @@ func (s *Selector) String() string {
 	b.WriteString("://")
 	b.WriteString(s.Domain.String())
 
-	for _, seg := range s.Segments {
+	for _, f := range s.Fields {
 		b.WriteByte('/')
-		if seg.Kind == "**" {
+		if f.Type == "**" {
 			b.WriteString("**")
 			break
 		}
-		b.WriteString(seg.Kind)
+		b.WriteString(f.Type)
 		b.WriteByte('/')
-		b.WriteString(seg.Name)
+		b.WriteString(f.Name)
 	}
 
 	return b.String()
@@ -90,7 +90,7 @@ func (s *Selector) UnmarshalJSON(data []byte) error {
 
 // ParseSelector parses a kryptonid:// selector string into a Selector.
 // Returns an error if the scheme is wrong, domain is empty or invalid,
-// or the path has an odd number of segments without a trailing "**".
+// or the path has an odd number of fields without a trailing "**".
 func ParseSelector(raw string) (Selector, error) {
 	after, found := strings.CutPrefix(raw, Scheme+"://")
 	if !found {
@@ -107,11 +107,11 @@ func ParseSelector(raw string) (Selector, error) {
 	}
 
 	parts := strings.Split(path, "/")
-	var segments []SegmentSelector
+	var fields []FieldSelector
 
 	for len(parts) > 0 {
 		if parts[0] == "**" {
-			segments = append(segments, SegmentSelector{Kind: "**"})
+			fields = append(fields, FieldSelector{Type: "**"})
 			break
 		}
 
@@ -119,34 +119,34 @@ func ParseSelector(raw string) (Selector, error) {
 			return Selector{}, ErrInvalidSelectorPath
 		}
 
-		segments = append(segments, SegmentSelector{Kind: parts[0], Name: parts[1]})
+		fields = append(fields, FieldSelector{Type: parts[0], Name: parts[1]})
 		parts = parts[2:]
 	}
 
 	return Selector{
-		Domain:   Domain(d),
-		Segments: segments,
+		Domain: Domain(d),
+		Fields: fields,
 	}, nil
 }
 
-// SegmentSelector represents a kind/name pair in an identity selector.
+// FieldSelector represents a type/name pair in an identity selector.
 // Name can be "*" to match any name.
-// Kind can be "**" to match zero or more trailing segments of any kind.
-type SegmentSelector struct {
-	Kind string
+// Type can be "**" to match zero or more trailing fields of any type.
+type FieldSelector struct {
+	Type string
 	Name string
 }
 
-// Matches checks if this segment selector matches a concrete segment.
-// Kind must match exactly. Name must match exactly or selector name is "*".
-func (ss SegmentSelector) Matches(s Segment) bool {
-	if ss.Kind != s.Kind {
+// Matches checks if this field selector matches a concrete field.
+// Type must match exactly. Name must match exactly or selector name is "*".
+func (fs FieldSelector) Matches(f Field) bool {
+	if fs.Type != f.Type {
 		return false
 	}
-	if ss.Name == "*" {
+	if fs.Name == "*" {
 		return true
 	}
-	return ss.Name == s.Name
+	return fs.Name == f.Name
 }
 
 // MatchesAny checks if the identity matches any of the selectors.

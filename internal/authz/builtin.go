@@ -6,8 +6,8 @@ import (
 	"github.com/openkcm/krypton/internal/identity"
 )
 
-// KindNode is the segment kind for agent nodes in a topology.
-const KindNode = "node"
+// TypeNode is the field type for agent nodes in a topology.
+const TypeNode = "node"
 
 // NameRoot is the name of the root node in a topology.
 const NameRoot = "root"
@@ -19,7 +19,7 @@ const NameRoot = "root"
 //   - Each sub-agent can call its parent (non-root only)
 //   - Implicit deny covers all other cases (no policy needed)
 func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, error) {
-	if len(self.Segments) == 0 || self.Segments[0].Kind != KindNode {
+	if len(self.Fields) == 0 || self.Fields[0].Type != TypeNode {
 		return nil, fmt.Errorf("self must be a node identity: %s", self.URI())
 	}
 
@@ -34,8 +34,8 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 					Principals: []identity.Selector{
 						{
 							Domain: self.Domain,
-							Segments: []identity.SegmentSelector{
-								{Kind: KindNode, Name: NameRoot},
+							Fields: []identity.FieldSelector{
+								{Type: TypeNode, Name: NameRoot},
 							},
 						},
 					},
@@ -43,8 +43,8 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 					Resources: []identity.Selector{
 						{
 							Domain: self.Domain,
-							Segments: []identity.SegmentSelector{
-								{Kind: "**"},
+							Fields: []identity.FieldSelector{
+								{Type: "**"},
 							},
 						},
 					},
@@ -60,8 +60,8 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 					Principals: []identity.Selector{
 						{
 							Domain: self.Domain,
-							Segments: []identity.SegmentSelector{
-								{Kind: KindNode, Name: "*"},
+							Fields: []identity.FieldSelector{
+								{Type: TypeNode, Name: "*"},
 							},
 						},
 					},
@@ -69,8 +69,8 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 					Resources: []identity.Selector{
 						{
 							Domain: self.Domain,
-							Segments: []identity.SegmentSelector{
-								{Kind: KindNode, Name: NameRoot},
+							Fields: []identity.FieldSelector{
+								{Type: TypeNode, Name: NameRoot},
 							},
 						},
 					},
@@ -80,33 +80,33 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 	}
 
 	// Root doesn't need sub-agent policies — anyone-calls-root already covers it.
-	if self.Segments[0].Name == NameRoot {
+	if self.Fields[0].Name == NameRoot {
 		return policies, nil
 	}
 
 	// Non-root: each sub-agent can call this node (its parent).
 	for _, sub := range subAgents {
-		if len(sub.Segments) == 0 || sub.Segments[0].Kind != KindNode {
+		if len(sub.Fields) == 0 || sub.Fields[0].Type != TypeNode {
 			return nil, fmt.Errorf("sub-agent must be a node identity: %s", sub.URI())
 		}
 
 		policies = append(policies, Policy{
-			ID:   "topology:sub-agent-" + sub.Segments[0].Name,
-			Name: fmt.Sprintf("sub-agent-%s-calls-parent", sub.Segments[0].Name),
+			ID:   "topology:sub-agent-" + sub.Fields[0].Name,
+			Name: fmt.Sprintf("sub-agent-%s-calls-parent", sub.Fields[0].Name),
 			Statements: []Statement{
 				{
 					Effect: EffectAllow,
 					Principals: []identity.Selector{
 						{
-							Domain:   sub.Domain,
-							Segments: toSegmentSelectors(sub.Segments),
+							Domain: sub.Domain,
+							Fields: toFieldSelectors(sub.Fields),
 						},
 					},
 					Actions: []ActionSelector{"*"},
 					Resources: []identity.Selector{
 						{
-							Domain:   self.Domain,
-							Segments: toSegmentSelectors(self.Segments),
+							Domain: self.Domain,
+							Fields: toFieldSelectors(self.Fields),
 						},
 					},
 				},
@@ -117,11 +117,11 @@ func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, 
 	return policies, nil
 }
 
-// toSegmentSelectors converts concrete Segments to SegmentSelectors (exact match).
-func toSegmentSelectors(segs []identity.Segment) []identity.SegmentSelector {
-	ss := make([]identity.SegmentSelector, len(segs))
-	for i, s := range segs {
-		ss[i] = identity.SegmentSelector(s)
+// toFieldSelectors converts concrete Fields to FieldSelectors (exact match).
+func toFieldSelectors(fields []identity.Field) []identity.FieldSelector {
+	fs := make([]identity.FieldSelector, len(fields))
+	for i, f := range fields {
+		fs[i] = identity.FieldSelector(f)
 	}
-	return ss
+	return fs
 }
