@@ -3,22 +3,27 @@ package authz
 import (
 	"fmt"
 
-	"github.com/openkcm/krypton/internal/authn"
+	"github.com/openkcm/krypton/internal/identity"
 )
+
+// KindNode is the segment kind for agent nodes in a topology.
+const KindNode = "node"
+
+// NameRoot is the name of the root node in a topology.
+const NameRoot = "root"
 
 // Topology generates builtin policies from the agent topology.
 // These encode the topology-based authorization rules:
 //   - Root can do anything within its trust domain
 //   - Any node can call root
-//   - Each sub-agent can call its parent
+//   - Each sub-agent can call its parent (non-root only)
 //   - Implicit deny covers all other cases (no policy needed)
-func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error) {
-	if len(self.Segments) == 0 || self.Segments[0].Kind != authn.KindNode {
-		return nil, fmt.Errorf("selfID must be a node identity: %s", self.URI())
+func Topology(self identity.Identity, subAgents []identity.Identity) ([]Policy, error) {
+	if len(self.Segments) == 0 || self.Segments[0].Kind != KindNode {
+		return nil, fmt.Errorf("self must be a node identity: %s", self.URI())
 	}
 
-	td := self.TrustDomain
-
+	// Base policies that every node needs: root is unrestricted, any node can call root.
 	policies := []Policy{
 		{
 			ID:   "topology:root-unrestricted",
@@ -26,19 +31,19 @@ func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error)
 			Statements: []Statement{
 				{
 					Effect: EffectAllow,
-					Principals: []IdentityPattern{
+					Principals: []identity.Selector{
 						{
-							TrustDomain: td,
-							Segments: []PatternSegment{
-								{Kind: authn.KindNode, Name: "root"},
+							Domain: self.Domain,
+							Segments: []identity.SegmentSelector{
+								{Kind: KindNode, Name: NameRoot},
 							},
 						},
 					},
-					Actions: []ActionPattern{"*"},
-					Resources: []IdentityPattern{
+					Actions: []ActionSelector{"*"},
+					Resources: []identity.Selector{
 						{
-							TrustDomain: td,
-							Segments: []PatternSegment{
+							Domain: self.Domain,
+							Segments: []identity.SegmentSelector{
 								{Kind: "**"},
 							},
 						},
@@ -52,20 +57,20 @@ func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error)
 			Statements: []Statement{
 				{
 					Effect: EffectAllow,
-					Principals: []IdentityPattern{
+					Principals: []identity.Selector{
 						{
-							TrustDomain: td,
-							Segments: []PatternSegment{
-								{Kind: authn.KindNode, Name: "*"},
+							Domain: self.Domain,
+							Segments: []identity.SegmentSelector{
+								{Kind: KindNode, Name: "*"},
 							},
 						},
 					},
-					Actions: []ActionPattern{"*"},
-					Resources: []IdentityPattern{
+					Actions: []ActionSelector{"*"},
+					Resources: []identity.Selector{
 						{
-							TrustDomain: td,
-							Segments: []PatternSegment{
-								{Kind: authn.KindNode, Name: "root"},
+							Domain: self.Domain,
+							Segments: []identity.SegmentSelector{
+								{Kind: KindNode, Name: NameRoot},
 							},
 						},
 					},
@@ -74,28 +79,34 @@ func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error)
 		},
 	}
 
+	// Root doesn't need sub-agent policies — anyone-calls-root already covers it.
+	if self.Segments[0].Name == NameRoot {
+		return policies, nil
+	}
+
+	// Non-root: each sub-agent can call this node (its parent).
 	for _, sub := range subAgents {
-		if len(sub.Segments) == 0 || sub.Segments[0].Kind != authn.KindNode {
+		if len(sub.Segments) == 0 || sub.Segments[0].Kind != KindNode {
 			return nil, fmt.Errorf("sub-agent must be a node identity: %s", sub.URI())
 		}
 
 		policies = append(policies, Policy{
 			ID:   "topology:sub-agent-" + sub.Segments[0].Name,
-			Name: "sub-agent-" + sub.Segments[0].Name + "-calls-parent",
+			Name: fmt.Sprintf("sub-agent-%s-calls-parent", sub.Segments[0].Name),
 			Statements: []Statement{
 				{
 					Effect: EffectAllow,
-					Principals: []IdentityPattern{
+					Principals: []identity.Selector{
 						{
-							TrustDomain: sub.TrustDomain,
-							Segments:    toPatternSegments(sub.Segments),
+							Domain:   sub.Domain,
+							Segments: toSegmentSelectors(sub.Segments),
 						},
 					},
-					Actions: []ActionPattern{"*"},
-					Resources: []IdentityPattern{
+					Actions: []ActionSelector{"*"},
+					Resources: []identity.Selector{
 						{
-							TrustDomain: self.TrustDomain,
-							Segments:    toPatternSegments(self.Segments),
+							Domain:   self.Domain,
+							Segments: toSegmentSelectors(self.Segments),
 						},
 					},
 				},
@@ -106,11 +117,11 @@ func Topology(self authn.Identity, subAgents []authn.Identity) ([]Policy, error)
 	return policies, nil
 }
 
-// toPatternSegments converts concrete authn.Segments to PatternSegments (exact match).
-func toPatternSegments(segs []authn.Segment) []PatternSegment {
-	ps := make([]PatternSegment, len(segs))
+// toSegmentSelectors converts concrete Segments to SegmentSelectors (exact match).
+func toSegmentSelectors(segs []identity.Segment) []identity.SegmentSelector {
+	ss := make([]identity.SegmentSelector, len(segs))
 	for i, s := range segs {
-		ps[i] = PatternSegment{Kind: s.Kind, Name: s.Name}
+		ss[i] = identity.SegmentSelector(s)
 	}
-	return ps
+	return ss
 }

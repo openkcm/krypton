@@ -1,4 +1,4 @@
-package authn
+package identity
 
 import (
 	"encoding/json"
@@ -9,15 +9,15 @@ import (
 // Scheme is the URI scheme for krypton identities.
 const Scheme = "kryptonid"
 
-// KindNode is the segment kind for agent nodes in a topology.
-const KindNode = "node"
-
 var (
 	// ErrInvalidScheme is returned when parsing a URI with wrong scheme.
 	ErrInvalidScheme = errors.New("invalid scheme: must be 'kryptonid'")
 
-	// ErrEmptyTrustDomain is returned when trust domain is empty.
-	ErrEmptyTrustDomain = errors.New("trust domain cannot be empty")
+	// ErrEmptyDomain is returned when a domain is empty.
+	ErrEmptyDomain = errors.New("domain cannot be empty")
+
+	// ErrInvalidDomain is returned when a domain contains invalid characters.
+	ErrInvalidDomain = errors.New("domain must not contain '*', '/', or whitespace")
 
 	// ErrInvalidPath is returned when the path has an incomplete kind/name pair.
 	ErrInvalidPath = errors.New("invalid path: must have even number of segments (kind/name pairs)")
@@ -26,10 +26,28 @@ var (
 	ErrInvalidSegment = errors.New("segment kind and name must be non-empty and must not contain '*', '/', or whitespace")
 )
 
+// Domain identifies a trust boundary for identities.
+type Domain string
+
+// String returns the domain as a string.
+func (d Domain) String() string { return string(d) }
+
+// Validate checks that the domain is non-empty and does not contain
+// invalid characters (slashes, wildcards, whitespace).
+func (d Domain) Validate() error {
+	if d == "" {
+		return ErrEmptyDomain
+	}
+	if strings.ContainsAny(string(d), "*/\t\n\r ") {
+		return ErrInvalidDomain
+	}
+	return nil
+}
+
 // Identity is a kryptonid:// URI representing any entity in Krypton.
 type Identity struct {
-	TrustDomain string
-	Segments    []Segment
+	Domain   Domain
+	Segments []Segment
 }
 
 // Segment represents a kind/name pair in the identity path.
@@ -38,13 +56,24 @@ type Segment struct {
 	Name string
 }
 
+// Validate checks that kind and name are non-empty and do not contain
+// glob characters ('*'), slashes, or whitespace.
+func (s Segment) Validate() error {
+	for _, v := range []string{s.Kind, s.Name} {
+		if v == "" || strings.ContainsAny(v, "*/\t\n\r ") {
+			return ErrInvalidSegment
+		}
+	}
+	return nil
+}
+
 // URI returns the kryptonid:// string representation.
 func (id *Identity) URI() string {
 	var b strings.Builder
 
 	b.WriteString(Scheme)
 	b.WriteString("://")
-	b.WriteString(id.TrustDomain)
+	b.WriteString(id.Domain.String())
 
 	for _, s := range id.Segments {
 		b.WriteByte('/')
@@ -78,7 +107,7 @@ func (id *Identity) UnmarshalJSON(data []byte) error {
 }
 
 // Parse parses a kryptonid:// URI string into an Identity.
-// Returns an error if the scheme is wrong, trust domain is empty,
+// Returns an error if the scheme is wrong, domain is empty or invalid,
 // or the path has an odd number of segments (incomplete kind/name pair).
 func Parse(uri string) (Identity, error) {
 	after, found := strings.CutPrefix(uri, Scheme+"://")
@@ -86,13 +115,15 @@ func Parse(uri string) (Identity, error) {
 		return Identity{}, ErrInvalidScheme
 	}
 
-	td, path, _ := strings.Cut(after, "/")
-	if td == "" {
-		return Identity{}, ErrEmptyTrustDomain
+	d, path, _ := strings.Cut(after, "/")
+	if err := Domain(d).Validate(); err != nil {
+		return Identity{}, err
 	}
 
 	if path == "" {
-		return Identity{TrustDomain: td}, nil
+		return Identity{
+			Domain: Domain(d),
+		}, nil
 	}
 
 	parts := strings.Split(path, "/")
@@ -102,35 +133,15 @@ func Parse(uri string) (Identity, error) {
 
 	segments := make([]Segment, 0, len(parts)/2)
 	for i := 0; i < len(parts); i += 2 {
-		if err := validateSegment(parts[i], parts[i+1]); err != nil {
+		seg := Segment{Kind: parts[i], Name: parts[i+1]}
+		if err := seg.Validate(); err != nil {
 			return Identity{}, err
 		}
-		segments = append(segments, Segment{Kind: parts[i], Name: parts[i+1]})
+		segments = append(segments, seg)
 	}
 
-	return Identity{TrustDomain: td, Segments: segments}, nil
-}
-
-// NodeIdentity creates a node identity for the given trust domain and name.
-func NodeIdentity(trustDomain, name string) (Identity, error) {
-	if err := validateSegment(KindNode, name); err != nil {
-		return Identity{}, err
-	}
 	return Identity{
-		TrustDomain: trustDomain,
-		Segments: []Segment{
-			{Kind: KindNode, Name: name},
-		},
+		Domain:   Domain(d),
+		Segments: segments,
 	}, nil
-}
-
-// validateSegment checks that kind and name are non-empty and do not contain
-// glob characters ('*'), slashes, or whitespace.
-func validateSegment(kind, name string) error {
-	for _, s := range []string{kind, name} {
-		if s == "" || strings.ContainsAny(s, "*/\t\n\r ") {
-			return ErrInvalidSegment
-		}
-	}
-	return nil
 }

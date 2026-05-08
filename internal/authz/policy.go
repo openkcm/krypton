@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/openkcm/krypton/internal/authn"
 	"github.com/openkcm/krypton/internal/clock"
+	"github.com/openkcm/krypton/internal/identity"
 )
 
 // Effect determines whether a statement allows or denies access.
@@ -31,22 +31,41 @@ type Policy struct {
 
 // Statement is a single authorization rule within a policy.
 type Statement struct {
-	Effect     Effect            `json:"effect"`
-	Principals []IdentityPattern `json:"principals"`
-	Actions    []ActionPattern   `json:"actions"`
-	Resources  []IdentityPattern `json:"resources"`
+	Effect     Effect              `json:"effect"`
+	Principals []identity.Selector `json:"principals"`
+	Actions    []ActionSelector    `json:"actions"`
+	Resources  []identity.Selector `json:"resources"`
 }
 
 // Request represents an authorization question:
 // Can this principal perform this action on this resource?
 type Request struct {
-	Principal authn.Identity
+	Principal identity.Identity
 	Action    Action
-	Resource  authn.Identity
+	Resource  identity.Identity
 }
 
 // Action represents a Krypton operation.
 type Action string
+
+// ActionSelector represents a matching template for actions.
+// Only "*" (match all) or exact string equality.
+type ActionSelector string
+
+// Matches checks if an action matches this selector.
+func (s ActionSelector) Matches(action Action) bool {
+	return string(s) == "*" || string(s) == string(action)
+}
+
+// matchesAnyAction checks if the action matches any of the action selectors.
+func matchesAnyAction(selectors []ActionSelector, action Action) bool {
+	for _, s := range selectors {
+		if s.Matches(action) {
+			return true
+		}
+	}
+	return false
+}
 
 // Decision is the result of policy evaluation.
 type Decision struct {
@@ -95,13 +114,13 @@ func (e *PolicyEngine) Decide(ctx context.Context, req Request) Decision {
 		for j := range policy.Statements {
 			stmt := &policy.Statements[j]
 
-			if !matchesAnyIdentity(stmt.Principals, req.Principal) {
+			if !identity.MatchesAny(stmt.Principals, req.Principal) {
 				continue
 			}
 			if !matchesAnyAction(stmt.Actions, req.Action) {
 				continue
 			}
-			if !matchesAnyIdentity(stmt.Resources, req.Resource) {
+			if !identity.MatchesAny(stmt.Resources, req.Resource) {
 				continue
 			}
 
