@@ -80,6 +80,7 @@ dev: postgres root
 proto-gen:
 	./scripts/proto-gen.sh "api-specs/v1/proto/agents"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin"
+	./scripts/proto-gen.sh "api-specs/v1/proto/keys"
 	./scripts/proto-gen.sh "api-specs/v1/proto"
 	$(MAKE) go-format
 

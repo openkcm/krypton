@@ -23,8 +23,8 @@ func TestDeregister(t *testing.T) {
 
 	db := createDatabase(t)
 
-	agentStore, err := storesql.NewAgentStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	agentStore := storesql.NewAgentStore(db)
 
 	t.Run("should update the status of the registered to deregistered", func(t *testing.T) {
 		// given
@@ -76,7 +76,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err = cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
+		_, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
 			AgentName:  expAgentName,
 			InstanceId: expInstanceID,
 		})
@@ -172,7 +172,7 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
-		_, err = agentStore.Get(ctx, store.GetAgentQuery{
+		_, err := agentStore.Get(ctx, store.GetAgentQuery{
 			Name:       expAgentName,
 			InstanceID: expInstanceID,
 		})
@@ -226,11 +226,11 @@ func TestDeregister(t *testing.T) {
 		expInstanceID := uuid.NewString()
 		tmpDB := createDatabase(t)
 
-		agentStore, err := storesql.NewAgentStore(ctx, tmpDB)
-		require.NoError(t, err)
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		agentStore := storesql.NewAgentStore(tmpDB)
 
 		// drop the table to cause an error in the agent store during deregister processing
-		_, err = tmpDB.ExecContext(ctx, "DROP TABLE agent_registrations")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE agent_registrations")
 		require.NoError(t, err)
 
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))

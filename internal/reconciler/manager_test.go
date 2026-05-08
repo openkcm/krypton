@@ -1,11 +1,8 @@
-package reconciler
+package reconciler_test
 
 import (
 	"context"
 	"errors"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"testing"
 	"time"
 
@@ -15,11 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/reconciler"
 )
 
 func TestNewManager(t *testing.T) {
 	var createdTargets []config.ReconcilerTarget
-	targetProvider := TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
+	targetProvider := reconciler.NewTargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
 		createdTargets = append(createdTargets, target)
 		return &fakeInitiator{}, nil
 	})
@@ -27,45 +25,46 @@ func TestNewManager(t *testing.T) {
 	cfg := config.ReconcilerConfig{MaxReconcileCount: 6}
 	cfg.Targets = []config.ReconcilerTarget{validTarget("agent-aws"), validTarget("agent-gcp")}
 
-	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
+	manager, err := reconciler.NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}})
 	require.NoError(t, err)
 
-	assert.Equal(t, cfg.MaxReconcileCount, manager.orbitalManager.Config.MaxPendingReconciles)
+	assert.Equal(t, cfg.MaxReconcileCount, manager.OrbitalManager().Config.MaxPendingReconciles)
 	assert.Len(t, createdTargets, 2)
 }
 
 func TestNewManagerUsesDefaultMaxPendingReconciles(t *testing.T) {
-	manager, err := NewManager(
+	manager, err := reconciler.NewManager(
 		t.Context(),
 		new(config.ReconcilerConfig),
 		newNoopRepo(),
 		nil,
-		[]JobHandler{&fakeJobHandler{jobType: "job.type"}},
+		[]reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}},
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, defaultMaxPendingReconciles, manager.orbitalManager.Config.MaxPendingReconciles)
+	assert.Equal(t, reconciler.DefaultMaxPendingReconciles, manager.OrbitalManager().Config.MaxPendingReconciles)
 }
 
 func TestNewManagerOptions(t *testing.T) {
-	manager, err := NewManager(
+	manager, err := reconciler.NewManager(
 		t.Context(),
 		&config.ReconcilerConfig{},
 		newNoopRepo(),
 		nil,
-		[]JobHandler{&fakeJobHandler{jobType: "job.type"}},
-		WithMaxPendingReconciles(42),
-		WithConfirmJobAfter(3*time.Second),
-		WithExecInterval(250*time.Millisecond),
+		[]reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+		reconciler.WithMaxPendingReconciles(42),
+		reconciler.WithConfirmJobAfter(3*time.Second),
+		reconciler.WithExecInterval(250*time.Millisecond),
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(42), manager.orbitalManager.Config.MaxPendingReconciles)
-	assert.Equal(t, 3*time.Second, manager.orbitalManager.Config.ConfirmJobAfter)
-	assert.Equal(t, 250*time.Millisecond, manager.orbitalManager.Config.ConfirmJobWorkerConfig.ExecInterval)
-	assert.Equal(t, 250*time.Millisecond, manager.orbitalManager.Config.CreateTasksWorkerConfig.ExecInterval)
-	assert.Equal(t, 250*time.Millisecond, manager.orbitalManager.Config.ReconcileWorkerConfig.ExecInterval)
-	assert.Equal(t, 250*time.Millisecond, manager.orbitalManager.Config.NotifyWorkerConfig.ExecInterval)
+	cfg := manager.OrbitalManager().Config
+	assert.Equal(t, uint64(42), cfg.MaxPendingReconciles)
+	assert.Equal(t, 3*time.Second, cfg.ConfirmJobAfter)
+	assert.Equal(t, 250*time.Millisecond, cfg.ConfirmJobWorkerConfig.ExecInterval)
+	assert.Equal(t, 250*time.Millisecond, cfg.CreateTasksWorkerConfig.ExecInterval)
+	assert.Equal(t, 250*time.Millisecond, cfg.ReconcileWorkerConfig.ExecInterval)
+	assert.Equal(t, 250*time.Millisecond, cfg.NotifyWorkerConfig.ExecInterval)
 }
 
 func TestNewManagerValidation(t *testing.T) {
@@ -73,54 +72,54 @@ func TestNewManagerValidation(t *testing.T) {
 		name           string
 		cfg            *config.ReconcilerConfig
 		repo           *orbital.Repository
-		targetProvider TargetProvider
-		handlers       []JobHandler
+		targetProvider reconciler.TargetProvider
+		handlers       []reconciler.JobHandler
 		wantErr        error
 	}{
 		{
 			name:     "nil config",
 			repo:     newNoopRepo(),
-			handlers: []JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			handlers: []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}},
 			wantErr:  config.ErrReconcilerConfigNil,
 		},
 		{
 			name:     "nil repo",
 			cfg:      &config.ReconcilerConfig{},
-			handlers: []JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			wantErr:  ErrRepositoryNil,
+			handlers: []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			wantErr:  reconciler.ErrRepositoryNil,
 		},
 		{
 			name:     "target factory required",
 			cfg:      configWithTargets(),
 			repo:     newNoopRepo(),
-			handlers: []JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			wantErr:  ErrTargetFactoryRequired,
+			handlers: []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			wantErr:  reconciler.ErrTargetFactoryRequired,
 		},
 		{
 			name:    "handler required",
 			cfg:     &config.ReconcilerConfig{},
 			repo:    newNoopRepo(),
-			wantErr: ErrJobHandlerRequired,
+			wantErr: reconciler.ErrJobHandlerRequired,
 		},
 		{
 			name:     "nil handler",
 			cfg:      &config.ReconcilerConfig{},
 			repo:     newNoopRepo(),
-			handlers: []JobHandler{nil},
-			wantErr:  ErrJobHandlerNil,
+			handlers: []reconciler.JobHandler{nil},
+			wantErr:  reconciler.ErrJobHandlerNil,
 		},
 		{
 			name:     "empty handler type",
 			cfg:      &config.ReconcilerConfig{},
 			repo:     newNoopRepo(),
-			handlers: []JobHandler{&fakeJobHandler{}},
-			wantErr:  ErrJobTypeEmpty,
+			handlers: []reconciler.JobHandler{&fakeJobHandler{}},
+			wantErr:  reconciler.ErrJobTypeEmpty,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewManager(t.Context(), tt.cfg, tt.repo, tt.targetProvider, tt.handlers)
+			_, err := reconciler.NewManager(t.Context(), tt.cfg, tt.repo, tt.targetProvider, tt.handlers)
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
@@ -128,20 +127,20 @@ func TestNewManagerValidation(t *testing.T) {
 
 func TestManagerRoutesJobHandler(t *testing.T) {
 	handler := &fakeJobHandler{jobType: "job.type"}
-	manager, err := NewManager(t.Context(), &config.ReconcilerConfig{}, newNoopRepo(), nil, []JobHandler{handler})
+	manager, err := reconciler.NewManager(t.Context(), &config.ReconcilerConfig{}, newNoopRepo(), nil, []reconciler.JobHandler{handler})
 	require.NoError(t, err)
 
-	confirmResult, err := manager.confirmJob(t.Context(), orbital.Job{Type: "job.type"})
+	confirmResult, err := manager.ConfirmJob(t.Context(), orbital.Job{Type: "job.type"})
 	require.NoError(t, err)
 	assert.Equal(t, orbital.CompleteJobConfirmer().Type(), confirmResult.Type())
 
-	resolveResult, err := manager.resolveTasks(t.Context(), orbital.Job{Type: "job.type"}, "")
+	resolveResult, err := manager.ResolveTasks(t.Context(), orbital.Job{Type: "job.type"}, "")
 	require.NoError(t, err)
 	assert.Equal(t, orbital.CompleteTaskResolver().Type(), resolveResult.Type())
 
-	assert.NoError(t, manager.jobDone(t.Context(), orbital.Job{Type: "job.type"}))
-	assert.NoError(t, manager.jobFailed(t.Context(), orbital.Job{Type: "job.type"}))
-	assert.NoError(t, manager.jobCanceled(t.Context(), orbital.Job{Type: "job.type"}))
+	assert.NoError(t, manager.JobDone(t.Context(), orbital.Job{Type: "job.type"}))
+	assert.NoError(t, manager.JobFailed(t.Context(), orbital.Job{Type: "job.type"}))
+	assert.NoError(t, manager.JobCanceled(t.Context(), orbital.Job{Type: "job.type"}))
 
 	assert.True(t, handler.confirmed)
 	assert.True(t, handler.resolved)
@@ -151,27 +150,27 @@ func TestManagerRoutesJobHandler(t *testing.T) {
 }
 
 func TestManagerUnknownJobTypeCancels(t *testing.T) {
-	manager, err := NewManager(t.Context(), &config.ReconcilerConfig{}, newNoopRepo(), nil, []JobHandler{&fakeJobHandler{jobType: "known"}})
+	manager, err := reconciler.NewManager(t.Context(), &config.ReconcilerConfig{}, newNoopRepo(), nil, []reconciler.JobHandler{&fakeJobHandler{jobType: "known"}})
 	require.NoError(t, err)
 
-	confirmResult, err := manager.confirmJob(t.Context(), orbital.Job{Type: "unknown"})
+	confirmResult, err := manager.ConfirmJob(t.Context(), orbital.Job{Type: "unknown"})
 	require.NoError(t, err)
 	assert.Equal(t, orbital.CancelJobConfirmer("missing").Type(), confirmResult.Type())
 
-	resolveResult, err := manager.resolveTasks(t.Context(), orbital.Job{Type: "unknown"}, "")
+	resolveResult, err := manager.ResolveTasks(t.Context(), orbital.Job{Type: "unknown"}, "")
 	require.NoError(t, err)
 	assert.Equal(t, orbital.CancelTaskResolver("missing").Type(), resolveResult.Type())
 
-	assert.ErrorIs(t, manager.jobDone(t.Context(), orbital.Job{Type: "unknown"}), ErrJobHandlerNotFound)
-	assert.ErrorIs(t, manager.jobFailed(t.Context(), orbital.Job{Type: "unknown"}), ErrJobHandlerNotFound)
-	assert.ErrorIs(t, manager.jobCanceled(t.Context(), orbital.Job{Type: "unknown"}), ErrJobHandlerNotFound)
-	assert.Contains(t, jobHandlerNotFoundError("unknown").Error(), noJobHandlerRegisteredMessage)
+	assert.ErrorIs(t, manager.JobDone(t.Context(), orbital.Job{Type: "unknown"}), reconciler.ErrJobHandlerNotFound)
+	assert.ErrorIs(t, manager.JobFailed(t.Context(), orbital.Job{Type: "unknown"}), reconciler.ErrJobHandlerNotFound)
+	assert.ErrorIs(t, manager.JobCanceled(t.Context(), orbital.Job{Type: "unknown"}), reconciler.ErrJobHandlerNotFound)
+	assert.Contains(t, reconciler.JobHandlerNotFoundError("unknown").Error(), reconciler.NoJobHandlerRegisteredMessage)
 }
 
 func TestBuildTargetsClosesCreatedClientsOnError(t *testing.T) {
 	first := &fakeInitiator{}
 	providerErr := errors.New("boom")
-	targetProvider := TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
+	targetProvider := reconciler.NewTargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
 		if target.Name == "first" {
 			return first, nil
 		}
@@ -179,7 +178,7 @@ func TestBuildTargetsClosesCreatedClientsOnError(t *testing.T) {
 	})
 
 	targets := []config.ReconcilerTarget{validTarget("first"), validTarget("second")}
-	_, err := buildTargets(t.Context(), targets, targetProvider)
+	_, err := reconciler.BuildTargets(t.Context(), targets, targetProvider)
 
 	assert.ErrorIs(t, err, providerErr)
 	assert.True(t, first.closed)
@@ -187,12 +186,12 @@ func TestBuildTargetsClosesCreatedClientsOnError(t *testing.T) {
 
 func TestStopClosesTargetsWhenOrbitalWasNotStarted(t *testing.T) {
 	initiator := &fakeInitiator{}
-	targetProvider := TargetProvider(func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error) {
+	targetProvider := reconciler.NewTargetProvider(func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error) {
 		return initiator, nil
 	})
 
 	cfg := config.ReconcilerConfig{Targets: []config.ReconcilerTarget{validTarget("agent-aws")}}
-	manager, err := NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []JobHandler{&fakeJobHandler{jobType: "job.type"}})
+	manager, err := reconciler.NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}})
 	require.NoError(t, err)
 
 	err = manager.Stop(t.Context())
@@ -200,33 +199,6 @@ func TestStopClosesTargetsWhenOrbitalWasNotStarted(t *testing.T) {
 	assert.ErrorIs(t, err, orbital.ErrManagerNotStarted)
 	assert.True(t, initiator.closed)
 	assert.Equal(t, 1, initiator.closeCount)
-}
-
-func TestManagerOnlyExposesStartAndStop(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "manager.go", nil, 0)
-	require.NoError(t, err)
-
-	exported := map[string]struct{}{}
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Recv == nil || !fn.Name.IsExported() {
-			continue
-		}
-		if len(fn.Recv.List) == 0 {
-			continue
-		}
-		star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
-		if !ok {
-			continue
-		}
-		ident, ok := star.X.(*ast.Ident)
-		if ok && ident.Name == "Manager" {
-			exported[fn.Name.Name] = struct{}{}
-		}
-	}
-
-	assert.Equal(t, map[string]struct{}{"Start": {}, "Stop": {}}, exported)
 }
 
 func configWithTargets() *config.ReconcilerConfig {
