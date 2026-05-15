@@ -1,4 +1,4 @@
-package keys
+package admin
 
 import (
 	"context"
@@ -12,21 +12,20 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-type Service struct {
-	UnimplementedServiceServer
+type KeyService struct {
+	UnimplementedKeyServiceServer
 
 	keyStore store.Key
 }
 
-func NewService(keyStore store.Key) *Service {
-	return &Service{keyStore: keyStore}
+func NewKeyService(keyStore store.Key) *KeyService {
+	return &KeyService{keyStore: keyStore}
 }
 
-func (s *Service) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
+func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
 	var parentID *string
 	if req.GetParentId() != "" {
-		p := req.GetParentId()
-		parentID = &p
+		parentID = new(req.GetParentId())
 	}
 
 	key := model.NewKey(
@@ -48,7 +47,7 @@ func (s *Service) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*An
 	return &AnnounceKeyResponse{Key: KeyToProto(key)}, nil
 }
 
-func (s *Service) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
+func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
 	key, err := s.keyStore.GetKeyByID(ctx, req.GetId(), req.GetTenantId())
 	if err != nil {
 		if errors.Is(err, store.ErrKeyNotFound) {

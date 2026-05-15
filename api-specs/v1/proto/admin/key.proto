@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 
-package krypton.v1.keys;
+package krypton.v1.admin;
 
-option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/keys";
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin";
 
-service Service {
+service KeyService {
   rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
 }

@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.34.1
-// source: keys.proto
+// source: key.proto
 
-package keys
+package admin
 
 import (
 	reflect "reflect"
@@ -40,7 +40,7 @@ type Key struct {
 
 func (x *Key) Reset() {
 	*x = Key{}
-	mi := &file_keys_proto_msgTypes[0]
+	mi := &file_key_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -52,7 +52,7 @@ func (x *Key) String() string {
 func (*Key) ProtoMessage() {}
 
 func (x *Key) ProtoReflect() protoreflect.Message {
-	mi := &file_keys_proto_msgTypes[0]
+	mi := &file_key_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65,7 +65,7 @@ func (x *Key) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Key.ProtoReflect.Descriptor instead.
 func (*Key) Descriptor() ([]byte, []int) {
-	return file_keys_proto_rawDescGZIP(), []int{0}
+	return file_key_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Key) GetId() string {
@@ -152,7 +152,7 @@ type AnnounceKeyRequest struct {
 
 func (x *AnnounceKeyRequest) Reset() {
 	*x = AnnounceKeyRequest{}
-	mi := &file_keys_proto_msgTypes[1]
+	mi := &file_key_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -164,7 +164,7 @@ func (x *AnnounceKeyRequest) String() string {
 func (*AnnounceKeyRequest) ProtoMessage() {}
 
 func (x *AnnounceKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_keys_proto_msgTypes[1]
+	mi := &file_key_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -177,7 +177,7 @@ func (x *AnnounceKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceKeyRequest.ProtoReflect.Descriptor instead.
 func (*AnnounceKeyRequest) Descriptor() ([]byte, []int) {
-	return file_keys_proto_rawDescGZIP(), []int{1}
+	return file_key_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *AnnounceKeyRequest) GetTenantId() string {
@@ -231,7 +231,7 @@ type AnnounceKeyResponse struct {
 
 func (x *AnnounceKeyResponse) Reset() {
 	*x = AnnounceKeyResponse{}
-	mi := &file_keys_proto_msgTypes[2]
+	mi := &file_key_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -243,7 +243,7 @@ func (x *AnnounceKeyResponse) String() string {
 func (*AnnounceKeyResponse) ProtoMessage() {}
 
 func (x *AnnounceKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_keys_proto_msgTypes[2]
+	mi := &file_key_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -256,7 +256,7 @@ func (x *AnnounceKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceKeyResponse.ProtoReflect.Descriptor instead.
 func (*AnnounceKeyResponse) Descriptor() ([]byte, []int) {
-	return file_keys_proto_rawDescGZIP(), []int{2}
+	return file_key_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AnnounceKeyResponse) GetKey() *Key {
@@ -276,7 +276,7 @@ type GetKeyRequest struct {
 
 func (x *GetKeyRequest) Reset() {
 	*x = GetKeyRequest{}
-	mi := &file_keys_proto_msgTypes[3]
+	mi := &file_key_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -288,7 +288,7 @@ func (x *GetKeyRequest) String() string {
 func (*GetKeyRequest) ProtoMessage() {}
 
 func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_keys_proto_msgTypes[3]
+	mi := &file_key_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -301,7 +301,7 @@ func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyRequest.ProtoReflect.Descriptor instead.
 func (*GetKeyRequest) Descriptor() ([]byte, []int) {
-	return file_keys_proto_rawDescGZIP(), []int{3}
+	return file_key_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetKeyRequest) GetId() string {
@@ -327,7 +327,7 @@ type GetKeyResponse struct {
 
 func (x *GetKeyResponse) Reset() {
 	*x = GetKeyResponse{}
-	mi := &file_keys_proto_msgTypes[4]
+	mi := &file_key_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +339,7 @@ func (x *GetKeyResponse) String() string {
 func (*GetKeyResponse) ProtoMessage() {}
 
 func (x *GetKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_keys_proto_msgTypes[4]
+	mi := &file_key_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +352,7 @@ func (x *GetKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyResponse.ProtoReflect.Descriptor instead.
 func (*GetKeyResponse) Descriptor() ([]byte, []int) {
-	return file_keys_proto_rawDescGZIP(), []int{4}
+	return file_key_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetKeyResponse) GetKey() *Key {
@@ -362,12 +362,11 @@ func (x *GetKeyResponse) GetKey() *Key {
 	return nil
 }
 
-var File_keys_proto protoreflect.FileDescriptor
+var File_key_proto protoreflect.FileDescriptor
 
-const file_keys_proto_rawDesc = "" +
+const file_key_proto_rawDesc = "" +
 	"\n" +
-	"\n" +
-	"keys.proto\x12\x0fkrypton.v1.keys\"\xdf\x02\n" +
+	"\tkey.proto\x12\x10krypton.v1.admin\"\xe0\x02\n" +
 	"\x03Key\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -375,8 +374,8 @@ const file_keys_proto_rawDesc = "" +
 	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1b\n" +
 	"\tparent_id\x18\x05 \x01(\tR\bparentId\x12\x1d\n" +
 	"\n" +
-	"managed_by\x18\x06 \x01(\tR\tmanagedBy\x128\n" +
-	"\x06labels\x18\a \x03(\v2 .krypton.v1.keys.Key.LabelsEntryR\x06labels\x12\x14\n" +
+	"managed_by\x18\x06 \x01(\tR\tmanagedBy\x129\n" +
+	"\x06labels\x18\a \x03(\v2!.krypton.v1.admin.Key.LabelsEntryR\x06labels\x12\x14\n" +
 	"\x05state\x18\b \x01(\tR\x05state\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\t \x01(\x03R\tcreatedAt\x12\x1d\n" +
@@ -385,60 +384,61 @@ const file_keys_proto_rawDesc = "" +
 	" \x01(\x03R\tupdatedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9b\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9c\x02\n" +
 	"\x12AnnounceKeyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
 	"\tparent_id\x18\x04 \x01(\tR\bparentId\x12\x1f\n" +
 	"\vtarget_name\x18\x05 \x01(\tR\n" +
-	"targetName\x12G\n" +
-	"\x06labels\x18\x06 \x03(\v2/.krypton.v1.keys.AnnounceKeyRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"targetName\x12H\n" +
+	"\x06labels\x18\x06 \x03(\v20.krypton.v1.admin.AnnounceKeyRequest.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"=\n" +
-	"\x13AnnounceKeyResponse\x12&\n" +
-	"\x03key\x18\x01 \x01(\v2\x14.krypton.v1.keys.KeyR\x03key\"<\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\">\n" +
+	"\x13AnnounceKeyResponse\x12'\n" +
+	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key\"<\n" +
 	"\rGetKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"8\n" +
-	"\x0eGetKeyResponse\x12&\n" +
-	"\x03key\x18\x01 \x01(\v2\x14.krypton.v1.keys.KeyR\x03key2\xae\x01\n" +
-	"\aService\x12X\n" +
-	"\vAnnounceKey\x12#.krypton.v1.keys.AnnounceKeyRequest\x1a$.krypton.v1.keys.AnnounceKeyResponse\x12I\n" +
-	"\x06GetKey\x12\x1e.krypton.v1.keys.GetKeyRequest\x1a\x1f.krypton.v1.keys.GetKeyResponseB2Z0github.com/openkcm/krypton/pkg/api/v1/proto/keysb\x06proto3"
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"9\n" +
+	"\x0eGetKeyResponse\x12'\n" +
+	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key2\xb5\x01\n" +
+	"\n" +
+	"KeyService\x12Z\n" +
+	"\vAnnounceKey\x12$.krypton.v1.admin.AnnounceKeyRequest\x1a%.krypton.v1.admin.AnnounceKeyResponse\x12K\n" +
+	"\x06GetKey\x12\x1f.krypton.v1.admin.GetKeyRequest\x1a .krypton.v1.admin.GetKeyResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
 
 var (
-	file_keys_proto_rawDescOnce sync.Once
-	file_keys_proto_rawDescData []byte
+	file_key_proto_rawDescOnce sync.Once
+	file_key_proto_rawDescData []byte
 )
 
-func file_keys_proto_rawDescGZIP() []byte {
-	file_keys_proto_rawDescOnce.Do(func() {
-		file_keys_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_keys_proto_rawDesc), len(file_keys_proto_rawDesc)))
+func file_key_proto_rawDescGZIP() []byte {
+	file_key_proto_rawDescOnce.Do(func() {
+		file_key_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_key_proto_rawDesc), len(file_key_proto_rawDesc)))
 	})
-	return file_keys_proto_rawDescData
+	return file_key_proto_rawDescData
 }
 
-var file_keys_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_keys_proto_goTypes = []any{
-	(*Key)(nil),                 // 0: krypton.v1.keys.Key
-	(*AnnounceKeyRequest)(nil),  // 1: krypton.v1.keys.AnnounceKeyRequest
-	(*AnnounceKeyResponse)(nil), // 2: krypton.v1.keys.AnnounceKeyResponse
-	(*GetKeyRequest)(nil),       // 3: krypton.v1.keys.GetKeyRequest
-	(*GetKeyResponse)(nil),      // 4: krypton.v1.keys.GetKeyResponse
-	nil,                         // 5: krypton.v1.keys.Key.LabelsEntry
-	nil,                         // 6: krypton.v1.keys.AnnounceKeyRequest.LabelsEntry
+var file_key_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_key_proto_goTypes = []any{
+	(*Key)(nil),                 // 0: krypton.v1.admin.Key
+	(*AnnounceKeyRequest)(nil),  // 1: krypton.v1.admin.AnnounceKeyRequest
+	(*AnnounceKeyResponse)(nil), // 2: krypton.v1.admin.AnnounceKeyResponse
+	(*GetKeyRequest)(nil),       // 3: krypton.v1.admin.GetKeyRequest
+	(*GetKeyResponse)(nil),      // 4: krypton.v1.admin.GetKeyResponse
+	nil,                         // 5: krypton.v1.admin.Key.LabelsEntry
+	nil,                         // 6: krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
 }
-var file_keys_proto_depIdxs = []int32{
-	5, // 0: krypton.v1.keys.Key.labels:type_name -> krypton.v1.keys.Key.LabelsEntry
-	6, // 1: krypton.v1.keys.AnnounceKeyRequest.labels:type_name -> krypton.v1.keys.AnnounceKeyRequest.LabelsEntry
-	0, // 2: krypton.v1.keys.AnnounceKeyResponse.key:type_name -> krypton.v1.keys.Key
-	0, // 3: krypton.v1.keys.GetKeyResponse.key:type_name -> krypton.v1.keys.Key
-	1, // 4: krypton.v1.keys.Service.AnnounceKey:input_type -> krypton.v1.keys.AnnounceKeyRequest
-	3, // 5: krypton.v1.keys.Service.GetKey:input_type -> krypton.v1.keys.GetKeyRequest
-	2, // 6: krypton.v1.keys.Service.AnnounceKey:output_type -> krypton.v1.keys.AnnounceKeyResponse
-	4, // 7: krypton.v1.keys.Service.GetKey:output_type -> krypton.v1.keys.GetKeyResponse
+var file_key_proto_depIdxs = []int32{
+	5, // 0: krypton.v1.admin.Key.labels:type_name -> krypton.v1.admin.Key.LabelsEntry
+	6, // 1: krypton.v1.admin.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
+	0, // 2: krypton.v1.admin.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.Key
+	0, // 3: krypton.v1.admin.GetKeyResponse.key:type_name -> krypton.v1.admin.Key
+	1, // 4: krypton.v1.admin.KeyService.AnnounceKey:input_type -> krypton.v1.admin.AnnounceKeyRequest
+	3, // 5: krypton.v1.admin.KeyService.GetKey:input_type -> krypton.v1.admin.GetKeyRequest
+	2, // 6: krypton.v1.admin.KeyService.AnnounceKey:output_type -> krypton.v1.admin.AnnounceKeyResponse
+	4, // 7: krypton.v1.admin.KeyService.GetKey:output_type -> krypton.v1.admin.GetKeyResponse
 	6, // [6:8] is the sub-list for method output_type
 	4, // [4:6] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -446,26 +446,26 @@ var file_keys_proto_depIdxs = []int32{
 	0, // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_keys_proto_init() }
-func file_keys_proto_init() {
-	if File_keys_proto != nil {
+func init() { file_key_proto_init() }
+func file_key_proto_init() {
+	if File_key_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keys_proto_rawDesc), len(file_keys_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_key_proto_rawDesc), len(file_key_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_keys_proto_goTypes,
-		DependencyIndexes: file_keys_proto_depIdxs,
-		MessageInfos:      file_keys_proto_msgTypes,
+		GoTypes:           file_key_proto_goTypes,
+		DependencyIndexes: file_key_proto_depIdxs,
+		MessageInfos:      file_key_proto_msgTypes,
 	}.Build()
-	File_keys_proto = out.File
-	file_keys_proto_goTypes = nil
-	file_keys_proto_depIdxs = nil
+	File_key_proto = out.File
+	file_key_proto_goTypes = nil
+	file_key_proto_depIdxs = nil
 }

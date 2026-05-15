@@ -27,7 +27,7 @@ type expTenant struct {
 func TestCreateTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
 	t.Run("creates tenant with name only", func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestCreateTenant(t *testing.T) {
 func TestGetTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
 	t.Run("gets tenant by id", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestListTenants(t *testing.T) {
 		// given
 		tenantStore := newTestStore(t)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-			admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
+			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
 
 		// when `kr get tenants --json --server <server-addr>`
@@ -182,7 +182,7 @@ func TestListTenants(t *testing.T) {
 		// given
 		tenantStore := newTestStore(t)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-			admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
+			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
 
 		tenant1Name := "tenant-" + uuid.NewString()
@@ -225,7 +225,7 @@ func TestListTenants(t *testing.T) {
 func TestSelectTenant(t *testing.T) {
 	tenantStore := newTestStore(t)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admin.RegisterServiceServer(srv, admin.NewService(tenantStore))
+		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
 	t.Run("selects tenant by ID and persists config", func(t *testing.T) {

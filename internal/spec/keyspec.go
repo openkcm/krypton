@@ -2,11 +2,11 @@ package spec
 
 import (
 	"errors"
+
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 type (
-	// KeyKind identifies the type or purpose of a key within a hierarchy.
-	KeyKind string
 	// KeyRole identifies the role of a key within a hierarchy.
 	KeyRole string
 	// KeyAlgorithm identifies the encryption algorithm used by a key.
@@ -50,10 +50,10 @@ var (
 
 // KeySpec defines the properties of a key within a hierarchy, including its kind, role, and algorithm.
 type KeySpec struct {
-	Kind       KeyKind      `yaml:"kind"`
-	Role       KeyRole      `yaml:"role"`
-	Algorithm  KeyAlgorithm `yaml:"algorithm"`
-	LabelsSpec LabelsSpec   `yaml:"labels_spec"`
+	Kind       model.KeyKind `yaml:"kind"`
+	Role       KeyRole       `yaml:"role"`
+	Algorithm  KeyAlgorithm  `yaml:"algorithm"`
+	LabelsSpec LabelsSpec    `yaml:"labels_spec"`
 }
 
 // Usage returns the KeyUsage associated with the KeySpec's role.

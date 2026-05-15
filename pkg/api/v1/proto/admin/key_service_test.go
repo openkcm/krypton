@@ -1,4 +1,4 @@
-package keys_test
+package admin_test
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -24,9 +24,9 @@ func TestAnnounceKey(t *testing.T) {
 	tenant := createTenant(t, db)
 
 	t.Run("should create key successfully", func(t *testing.T) {
-		cli := setupServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, keyStore)
 
-		res, err := cli.AnnounceKey(ctx, &keys.AnnounceKeyRequest{
+		res, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "root-key-" + uuid.NewString(),
@@ -38,7 +38,7 @@ func TestAnnounceKey(t *testing.T) {
 		assert.NotEmpty(t, res.GetKey().GetId())
 		assert.Equal(t, "K0", res.GetKey().GetKind())
 		assert.Equal(t, "root", res.GetKey().GetManagedBy())
-		assert.Equal(t, "pending", res.GetKey().GetState())
+		assert.Equal(t, "pre-activation", res.GetKey().GetState())
 		assert.Equal(t, tenant.ID, res.GetKey().GetTenantId())
 		assert.Equal(t, "prod", res.GetKey().GetLabels()["env"])
 		assert.NotZero(t, res.GetKey().GetCreatedAt())
@@ -46,9 +46,9 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should create key with parent", func(t *testing.T) {
-		cli := setupServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, keyStore)
 
-		parentRes, err := cli.AnnounceKey(ctx, &keys.AnnounceKeyRequest{
+		parentRes, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "parent-" + uuid.NewString(),
@@ -56,7 +56,7 @@ func TestAnnounceKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		res, err := cli.AnnounceKey(ctx, &keys.AnnounceKeyRequest{
+		res, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
 			Name:       "child-" + uuid.NewString(),
@@ -78,9 +78,9 @@ func TestAnnounceKey(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpKeyStore)
 
-		resp, err := cli.AnnounceKey(ctx, &keys.AnnounceKeyRequest{
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   uuid.NewString(),
 			Kind:       "K0",
 			Name:       "will-fail",
@@ -103,9 +103,9 @@ func TestGetKeyService(t *testing.T) {
 	tenant := createTenant(t, db)
 
 	t.Run("should get key successfully", func(t *testing.T) {
-		cli := setupServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, keyStore)
 
-		created, err := cli.AnnounceKey(ctx, &keys.AnnounceKeyRequest{
+		created, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "get-me-" + uuid.NewString(),
@@ -114,7 +114,7 @@ func TestGetKeyService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		res, err := cli.GetKey(ctx, &keys.GetKeyRequest{
+		res, err := cli.GetKey(ctx, &admin.GetKeyRequest{
 			Id:       created.GetKey().GetId(),
 			TenantId: tenant.ID,
 		})
@@ -126,9 +126,9 @@ func TestGetKeyService(t *testing.T) {
 	})
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
-		cli := setupServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, keyStore)
 
-		resp, err := cli.GetKey(ctx, &keys.GetKeyRequest{
+		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{
 			Id:       uuid.NewString(),
 			TenantId: tenant.ID,
 		})
@@ -148,9 +148,9 @@ func TestGetKeyService(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpKeyStore)
 
-		resp, err := cli.GetKey(ctx, &keys.GetKeyRequest{
+		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{
 			Id:       uuid.NewString(),
 			TenantId: uuid.NewString(),
 		})

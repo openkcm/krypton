@@ -3,6 +3,8 @@ package spec
 import (
 	"errors"
 	"fmt"
+
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 var (
@@ -47,7 +49,7 @@ func (h KeyHierarchy) Validate() error {
 		return ErrKeyHierarchyKeysListEmpty
 	}
 
-	seenKind := make(map[KeyKind]struct{}, keyLen)
+	seenKind := make(map[model.KeyKind]struct{}, keyLen)
 	for i, k := range h.KeySpecs {
 		if err := k.Validate(); err != nil {
 			return fmt.Errorf("key at index %d: %w", i, err)
@@ -86,7 +88,7 @@ func (h KeyHierarchy) Validate() error {
 
 // FindKeySpec searches the KeySpecs in the hierarchy for a key with the specified kind.
 // It returns the KeySpec and true if found, or an empty KeySpec and false if not found.
-func (h KeyHierarchy) FindKeySpec(kind KeyKind) (KeySpec, bool) {
+func (h KeyHierarchy) FindKeySpec(kind model.KeyKind) (KeySpec, bool) {
 	for _, k := range h.KeySpecs {
 		if k.Kind == kind {
 			return k, true
@@ -96,7 +98,7 @@ func (h KeyHierarchy) FindKeySpec(kind KeyKind) (KeySpec, bool) {
 }
 
 // IndexOf returns the position of the given kind in the hierarchy's KeySpecs slice. Returns -1 if not found.
-func (h KeyHierarchy) IndexOf(kind KeyKind) int {
+func (h KeyHierarchy) IndexOf(kind model.KeyKind) int {
 	for i, k := range h.KeySpecs {
 		if k.Kind == kind {
 			return i
@@ -108,7 +110,7 @@ func (h KeyHierarchy) IndexOf(kind KeyKind) int {
 
 // KindsBetween returns the sub-slice of KeySpecs from start to end (inclusive).
 // Returns an error if either kind is not found or if start comes after end in the hierarchy.
-func (h KeyHierarchy) KindsBetween(start, end KeyKind) ([]KeySpec, error) {
+func (h KeyHierarchy) KindsBetween(start, end model.KeyKind) ([]KeySpec, error) {
 	startIdx := h.IndexOf(start)
 	if startIdx < 0 {
 		return nil, fmt.Errorf("%w: %q", ErrKeyHierarchyKindNotFound, start)

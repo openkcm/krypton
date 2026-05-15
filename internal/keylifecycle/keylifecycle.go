@@ -7,33 +7,13 @@ import (
 	"fmt"
 
 	"github.com/openkcm/krypton/internal/spec"
-)
-
-type (
-	// State represents a lifecycle state of a cryptographic key.
-	State string
-)
-
-// Key lifecycle states per NIST SP 800-57.
-const (
-	// StatePreActivation: key generated but not yet in use.
-	StatePreActivation State = "pre-activation"
-	// StateActive: key is in normal operational use.
-	StateActive State = "active"
-	// StateSuspended: key temporarily disabled; decrypt/unwrap only.
-	StateSuspended State = "suspended"
-	// StateDeactivated: key retired; decrypt/unwrap only.
-	StateDeactivated State = "deactivated"
-	// StateCompromised: key integrity suspect; decrypt/unwrap only.
-	StateCompromised State = "compromised"
-	// StateDestroyed: key material erased; no operations allowed.
-	StateDestroyed State = "destroyed"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 // lifecycle holds allowed state transitions and per-state permitted operations.
 type lifecycle struct {
-	transitions map[State]map[State]struct{}
-	stateUsages map[State]spec.KeyUsage
+	transitions map[model.KeyState]map[model.KeyState]struct{}
+	stateUsages map[model.KeyState]spec.KeyUsage
 }
 
 // Sentinel errors for lifecycle validation.
@@ -44,45 +24,45 @@ var (
 
 // defaultLifecycle encodes the NIST SP 800-57 state machine used by all public functions.
 var defaultLifecycle = lifecycle{
-	transitions: map[State]map[State]struct{}{
-		StatePreActivation: {
-			StateDestroyed:   {},
-			StateActive:      {},
-			StateCompromised: {},
+	transitions: map[model.KeyState]map[model.KeyState]struct{}{
+		model.KeyStatePreActivation: {
+			model.KeyStateDestroyed:   {},
+			model.KeyStateActive:      {},
+			model.KeyStateCompromised: {},
 		},
-		StateActive: {
-			StateDestroyed:   {},
-			StateDeactivated: {},
-			StateSuspended:   {},
-			StateCompromised: {},
+		model.KeyStateActive: {
+			model.KeyStateDestroyed:   {},
+			model.KeyStateDeactivated: {},
+			model.KeyStateSuspended:   {},
+			model.KeyStateCompromised: {},
 		},
-		StateSuspended: {
-			StateDestroyed:   {},
-			StateDeactivated: {},
-			StateCompromised: {},
-			StateActive:      {},
+		model.KeyStateSuspended: {
+			model.KeyStateDestroyed:   {},
+			model.KeyStateDeactivated: {},
+			model.KeyStateCompromised: {},
+			model.KeyStateActive:      {},
 		},
-		StateDeactivated: {
-			StateDestroyed:   {},
-			StateCompromised: {},
+		model.KeyStateDeactivated: {
+			model.KeyStateDestroyed:   {},
+			model.KeyStateCompromised: {},
 		},
-		StateCompromised: {
-			StateDestroyed: {},
+		model.KeyStateCompromised: {
+			model.KeyStateDestroyed: {},
 		},
-		StateDestroyed: {},
+		model.KeyStateDestroyed: {},
 	},
-	stateUsages: map[State]spec.KeyUsage{
-		StatePreActivation: spec.KeyUsageNone,
-		StateActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
-		StateSuspended:     spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		StateDeactivated:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		StateCompromised:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		StateDestroyed:     spec.KeyUsageNone,
+	stateUsages: map[model.KeyState]spec.KeyUsage{
+		model.KeyStatePreActivation: spec.KeyUsageNone,
+		model.KeyStateActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
+		model.KeyStateSuspended:     spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateDeactivated:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateCompromised:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateDestroyed:     spec.KeyUsageNone,
 	},
 }
 
 // ValidateTransition checks whether transitioning from one state to another is allowed.
-func ValidateTransition(from, to State) error {
+func ValidateTransition(from, to model.KeyState) error {
 	ts, ok := defaultLifecycle.transitions[from]
 	if !ok {
 		return fmt.Errorf("invalid from state: %s: %w", from, ErrInvalidKeyStateTransition)
@@ -96,7 +76,7 @@ func ValidateTransition(from, to State) error {
 }
 
 // ValidateKeyUsage checks whether operation op is permitted in state s.
-func ValidateKeyUsage(s State, op spec.KeyUsage) error {
+func ValidateKeyUsage(s model.KeyState, op spec.KeyUsage) error {
 	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
 		return fmt.Errorf("invalid state: %s: %w", s, ErrOperationNotAllowedInState)
@@ -110,13 +90,13 @@ func ValidateKeyUsage(s State, op spec.KeyUsage) error {
 }
 
 // GetAllowedTransitions returns the states reachable from the given state.
-func GetAllowedTransitions(s State) []State {
+func GetAllowedTransitions(s model.KeyState) []model.KeyState {
 	ts, ok := defaultLifecycle.transitions[s]
 	if !ok {
-		return []State{}
+		return []model.KeyState{}
 	}
 
-	rs := make([]State, 0, len(ts))
+	rs := make([]model.KeyState, 0, len(ts))
 	for k := range ts {
 		rs = append(rs, k)
 	}
@@ -124,7 +104,7 @@ func GetAllowedTransitions(s State) []State {
 }
 
 // GetAllowedKeyUsages returns the permitted operations for the given state.
-func GetAllowedKeyUsages(s State) spec.KeyUsage {
+func GetAllowedKeyUsages(s model.KeyState) spec.KeyUsage {
 	ops, ok := defaultLifecycle.stateUsages[s]
 	if !ok {
 		return spec.KeyUsageNone

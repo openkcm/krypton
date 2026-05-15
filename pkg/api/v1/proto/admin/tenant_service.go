@@ -12,20 +12,17 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-// Service implements the gRPC AdminService server.
-type Service struct {
-	UnimplementedServiceServer
+type TenantService struct {
+	UnimplementedTenantServiceServer
 
 	store store.Tenant
 }
 
-// NewService creates a new Service with the given tenant store.
-func NewService(s store.Tenant) *Service {
-	return &Service{store: s}
+func NewTenantService(s store.Tenant) *TenantService {
+	return &TenantService{store: s}
 }
 
-// CreateTenant creates a new tenant.
-func (s *Service) CreateTenant(ctx context.Context, req *CreateTenantRequest) (*CreateTenantResponse, error) {
+func (s *TenantService) CreateTenant(ctx context.Context, req *CreateTenantRequest) (*CreateTenantResponse, error) {
 	tenant := model.NewTenant(req.GetName(), req.GetLabels())
 
 	result, err := s.store.CreateTenant(ctx, store.CreateTenantQuery{
@@ -43,8 +40,7 @@ func (s *Service) CreateTenant(ctx context.Context, req *CreateTenantRequest) (*
 	}, nil
 }
 
-// GetTenant retrieves a tenant by ID.
-func (s *Service) GetTenant(ctx context.Context, req *GetTenantRequest) (*GetTenantResponse, error) {
+func (s *TenantService) GetTenant(ctx context.Context, req *GetTenantRequest) (*GetTenantResponse, error) {
 	result, err := s.store.GetTenant(ctx, store.GetTenantQuery{
 		ID: req.GetId(),
 	})
@@ -66,8 +62,7 @@ func (s *Service) GetTenant(ctx context.Context, req *GetTenantRequest) (*GetTen
 	}, nil
 }
 
-// ListTenants returns all tenants.
-func (s *Service) ListTenants(ctx context.Context, _ *ListTenantsRequest) (*ListTenantsResponse, error) {
+func (s *TenantService) ListTenants(ctx context.Context, _ *ListTenantsRequest) (*ListTenantsResponse, error) {
 	result, err := s.store.ListTenants(ctx, store.ListTenantsQuery{})
 	if err != nil {
 		return nil, proto.ErrDetailsWithCode(

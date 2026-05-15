@@ -6,19 +6,24 @@ import (
 	"github.com/openkcm/krypton/internal/clock"
 )
 
+type KeyKind string
+
 type KeyState string
 
 const (
-	KeyStatePending   KeyState = "pending"
-	KeyStateAnnounced KeyState = "announced"
-	KeyStateFailed    KeyState = "failed"
+	KeyStatePreActivation KeyState = "pre-activation"
+	KeyStateActive        KeyState = "active"
+	KeyStateSuspended     KeyState = "suspended"
+	KeyStateDeactivated   KeyState = "deactivated"
+	KeyStateCompromised   KeyState = "compromised"
+	KeyStateDestroyed     KeyState = "destroyed"
 )
 
 type Key struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
 	TenantID  string         `json:"tenant_id"`
-	Kind      string         `json:"kind"`
+	Kind      KeyKind        `json:"kind"`
 	ParentID  *string        `json:"parent_id"`
 	ManagedBy string         `json:"managed_by"`
 	Labels    Labels         `json:"labels"`
@@ -33,11 +38,11 @@ func NewKey(tenantID, name string, kind string, parentID *string, managedBy stri
 		ID:        uuid.NewString(),
 		Name:      name,
 		TenantID:  tenantID,
-		Kind:      kind,
+		Kind:      KeyKind(kind),
 		ParentID:  parentID,
 		ManagedBy: managedBy,
 		Labels:    labels,
-		State:     KeyStatePending,
+		State:     KeyStatePreActivation,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

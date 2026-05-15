@@ -1,4 +1,4 @@
-package keys
+package admin
 
 import (
 	"github.com/openkcm/krypton/internal/clock"
@@ -14,7 +14,7 @@ func KeyToProto(k model.Key) *Key {
 		Id:        k.ID,
 		Name:      k.Name,
 		TenantId:  k.TenantID,
-		Kind:      k.Kind,
+		Kind:      string(k.Kind),
 		ParentId:  parentID,
 		ManagedBy: k.ManagedBy,
 		Labels:    k.Labels,
@@ -27,14 +27,13 @@ func KeyToProto(k model.Key) *Key {
 func KeyFromProto(k *Key) model.Key {
 	var parentID *string
 	if k.GetParentId() != "" {
-		p := k.GetParentId()
-		parentID = &p
+		parentID = new(k.GetParentId())
 	}
 	return model.Key{
 		ID:        k.GetId(),
 		Name:      k.GetName(),
 		TenantID:  k.GetTenantId(),
-		Kind:      k.GetKind(),
+		Kind:      model.KeyKind(k.GetKind()),
 		ParentID:  parentID,
 		ManagedBy: k.GetManagedBy(),
 		Labels:    k.GetLabels(),

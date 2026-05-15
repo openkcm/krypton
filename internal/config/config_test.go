@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 func validRootConfig() *RootConfig {
@@ -418,7 +419,7 @@ reconciler:
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
 				assert.Equal(t, "production-hierarchy", cfg.Hierarchy.Name)
 				assert.Len(t, cfg.Hierarchy.KeySpecs, 4)
-				assert.Equal(t, spec.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
+				assert.Equal(t, model.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
 				assert.Equal(t, uint64(7), cfg.Reconciler.MaxReconcileCount)

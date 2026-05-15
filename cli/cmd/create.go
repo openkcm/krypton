@@ -41,7 +41,7 @@ func createTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewServiceClient(conn)
+			client := admin.NewTenantServiceClient(conn)
 
 			resp, err := client.CreateTenant(cmd.Context(), &admin.CreateTenantRequest{
 				Name:   name,

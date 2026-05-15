@@ -43,7 +43,7 @@ func getTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewServiceClient(conn)
+			client := admin.NewTenantServiceClient(conn)
 
 			resp, err := client.GetTenant(cmd.Context(), &admin.GetTenantRequest{
 				Id: args[0],
@@ -89,7 +89,7 @@ func getTenantsCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewServiceClient(conn)
+			client := admin.NewTenantServiceClient(conn)
 
 			resp, err := client.ListTenants(cmd.Context(), &admin.ListTenantsRequest{})
 			if err != nil {

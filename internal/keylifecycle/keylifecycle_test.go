@@ -8,15 +8,16 @@ import (
 
 	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
-var allKeyStates = []keylifecycle.State{
-	keylifecycle.StatePreActivation,
-	keylifecycle.StateActive,
-	keylifecycle.StateSuspended,
-	keylifecycle.StateDeactivated,
-	keylifecycle.StateCompromised,
-	keylifecycle.StateDestroyed,
+var allKeyStates = []model.KeyState{
+	model.KeyStatePreActivation,
+	model.KeyStateActive,
+	model.KeyStateSuspended,
+	model.KeyStateDeactivated,
+	model.KeyStateCompromised,
+	model.KeyStateDestroyed,
 }
 
 var allKeyOperations = []spec.KeyUsage{
@@ -30,55 +31,55 @@ func TestKeyLifecycleStateTransitions(t *testing.T) {
 	t.Parallel()
 
 	tts := []struct {
-		from             keylifecycle.State
-		validTransitions map[keylifecycle.State]struct{}
+		from             model.KeyState
+		validTransitions map[model.KeyState]struct{}
 	}{
 		{
-			from: keylifecycle.StatePreActivation,
-			validTransitions: map[keylifecycle.State]struct{}{
-				keylifecycle.StateDestroyed:   {},
-				keylifecycle.StateActive:      {},
-				keylifecycle.StateCompromised: {},
+			from: model.KeyStatePreActivation,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed:   {},
+				model.KeyStateActive:      {},
+				model.KeyStateCompromised: {},
 			},
 		},
 		{
-			from: keylifecycle.StateActive,
-			validTransitions: map[keylifecycle.State]struct{}{
-				keylifecycle.StateDestroyed:   {},
-				keylifecycle.StateDeactivated: {},
-				keylifecycle.StateSuspended:   {},
-				keylifecycle.StateCompromised: {},
+			from: model.KeyStateActive,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed:   {},
+				model.KeyStateDeactivated: {},
+				model.KeyStateSuspended:   {},
+				model.KeyStateCompromised: {},
 			},
 		},
 		{
-			from: keylifecycle.StateSuspended,
-			validTransitions: map[keylifecycle.State]struct{}{
-				keylifecycle.StateDestroyed:   {},
-				keylifecycle.StateDeactivated: {},
-				keylifecycle.StateCompromised: {},
-				keylifecycle.StateActive:      {},
+			from: model.KeyStateSuspended,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed:   {},
+				model.KeyStateDeactivated: {},
+				model.KeyStateCompromised: {},
+				model.KeyStateActive:      {},
 			},
 		},
 		{
-			from: keylifecycle.StateDeactivated,
-			validTransitions: map[keylifecycle.State]struct{}{
-				keylifecycle.StateDestroyed:   {},
-				keylifecycle.StateCompromised: {},
+			from: model.KeyStateDeactivated,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed:   {},
+				model.KeyStateCompromised: {},
 			},
 		},
 		{
-			from: keylifecycle.StateCompromised,
-			validTransitions: map[keylifecycle.State]struct{}{
-				keylifecycle.StateDestroyed: {},
+			from: model.KeyStateCompromised,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed: {},
 			},
 		},
 		{
-			from:             keylifecycle.StateDestroyed,
-			validTransitions: map[keylifecycle.State]struct{}{},
+			from:             model.KeyStateDestroyed,
+			validTransitions: map[model.KeyState]struct{}{},
 		},
 		{
 			from:             "invalid-state",
-			validTransitions: map[keylifecycle.State]struct{}{},
+			validTransitions: map[model.KeyState]struct{}{},
 		},
 	}
 
@@ -109,7 +110,7 @@ func TestKeyLifecycleStateTransitions(t *testing.T) {
 		t.Parallel()
 		for _, tt := range tts {
 			// given
-			expResult := make([]keylifecycle.State, 0, len(tt.validTransitions))
+			expResult := make([]model.KeyState, 0, len(tt.validTransitions))
 			for k := range tt.validTransitions {
 				expResult = append(expResult, k)
 			}
@@ -131,31 +132,31 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 	t.Parallel()
 
 	tts := []struct {
-		state           keylifecycle.State
+		state           model.KeyState
 		validOperations spec.KeyUsage
 	}{
 		{
-			state:           keylifecycle.StatePreActivation,
+			state:           model.KeyStatePreActivation,
 			validOperations: spec.KeyUsageNone,
 		},
 		{
-			state:           keylifecycle.StateActive,
+			state:           model.KeyStateActive,
 			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageEncrypt | spec.KeyUsageWrap | spec.KeyUsageUnwrap,
 		},
 		{
-			state:           keylifecycle.StateSuspended,
+			state:           model.KeyStateSuspended,
 			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
-			state:           keylifecycle.StateDeactivated,
+			state:           model.KeyStateDeactivated,
 			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
-			state:           keylifecycle.StateCompromised,
+			state:           model.KeyStateCompromised,
 			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		},
 		{
-			state:           keylifecycle.StateDestroyed,
+			state:           model.KeyStateDestroyed,
 			validOperations: spec.KeyUsageNone,
 		},
 		{

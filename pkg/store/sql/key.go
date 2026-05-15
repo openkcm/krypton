@@ -59,13 +59,12 @@ func (ks *KeyStore) GetKeyByID(ctx context.Context, id, tenantID string) (*model
 
 func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
 	var key model.Key
-	var kind string
 	var labelsData []byte
 
 	err := row.Scan(
 		&key.ID,
 		&key.TenantID,
-		&kind,
+		&key.Kind,
 		&key.Name,
 		&key.ParentID,
 		&key.ManagedBy,
@@ -80,8 +79,6 @@ func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
 		}
 		return nil, err
 	}
-
-	key.Kind = kind
 
 	if len(labelsData) > 0 {
 		if err := json.Unmarshal(labelsData, &key.Labels); err != nil {
