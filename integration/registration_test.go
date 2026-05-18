@@ -30,8 +30,8 @@ func TestRegistration(t *testing.T) {
 	db, dbConnStr := createDatabase(t)
 
 	// Create agent store
-	agentStore, err := sql.NewAgentStore(ctx, db)
-	require.NoError(t, err, "failed to create agent store")
+	require.NoError(t, sql.Migrate(ctx, db))
+	agentStore := sql.NewAgentStore(db)
 
 	// Build binaries for root server and agent
 	rootBinary := buildBinary(t, "root", "../cmd/root")
@@ -45,7 +45,7 @@ func TestRegistration(t *testing.T) {
 		"DATABASE_URL=" + dbConnStr,
 		"SERVER_PORT=" + rootPort,
 	})
-	err = rootCmd.Start()
+	err := rootCmd.Start()
 	require.NoError(t, err, "failed to start root server process")
 
 	// Wait for root server to accept connections

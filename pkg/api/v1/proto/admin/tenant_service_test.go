@@ -21,12 +21,12 @@ func TestCreateTenant(t *testing.T) {
 
 	db := createDatabase(t)
 
-	tenantStore, err := storesql.NewTenantStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("creates tenant successfully", func(t *testing.T) {
 		// given
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 		expName := "tenant-" + uuid.New().String()
 
 		// when
@@ -56,14 +56,14 @@ func TestCreateTenant(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		tenantStore, err := storesql.NewTenantStore(ctx, tmpDB)
-		require.NoError(t, err)
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error
-		_, err = tmpDB.ExecContext(ctx, "DROP TABLE tenants")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE tenants CASCADE")
 		require.NoError(t, err)
 
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		// when
 		resp, err := cli.CreateTenant(ctx, &admin.CreateTenantRequest{
@@ -86,12 +86,12 @@ func TestGetTenant(t *testing.T) {
 
 	db := createDatabase(t)
 
-	tenantStore, err := storesql.NewTenantStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("should get tenant successfully", func(t *testing.T) {
 		// given
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		createRes, err := cli.CreateTenant(ctx, &admin.CreateTenantRequest{
 			Name:   "tenant-" + uuid.New().String(),
@@ -115,7 +115,7 @@ func TestGetTenant(t *testing.T) {
 
 	t.Run("should return not found error if tenant does not exist", func(t *testing.T) {
 		// given
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		// when
 		resp, err := cli.GetTenant(ctx, &admin.GetTenantRequest{
@@ -133,14 +133,14 @@ func TestGetTenant(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		tenantStore, err := storesql.NewTenantStore(ctx, tmpDB)
-		require.NoError(t, err)
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error
-		_, err = tmpDB.ExecContext(ctx, "DROP TABLE tenants")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE tenants CASCADE")
 		require.NoError(t, err)
 
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		// when
 		resp, err := cli.GetTenant(ctx, &admin.GetTenantRequest{
@@ -161,12 +161,12 @@ func TestListTenants(t *testing.T) {
 
 	db := createDatabase(t)
 
-	tenantStore, err := storesql.NewTenantStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("should list tenants successfully", func(t *testing.T) {
 		// given
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		names := map[string]struct{}{}
 		for range 3 {
@@ -201,14 +201,14 @@ func TestListTenants(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		tenantStore, err := storesql.NewTenantStore(ctx, tmpDB)
-		require.NoError(t, err)
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error
-		_, err = tmpDB.ExecContext(ctx, "DROP TABLE tenants")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE tenants CASCADE")
 		require.NoError(t, err)
 
-		cli := setupServerAndClient(t, tenantStore)
+		cli := setupTenantServerAndClient(t, tenantStore)
 
 		// when
 		resp, err := cli.ListTenants(ctx, &admin.ListTenantsRequest{})

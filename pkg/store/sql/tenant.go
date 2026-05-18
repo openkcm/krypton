@@ -15,27 +15,8 @@ type TenantStore struct {
 
 var _ store.Tenant = &TenantStore{}
 
-func NewTenantStore(ctx context.Context, db *sql.DB) (*TenantStore, error) {
-	ps := &TenantStore{
-		db: db,
-	}
-
-	stmt := `
-	CREATE TABLE IF NOT EXISTS tenants (
-		id UUID PRIMARY KEY,
-		name TEXT NOT NULL,
-		labels JSONB,
-		created_at BIGINT NOT NULL,
-		updated_at BIGINT NOT NULL
-	);
-	`
-
-	_, err := ps.db.ExecContext(ctx, stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	return ps, nil
+func NewTenantStore(db *sql.DB) *TenantStore {
+	return &TenantStore{db: db}
 }
 
 func (ps *TenantStore) CreateTenant(ctx context.Context, query store.CreateTenantQuery) (store.CreateTenantResult, error) {

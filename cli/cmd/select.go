@@ -52,7 +52,7 @@ func selectTenantCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewServiceClient(conn)
+			client := admin.NewTenantServiceClient(conn)
 
 			var tenant *admin.Tenant
 
@@ -91,7 +91,7 @@ func selectTenantCmd() *cobra.Command {
 	return cmd
 }
 
-func getTenantByID(ctx context.Context, client admin.ServiceClient, id string) (*admin.Tenant, error) {
+func getTenantByID(ctx context.Context, client admin.TenantServiceClient, id string) (*admin.Tenant, error) {
 	resp, err := client.GetTenant(ctx, &admin.GetTenantRequest{
 		Id: id,
 	})
@@ -104,7 +104,7 @@ func getTenantByID(ctx context.Context, client admin.ServiceClient, id string) (
 	return resp.GetTenant(), nil
 }
 
-func selectTenantInteractive(cmd *cobra.Command, client admin.ServiceClient) (*admin.Tenant, error) {
+func selectTenantInteractive(cmd *cobra.Command, client admin.TenantServiceClient) (*admin.Tenant, error) {
 	resp, err := client.ListTenants(cmd.Context(), &admin.ListTenantsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tenants: %w", err)

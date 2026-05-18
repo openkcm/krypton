@@ -392,8 +392,8 @@ const file_admin_proto_rawDesc = "" +
 	"\x06tenant\x18\x01 \x01(\v2\x18.krypton.v1.admin.TenantR\x06tenant\"\x14\n" +
 	"\x12ListTenantsRequest\"I\n" +
 	"\x13ListTenantsResponse\x122\n" +
-	"\atenants\x18\x01 \x03(\v2\x18.krypton.v1.admin.TenantR\atenants2\x9a\x02\n" +
-	"\aService\x12]\n" +
+	"\atenants\x18\x01 \x03(\v2\x18.krypton.v1.admin.TenantR\atenants2\xa0\x02\n" +
+	"\rTenantService\x12]\n" +
 	"\fCreateTenant\x12%.krypton.v1.admin.CreateTenantRequest\x1a&.krypton.v1.admin.CreateTenantResponse\x12T\n" +
 	"\tGetTenant\x12\".krypton.v1.admin.GetTenantRequest\x1a#.krypton.v1.admin.GetTenantResponse\x12Z\n" +
 	"\vListTenants\x12$.krypton.v1.admin.ListTenantsRequest\x1a%.krypton.v1.admin.ListTenantsResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
@@ -428,12 +428,12 @@ var file_admin_proto_depIdxs = []int32{
 	0, // 2: krypton.v1.admin.CreateTenantResponse.tenant:type_name -> krypton.v1.admin.Tenant
 	0, // 3: krypton.v1.admin.GetTenantResponse.tenant:type_name -> krypton.v1.admin.Tenant
 	0, // 4: krypton.v1.admin.ListTenantsResponse.tenants:type_name -> krypton.v1.admin.Tenant
-	1, // 5: krypton.v1.admin.Service.CreateTenant:input_type -> krypton.v1.admin.CreateTenantRequest
-	3, // 6: krypton.v1.admin.Service.GetTenant:input_type -> krypton.v1.admin.GetTenantRequest
-	5, // 7: krypton.v1.admin.Service.ListTenants:input_type -> krypton.v1.admin.ListTenantsRequest
-	2, // 8: krypton.v1.admin.Service.CreateTenant:output_type -> krypton.v1.admin.CreateTenantResponse
-	4, // 9: krypton.v1.admin.Service.GetTenant:output_type -> krypton.v1.admin.GetTenantResponse
-	6, // 10: krypton.v1.admin.Service.ListTenants:output_type -> krypton.v1.admin.ListTenantsResponse
+	1, // 5: krypton.v1.admin.TenantService.CreateTenant:input_type -> krypton.v1.admin.CreateTenantRequest
+	3, // 6: krypton.v1.admin.TenantService.GetTenant:input_type -> krypton.v1.admin.GetTenantRequest
+	5, // 7: krypton.v1.admin.TenantService.ListTenants:input_type -> krypton.v1.admin.ListTenantsRequest
+	2, // 8: krypton.v1.admin.TenantService.CreateTenant:output_type -> krypton.v1.admin.CreateTenantResponse
+	4, // 9: krypton.v1.admin.TenantService.GetTenant:output_type -> krypton.v1.admin.GetTenantResponse
+	6, // 10: krypton.v1.admin.TenantService.ListTenants:output_type -> krypton.v1.admin.ListTenantsResponse
 	8, // [8:11] is the sub-list for method output_type
 	5, // [5:8] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name

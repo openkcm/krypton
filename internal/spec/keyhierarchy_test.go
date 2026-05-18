@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 func TestKeyHierarchy(t *testing.T) {
@@ -440,7 +441,7 @@ func TestKeyHierarchy(t *testing.T) {
 		tts := []struct {
 			name       string
 			input      *spec.KeyHierarchy
-			keyToCheck spec.KeyKind
+			keyToCheck model.KeyKind
 			expIsFound bool
 			expKeySpec spec.KeySpec
 		}{
@@ -528,7 +529,7 @@ func TestKeyHierarchy(t *testing.T) {
 
 		tts := []struct {
 			name     string
-			kind     spec.KeyKind
+			kind     model.KeyKind
 			expIndex int
 		}{
 			{name: "found at index 0", kind: "K0", expIndex: 0},
@@ -561,16 +562,16 @@ func TestKeyHierarchy(t *testing.T) {
 			specs, err := hierarchy.KindsBetween("K1", "K3")
 			assert.NoError(t, err)
 			assert.Len(t, specs, 3)
-			assert.Equal(t, spec.KeyKind("K1"), specs[0].Kind)
-			assert.Equal(t, spec.KeyKind("K2"), specs[1].Kind)
-			assert.Equal(t, spec.KeyKind("K3"), specs[2].Kind)
+			assert.Equal(t, model.KeyKind("K1"), specs[0].Kind)
+			assert.Equal(t, model.KeyKind("K2"), specs[1].Kind)
+			assert.Equal(t, model.KeyKind("K3"), specs[2].Kind)
 		})
 
 		t.Run("single element range", func(t *testing.T) {
 			specs, err := hierarchy.KindsBetween("K2", "K2")
 			assert.NoError(t, err)
 			assert.Len(t, specs, 1)
-			assert.Equal(t, spec.KeyKind("K2"), specs[0].Kind)
+			assert.Equal(t, model.KeyKind("K2"), specs[0].Kind)
 		})
 
 		t.Run("full range returns entire slice", func(t *testing.T) {

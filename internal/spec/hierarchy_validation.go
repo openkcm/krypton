@@ -3,6 +3,8 @@ package spec
 import (
 	"errors"
 	"fmt"
+
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 var (
@@ -29,11 +31,11 @@ var (
 
 // ValidateSegmentAgainstHierarchy checks that a segment's endpoints exist in the hierarchy are in the correct order, and that bindings cover exactly the segment range.
 func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding) error {
-	startIdx := h.IndexOf(KeyKind(seg.StartKind))
+	startIdx := h.IndexOf(model.KeyKind(seg.StartKind))
 	if startIdx < 0 {
 		return fmt.Errorf("%w: %q", ErrSegmentStartKindNotInHierarchy, seg.StartKind)
 	}
-	endIdx := h.IndexOf(KeyKind(seg.EndKind))
+	endIdx := h.IndexOf(model.KeyKind(seg.EndKind))
 	if endIdx < 0 {
 		return fmt.Errorf("%w: %q", ErrSegmentEndKindNotInHierarchy, seg.EndKind)
 	}
@@ -67,12 +69,12 @@ func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[stri
 		return err
 	}
 
-	startIdx := h.IndexOf(KeyKind(seg.StartKind))
+	startIdx := h.IndexOf(model.KeyKind(seg.StartKind))
 	if startIdx != 0 {
 		return ErrRootSegmentStartNotFirst
 	}
 
-	endSpec, _ := h.FindKeySpec(KeyKind(seg.EndKind))
+	endSpec, _ := h.FindKeySpec(model.KeyKind(seg.EndKind))
 	if endSpec.Role == KeyRoleTek {
 		return ErrRootSegmentEndIsTek
 	}
@@ -91,14 +93,14 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 		return err
 	}
 
-	startSpec, _ := h.FindKeySpec(KeyKind(seg.StartKind))
+	startSpec, _ := h.FindKeySpec(model.KeyKind(seg.StartKind))
 	if startSpec.Role != KeyRoleTek {
 		return ErrAgentSegmentStartNotTek
 	}
 
 	isSingleKey := seg.StartKind == seg.EndKind
 	if !isSingleKey {
-		endSpec, _ := h.FindKeySpec(KeyKind(seg.EndKind))
+		endSpec, _ := h.FindKeySpec(model.KeyKind(seg.EndKind))
 		if endSpec.Role == KeyRoleRoot {
 			return ErrAgentSegmentEndIsRoot
 		}
@@ -107,7 +109,7 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 		}
 	}
 
-	kindsInRange, _ := h.KindsBetween(KeyKind(seg.StartKind), KeyKind(seg.EndKind))
+	kindsInRange, _ := h.KindsBetween(model.KeyKind(seg.StartKind), model.KeyKind(seg.EndKind))
 	for _, ks := range kindsInRange {
 		if ks.Role == KeyRoleRoot {
 			return ErrAgentSegmentContainsRoot
@@ -170,15 +172,15 @@ func validateBindingsParentProviders(h KeyHierarchy, bindings map[string]KeyBind
 			return fmt.Errorf("%w: %q (referenced by key kind %q)", ErrParentKeyProviderNotResolvable, providerName, kind)
 		}
 
-		kindIdx := h.IndexOf(KeyKind(kind))
+		kindIdx := h.IndexOf(model.KeyKind(kind))
 		if kindIdx <= 0 {
 			continue
 		}
 
 		parentKind := h.KeySpecs[kindIdx-1].Kind
 		parentIdx := h.IndexOf(parentKind)
-		providerStartIdx := h.IndexOf(KeyKind(providerSeg.StartKind))
-		providerEndIdx := h.IndexOf(KeyKind(providerSeg.EndKind))
+		providerStartIdx := h.IndexOf(model.KeyKind(providerSeg.StartKind))
+		providerEndIdx := h.IndexOf(model.KeyKind(providerSeg.EndKind))
 		if providerStartIdx >= 0 && providerEndIdx >= 0 {
 			if parentIdx < providerStartIdx || parentIdx > providerEndIdx {
 				return fmt.Errorf("%w: parent key kind %q not in segment %q (%s→%s)",

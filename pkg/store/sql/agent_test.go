@@ -44,8 +44,8 @@ func TestRegister(t *testing.T) {
 		db.Close()
 	})
 
-	subj, err := storesql.NewAgentStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	subj := storesql.NewAgentStore(db)
 
 	t.Run("should insert new agent registration", func(t *testing.T) {
 		// given
@@ -119,8 +119,7 @@ func TestGet(t *testing.T) {
 
 	t.Run("should get existing agent registration", func(t *testing.T) {
 		// given
-		subj, err := storesql.NewAgentStore(ctx, db)
-		require.NoError(t, err)
+		subj := storesql.NewAgentStore(db)
 
 		registration := core.AgentRegistration{
 			Name:       agentName(),
@@ -152,8 +151,7 @@ func TestGet(t *testing.T) {
 
 	t.Run("should return error if agent registration not found", func(t *testing.T) {
 		// given
-		subj, err := storesql.NewAgentStore(ctx, db)
-		require.NoError(t, err)
+		subj := storesql.NewAgentStore(db)
 
 		// when
 		getResult, err := subj.Get(ctx, store.GetAgentQuery{
@@ -178,8 +176,8 @@ func TestUpdateStatus(t *testing.T) {
 		db.Close()
 	})
 
-	subj, err := storesql.NewAgentStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	subj := storesql.NewAgentStore(db)
 
 	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
 		// given
@@ -713,8 +711,8 @@ func TestDelete(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	subj, err := storesql.NewAgentStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	subj := storesql.NewAgentStore(db)
 
 	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
 		// given
@@ -911,8 +909,8 @@ func TestList(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	subj, err := storesql.NewAgentStore(ctx, db)
-	require.NoError(t, err)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	subj := storesql.NewAgentStore(db)
 
 	name1 := uuid.New().String()
 	name2 := uuid.New().String()

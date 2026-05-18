@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
 
@@ -126,13 +127,8 @@ func newTestStore(t *testing.T) store.Tenant {
 	ctx := t.Context()
 
 	testDB, _ := createDatabase(t)
-	s, err := storesql.NewTenantStore(ctx, testDB)
-	if err != nil {
-		testDB.Close()
-		assert.FailNowf(t, "failed to create test store", "error: %v", err)
-	}
-
-	return s
+	require.NoError(t, storesql.Migrate(ctx, testDB))
+	return storesql.NewTenantStore(testDB)
 }
 
 // createDatabase creates a new PostgreSQL database for testing and returns a connection to it.

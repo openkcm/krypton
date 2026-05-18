@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+
+package krypton.v1.admin;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin";
+
+service KeyService {
+  rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
+  rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
+}
+
+message Key {
+  string id = 1;
+  string name = 2;
+  string tenant_id = 3;
+  string kind = 4;
+  string parent_id = 5;
+  string managed_by = 6;
+  map<string, string> labels = 7;
+  string state = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+}
+
+message AnnounceKeyRequest {
+  string tenant_id = 1;
+  string kind = 2;
+  string name = 3;
+  string parent_id = 4;
+  string target_name = 5;
+  map<string, string> labels = 6;
+}
+
+message AnnounceKeyResponse {
+  Key key = 1;
+}
+
+message GetKeyRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message GetKeyResponse {
+  Key key = 1;
+}

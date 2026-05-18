@@ -17,29 +17,8 @@ type AgentStore struct {
 
 var _ store.Agent = &AgentStore{}
 
-func NewAgentStore(ctx context.Context, db *sql.DB) (*AgentStore, error) {
-	reg := &AgentStore{
-		db: db,
-	}
-
-	stmt := `
-	CREATE TABLE IF NOT EXISTS agent_registrations (
-		name TEXT NOT NULL,
-		instance_id UUID,
-		status TEXT NOT NULL,
-	  last_heartbeat BIGINT NOT NULL,
-		created_at BIGINT NOT NULL,
-		updated_at BIGINT NOT NULL,
- 		PRIMARY KEY (name, instance_id)
-	);
-	`
-
-	_, err := reg.db.ExecContext(ctx, stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	return reg, nil
+func NewAgentStore(db *sql.DB) *AgentStore {
+	return &AgentStore{db: db}
 }
 
 func (s *AgentStore) Register(ctx context.Context, q store.RegisterAgentQuery) (store.RegisterAgentResult, error) {
