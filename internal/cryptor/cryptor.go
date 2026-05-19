@@ -4,6 +4,8 @@ package cryptor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
@@ -84,4 +86,38 @@ type Cryptor interface {
 	Encryptor
 	Decryptor
 	Info() Info
+}
+
+var ErrRequest = errors.New("invalid cryptographic request")
+
+func (req EncryptRequest) Validate() error {
+	if req.TenantID == "" {
+		return fmt.Errorf("invalid tenant ID: %w", ErrRequest)
+	}
+	if req.KeyID == "" {
+		return fmt.Errorf("invalid key ID: %w", ErrRequest)
+	}
+	if req.KeyVersion == 0 {
+		return fmt.Errorf("invalid key version: %w", ErrRequest)
+	}
+	if req.Plaintext == nil {
+		return fmt.Errorf("invalid plaintext: %w", ErrRequest)
+	}
+	return nil
+}
+
+func (req DecryptRequest) Validate() error {
+	if req.TenantID == "" {
+		return fmt.Errorf("invalid tenant ID: %w", ErrRequest)
+	}
+	if req.KeyID == "" {
+		return fmt.Errorf("invalid key ID: %w", ErrRequest)
+	}
+	if req.KeyVersion == 0 {
+		return fmt.Errorf("invalid key version: %w", ErrRequest)
+	}
+	if req.Ciphertext == nil {
+		return fmt.Errorf("invalid ciphertext: %w", ErrRequest)
+	}
+	return nil
 }

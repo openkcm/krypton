@@ -1,0 +1,164 @@
+package cryptor_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/securemem"
+)
+
+func TestDecryptRequestValidate(t *testing.T) {
+	// given
+	tts := []struct {
+		name    string
+		req     cryptor.DecryptRequest
+		wantErr error
+	}{
+		{
+			name: "valid request",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid request with negative key version",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: -1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "missing tenant ID",
+			req: cryptor.DecryptRequest{
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "missing key ID",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyVersion: 1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "invalid key version",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 0,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "missing ciphertext",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.req.Validate()
+
+			// then
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestEncryptRequestValidate(t *testing.T) {
+	// given
+	tts := []struct {
+		name    string
+		req     cryptor.EncryptRequest
+		wantErr error
+	}{
+		{
+			name: "valid request",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  &securemem.Data{},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid request with negative key version",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: -1,
+				Plaintext:  &securemem.Data{},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "missing tenant ID",
+			req: cryptor.EncryptRequest{
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "missing key ID",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyVersion: 1,
+				Plaintext:  &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "invalid key version",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 0,
+				Plaintext:  &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "missing plaintext",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.req.Validate()
+
+			// then
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
