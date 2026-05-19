@@ -16,7 +16,7 @@ type EncryptRequest struct {
 	// KeyID is the unique identifier of the key.
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
-	KeyVersion string
+	KeyVersion int
 	// Algorithm is the encryption algorithm to apply.
 	Algorithm spec.KeyAlgorithm
 	// Secret is the key material used for encryption.
@@ -42,7 +42,7 @@ type DecryptRequest struct {
 	// KeyID is the unique identifier of the key.
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
-	KeyVersion string
+	KeyVersion int
 	// Algorithm is the encryption algorithm that was used.
 	Algorithm spec.KeyAlgorithm
 	// Secret is the key material used for decryption.
@@ -61,12 +61,10 @@ type DecryptResponse struct {
 	Plaintext *securemem.Data
 }
 
-// CryptorInfo describes a Cryptor implementation's capabilities.
-type CryptorInfo struct {
+// Info describes a Cryptor implementation's capabilities.
+type Info struct {
 	// Name is a human-readable identifier for the implementation.
 	Name string
-	// Algorithm is the encryption algorithm supported by this implementation.
-	Algorithm spec.KeyAlgorithm
 	// DecryptionSecretRequired is false if cryptor manages its own secret (e.g., HSM).
 	DecryptionSecretRequired bool
 }
@@ -85,5 +83,5 @@ type Decryptor interface {
 type Cryptor interface {
 	Encryptor
 	Decryptor
-	CryptorInfo() CryptorInfo
+	Info() Info
 }
