@@ -172,6 +172,7 @@ func TestGetKey(t *testing.T) {
 }
 
 func TestGetKeyChain(t *testing.T) {
+	// given
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
 	require.NoError(t, err)
@@ -184,8 +185,13 @@ func TestGetKeyChain(t *testing.T) {
 	h := createKeyHierarchy(t, keyStore, tenantStore)
 
 	t.Run("should get full key chain for leaf node", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: h.h.ID, TenantID: h.tenant.ID}
+
+		// when
 		result, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 4)
 		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
@@ -195,8 +201,13 @@ func TestGetKeyChain(t *testing.T) {
 	})
 
 	t.Run("should get key chain for intermediate node", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: h.c.ID, TenantID: h.tenant.ID}
+
+		// when
 		result, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 2)
 		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
@@ -204,8 +215,13 @@ func TestGetKeyChain(t *testing.T) {
 	})
 
 	t.Run("should get key chain for second intermediate node", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: h.e.ID, TenantID: h.tenant.ID}
+
+		// when
 		result, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 3)
 		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
@@ -214,27 +230,42 @@ func TestGetKeyChain(t *testing.T) {
 	})
 
 	t.Run("should get key chain for root node", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: h.root.ID, TenantID: h.tenant.ID}
+
+		// when
 		result, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 1)
 		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
 	})
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: uuid.NewString(), TenantID: h.tenant.ID}
+
+		// when
 		_, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
+		// given
 		query := store.GetKeyChainQuery{KeyID: h.h.ID, TenantID: uuid.NewString()}
+
+		// when
 		_, err := keyStore.GetKeyChain(ctx, query)
+
+		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }
 
-func TestGetKeyDescendants(t *testing.T) {
+func TestGetKeyTree(t *testing.T) {
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
 	require.NoError(t, err)
@@ -246,57 +277,108 @@ func TestGetKeyDescendants(t *testing.T) {
 
 	k := createKeyHierarchy(t, keyStore, tenantStore)
 
-	t.Run("should get all descendants for root node", func(t *testing.T) {
-		query := store.GetKeyDescendantsQuery{KeyID: k.root.ID, TenantID: k.tenant.ID}
-		result, err := keyStore.GetKeyDescendants(ctx, query)
+	t.Run("should get all key tree for root node", func(t *testing.T) {
+		// given
+		query := store.GetKeyTreeQuery{KeyID: k.root.ID, TenantID: k.tenant.ID}
+
+		// when
+		result, err := keyStore.GetKeyTree(ctx, query)
+
+		// then
 		require.NoError(t, err)
-		require.Len(t, result.Keys, 4)                   // 4 levels total (depth 0-3)
-		require.Len(t, result.Keys[0], 1)                // depth 0: A
-		require.Len(t, result.Keys[1], 2)                // depth 1: B, C
-		require.Len(t, result.Keys[2], 4)                // depth 2: D, E, F, G
-		require.Len(t, result.Keys[3], 1)                // depth 3: H
-		assert.Equal(t, k.root.ID, result.Keys[0][0].ID) // A
-		assert.Equal(t, k.b.ID, result.Keys[1][0].ID)    // B
-		assert.Equal(t, k.c.ID, result.Keys[1][1].ID)    // C
-		assert.Equal(t, k.d.ID, result.Keys[2][0].ID)    // D
-		assert.Equal(t, k.e.ID, result.Keys[2][1].ID)    // E
-		assert.Equal(t, k.f.ID, result.Keys[2][2].ID)    // F
-		assert.Equal(t, k.g.ID, result.Keys[2][3].ID)    // G
-		assert.Equal(t, k.h.ID, result.Keys[3][0].ID)    // H
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 2)             // depth 1: B, C
+				assert.Equal(t, k.b.ID, layer[0].ID) // B
+				assert.Equal(t, k.c.ID, layer[1].ID) // C
+			case 2:
+				require.Len(t, layer, 4)             // depth 2: D, E, F, G
+				assert.Equal(t, k.d.ID, layer[0].ID) // D
+				assert.Equal(t, k.e.ID, layer[1].ID) // E
+				assert.Equal(t, k.f.ID, layer[2].ID) // F
+				assert.Equal(t, k.g.ID, layer[3].ID) // G
+			case 3:
+				require.Len(t, layer, 1)             // depth 3: H
+				assert.Equal(t, k.h.ID, layer[0].ID) // H
+			}
+			depth++
+		}
+		assert.Equal(t, 4, depth) // 4 levels total (depth 0-3)
 	})
 
-	t.Run("should get descendants for intermediate node", func(t *testing.T) {
-		query := store.GetKeyDescendantsQuery{KeyID: k.c.ID, TenantID: k.tenant.ID}
-		result, err := keyStore.GetKeyDescendants(ctx, query)
+	t.Run("should get tree for intermediate node", func(t *testing.T) {
+		// given
+		query := store.GetKeyTreeQuery{KeyID: k.c.ID, TenantID: k.tenant.ID}
+
+		// when
+		result, err := keyStore.GetKeyTree(ctx, query)
+
+		// then
 		require.NoError(t, err)
-		require.Len(t, result.Keys, 3)                // 3 depth levels below C including itself
-		require.Len(t, result.Keys[0], 1)             // depth 0: C
-		require.Len(t, result.Keys[1], 2)             // depth 1: F, G
-		require.Len(t, result.Keys[2], 1)             // depth 2: H
-		assert.Equal(t, k.c.ID, result.Keys[0][0].ID) // C
-		assert.Equal(t, k.f.ID, result.Keys[1][0].ID) // F
-		assert.Equal(t, k.g.ID, result.Keys[1][1].ID) // G
-		assert.Equal(t, k.h.ID, result.Keys[2][0].ID) // H
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)             // depth 0: C
+				assert.Equal(t, k.c.ID, layer[0].ID) // C
+			case 1:
+				require.Len(t, layer, 2)             // depth 1: F, G
+				assert.Equal(t, k.f.ID, layer[0].ID) // F
+				assert.Equal(t, k.g.ID, layer[1].ID) // G
+			case 2:
+				require.Len(t, layer, 1)             // depth 2: H
+				assert.Equal(t, k.h.ID, layer[0].ID) // H
+			}
+			depth++
+		}
+		require.Equal(t, 3, depth) // 3 depth levels below C including itself
 	})
 
 	t.Run("should get only self for leaf node", func(t *testing.T) {
-		query := store.GetKeyDescendantsQuery{KeyID: k.h.ID, TenantID: k.tenant.ID}
-		result, err := keyStore.GetKeyDescendants(ctx, query)
+		// given
+		query := store.GetKeyTreeQuery{KeyID: k.h.ID, TenantID: k.tenant.ID}
+
+		// when
+		result, err := keyStore.GetKeyTree(ctx, query)
+
+		// then
 		require.NoError(t, err)
-		require.Len(t, result.Keys, 1)                // 1 depth level below H including itself
-		require.Len(t, result.Keys[0], 1)             // depth 0: H
-		assert.Equal(t, k.h.ID, result.Keys[0][0].ID) // H
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)             // depth 0: H
+				assert.Equal(t, k.h.ID, layer[0].ID) // H
+			}
+			depth++
+		}
+		require.Equal(t, 1, depth) // 1 depth level below H including itself
 	})
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
-		query := store.GetKeyDescendantsQuery{KeyID: uuid.NewString(), TenantID: k.tenant.ID}
-		_, err := keyStore.GetKeyDescendants(ctx, query)
+		// given
+		query := store.GetKeyTreeQuery{KeyID: uuid.NewString(), TenantID: k.tenant.ID}
+
+		// when
+		_, err := keyStore.GetKeyTree(ctx, query)
+
+		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
-		query := store.GetKeyDescendantsQuery{KeyID: k.root.ID, TenantID: uuid.NewString()}
-		_, err := keyStore.GetKeyDescendants(ctx, query)
+		// given
+		query := store.GetKeyTreeQuery{KeyID: k.root.ID, TenantID: uuid.NewString()}
+
+		// when
+		_, err := keyStore.GetKeyTree(ctx, query)
+
+		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }

@@ -103,10 +103,10 @@ func (ks *KeyStore) GetKeyChain(ctx context.Context, query store.GetKeyChainQuer
 	return store.GetKeyChainResult{Keys: keys}, nil
 }
 
-// GetKeyDescendants returns all descendants of the given key (including itself)
+// GetKeyTree returns all descendants of the given key (including itself)
 // by traversing parent_id down to the leaves.
 // The result is grouped by depth level.
-func (ks *KeyStore) GetKeyDescendants(ctx context.Context, query store.GetKeyDescendantsQuery) (store.GetKeyDescendantsResult, error) {
+func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery) (store.GetKeyTreeResult, error) {
 	stmt := `
 		WITH RECURSIVE key_tree AS (
 			SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, state, created_at, updated_at, 0 AS depth
@@ -126,11 +126,11 @@ func (ks *KeyStore) GetKeyDescendants(ctx context.Context, query store.GetKeyDes
 
 	rows, err := ks.db.QueryContext(ctx, stmt, query.KeyID, query.TenantID)
 	if err != nil {
-		return store.GetKeyDescendantsResult{}, err
+		return store.GetKeyTreeResult{}, err
 	}
 	defer rows.Close()
 
-	var levels [][]model.Key
+	var layers [][]model.Key
 	var found bool
 	for rows.Next() {
 		var key model.Key
@@ -151,12 +151,12 @@ func (ks *KeyStore) GetKeyDescendants(ctx context.Context, query store.GetKeyDes
 			&depth,
 		)
 		if err != nil {
-			return store.GetKeyDescendantsResult{}, err
+			return store.GetKeyTreeResult{}, err
 		}
 
 		if len(labelsData) > 0 {
 			if err := json.Unmarshal(labelsData, &key.Labels); err != nil {
-				return store.GetKeyDescendantsResult{}, err
+				return store.GetKeyTreeResult{}, err
 			}
 		}
 
@@ -164,21 +164,21 @@ func (ks *KeyStore) GetKeyDescendants(ctx context.Context, query store.GetKeyDes
 			found = true
 		}
 
-		for len(levels) <= depth {
-			levels = append(levels, nil)
+		for len(layers) <= depth {
+			layers = append(layers, nil)
 		}
-		levels[depth] = append(levels[depth], key)
+		layers[depth] = append(layers[depth], key)
 	}
 
 	if err := rows.Err(); err != nil {
-		return store.GetKeyDescendantsResult{}, err
+		return store.GetKeyTreeResult{}, err
 	}
 
 	if !found {
-		return store.GetKeyDescendantsResult{}, store.ErrKeyNotFound
+		return store.GetKeyTreeResult{}, store.ErrKeyNotFound
 	}
 
-	return store.GetKeyDescendantsResult{Keys: levels}, nil
+	return store.GetKeyTreeResult{KeyTree: layers}, nil
 }
 
 func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
