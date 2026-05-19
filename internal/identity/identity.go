@@ -22,8 +22,8 @@ var (
 	ErrEmptyDomain = errors.New("domain cannot be empty")
 
 	// ErrInvalidCharacters is returned when a domain, field type, or field name
-	// contains characters from invalidChars ('*', '/', or whitespace).
-	ErrInvalidCharacters = errors.New("must not contain '*', '/', or whitespace")
+	// contains characters from invalidChars.
+	ErrInvalidCharacters = errors.New("contains invalid characters")
 
 	// ErrInvalidPath is returned when the path has an incomplete type/name pair.
 	ErrInvalidPath = errors.New("invalid path: must have even number of fields (type/name pairs)")
