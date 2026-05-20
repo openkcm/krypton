@@ -64,3 +64,26 @@ func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyRes
 
 	return &GetKeyResponse{Key: KeyToProto(*key)}, nil
 }
+
+func (s *KeyService) GetKeyChain(ctx context.Context, req *GetKeyChainRequest) (*GetKeyChainResponse, error) {
+	res, err := s.keyStore.GetKeyChain(ctx, store.GetKeyChainQuery{
+		KeyID:    req.GetId(),
+		TenantID: req.GetTenantId(),
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrKeyNotFound) {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "key not found"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to get key chain"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	return &GetKeyChainResponse{
+		Keys: KeysToProto(res.Keys),
+	}, nil
+}
