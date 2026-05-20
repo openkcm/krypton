@@ -15,6 +15,7 @@ var (
 	ErrRoleInvalid            = errors.New("invalid config role")
 	ErrConfigAddressEmpty     = errors.New("address URL cannot be empty")
 	ErrConfigKeyBindingsEmpty = errors.New("key bindings cannot be empty")
+	ErrConfigTrustDomainEmpty = errors.New("trust domain cannot be empty")
 )
 
 // AddressType identifies the transport protocol for inter-service communication.
@@ -41,6 +42,7 @@ type KryptonRoot struct {
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
 	Name           string                     `yaml:"name"`
+	TrustDomain    string                     `yaml:"trust_domain"`
 	Role           spec.AgentRole             `yaml:"role"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
@@ -65,6 +67,11 @@ func (cfg *RootConfig) Validate() error {
 	if err := cfg.Reconciler.Validate(); err != nil {
 		return fmt.Errorf("reconciler: %w", err)
 	}
+
+	if cfg.TrustDomain == "" {
+		return ErrConfigTrustDomainEmpty
+	}
+
 	if cfg.Role != spec.RootRole {
 		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.RootRole)
 	}
@@ -120,6 +127,7 @@ func LoadRootConfig(path string) (*RootConfig, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
 	return &cfg, nil
 }
 

@@ -13,8 +13,9 @@ import (
 
 func validRootConfig() *RootConfig {
 	return &RootConfig{
-		Name: "root",
-		Role: "root",
+		Name:        "root",
+		TrustDomain: "acme-corp",
+		Role:        "root",
 		Segment: spec.HierarchySegment{
 			StartKind: "K0",
 			EndKind:   "K1",
@@ -85,6 +86,11 @@ func TestValidateRootConfig(t *testing.T) {
 			name:    "empty name",
 			modify:  func(c *RootConfig) { c.Name = "" },
 			wantErr: ErrConfigNameEmpty,
+		},
+		{
+			name:    "empty trust domain",
+			modify:  func(c *RootConfig) { c.TrustDomain = "" },
+			wantErr: ErrConfigTrustDomainEmpty,
 		},
 		{
 			name:    "wrong role",
@@ -316,6 +322,7 @@ func TestValidateAgentBootstrapConfig(t *testing.T) {
 
 func TestLoadRootConfig(t *testing.T) {
 	const validYAML = `name: "root"
+trust_domain: "acme-corp"
 role: "root"
 segment:
   start_kind: "K0"
@@ -409,6 +416,7 @@ reconciler:
 			validate: func(t *testing.T, cfg *RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
+				assert.Equal(t, "acme-corp", cfg.TrustDomain)
 				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
@@ -435,6 +443,7 @@ reconciler:
 		{
 			name: "valid YAML but fails validation",
 			yaml: `name: ""
+trust_domain: "acme-corp"
 role: "root"
 segment:
   start_kind: "K0"
