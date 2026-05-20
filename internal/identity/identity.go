@@ -32,13 +32,27 @@ var (
 	ErrEmptyField = errors.New("field type and name must be non-empty")
 )
 
-// URI is the string representation of a krypton identity.
-type URI string
+type (
+	// URI is the string representation of a krypton identity.
+	URI string
 
-// Domain identifies a trust boundary for identities.
-type Domain string
+	// Domain identifies a trust boundary for identities.
+	Domain string
 
-// Validate checks that the domain is non-empty and does not contain invalid characters.
+	// Field represents a type/name pair in the identity path.
+	Field struct {
+		Type string
+		Name string
+	}
+
+	// Identity is a kryptonid:// URI representing any entity in Krypton.
+	Identity struct {
+		Domain Domain
+		Fields []Field
+	}
+)
+
+// Validate validates that the domain is non-empty and does not contain invalid characters.
 func (d Domain) Validate() error {
 	if d == "" {
 		return ErrEmptyDomain
@@ -49,19 +63,7 @@ func (d Domain) Validate() error {
 	return nil
 }
 
-// Identity is a kryptonid:// URI representing any entity in Krypton.
-type Identity struct {
-	Domain Domain
-	Fields []Field
-}
-
-// Field represents a type/name pair in the identity path.
-type Field struct {
-	Type string
-	Name string
-}
-
-// Validate checks that type and name are non-empty and do not contain invalid characters.
+// Validate validates that type and name are non-empty and do not contain invalid characters.
 func (f Field) Validate() error {
 	for _, v := range []string{f.Type, f.Name} {
 		if v == "" {
@@ -95,6 +97,8 @@ func (id *Identity) URI() URI {
 // Parse parses a kryptonid:// URI into an Identity.
 // Returns an error if the scheme is wrong, domain is empty or invalid,
 // or the path has an odd number of fields (incomplete type/name pair).
+//
+// Example URI: kryptonid://acme-corp/node/root
 func Parse(uri URI) (Identity, error) {
 	after, found := strings.CutPrefix(string(uri), Scheme+"://")
 	if !found {
