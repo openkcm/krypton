@@ -1,6 +1,9 @@
 package model
 
 import (
+	"iter"
+	"slices"
+
 	"github.com/google/uuid"
 
 	"github.com/openkcm/krypton/internal/clock"
@@ -32,6 +35,22 @@ type Key struct {
 	UpdatedAt clock.UnixNano `json:"updated_at"`
 }
 
+// KeyTree represents a hierarchical structure of keys, where each inner
+// slice represents a layer of keys in the hierarchy.
+type KeyTree [][]Key
+
+// KeyTreeTraverser defines methods for traversing a KeyTree in different orders.
+type KeyTreeTraverser interface {
+	// IterKeysByLayerAsc iterates the keys layer by layer in ascending order (from root to leaf).
+	IterKeysByLayerAsc() iter.Seq[[]Key]
+	// IterKeysByLayerDsc iterates the keys layer by layer in descending order (from leaf to root).
+	IterKeysByLayerDsc() iter.Seq[[]Key]
+	// IterLayerAsc iterates the key kinds layer by layer in ascending order (from root to leaf).
+	IterLayerAsc() iter.Seq[KeyKind]
+	// IterLayerDsc iterates the key kinds layer by layer in descending order (from leaf to root).
+	IterLayerDsc() iter.Seq[KeyKind]
+}
+
 func NewKey(tenantID, name string, kind string, parentID *string, managedBy string, labels Labels) Key {
 	now := clock.Now()
 	return Key{
@@ -45,5 +64,57 @@ func NewKey(tenantID, name string, kind string, parentID *string, managedBy stri
 		State:     KeyStatePreActivation,
 		CreatedAt: now,
 		UpdatedAt: now,
+	}
+}
+
+var _ KeyTreeTraverser = KeyTree{}
+
+// IterKeysByLayerAsc iterates the keys layer by layer in ascending order (from root to leaf).
+func (kt KeyTree) IterKeysByLayerAsc() iter.Seq[[]Key] {
+	return func(yield func([]Key) bool) {
+		for _, layer := range kt {
+			if !yield(layer) {
+				return
+			}
+		}
+	}
+}
+
+// IterKeysByLayerDsc iterates the keys layer by layer in descending order (from leaf to root).
+func (kt KeyTree) IterKeysByLayerDsc() iter.Seq[[]Key] {
+	return func(yield func([]Key) bool) {
+		for _, layer := range slices.Backward(kt) {
+			if !yield(layer) {
+				return
+			}
+		}
+	}
+}
+
+// IterLayerAsc iterates the key kinds layer by layer in ascending order (from root to leaf).
+func (kt KeyTree) IterLayerAsc() iter.Seq[KeyKind] {
+	return func(yield func(KeyKind) bool) {
+		for _, layer := range kt {
+			if len(layer) == 0 {
+				continue
+			}
+			if !yield(layer[0].Kind) {
+				return
+			}
+		}
+	}
+}
+
+// IterLayerDsc iterates the key kinds layer by layer in descending order (from leaf to root).
+func (kt KeyTree) IterLayerDsc() iter.Seq[KeyKind] {
+	return func(yield func(KeyKind) bool) {
+		for _, layer := range slices.Backward(kt) {
+			if len(layer) == 0 {
+				continue
+			}
+			if !yield(layer[0].Kind) {
+				return
+			}
+		}
 	}
 }
