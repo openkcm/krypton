@@ -130,7 +130,7 @@ func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery)
 	}
 	defer rows.Close()
 
-	var layers [][]model.Key
+	var layers model.KeyTree
 	var found bool
 	for rows.Next() {
 		var key model.Key

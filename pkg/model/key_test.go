@@ -1,4 +1,4 @@
-package store_test
+package model_test
 
 import (
 	"testing"
@@ -6,12 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/pkg/model"
-	"github.com/openkcm/krypton/pkg/store"
 )
 
 func TestKeyTreeTraversal(t *testing.T) {
 	// given
-	subj := store.KeyTree{
+	subj := model.KeyTree{
 		{
 			{ID: "A", Name: "A", Kind: "K0"},
 		},
