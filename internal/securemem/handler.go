@@ -80,6 +80,11 @@ func Run(ctx context.Context, handler Handler) (*HandlerResponse, error) {
 			}
 		}
 
+		// Sever references to the vaults so the GC below can finalize any
+		// unreachable vault data; prevents the request from holding them alive.
+		req.persistentVault = nil
+		req.temporaryVault = nil
+
 		// calling GC here to ensure that any vault data that is no longer referenced is
 		// collected and finalized before we mark the persistent vault as read-only.
 		// This is important because if there are any vault data that are still referenced,

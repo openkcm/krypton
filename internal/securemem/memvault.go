@@ -44,9 +44,9 @@ func (v *MemVault) Reserve(name string, size int) (SecureBytes, error) {
 	return data.SecureBytes(), nil
 }
 
-// Get retrieves the SecureBytes associated with the given name from the vault.
-// It returns the SecureBytes and a boolean indicating whether the data was found.
-func (v *MemVault) Get(name string) (SecureBytes, bool) {
+// Get retrieves the Data instance associated with the given name from the vault.
+// It returns the Data instance and a boolean indicating whether the data was found in the vault.
+func (v *MemVault) Get(name string) (*Data, bool) {
 	v.mux.RLock()
 	defer v.mux.RUnlock()
 
@@ -56,7 +56,7 @@ func (v *MemVault) Get(name string) (SecureBytes, bool) {
 		return nil, false
 	}
 
-	return data.SecureBytes(), true
+	return data, true
 }
 
 // Destroy securely destroys the Data instance associated with the given name and removes it from the vault.

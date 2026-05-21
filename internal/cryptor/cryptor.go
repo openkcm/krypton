@@ -100,7 +100,7 @@ func (req EncryptRequest) Validate() error {
 	if req.KeyVersion == 0 {
 		return fmt.Errorf("invalid key version: %w", ErrRequest)
 	}
-	if req.Plaintext == nil {
+	if req.Plaintext == nil || req.Plaintext.SecureBytes() == nil {
 		return fmt.Errorf("invalid plaintext: %w", ErrRequest)
 	}
 	return nil
@@ -116,7 +116,7 @@ func (req DecryptRequest) Validate() error {
 	if req.KeyVersion == 0 {
 		return fmt.Errorf("invalid key version: %w", ErrRequest)
 	}
-	if req.Ciphertext == nil {
+	if req.Ciphertext == nil || req.Ciphertext.SecureBytes() == nil {
 		return fmt.Errorf("invalid ciphertext: %w", ErrRequest)
 	}
 	return nil

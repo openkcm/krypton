@@ -1,0 +1,189 @@
+package cryptor
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"errors"
+	"fmt"
+
+	"github.com/openkcm/krypton/internal/securemem"
+)
+
+const (
+	plainTextKey  = "plainText"
+	cipherTextKey = "cipherText"
+)
+
+type AES256GCM struct {
+	info Info
+}
+
+var _ Cryptor = &AES256GCM{}
+
+var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
+
+func NewAES256GCM(name string) *AES256GCM {
+	return &AES256GCM{
+		info: Info{
+			Name:                     name,
+			DecryptionSecretRequired: true,
+		},
+	}
+}
+
+// Info returns metadata about the AES256GCM cryptor.
+func (a *AES256GCM) Info() Info {
+	return a.info
+}
+
+// Encrypt encrypts the plaintext using AES-256 in GCM mode with the provided key and AAD.
+func (a *AES256GCM) Encrypt(ctx context.Context, req EncryptRequest) (*EncryptResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if req.Secret == nil {
+		return nil, fmt.Errorf("missing encryption secret: %w", ErrRequest)
+	}
+
+	secretSize := len(req.Secret.SecureBytes())
+	if secretSize != 32 {
+		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, ErrRequest)
+	}
+
+	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
+		// 1. Initialize AES-256 block cipher from the 32-byte key.
+		block, err := aes.NewCipher(req.Secret.SecureBytes())
+		if err != nil {
+			return fmt.Errorf("failed to create AES cipher: %w", err)
+		}
+
+		// 2. Wrap the block cipher in GCM mode for authenticated encryption.
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return fmt.Errorf("failed to create GCM: %w", err)
+		}
+
+		// 3. Compute total output size: nonce + ciphertext + auth tag.
+		nonceSize := gcm.NonceSize()
+		totalSealDataSize := nonceSize + len(req.Plaintext.SecureBytes()) + gcm.Overhead()
+
+		// 4. Reserve secure (mlock'd) memory in the persistent vault for the output.
+		cipherBytes, err := hr.PersistentVault().Reserve(cipherTextKey, totalSealDataSize)
+		if err != nil {
+			return fmt.Errorf("failed to allocate secure memory for ciphertext: %w", err)
+		}
+
+		// 5. Generate a random nonce and write it to the front of the output buffer.
+		nonce := cipherBytes[:nonceSize]
+		if _, err := rand.Read(nonce); err != nil {
+			return fmt.Errorf("failed to generate nonce: %w", err)
+		}
+
+		// 6. Seal plaintext into the buffer after the nonce.
+		//    Output layout: [nonce || ciphertext || tag]
+		gcm.Seal(cipherBytes[nonceSize:nonceSize], nonce, req.Plaintext.SecureBytes(), req.AAD)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 7. Retrieve the sealed ciphertext from the (now read-only) vault.
+	cipherText, ok := resp.MemVault().Get(cipherTextKey)
+	if !ok {
+		// This should never happen since we just reserved this memory, but if it does, destroy all vault data to be safe.
+		err = resp.MemVault().DestroyAll()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("allocated ciphertext not found in vault after encryption: %w", ErrAllocatedDataNotFound)
+	}
+
+	return &EncryptResponse{
+		Ciphertext: cipherText,
+	}, nil
+}
+
+// Decrypt decrypts the ciphertext using AES-256 in GCM mode with the provided key and AAD.
+func (a *AES256GCM) Decrypt(ctx context.Context, req DecryptRequest) (*DecryptResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	if req.Secret == nil {
+		return nil, fmt.Errorf("missing decryption secret: %w", ErrRequest)
+	}
+
+	secretSize := len(req.Secret.SecureBytes())
+	if secretSize != 32 {
+		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, ErrRequest)
+	}
+
+	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
+		// 1. Initialize AES-256 block cipher from the 32-byte key.
+		block, err := aes.NewCipher(req.Secret.SecureBytes())
+		if err != nil {
+			return fmt.Errorf("failed to create AES cipher: %w", err)
+		}
+
+		// 2. Wrap the block cipher in GCM mode for authenticated decryption.
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return fmt.Errorf("failed to create GCM: %w", err)
+		}
+
+		nonceSize := gcm.NonceSize()
+		cipherTextSize := len(req.Ciphertext.SecureBytes())
+
+		// 3. Verify the ciphertext is at least nonce + tag bytes long.
+		if cipherTextSize < nonceSize+gcm.Overhead() {
+			return fmt.Errorf("ciphertext too short: %w", ErrRequest)
+		}
+
+		// 4. Compute plaintext size: total - nonce - tag.
+		plainTextSize := cipherTextSize - nonceSize - gcm.Overhead()
+
+		// 5. Reserve secure (mlock'd) memory in the persistent vault for the plaintext.
+		plainBytes, err := hr.PersistentVault().Reserve(plainTextKey, plainTextSize)
+		if err != nil {
+			return fmt.Errorf("failed to allocate secure memory for plaintext: %w", err)
+		}
+
+		// 6. Decrypt and authenticate. Open appends the plaintext into plainBytes'
+		//    backing array (passed as [:0] so it writes from the start).
+		//    Input layout: [nonce || ciphertext || tag]
+		_, err = gcm.Open(
+			plainBytes[:0],
+			req.Ciphertext.SecureBytes()[:nonceSize],
+			req.Ciphertext.SecureBytes()[nonceSize:],
+			req.AAD,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 7. Retrieve the decrypted plaintext from the (now read-only) vault.
+	plainText, ok := resp.MemVault().Get(plainTextKey)
+	if !ok {
+		// This should never happen since we just reserved this memory, but if it does, destroy all vault data to be safe.
+		err = resp.MemVault().DestroyAll()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("allocated plaintext not found in vault after decryption: %w", ErrAllocatedDataNotFound)
+	}
+
+	return &DecryptResponse{
+		Plaintext: plainText,
+	}, nil
+}
