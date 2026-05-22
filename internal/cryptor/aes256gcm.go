@@ -156,10 +156,13 @@ func (a *AES256GCM) Decrypt(ctx context.Context, req DecryptRequest) (*DecryptRe
 		// 6. Decrypt and authenticate. Open appends the plaintext into plainBytes'
 		//    backing array (passed as [:0] so it writes from the start).
 		//    Input layout: [nonce || ciphertext || tag]
+		nonce := req.Ciphertext.SecureBytes()[:nonceSize]
+		ciphertext := req.Ciphertext.SecureBytes()[nonceSize:]
+
 		_, err = gcm.Open(
 			plainBytes[:0],
-			req.Ciphertext.SecureBytes()[:nonceSize],
-			req.Ciphertext.SecureBytes()[nonceSize:],
+			nonce,
+			ciphertext,
 			req.AAD,
 		)
 		if err != nil {
