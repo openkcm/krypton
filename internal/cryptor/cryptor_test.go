@@ -97,6 +97,16 @@ func TestDecryptRequestValidate(t *testing.T) {
 			},
 			wantErr: cryptor.ErrRequest,
 		},
+		{
+			name: "empty securememe data",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
 	}
 
 	for _, tt := range tts {
@@ -194,6 +204,16 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  destroyedData,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty securemem data",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  &securemem.Data{},
 			},
 			wantErr: cryptor.ErrRequest,
 		},
