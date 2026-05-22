@@ -606,49 +606,6 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 		assert.NotNil(t, secret.SecureBytes())
 		assert.NotNil(t, encResp.Ciphertext.SecureBytes())
 	})
-
-	// t.Run("should encrypt and decrypt for empty plaintext successfully", func(t *testing.T) {
-	// 	// given
-	// 	key := newKey(t)
-	// 	plaintext := []byte("")
-	// 	pt := newPlaintext(t, plaintext)
-	//
-	// 	// when
-	// 	// encrypt
-	// 	encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-	// 		TenantID:   "tenant-1",
-	// 		KeyID:      "key-1",
-	// 		KeyVersion: 1,
-	// 		Algorithm:  spec.KeyAlgorithmAES256,
-	// 		Secret:     key,
-	// 		Plaintext:  pt,
-	// 	})
-	//
-	// 	// then
-	// 	require.NoError(t, err)
-	// 	t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
-	//
-	// 	// ciphertext must differ from plaintext
-	// 	assert.NotEqual(t, plaintext, []byte(encResp.Ciphertext.SecureBytes()))
-	//
-	// 	// when
-	// 	// decrypt
-	// 	decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-	// 		TenantID:   "tenant-1",
-	// 		KeyID:      "key-1",
-	// 		KeyVersion: 1,
-	// 		Algorithm:  spec.KeyAlgorithmAES256,
-	// 		Secret:     key,
-	// 		Ciphertext: encResp.Ciphertext,
-	// 	})
-	//
-	// 	// then
-	// 	require.NoError(t, err)
-	// 	t.Cleanup(func() { _ = decResp.Plaintext.Destroy() })
-	//
-	// 	// recovered plaintext must match original
-	// 	assert.Equal(t, plaintext, []byte(decResp.Plaintext.SecureBytes()))
-	// })
 }
 
 func TestAES256GCM_Info(t *testing.T) {
