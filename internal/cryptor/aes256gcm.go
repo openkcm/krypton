@@ -24,10 +24,10 @@ var _ Cryptor = &AES256GCM{}
 
 var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 
-func NewAES256GCM(name string) *AES256GCM {
+func NewAES256GCM() *AES256GCM {
 	return &AES256GCM{
 		info: Info{
-			Name:                     name,
+			Name:                     InfoNameAES256GCM,
 			DecryptionSecretRequired: true,
 		},
 	}

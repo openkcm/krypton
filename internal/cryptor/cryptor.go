@@ -8,8 +8,19 @@ import (
 	"fmt"
 
 	"github.com/openkcm/krypton/internal/securemem"
-	"github.com/openkcm/krypton/internal/spec"
 )
+
+// KeyAlgorithm identifies the encryption algorithm used by a key.
+type KeyAlgorithm string
+
+// KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
+const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
+
+// InfoName identifies the type of information returned by the Info() method of a Cryptor.
+type InfoName string
+
+// InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
+const InfoNameAES256GCM InfoName = "AES256-GCM"
 
 // EncryptRequest contains parameters for an encryption operation.
 type EncryptRequest struct {
@@ -20,7 +31,7 @@ type EncryptRequest struct {
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
 	// Algorithm is the encryption algorithm to apply.
-	Algorithm spec.KeyAlgorithm
+	Algorithm KeyAlgorithm
 	// Secret is the key material used for encryption.
 	// The Secret is nil if Cryptor manages its own secrets (e.g., HSM).
 	Secret *securemem.Data
@@ -46,7 +57,7 @@ type DecryptRequest struct {
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
 	// Algorithm is the encryption algorithm that was used.
-	Algorithm spec.KeyAlgorithm
+	Algorithm KeyAlgorithm
 	// Secret is the key material used for decryption.
 	// The Secret is nil if Cryptor manages its own secrets (e.g., HSM).
 	Secret *securemem.Data
@@ -66,7 +77,7 @@ type DecryptResponse struct {
 // Info describes a Cryptor implementation's capabilities.
 type Info struct {
 	// Name is a human-readable identifier for the implementation.
-	Name string
+	Name InfoName
 	// DecryptionSecretRequired is false if cryptor manages its own secret (e.g., HSM).
 	DecryptionSecretRequired bool
 }
