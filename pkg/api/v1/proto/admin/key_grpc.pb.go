@@ -20,9 +20,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KeyService_AnnounceKey_FullMethodName = "/krypton.v1.admin.KeyService/AnnounceKey"
-	KeyService_GetKey_FullMethodName      = "/krypton.v1.admin.KeyService/GetKey"
-	KeyService_GetKeyChain_FullMethodName = "/krypton.v1.admin.KeyService/GetKeyChain"
+	KeyService_AnnounceKey_FullMethodName   = "/krypton.v1.admin.KeyService/AnnounceKey"
+	KeyService_GetKey_FullMethodName        = "/krypton.v1.admin.KeyService/GetKey"
+	KeyService_GetParentKeys_FullMethodName = "/krypton.v1.admin.KeyService/GetParentKeys"
 )
 
 // KeyServiceClient is the client API for KeyService service.
@@ -31,7 +31,7 @@ const (
 type KeyServiceClient interface {
 	AnnounceKey(ctx context.Context, in *AnnounceKeyRequest, opts ...grpc.CallOption) (*AnnounceKeyResponse, error)
 	GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error)
-	GetKeyChain(ctx context.Context, in *GetKeyChainRequest, opts ...grpc.CallOption) (*GetKeyChainResponse, error)
+	GetParentKeys(ctx context.Context, in *GetParentKeysRequest, opts ...grpc.CallOption) (*GetParentKeysResponse, error)
 }
 
 type keyServiceClient struct {
@@ -62,10 +62,10 @@ func (c *keyServiceClient) GetKey(ctx context.Context, in *GetKeyRequest, opts .
 	return out, nil
 }
 
-func (c *keyServiceClient) GetKeyChain(ctx context.Context, in *GetKeyChainRequest, opts ...grpc.CallOption) (*GetKeyChainResponse, error) {
+func (c *keyServiceClient) GetParentKeys(ctx context.Context, in *GetParentKeysRequest, opts ...grpc.CallOption) (*GetParentKeysResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetKeyChainResponse)
-	err := c.cc.Invoke(ctx, KeyService_GetKeyChain_FullMethodName, in, out, cOpts...)
+	out := new(GetParentKeysResponse)
+	err := c.cc.Invoke(ctx, KeyService_GetParentKeys_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (c *keyServiceClient) GetKeyChain(ctx context.Context, in *GetKeyChainReque
 type KeyServiceServer interface {
 	AnnounceKey(context.Context, *AnnounceKeyRequest) (*AnnounceKeyResponse, error)
 	GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error)
-	GetKeyChain(context.Context, *GetKeyChainRequest) (*GetKeyChainResponse, error)
+	GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error)
 	mustEmbedUnimplementedKeyServiceServer()
 }
 
@@ -95,8 +95,8 @@ func (UnimplementedKeyServiceServer) AnnounceKey(context.Context, *AnnounceKeyRe
 func (UnimplementedKeyServiceServer) GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetKey not implemented")
 }
-func (UnimplementedKeyServiceServer) GetKeyChain(context.Context, *GetKeyChainRequest) (*GetKeyChainResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetKeyChain not implemented")
+func (UnimplementedKeyServiceServer) GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetParentKeys not implemented")
 }
 func (UnimplementedKeyServiceServer) mustEmbedUnimplementedKeyServiceServer() {}
 func (UnimplementedKeyServiceServer) testEmbeddedByValue()                    {}
@@ -155,20 +155,20 @@ func _KeyService_GetKey_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KeyService_GetKeyChain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetKeyChainRequest)
+func _KeyService_GetParentKeys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetParentKeysRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KeyServiceServer).GetKeyChain(ctx, in)
+		return srv.(KeyServiceServer).GetParentKeys(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: KeyService_GetKeyChain_FullMethodName,
+		FullMethod: KeyService_GetParentKeys_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KeyServiceServer).GetKeyChain(ctx, req.(*GetKeyChainRequest))
+		return srv.(KeyServiceServer).GetParentKeys(ctx, req.(*GetParentKeysRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -189,8 +189,8 @@ var KeyService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _KeyService_GetKey_Handler,
 		},
 		{
-			MethodName: "GetKeyChain",
-			Handler:    _KeyService_GetKeyChain_Handler,
+			MethodName: "GetParentKeys",
+			Handler:    _KeyService_GetParentKeys_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

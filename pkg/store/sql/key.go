@@ -58,8 +58,8 @@ func (ks *KeyStore) GetKeyByID(ctx context.Context, id, tenantID string) (*model
 	return scanKey(row)
 }
 
-// GetKeyChain returns all ancestors of the given key (including itself) by traversing parent_id up to the root.
-func (ks *KeyStore) GetKeyChain(ctx context.Context, query store.GetKeyChainQuery) (store.GetKeyChainResult, error) {
+// GetParentKeys returns all ancestors of the given key (including itself) by traversing parent_id up to the root.
+func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
 	stmt := `
 		WITH RECURSIVE key_chain AS (
 			SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, state, created_at, updated_at, 0 AS depth
@@ -79,7 +79,7 @@ func (ks *KeyStore) GetKeyChain(ctx context.Context, query store.GetKeyChainQuer
 
 	rows, err := ks.db.QueryContext(ctx, stmt, query.KeyID, query.TenantID)
 	if err != nil {
-		return store.GetKeyChainResult{}, err
+		return store.GetParentKeysResult{}, err
 	}
 	defer rows.Close()
 
@@ -87,26 +87,26 @@ func (ks *KeyStore) GetKeyChain(ctx context.Context, query store.GetKeyChainQuer
 	for rows.Next() {
 		key, err := scanKey(rows)
 		if err != nil {
-			return store.GetKeyChainResult{}, err
+			return store.GetParentKeysResult{}, err
 		}
 		keys = append(keys, *key)
 	}
 
 	if err := rows.Err(); err != nil {
-		return store.GetKeyChainResult{}, err
+		return store.GetParentKeysResult{}, err
 	}
 
 	if len(keys) == 0 {
-		return store.GetKeyChainResult{}, store.ErrKeyNotFound
+		return store.GetParentKeysResult{}, store.ErrKeyNotFound
 	}
 
-	return store.GetKeyChainResult{Keys: keys}, nil
+	return store.GetParentKeysResult{Keys: keys}, nil
 }
 
-// GetKeyTree returns all descendants of the given key (including itself)
+// GetDescendantKeys returns all descendants of the given key (including itself)
 // by traversing parent_id down to the leaves.
 // The result is grouped by depth level.
-func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery) (store.GetKeyTreeResult, error) {
+func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
 	stmt := `
 		WITH RECURSIVE key_tree AS (
 			SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, state, created_at, updated_at, 0 AS depth
@@ -126,7 +126,7 @@ func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery)
 
 	rows, err := ks.db.QueryContext(ctx, stmt, query.KeyID, query.TenantID)
 	if err != nil {
-		return store.GetKeyTreeResult{}, err
+		return store.GetDescendantKeysResult{}, err
 	}
 	defer rows.Close()
 
@@ -151,12 +151,12 @@ func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery)
 			&depth,
 		)
 		if err != nil {
-			return store.GetKeyTreeResult{}, err
+			return store.GetDescendantKeysResult{}, err
 		}
 
 		if len(labelsData) > 0 {
 			if err := json.Unmarshal(labelsData, &key.Labels); err != nil {
-				return store.GetKeyTreeResult{}, err
+				return store.GetDescendantKeysResult{}, err
 			}
 		}
 
@@ -171,14 +171,14 @@ func (ks *KeyStore) GetKeyTree(ctx context.Context, query store.GetKeyTreeQuery)
 	}
 
 	if err := rows.Err(); err != nil {
-		return store.GetKeyTreeResult{}, err
+		return store.GetDescendantKeysResult{}, err
 	}
 
 	if !found {
-		return store.GetKeyTreeResult{}, store.ErrKeyNotFound
+		return store.GetDescendantKeysResult{}, store.ErrKeyNotFound
 	}
 
-	return store.GetKeyTreeResult{KeyTree: layers}, nil
+	return store.GetDescendantKeysResult{KeyTree: layers}, nil
 }
 
 func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {

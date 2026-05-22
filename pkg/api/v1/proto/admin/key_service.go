@@ -65,8 +65,8 @@ func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyRes
 	return &GetKeyResponse{Key: KeyToProto(*key)}, nil
 }
 
-func (s *KeyService) GetKeyChain(ctx context.Context, req *GetKeyChainRequest) (*GetKeyChainResponse, error) {
-	res, err := s.keyStore.GetKeyChain(ctx, store.GetKeyChainQuery{
+func (s *KeyService) GetParentKeys(ctx context.Context, req *GetParentKeysRequest) (*GetParentKeysResponse, error) {
+	res, err := s.keyStore.GetParentKeys(ctx, store.GetParentKeysQuery{
 		KeyID:    req.GetId(),
 		TenantID: req.GetTenantId(),
 	})
@@ -83,7 +83,7 @@ func (s *KeyService) GetKeyChain(ctx context.Context, req *GetKeyChainRequest) (
 		)
 	}
 
-	return &GetKeyChainResponse{
+	return &GetParentKeysResponse{
 		Keys: KeysToProto(res.Keys),
 	}, nil
 }

@@ -362,7 +362,7 @@ func (x *GetKeyResponse) GetKey() *Key {
 	return nil
 }
 
-type GetKeyChainRequest struct {
+type GetParentKeysRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -370,20 +370,20 @@ type GetKeyChainRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetKeyChainRequest) Reset() {
-	*x = GetKeyChainRequest{}
+func (x *GetParentKeysRequest) Reset() {
+	*x = GetParentKeysRequest{}
 	mi := &file_key_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetKeyChainRequest) String() string {
+func (x *GetParentKeysRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetKeyChainRequest) ProtoMessage() {}
+func (*GetParentKeysRequest) ProtoMessage() {}
 
-func (x *GetKeyChainRequest) ProtoReflect() protoreflect.Message {
+func (x *GetParentKeysRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_key_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -395,46 +395,46 @@ func (x *GetKeyChainRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetKeyChainRequest.ProtoReflect.Descriptor instead.
-func (*GetKeyChainRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetParentKeysRequest.ProtoReflect.Descriptor instead.
+func (*GetParentKeysRequest) Descriptor() ([]byte, []int) {
 	return file_key_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetKeyChainRequest) GetId() string {
+func (x *GetParentKeysRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *GetKeyChainRequest) GetTenantId() string {
+func (x *GetParentKeysRequest) GetTenantId() string {
 	if x != nil {
 		return x.TenantId
 	}
 	return ""
 }
 
-type GetKeyChainResponse struct {
+type GetParentKeysResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keys          []*Key                 `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetKeyChainResponse) Reset() {
-	*x = GetKeyChainResponse{}
+func (x *GetParentKeysResponse) Reset() {
+	*x = GetParentKeysResponse{}
 	mi := &file_key_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetKeyChainResponse) String() string {
+func (x *GetParentKeysResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetKeyChainResponse) ProtoMessage() {}
+func (*GetParentKeysResponse) ProtoMessage() {}
 
-func (x *GetKeyChainResponse) ProtoReflect() protoreflect.Message {
+func (x *GetParentKeysResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_key_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -446,12 +446,12 @@ func (x *GetKeyChainResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetKeyChainResponse.ProtoReflect.Descriptor instead.
-func (*GetKeyChainResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetParentKeysResponse.ProtoReflect.Descriptor instead.
+func (*GetParentKeysResponse) Descriptor() ([]byte, []int) {
 	return file_key_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *GetKeyChainResponse) GetKeys() []*Key {
+func (x *GetParentKeysResponse) GetKeys() []*Key {
 	if x != nil {
 		return x.Keys
 	}
@@ -498,17 +498,17 @@ const file_key_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"9\n" +
 	"\x0eGetKeyResponse\x12'\n" +
-	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key\"A\n" +
-	"\x12GetKeyChainRequest\x12\x0e\n" +
+	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key\"C\n" +
+	"\x14GetParentKeysRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"@\n" +
-	"\x13GetKeyChainResponse\x12)\n" +
-	"\x04keys\x18\x01 \x03(\v2\x15.krypton.v1.admin.KeyR\x04keys2\x91\x02\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"B\n" +
+	"\x15GetParentKeysResponse\x12)\n" +
+	"\x04keys\x18\x01 \x03(\v2\x15.krypton.v1.admin.KeyR\x04keys2\x97\x02\n" +
 	"\n" +
 	"KeyService\x12Z\n" +
 	"\vAnnounceKey\x12$.krypton.v1.admin.AnnounceKeyRequest\x1a%.krypton.v1.admin.AnnounceKeyResponse\x12K\n" +
-	"\x06GetKey\x12\x1f.krypton.v1.admin.GetKeyRequest\x1a .krypton.v1.admin.GetKeyResponse\x12Z\n" +
-	"\vGetKeyChain\x12$.krypton.v1.admin.GetKeyChainRequest\x1a%.krypton.v1.admin.GetKeyChainResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
+	"\x06GetKey\x12\x1f.krypton.v1.admin.GetKeyRequest\x1a .krypton.v1.admin.GetKeyResponse\x12`\n" +
+	"\rGetParentKeys\x12&.krypton.v1.admin.GetParentKeysRequest\x1a'.krypton.v1.admin.GetParentKeysResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
 
 var (
 	file_key_proto_rawDescOnce sync.Once
@@ -524,28 +524,28 @@ func file_key_proto_rawDescGZIP() []byte {
 
 var file_key_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_key_proto_goTypes = []any{
-	(*Key)(nil),                 // 0: krypton.v1.admin.Key
-	(*AnnounceKeyRequest)(nil),  // 1: krypton.v1.admin.AnnounceKeyRequest
-	(*AnnounceKeyResponse)(nil), // 2: krypton.v1.admin.AnnounceKeyResponse
-	(*GetKeyRequest)(nil),       // 3: krypton.v1.admin.GetKeyRequest
-	(*GetKeyResponse)(nil),      // 4: krypton.v1.admin.GetKeyResponse
-	(*GetKeyChainRequest)(nil),  // 5: krypton.v1.admin.GetKeyChainRequest
-	(*GetKeyChainResponse)(nil), // 6: krypton.v1.admin.GetKeyChainResponse
-	nil,                         // 7: krypton.v1.admin.Key.LabelsEntry
-	nil,                         // 8: krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
+	(*Key)(nil),                   // 0: krypton.v1.admin.Key
+	(*AnnounceKeyRequest)(nil),    // 1: krypton.v1.admin.AnnounceKeyRequest
+	(*AnnounceKeyResponse)(nil),   // 2: krypton.v1.admin.AnnounceKeyResponse
+	(*GetKeyRequest)(nil),         // 3: krypton.v1.admin.GetKeyRequest
+	(*GetKeyResponse)(nil),        // 4: krypton.v1.admin.GetKeyResponse
+	(*GetParentKeysRequest)(nil),  // 5: krypton.v1.admin.GetParentKeysRequest
+	(*GetParentKeysResponse)(nil), // 6: krypton.v1.admin.GetParentKeysResponse
+	nil,                           // 7: krypton.v1.admin.Key.LabelsEntry
+	nil,                           // 8: krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
 }
 var file_key_proto_depIdxs = []int32{
 	7, // 0: krypton.v1.admin.Key.labels:type_name -> krypton.v1.admin.Key.LabelsEntry
 	8, // 1: krypton.v1.admin.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
 	0, // 2: krypton.v1.admin.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.Key
 	0, // 3: krypton.v1.admin.GetKeyResponse.key:type_name -> krypton.v1.admin.Key
-	0, // 4: krypton.v1.admin.GetKeyChainResponse.keys:type_name -> krypton.v1.admin.Key
+	0, // 4: krypton.v1.admin.GetParentKeysResponse.keys:type_name -> krypton.v1.admin.Key
 	1, // 5: krypton.v1.admin.KeyService.AnnounceKey:input_type -> krypton.v1.admin.AnnounceKeyRequest
 	3, // 6: krypton.v1.admin.KeyService.GetKey:input_type -> krypton.v1.admin.GetKeyRequest
-	5, // 7: krypton.v1.admin.KeyService.GetKeyChain:input_type -> krypton.v1.admin.GetKeyChainRequest
+	5, // 7: krypton.v1.admin.KeyService.GetParentKeys:input_type -> krypton.v1.admin.GetParentKeysRequest
 	2, // 8: krypton.v1.admin.KeyService.AnnounceKey:output_type -> krypton.v1.admin.AnnounceKeyResponse
 	4, // 9: krypton.v1.admin.KeyService.GetKey:output_type -> krypton.v1.admin.GetKeyResponse
-	6, // 10: krypton.v1.admin.KeyService.GetKeyChain:output_type -> krypton.v1.admin.GetKeyChainResponse
+	6, // 10: krypton.v1.admin.KeyService.GetParentKeys:output_type -> krypton.v1.admin.GetParentKeysResponse
 	8, // [8:11] is the sub-list for method output_type
 	5, // [5:8] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name

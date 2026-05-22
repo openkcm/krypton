@@ -206,7 +206,7 @@ func TestGetKeyService(t *testing.T) {
 	})
 }
 
-func TestGetKeyChain(t *testing.T) {
+func TestGetParentKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db := createDatabase(t)
@@ -222,7 +222,7 @@ func TestGetKeyChain(t *testing.T) {
 
 	t.Run("should get keychain successfully for intermediate", func(t *testing.T) {
 		// when
-		res, err := cli.GetKeyChain(ctx, &admin.GetKeyChainRequest{
+		res, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
 			Id:       ha.d.ID,
 			TenantId: tenant.ID,
 		})
@@ -237,7 +237,7 @@ func TestGetKeyChain(t *testing.T) {
 
 	t.Run("should get keychain successfully for leaf node", func(t *testing.T) {
 		// when
-		res, err := cli.GetKeyChain(ctx, &admin.GetKeyChainRequest{
+		res, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
 			Id:       ha.h.ID,
 			TenantId: tenant.ID,
 		})
@@ -253,7 +253,7 @@ func TestGetKeyChain(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// when
-		res, err := cli.GetKeyChain(ctx, &admin.GetKeyChainRequest{
+		res, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
 			Id:       uuid.NewString(),
 			TenantId: tenant.ID,
 		})
@@ -278,7 +278,7 @@ func TestGetKeyChain(t *testing.T) {
 		cli := setupKeyServerAndClient(t, tmpKeyStore)
 
 		// when
-		resp, err := cli.GetKeyChain(ctx, &admin.GetKeyChainRequest{
+		resp, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
 			Id:       uuid.NewString(),
 			TenantId: uuid.NewString(),
 		})
