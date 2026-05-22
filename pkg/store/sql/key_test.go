@@ -383,8 +383,8 @@ func TestGetKeyTree(t *testing.T) {
 	})
 }
 
-//createKeyHierarchy sets up a test key hierarchy with 8 keys across 4 levels and returns the created keys for reference in tests.
-//// keyHierarchy holds a test key tree with the following structure:
+// createKeyHierarchy sets up a test key hierarchy with 8 keys across 4 levels and returns the created keys for reference in tests.
+// keyHierarchy holds a test key tree with the following structure:
 //
 //	A(K0)
 //	  B(K1)
@@ -394,7 +394,6 @@ func TestGetKeyTree(t *testing.T) {
 //	    F(K2)
 //	    G(K2)
 //	      H(K3)
-
 func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *storesql.TenantStore) keyHierarchy {
 	t.Helper()
 	ctx := t.Context()

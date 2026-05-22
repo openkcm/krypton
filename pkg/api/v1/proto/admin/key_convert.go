@@ -24,6 +24,14 @@ func KeyToProto(k model.Key) *Key {
 	}
 }
 
+func KeysToProto(ks []model.Key) []*Key {
+	res := make([]*Key, len(ks))
+	for i := range ks {
+		res[i] = KeyToProto(ks[i])
+	}
+	return res
+}
+
 func KeyFromProto(k *Key) model.Key {
 	var parentID *string
 	if k.GetParentId() != "" {
