@@ -20,9 +20,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KeyService_AnnounceKey_FullMethodName   = "/krypton.v1.admin.KeyService/AnnounceKey"
-	KeyService_GetKey_FullMethodName        = "/krypton.v1.admin.KeyService/GetKey"
-	KeyService_GetParentKeys_FullMethodName = "/krypton.v1.admin.KeyService/GetParentKeys"
+	KeyService_AnnounceKey_FullMethodName       = "/krypton.v1.admin.KeyService/AnnounceKey"
+	KeyService_GetKey_FullMethodName            = "/krypton.v1.admin.KeyService/GetKey"
+	KeyService_GetParentKeys_FullMethodName     = "/krypton.v1.admin.KeyService/GetParentKeys"
+	KeyService_GetDescendantKeys_FullMethodName = "/krypton.v1.admin.KeyService/GetDescendantKeys"
 )
 
 // KeyServiceClient is the client API for KeyService service.
@@ -32,6 +33,7 @@ type KeyServiceClient interface {
 	AnnounceKey(ctx context.Context, in *AnnounceKeyRequest, opts ...grpc.CallOption) (*AnnounceKeyResponse, error)
 	GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error)
 	GetParentKeys(ctx context.Context, in *GetParentKeysRequest, opts ...grpc.CallOption) (*GetParentKeysResponse, error)
+	GetDescendantKeys(ctx context.Context, in *GetDescendantKeysRequest, opts ...grpc.CallOption) (*GetDescendantKeysResponse, error)
 }
 
 type keyServiceClient struct {
@@ -72,6 +74,16 @@ func (c *keyServiceClient) GetParentKeys(ctx context.Context, in *GetParentKeysR
 	return out, nil
 }
 
+func (c *keyServiceClient) GetDescendantKeys(ctx context.Context, in *GetDescendantKeysRequest, opts ...grpc.CallOption) (*GetDescendantKeysResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDescendantKeysResponse)
+	err := c.cc.Invoke(ctx, KeyService_GetDescendantKeys_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KeyServiceServer is the server API for KeyService service.
 // All implementations must embed UnimplementedKeyServiceServer
 // for forward compatibility.
@@ -79,6 +91,7 @@ type KeyServiceServer interface {
 	AnnounceKey(context.Context, *AnnounceKeyRequest) (*AnnounceKeyResponse, error)
 	GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error)
 	GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error)
+	GetDescendantKeys(context.Context, *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error)
 	mustEmbedUnimplementedKeyServiceServer()
 }
 
@@ -97,6 +110,9 @@ func (UnimplementedKeyServiceServer) GetKey(context.Context, *GetKeyRequest) (*G
 }
 func (UnimplementedKeyServiceServer) GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetParentKeys not implemented")
+}
+func (UnimplementedKeyServiceServer) GetDescendantKeys(context.Context, *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDescendantKeys not implemented")
 }
 func (UnimplementedKeyServiceServer) mustEmbedUnimplementedKeyServiceServer() {}
 func (UnimplementedKeyServiceServer) testEmbeddedByValue()                    {}
@@ -173,6 +189,24 @@ func _KeyService_GetParentKeys_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KeyService_GetDescendantKeys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDescendantKeysRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KeyServiceServer).GetDescendantKeys(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KeyService_GetDescendantKeys_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KeyServiceServer).GetDescendantKeys(ctx, req.(*GetDescendantKeysRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KeyService_ServiceDesc is the grpc.ServiceDesc for KeyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -191,6 +225,10 @@ var KeyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetParentKeys",
 			Handler:    _KeyService_GetParentKeys_Handler,
+		},
+		{
+			MethodName: "GetDescendantKeys",
+			Handler:    _KeyService_GetDescendantKeys_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -9,6 +9,7 @@ service KeyService {
   rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
   rpc GetParentKeys(GetParentKeysRequest) returns (GetParentKeysResponse);
+  rpc GetDescendantKeys(GetDescendantKeysRequest) returns (GetDescendantKeysResponse);
 }
 
 message Key {
@@ -53,5 +54,18 @@ message GetParentKeysRequest {
 
 message GetParentKeysResponse {
   repeated Key keys = 1;
+}
+
+message GetDescendantKeysRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message KeyTree {
+  repeated Key keys = 1;
+}
+
+message GetDescendantKeysResponse {
+  repeated KeyTree key_tree = 1;
 }
 

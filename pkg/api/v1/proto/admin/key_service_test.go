@@ -220,10 +220,10 @@ func TestGetParentKeys(t *testing.T) {
 
 	cli := setupKeyServerAndClient(t, keyStore)
 
-	t.Run("should get keychain successfully for intermediate", func(t *testing.T) {
+	t.Run("should get parent keys successfully for intermediate", func(t *testing.T) {
 		// when
 		res, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
-			Id:       ha.d.ID,
+			Id:       ha.g.ID,
 			TenantId: tenant.ID,
 		})
 
@@ -231,11 +231,11 @@ func TestGetParentKeys(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, res.GetKeys(), 3)
 		assert.Equal(t, ha.root.ID, res.GetKeys()[0].GetId())
-		assert.Equal(t, ha.b.ID, res.GetKeys()[1].GetId())
-		assert.Equal(t, ha.d.ID, res.GetKeys()[2].GetId())
+		assert.Equal(t, ha.c.ID, res.GetKeys()[1].GetId())
+		assert.Equal(t, ha.g.ID, res.GetKeys()[2].GetId())
 	})
 
-	t.Run("should get keychain successfully for leaf node", func(t *testing.T) {
+	t.Run("should get parent keys successfully for leaf node", func(t *testing.T) {
 		// when
 		res, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
 			Id:       ha.h.ID,
@@ -279,6 +279,124 @@ func TestGetParentKeys(t *testing.T) {
 
 		// when
 		resp, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
+			Id:       uuid.NewString(),
+			TenantId: uuid.NewString(),
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
+	})
+}
+
+func TestGetDescendantKeys(t *testing.T) {
+	// given
+	ctx := t.Context()
+	db := createDatabase(t)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, db)
+
+	ha := createKeyHierarchy(t, keyStore, tenant)
+
+	cli := setupKeyServerAndClient(t, keyStore)
+
+	t.Run("should get descendant keys successfully for root", func(t *testing.T) {
+		// when
+		res, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
+			Id:       ha.root.ID,
+			TenantId: tenant.ID,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, res.GetKeyTree(), 4)                                    // 4 levels in the tree
+		assert.Len(t, res.GetKeyTree()[0].GetKeys(), 1)                       // root level
+		assert.Equal(t, ha.root.ID, res.GetKeyTree()[0].GetKeys()[0].GetId()) // root key
+
+		assert.Len(t, res.GetKeyTree()[1].GetKeys(), 2)                    // level 1 has 2 keys: B and C
+		assert.Equal(t, ha.b.ID, res.GetKeyTree()[1].GetKeys()[0].GetId()) // B key
+		assert.Equal(t, ha.c.ID, res.GetKeyTree()[1].GetKeys()[1].GetId()) // C key
+
+		assert.Len(t, res.GetKeyTree()[2].GetKeys(), 4)                    // level 2 has 4 keys: D, E, F, G
+		assert.Equal(t, ha.d.ID, res.GetKeyTree()[2].GetKeys()[0].GetId()) // D key
+		assert.Equal(t, ha.e.ID, res.GetKeyTree()[2].GetKeys()[1].GetId()) // E key
+		assert.Equal(t, ha.f.ID, res.GetKeyTree()[2].GetKeys()[2].GetId()) // F key
+		assert.Equal(t, ha.g.ID, res.GetKeyTree()[2].GetKeys()[3].GetId()) // G key
+
+		assert.Len(t, res.GetKeyTree()[3].GetKeys(), 1)                    // level 3 has 1 key: H
+		assert.Equal(t, ha.h.ID, res.GetKeyTree()[3].GetKeys()[0].GetId()) // H key
+	})
+
+	t.Run("should get descendant keys successfully for intermediate", func(t *testing.T) {
+		// when
+		res, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
+			Id:       ha.c.ID,
+			TenantId: tenant.ID,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, res.GetKeyTree(), 3)
+
+		assert.Len(t, res.GetKeyTree()[0].GetKeys(), 1)
+		assert.Equal(t, ha.c.ID, res.GetKeyTree()[0].GetKeys()[0].GetId())
+
+		assert.Len(t, res.GetKeyTree()[1].GetKeys(), 2)
+		assert.Equal(t, ha.f.ID, res.GetKeyTree()[1].GetKeys()[0].GetId())
+		assert.Equal(t, ha.g.ID, res.GetKeyTree()[1].GetKeys()[1].GetId())
+
+		assert.Len(t, res.GetKeyTree()[2].GetKeys(), 1)
+		assert.Equal(t, ha.h.ID, res.GetKeyTree()[2].GetKeys()[0].GetId())
+	})
+
+	t.Run("should get descendant successfully for leaf node", func(t *testing.T) {
+		// when
+		res, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
+			Id:       ha.h.ID,
+			TenantId: tenant.ID,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, res.GetKeyTree(), 1)
+
+		assert.Len(t, res.GetKeyTree()[0].GetKeys(), 1)
+		assert.Equal(t, ha.h.ID, res.GetKeyTree()[0].GetKeys()[0].GetId())
+	})
+
+	t.Run("should return not found for nonexistent key", func(t *testing.T) {
+		// when
+		res, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
+			Id:       uuid.NewString(),
+			TenantId: tenant.ID,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return internal error on database failure", func(t *testing.T) {
+		// given
+		tmpDB := createDatabase(t)
+
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		tmpKeyStore := storesql.NewKeyStore(tmpDB)
+
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		require.NoError(t, err)
+
+		cli := setupKeyServerAndClient(t, tmpKeyStore)
+
+		// when
+		resp, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
 			Id:       uuid.NewString(),
 			TenantId: uuid.NewString(),
 		})

@@ -78,12 +78,35 @@ func (s *KeyService) GetParentKeys(ctx context.Context, req *GetParentKeysReques
 			)
 		}
 		return nil, proto.ErrDetailsWithCode(
-			status.New(codes.Internal, "failed to get key chain"),
+			status.New(codes.Internal, "failed to get parent keys"),
 			proto.Code_ERROR_CODE_RETRY,
 		)
 	}
 
 	return &GetParentKeysResponse{
 		Keys: KeysToProto(res.Keys),
+	}, nil
+}
+
+func (s *KeyService) GetDescendantKeys(ctx context.Context, req *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error) {
+	res, err := s.keyStore.GetDescendantKeys(ctx, store.GetDescendantKeysQuery{
+		KeyID:    req.GetId(),
+		TenantID: req.GetTenantId(),
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrKeyNotFound) {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "key not found"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to get descendant keys"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	return &GetDescendantKeysResponse{
+		KeyTree: KeyTreeToProto(res.KeyTree),
 	}, nil
 }
