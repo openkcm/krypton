@@ -12,13 +12,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openkcm/orbital"
+	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	_ "github.com/lib/pq"
 
+	orbitalstore "github.com/openkcm/orbital/store/sql"
+
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/reconciler/handler/announcekey"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
@@ -57,6 +63,40 @@ func main() {
 	agentStore := storesql.NewAgentStore(db)
 	keyStore := storesql.NewKeyStore(db)
 
+	// orbital reconciler setup
+	orbitalStore, err := orbitalstore.New(context.Background(), db)
+	handleErr(err, "failed to create orbital store")
+	repo := orbital.NewRepository(orbitalStore)
+
+	targetProvider := reconciler.TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
+		conn, err := grpc.NewClient(target.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, err
+		}
+		return rpc.NewClient(conn)
+	})
+
+	var reconcilerOpts []reconciler.Option
+	if cfg.Reconciler.ExecInterval > 0 {
+		reconcilerOpts = append(reconcilerOpts, reconciler.WithExecInterval(cfg.Reconciler.ExecInterval))
+	}
+
+	reconcilerMgr, err := reconciler.NewManager(
+		context.Background(),
+		&cfg.Reconciler,
+		repo,
+		targetProvider,
+		[]reconciler.JobHandler{announcekey.NewHandler(keyStore)},
+		reconcilerOpts...,
+	)
+	handleErr(err, "failed to create reconciler manager")
+
+	go func() {
+		if err := reconcilerMgr.Start(context.Background()); err != nil {
+			log.Printf("reconciler manager stopped: %v", err)
+		}
+	}()
+
 	// gRPC server setup for admin API
 	grpcServer := grpc.NewServer()
 	admin.RegisterTenantServiceServer(grpcServer, admin.NewTenantService(tenantStore))
@@ -65,7 +105,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore))
+	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore, reconcilerMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -76,7 +116,6 @@ func main() {
 			log.Fatalf("failed to serve gRPC: %v", err)
 		}
 	}()
-	defer grpcServer.GracefulStop()
 
 	// worker initialization
 	wrkr := initAgentWorker(agentStore)
@@ -88,83 +127,21 @@ func main() {
 
 	<-signalChan
 	log.Println("Received shutdown signal, stopping server...")
+	grpcServer.GracefulStop()
 	wrkr.Stop()
-	log.Println("Shutting down gracefully...")
+	_ = reconcilerMgr.Stop(context.Background())
+	log.Println("Shutdown complete.")
 }
 
-// For simplicity, we hardcode a sample root configuration here.
 func loadConfig() *config.RootConfig {
-	rCfg, err := config.LoadRootConfig(os.Getenv("ROOT_CONFIG_PATH"))
-	if err != nil {
-		rCfg = &config.RootConfig{
-			Name: "root",
-			Role: spec.RootRole,
-			Segment: spec.HierarchySegment{
-				StartKind: "K0",
-				EndKind:   "K1",
-			},
-			SelectorLabels: spec.SelectorLabels{
-				"environment": "production",
-			},
-			KeyBindings: map[string]spec.KeyBinding{
-				"K0": {
-					Vault: spec.VaultSpec{
-						Name: "root-hsm-vault",
-						Type: spec.VaultTypeInMemory,
-					},
-				},
-				"K1": {
-					Vault: spec.VaultSpec{
-						Name: "root-vault",
-						Type: "open-bao",
-					},
-					ParentKeyProvider: &spec.ParentKeyProviderRef{
-						AgentName: "root",
-					},
-				},
-			},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "production-hierarchy",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K0", Role: "root", Algorithm: "AES256"},
-					{Kind: "K1", Role: "kek", Algorithm: "AES256"},
-					{Kind: "K2", Role: "tek", Algorithm: "AES256"},
-					{Kind: "K3", Role: "dek", Algorithm: "AES256"},
-				},
-			},
-			Topology: spec.Topology{
-				Segments: []spec.TopologySegment{
-					{
-						Name: "agent-k1",
-						Segment: spec.HierarchySegment{
-							StartKind: "K2",
-							EndKind:   "K3",
-						},
-						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {
-								Vault: spec.VaultSpec{
-									Name: "aws-vault",
-									Type: spec.VaultTypeInMemory,
-								},
-								ParentKeyProvider: &spec.ParentKeyProviderRef{
-									AgentName: "root",
-								},
-							},
-							"K3": {
-								Vault: spec.VaultSpec{
-									Name: "aws-dek-vault",
-									Type: spec.VaultTypeInMemory,
-								},
-							},
-						},
-						SelectorLabels: spec.SelectorLabels{
-							"cloud": "aws",
-						},
-					},
-				},
-			},
-		}
+	path := os.Getenv("ROOT_CONFIG_PATH")
+	if path == "" {
+		path = "config.yaml"
 	}
+
+	rCfg, err := config.LoadRootConfig(path)
+	handleErr(err, "failed to load root config from "+path)
+
 	return rCfg
 }
 

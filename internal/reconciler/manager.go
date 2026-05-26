@@ -96,6 +96,10 @@ func maxPendingReconciles(configured uint64) uint64 {
 	return configured
 }
 
+func (m *Manager) PrepareJob(ctx context.Context, job orbital.Job) (orbital.Job, error) {
+	return m.orbitalManager.PrepareJob(ctx, job)
+}
+
 func (m *Manager) Start(ctx context.Context) error {
 	return m.orbitalManager.Start(ctx)
 }

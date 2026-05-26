@@ -1,0 +1,6 @@
+name: agent-k1
+role: agent
+krypton_root:
+  address:
+    type: grpc
+    url: localhost:8080

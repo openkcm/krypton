@@ -425,28 +425,36 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.
 	ctx := t.Context()
 
 	root := model.NewKey(tenant.ID, "A", "K0", nil, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, root))
+	err := keyStore.CreateKey(ctx, root)
+	require.NoError(t, err)
 
 	b := model.NewKey(tenant.ID, "B", "K1", &root.ID, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, b))
+	err = keyStore.CreateKey(ctx, b)
+	require.NoError(t, err)
 
 	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, c))
+	err = keyStore.CreateKey(ctx, c)
+	require.NoError(t, err)
 
 	d := model.NewKey(tenant.ID, "D", "K2", &b.ID, "agent-aws", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, d))
+	err = keyStore.CreateKey(ctx, d)
+	require.NoError(t, err)
 
 	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, e))
+	err = keyStore.CreateKey(ctx, e)
+	require.NoError(t, err)
 
 	f := model.NewKey(tenant.ID, "F", "K2", &c.ID, "agent-gcp", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, f))
+	err = keyStore.CreateKey(ctx, f)
+	require.NoError(t, err)
 
 	g := model.NewKey(tenant.ID, "G", "K2", &c.ID, "agent-onprem", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, g))
+	err = keyStore.CreateKey(ctx, g)
+	require.NoError(t, err)
 
 	h := model.NewKey(tenant.ID, "H", "K3", &g.ID, "agent-onprem-2", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, h))
+	err = keyStore.CreateKey(ctx, h)
+	require.NoError(t, err)
 
 	return keyHierarchy{
 		tenant: tenant,

@@ -111,8 +111,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/common-sdk v1.16.0 h1:pmLXRHvjqg+8ATEyzXarCRiRghw/8pXGn2OtoYuMEIU=
 github.com/openkcm/common-sdk v1.16.0/go.mod h1:4umveCyatAaTi6dSQgwaBg1O/wqHr4sjzuMIQhEuX1o=
-github.com/openkcm/orbital v0.5.1 h1:fCFyGm059h2IkD8/u+GI7Ofqd54lFGj7zoujKI+7MQk=
-github.com/openkcm/orbital v0.5.1/go.mod h1:PqAOg75iYDrDQrL9uBQKAKfuBlNJgeG0pex1780Wo0E=
+github.com/openkcm/orbital v0.5.2-0.20260518064520-b38bdc42d86e h1:Z+wqTdJ7/ellv9p6O6PEQltKNHvj9q8iiGe1L6JhY4o=
+github.com/openkcm/orbital v0.5.2-0.20260518064520-b38bdc42d86e/go.mod h1:I/7qohDvKGghG8WiRJYEJ/0dNb9KWJgFgRT1MIV3mFE=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
 github.com/pelletier/go-toml/v2 v2.3.1 h1:MYEvvGnQjeNkRF1qUuGolNtNExTDwct51yp7olPtrEc=
 github.com/pelletier/go-toml/v2 v2.3.1/go.mod h1:2gIqNv+qfxSVS7cM2xJQKtLSTLUE9V8t9Stt+h56mCY=

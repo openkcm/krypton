@@ -18,6 +18,7 @@ var allKeyStates = []model.KeyState{
 	model.KeyStateDeactivated,
 	model.KeyStateCompromised,
 	model.KeyStateDestroyed,
+	model.KeyStateAnnounceFailed,
 }
 
 var allKeyOperations = []spec.KeyUsage{
@@ -37,9 +38,10 @@ func TestKeyLifecycleStateTransitions(t *testing.T) {
 		{
 			from: model.KeyStatePreActivation,
 			validTransitions: map[model.KeyState]struct{}{
-				model.KeyStateDestroyed:   {},
-				model.KeyStateActive:      {},
-				model.KeyStateCompromised: {},
+				model.KeyStateDestroyed:      {},
+				model.KeyStateActive:         {},
+				model.KeyStateCompromised:    {},
+				model.KeyStateAnnounceFailed: {},
 			},
 		},
 		{
@@ -76,6 +78,12 @@ func TestKeyLifecycleStateTransitions(t *testing.T) {
 		{
 			from:             model.KeyStateDestroyed,
 			validTransitions: map[model.KeyState]struct{}{},
+		},
+		{
+			from: model.KeyStateAnnounceFailed,
+			validTransitions: map[model.KeyState]struct{}{
+				model.KeyStateDestroyed: {},
+			},
 		},
 		{
 			from:             "invalid-state",
@@ -157,6 +165,10 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 		},
 		{
 			state:           model.KeyStateDestroyed,
+			validOperations: spec.KeyUsageNone,
+		},
+		{
+			state:           model.KeyStateAnnounceFailed,
 			validOperations: spec.KeyUsageNone,
 		},
 		{

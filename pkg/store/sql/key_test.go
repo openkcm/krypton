@@ -444,3 +444,49 @@ func createTenant(t *testing.T, s *storesql.TenantStore) model.Tenant {
 	require.NoError(t, err)
 	return result.Tenant
 }
+
+func TestUpdateKeyState(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should update key state", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "state-key", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		err := keyStore.UpdateKeyState(ctx, store.UpdateKeyStateQuery{
+			ID: key.ID, TenantID: tenant.ID, NewState: model.KeyStateAnnounceFailed,
+		})
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyStateAnnounceFailed, got.State)
+		assert.Greater(t, got.UpdatedAt, got.CreatedAt)
+	})
+
+	t.Run("should return not found for nonexistent key", func(t *testing.T) {
+		err := keyStore.UpdateKeyState(ctx, store.UpdateKeyStateQuery{
+			ID: uuid.NewString(), TenantID: tenant.ID, NewState: model.KeyStateAnnounceFailed,
+		})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+
+	t.Run("should return not found for wrong tenant", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "wrong-tenant-state", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		err := keyStore.UpdateKeyState(ctx, store.UpdateKeyStateQuery{
+			ID: key.ID, TenantID: uuid.NewString(), NewState: model.KeyStateAnnounceFailed,
+		})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}

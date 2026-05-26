@@ -14,6 +14,7 @@ type Key interface {
 	GetKeyByID(ctx context.Context, id, tenantID string) (*model.Key, error)
 	GetParentKeys(ctx context.Context, query GetParentKeysQuery) (GetParentKeysResult, error)
 	GetDescendantKeys(ctx context.Context, query GetDescendantKeysQuery) (GetDescendantKeysResult, error)
+	UpdateKeyState(ctx context.Context, query UpdateKeyStateQuery) error
 }
 
 type GetParentKeysQuery struct {
@@ -32,4 +33,10 @@ type GetDescendantKeysQuery struct {
 
 type GetDescendantKeysResult struct {
 	KeyTree model.KeyTreeTraverser
+}
+
+type UpdateKeyStateQuery struct {
+	ID       string
+	TenantID string
+	NewState model.KeyState
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -211,4 +212,25 @@ func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
 	}
 
 	return &key, nil
+}
+
+func (ks *KeyStore) UpdateKeyState(ctx context.Context, query store.UpdateKeyStateQuery) error {
+	result, err := ks.db.ExecContext(ctx,
+		`UPDATE keys SET state = $1, updated_at = $2 WHERE id = $3 AND tenant_id = $4`,
+		query.NewState, clock.Now(), query.ID, query.TenantID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return store.ErrKeyNotFound
+	}
+
+	return nil
 }

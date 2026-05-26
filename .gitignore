@@ -9,6 +9,10 @@
 *.dylib
 *.DS_Store
 
+# Compiled binaries
+/root
+/agent
+
 # Test binary, built with `go test -c`
 *.test
 

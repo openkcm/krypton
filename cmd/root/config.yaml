@@ -1,0 +1,72 @@
+name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K1
+selector_labels:
+  environment: production
+key_bindings:
+  K0:
+    vault:
+      name: root-hsm-vault
+      type: in-memory
+      config:
+        prefix: root-hsm
+  K1:
+    vault:
+      name: root-vault
+      type: in-memory
+      config:
+        prefix: root-kek
+    parent_key_provider:
+      agent_name: root
+hierarchy:
+  name: production-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: kek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K2
+      role: tek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K3
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+  segments:
+    - name: agent-k1
+      segment:
+        start_kind: K2
+        end_kind: K3
+      key_bindings:
+        K2:
+          vault:
+            name: agent-vault
+            type: in-memory
+            config:
+              prefix: agent-tek
+          parent_key_provider:
+            agent_name: root
+        K3:
+          vault:
+            name: agent-dek-vault
+            type: in-memory
+            config:
+              prefix: agent-dek
+      selector_labels:
+        cloud: aws
+reconciler:
+  targets:
+    - name: agent-k1
+      address: localhost:9091

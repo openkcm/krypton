@@ -14,12 +14,13 @@ type KeyKind string
 type KeyState string
 
 const (
-	KeyStatePreActivation KeyState = "pre-activation"
-	KeyStateActive        KeyState = "active"
-	KeyStateSuspended     KeyState = "suspended"
-	KeyStateDeactivated   KeyState = "deactivated"
-	KeyStateCompromised   KeyState = "compromised"
-	KeyStateDestroyed     KeyState = "destroyed"
+	KeyStatePreActivation  KeyState = "pre-activation"
+	KeyStateActive         KeyState = "active"
+	KeyStateSuspended      KeyState = "suspended"
+	KeyStateDeactivated    KeyState = "deactivated"
+	KeyStateCompromised    KeyState = "compromised"
+	KeyStateDestroyed      KeyState = "destroyed"
+	KeyStateAnnounceFailed KeyState = "announce-failed"
 )
 
 type Key struct {

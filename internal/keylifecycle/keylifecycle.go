@@ -26,9 +26,10 @@ var (
 var defaultLifecycle = lifecycle{
 	transitions: map[model.KeyState]map[model.KeyState]struct{}{
 		model.KeyStatePreActivation: {
-			model.KeyStateDestroyed:   {},
-			model.KeyStateActive:      {},
-			model.KeyStateCompromised: {},
+			model.KeyStateDestroyed:      {},
+			model.KeyStateActive:         {},
+			model.KeyStateCompromised:    {},
+			model.KeyStateAnnounceFailed: {},
 		},
 		model.KeyStateActive: {
 			model.KeyStateDestroyed:   {},
@@ -50,14 +51,18 @@ var defaultLifecycle = lifecycle{
 			model.KeyStateDestroyed: {},
 		},
 		model.KeyStateDestroyed: {},
+		model.KeyStateAnnounceFailed: {
+			model.KeyStateDestroyed: {},
+		},
 	},
 	stateUsages: map[model.KeyState]spec.KeyUsage{
-		model.KeyStatePreActivation: spec.KeyUsageNone,
-		model.KeyStateActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
-		model.KeyStateSuspended:     spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		model.KeyStateDeactivated:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		model.KeyStateCompromised:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
-		model.KeyStateDestroyed:     spec.KeyUsageNone,
+		model.KeyStatePreActivation:  spec.KeyUsageNone,
+		model.KeyStateActive:         spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
+		model.KeyStateSuspended:      spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateDeactivated:    spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateCompromised:    spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
+		model.KeyStateDestroyed:      spec.KeyUsageNone,
+		model.KeyStateAnnounceFailed: spec.KeyUsageNone,
 	},
 }
 

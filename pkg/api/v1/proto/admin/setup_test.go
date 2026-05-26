@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -98,7 +99,7 @@ func setupKeyServerAndClient(t *testing.T, keyStore store.Key) admin.KeyServiceC
 	t.Helper()
 
 	srv := grpc.NewServer()
-	admin.RegisterKeyServiceServer(srv, admin.NewKeyService(keyStore))
+	admin.RegisterKeyServiceServer(srv, admin.NewKeyService(keyStore, &noopJobPreparer{}))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -184,4 +185,10 @@ func createTenant(t *testing.T, db *sql.DB) model.Tenant {
 	result, err := tenantStore.CreateTenant(ctx, store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant
+}
+
+type noopJobPreparer struct{}
+
+func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
+	return job, nil
 }
