@@ -466,21 +466,23 @@ func TestSubSlicingRetainstheUnderlyingdatastructure(t *testing.T) {
 			dataByteB[i] = byte(i)
 		}
 
-		// sameUnderlying reports whether slices a and b overlap in memory (by capacity).
-		//	Case 1: Overlap → true        Case 2: No overlap → false
+		// sameUnderlying reports whether slice a is fully contained within
+		// the memory region of slice b (by capacity).
 		//
-		//	aStart           aEnd          aStart   aEnd
-		//	├────── cap(a) ──┤             ├─cap(a)─┤
-		//	┌──┬──┬──┬──┬──┬──┐           ┌──┬──┬──┐
-		//	│  │  │  │  │  │  │           │  │  │  │
-		//	└──┴──┴──┴──┴──┴──┘           └──┴──┴──┘
-		//	      ┌──┬──┬──┬──┬──┬──┐                  ┌──┬──┬──┐
-		//	      │  │  │  │  │  │  │                  │  │  │  │
-		//	      └──┴──┴──┴──┴──┴──┘                  └──┴──┴──┘
-		//	      ├────── cap(b) ──┤                   ├─cap(b)─┤
-		//	      bStart           bEnd                bStart   bEnd
+		//	Case 1: Contained → true       Case 2: Not contained → false
 		//
-		//	aStart<=bEnd ✓ && bStart<=aEnd ✓    bStart<=aEnd ✗ → false
+		//	bStart                 bEnd     aStart         aEnd
+		//	├────── cap(b) ────────┤        ├── cap(a) ────┤
+		//	┌──┬──┬──┬──┬──┬──┬──┬──┐      ┌──┬──┬──┬──┬──┐
+		//	│  │  │  │  │  │  │  │  │      │  │  │  │  │  │
+		//	└──┴──┴──┴──┴──┴──┴──┴──┘      └──┴──┴──┴──┴──┘
+		//	      ┌──┬──┬──┐                            ┌──┬──┬──┐
+		//	      │  │  │  │                            │  │  │  │
+		//	      └──┴──┴──┘                            └──┴──┴──┘
+		//	      ├─cap(a)─┤                            ├─cap(b)─┤
+		//	      aStart   aEnd                         bStart   bEnd
+		//
+		//	bStart<=aStart ✓ && aEnd<=bEnd ✓    bStart<=aStart ✗ → false
 		sameUnderLying := func(a, b []byte) bool {
 			if len(a) == 0 || len(b) == 0 {
 				return false
@@ -490,8 +492,8 @@ func TestSubSlicingRetainstheUnderlyingdatastructure(t *testing.T) {
 			bStart := unsafe.SliceData(b)
 			bEnd := unsafe.Add(unsafe.Pointer(bStart), uintptr(cap(b)-1)*unsafe.Sizeof(b[0]))
 
-			return uintptr(unsafe.Pointer(aStart)) <= uintptr(bEnd) &&
-				uintptr(unsafe.Pointer(bStart)) <= uintptr(aEnd)
+			return uintptr(unsafe.Pointer(bStart)) <= uintptr(unsafe.Pointer(aStart)) &&
+				uintptr(aEnd) <= uintptr(bEnd)
 		}
 
 		// when
