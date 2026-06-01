@@ -171,7 +171,7 @@ func TestGetKey(t *testing.T) {
 	})
 }
 
-func TestGetKeyChain(t *testing.T) {
+func TestGetParentKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
@@ -184,12 +184,12 @@ func TestGetKeyChain(t *testing.T) {
 
 	h := createKeyHierarchy(t, keyStore, tenantStore)
 
-	t.Run("should get full key chain for leaf node", func(t *testing.T) {
+	t.Run("should get full parent keys for leaf node", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: h.h.ID, TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: h.h.ID, TenantID: h.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyChain(ctx, query)
+		result, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -200,12 +200,12 @@ func TestGetKeyChain(t *testing.T) {
 		assert.Equal(t, h.h.ID, result.Keys[3].ID)    // H
 	})
 
-	t.Run("should get key chain for intermediate node", func(t *testing.T) {
+	t.Run("should get parent keys for intermediate node", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: h.c.ID, TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: h.c.ID, TenantID: h.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyChain(ctx, query)
+		result, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -214,12 +214,12 @@ func TestGetKeyChain(t *testing.T) {
 		assert.Equal(t, h.c.ID, result.Keys[1].ID)    // C
 	})
 
-	t.Run("should get key chain for second intermediate node", func(t *testing.T) {
+	t.Run("should get parent keys for second intermediate node", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: h.e.ID, TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: h.e.ID, TenantID: h.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyChain(ctx, query)
+		result, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -229,12 +229,12 @@ func TestGetKeyChain(t *testing.T) {
 		assert.Equal(t, h.e.ID, result.Keys[2].ID)    // E
 	})
 
-	t.Run("should get key chain for root node", func(t *testing.T) {
+	t.Run("should get parent keys for root node", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: h.root.ID, TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: h.root.ID, TenantID: h.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyChain(ctx, query)
+		result, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -244,10 +244,10 @@ func TestGetKeyChain(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: uuid.NewString(), TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: uuid.NewString(), TenantID: h.tenant.ID}
 
 		// when
-		_, err := keyStore.GetKeyChain(ctx, query)
+		_, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
@@ -255,17 +255,17 @@ func TestGetKeyChain(t *testing.T) {
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
 		// given
-		query := store.GetKeyChainQuery{KeyID: h.h.ID, TenantID: uuid.NewString()}
+		query := store.GetParentKeysQuery{KeyID: h.h.ID, TenantID: uuid.NewString()}
 
 		// when
-		_, err := keyStore.GetKeyChain(ctx, query)
+		_, err := keyStore.GetParentKeys(ctx, query)
 
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }
 
-func TestGetKeyTree(t *testing.T) {
+func TestGetDescendantKeys(t *testing.T) {
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
 	require.NoError(t, err)
@@ -279,10 +279,10 @@ func TestGetKeyTree(t *testing.T) {
 
 	t.Run("should get all key tree for root node", func(t *testing.T) {
 		// given
-		query := store.GetKeyTreeQuery{KeyID: k.root.ID, TenantID: k.tenant.ID}
+		query := store.GetDescendantKeysQuery{KeyID: k.root.ID, TenantID: k.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyTree(ctx, query)
+		result, err := keyStore.GetDescendantKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -313,10 +313,10 @@ func TestGetKeyTree(t *testing.T) {
 
 	t.Run("should get tree for intermediate node", func(t *testing.T) {
 		// given
-		query := store.GetKeyTreeQuery{KeyID: k.c.ID, TenantID: k.tenant.ID}
+		query := store.GetDescendantKeysQuery{KeyID: k.c.ID, TenantID: k.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyTree(ctx, query)
+		result, err := keyStore.GetDescendantKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -341,10 +341,10 @@ func TestGetKeyTree(t *testing.T) {
 
 	t.Run("should get only self for leaf node", func(t *testing.T) {
 		// given
-		query := store.GetKeyTreeQuery{KeyID: k.h.ID, TenantID: k.tenant.ID}
+		query := store.GetDescendantKeysQuery{KeyID: k.h.ID, TenantID: k.tenant.ID}
 
 		// when
-		result, err := keyStore.GetKeyTree(ctx, query)
+		result, err := keyStore.GetDescendantKeys(ctx, query)
 
 		// then
 		require.NoError(t, err)
@@ -362,10 +362,10 @@ func TestGetKeyTree(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		query := store.GetKeyTreeQuery{KeyID: uuid.NewString(), TenantID: k.tenant.ID}
+		query := store.GetDescendantKeysQuery{KeyID: uuid.NewString(), TenantID: k.tenant.ID}
 
 		// when
-		_, err := keyStore.GetKeyTree(ctx, query)
+		_, err := keyStore.GetDescendantKeys(ctx, query)
 
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
@@ -373,10 +373,10 @@ func TestGetKeyTree(t *testing.T) {
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
 		// given
-		query := store.GetKeyTreeQuery{KeyID: k.root.ID, TenantID: uuid.NewString()}
+		query := store.GetDescendantKeysQuery{KeyID: k.root.ID, TenantID: uuid.NewString()}
 
 		// when
-		_, err := keyStore.GetKeyTree(ctx, query)
+		_, err := keyStore.GetDescendantKeys(ctx, query)
 
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)

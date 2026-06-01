@@ -24,6 +24,14 @@ func KeyToProto(k model.Key) *Key {
 	}
 }
 
+func KeyTreeToProto(tree model.KeyTreeTraverser) []*KeyTree {
+	var res []*KeyTree
+	for layer := range tree.IterKeysByLayerAsc() {
+		res = append(res, &KeyTree{Keys: KeysToProto(layer)})
+	}
+	return res
+}
+
 func KeysToProto(ks []model.Key) []*Key {
 	res := make([]*Key, len(ks))
 	for i := range ks {

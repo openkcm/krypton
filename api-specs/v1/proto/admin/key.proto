@@ -8,7 +8,8 @@ option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin";
 service KeyService {
   rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
-  rpc GetKeyChain(GetKeyChainRequest) returns (GetKeyChainResponse);
+  rpc GetParentKeys(GetParentKeysRequest) returns (GetParentKeysResponse);
+  rpc GetDescendantKeys(GetDescendantKeysRequest) returns (GetDescendantKeysResponse);
 }
 
 message Key {
@@ -46,12 +47,25 @@ message GetKeyResponse {
   Key key = 1;
 }
 
-message GetKeyChainRequest {
+message GetParentKeysRequest {
   string id = 1;
   string tenant_id = 2;
 }
 
-message GetKeyChainResponse {
+message GetParentKeysResponse {
   repeated Key keys = 1;
+}
+
+message GetDescendantKeysRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message KeyTree {
+  repeated Key keys = 1;
+}
+
+message GetDescendantKeysResponse {
+  repeated KeyTree key_tree = 1;
 }
 
