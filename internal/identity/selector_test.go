@@ -305,6 +305,12 @@ func TestFieldSelectorMatches(t *testing.T) {
 			field:    identity.Field{Type: "user", Name: "anything"},
 			expMatch: false,
 		},
+		{
+			name:     "type any remaining matches any field",
+			fsel:     identity.FieldSelector{Type: identity.AnyRemaining},
+			field:    identity.Field{Type: "node", Name: "root"},
+			expMatch: true,
+		},
 	}
 
 	for _, tt := range tests {
