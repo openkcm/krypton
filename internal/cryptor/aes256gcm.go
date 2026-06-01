@@ -12,18 +12,26 @@ import (
 )
 
 const (
-	plainTextKey  = "plainText"
+	// plainTextKey is the vault key used to store decrypted plaintext in secure memory.
+	plainTextKey = "plainText"
+	// cipherTextKey is the vault key used to store encrypted ciphertext in secure memory.
 	cipherTextKey = "cipherText"
 )
 
+// AES256GCM implements the Cryptor interface using AES-256 in Galois/Counter Mode.
+// All key material and intermediate plaintext/ciphertext are handled in mlock'd
+// memory via securemem to prevent leakage into swap or core dumps.
 type AES256GCM struct {
 	info Info
 }
 
 var _ Cryptor = &AES256GCM{}
 
+// ErrAllocatedDataNotFound indicates that data reserved in the secure memory vault
+// could not be retrieved after the cryptographic operation completed.
 var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 
+// NewAES256GCM returns a ready-to-use AES-256-GCM cryptor.
 func NewAES256GCM() *AES256GCM {
 	return &AES256GCM{
 		info: Info{
