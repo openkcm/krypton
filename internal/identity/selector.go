@@ -159,8 +159,7 @@ func parseFields(path string) ([]FieldSelector, error) {
 		}
 	}
 
-	var fields []FieldSelector
-
+	fields := make([]FieldSelector, 0, (len(parts)+1)/2)
 	for len(parts) > 0 {
 		if parts[0] == AnyRemaining {
 			fields = append(fields, FieldSelector{Type: AnyRemaining})
