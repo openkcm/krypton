@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -423,5 +424,85 @@ func TestName(t *testing.T) {
 
 		// then
 		assert.Equal(t, name, got)
+	})
+}
+
+// TestSubSlicingRetainsUnderlyingMemory verifies that sub-slicing a
+// securemem.Data slice produces slices that still reference the same
+// underlying memory region, ensuring no hidden copies are made.
+//
+// This matters because securemem.Data is backed by protected memory
+// (e.g., mlock'd pages). If sub-slicing triggered a copy, the derived
+// slice would escape to unprotected heap memory, defeating the purpose.
+//
+// The test uses an interval-overlap check on raw pointers to confirm
+// that any sub-slice's backing array intersects the original:
+//
+//	Original securemem allocation (cap=10)
+//	┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+//	│ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │  ← dataByteA
+//	└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+//	        ├───────────┤
+//	        dataByteA[2:5]  → still points into the same region ✓
+//
+//	Separate heap allocation (cap=10)
+//	┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+//	│ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │  ← dataByteB
+//	└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+//	        → different memory, no overlap ✗
+func TestSubSlicingRetainstheUnderlyingdatastructure(t *testing.T) {
+	t.Run("sub slice shares underlying array", func(t *testing.T) {
+		// given
+		data, err := securemem.NewData("test-data", 10)
+		require.NoError(t, err)
+
+		dataByteA := data.SecureBytes()
+		for i := range dataByteA {
+			dataByteA[i] = byte(i)
+		}
+
+		dataByteB := make([]byte, 10)
+		for i := range dataByteB {
+			dataByteB[i] = byte(i)
+		}
+
+		// sameUnderlying reports whether slice a is fully contained within
+		// the memory region of slice b (by capacity).
+		//
+		//	Case 1: Contained → true       Case 2: Not contained → false
+		//
+		//	bStart                 bEnd     aStart         aEnd
+		//	├────── cap(b) ────────┤        ├── cap(a) ────┤
+		//	┌──┬──┬──┬──┬──┬──┬──┬──┐      ┌──┬──┬──┬──┬──┐
+		//	│  │  │  │  │  │  │  │  │      │  │  │  │  │  │
+		//	└──┴──┴──┴──┴──┴──┴──┴──┘      └──┴──┴──┴──┴──┘
+		//	      ┌──┬──┬──┐                            ┌──┬──┬──┐
+		//	      │  │  │  │                            │  │  │  │
+		//	      └──┴──┴──┘                            └──┴──┴──┘
+		//	      ├─cap(a)─┤                            ├─cap(b)─┤
+		//	      aStart   aEnd                         bStart   bEnd
+		//
+		//	bStart<=aStart ✓ && aEnd<=bEnd ✓    bStart<=aStart ✗ → false
+		sameUnderLying := func(a, b []byte) bool {
+			if len(a) == 0 || len(b) == 0 {
+				return false
+			}
+			aStart := unsafe.SliceData(a)
+			aEnd := unsafe.Add(unsafe.Pointer(aStart), uintptr(cap(a)-1)*unsafe.Sizeof(a[0]))
+			bStart := unsafe.SliceData(b)
+			bEnd := unsafe.Add(unsafe.Pointer(bStart), uintptr(cap(b)-1)*unsafe.Sizeof(b[0]))
+
+			return uintptr(unsafe.Pointer(bStart)) <= uintptr(unsafe.Pointer(aStart)) &&
+				uintptr(aEnd) <= uintptr(bEnd)
+		}
+
+		// when
+		assert.False(t, sameUnderLying(dataByteA, dataByteB))
+		assert.True(t, sameUnderLying(dataByteA[:1], dataByteA))
+		assert.True(t, sameUnderLying(dataByteA[:5][:2], dataByteA))
+		assert.True(t, sameUnderLying(dataByteA[2:], dataByteA))
+		assert.True(t, sameUnderLying(dataByteA[2:][:3], dataByteA))
+		assert.True(t, sameUnderLying(dataByteA[2:5], dataByteA))
+		assert.True(t, sameUnderLying(dataByteA[2:5][:1], dataByteA))
 	})
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 )
@@ -24,7 +25,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -55,7 +56,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -70,7 +71,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -85,7 +86,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleTek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -100,13 +101,13 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -136,7 +137,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: false},
 						},
 					},
@@ -151,25 +152,25 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K3",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -184,19 +185,19 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -211,31 +212,31 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K3",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K4",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -250,25 +251,25 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K3",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -283,13 +284,13 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -304,13 +305,13 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleTek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -325,13 +326,13 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -346,19 +347,19 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -373,31 +374,31 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K1",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K2",
 							Role:       spec.KeyRoleTek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K3",
 							Role:       spec.KeyRoleKek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 						{
 							Kind:       "K4",
 							Role:       spec.KeyRoleDek,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -412,7 +413,7 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:       "K0",
 							Role:       spec.KeyRoleRoot,
-							Algorithm:  spec.KeyAlgorithmAES256,
+							Algorithm:  cryptor.KeyAlgorithmAES256,
 							LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 						},
 					},
@@ -453,17 +454,17 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:      "K0",
 							Role:      spec.KeyRoleRoot,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 						{
 							Kind:      "K1",
 							Role:      spec.KeyRoleKek,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 						{
 							Kind:      "K2",
 							Role:      spec.KeyRoleDek,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 					},
 				},
@@ -472,7 +473,7 @@ func TestKeyHierarchy(t *testing.T) {
 				expKeySpec: spec.KeySpec{
 					Kind:      "K1",
 					Role:      spec.KeyRoleKek,
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 			},
 			{
@@ -483,17 +484,17 @@ func TestKeyHierarchy(t *testing.T) {
 						{
 							Kind:      "K0",
 							Role:      spec.KeyRoleRoot,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 						{
 							Kind:      "K1",
 							Role:      spec.KeyRoleKek,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 						{
 							Kind:      "K2",
 							Role:      spec.KeyRoleDek,
-							Algorithm: spec.KeyAlgorithmAES256,
+							Algorithm: cryptor.KeyAlgorithmAES256,
 						},
 					},
 				},
@@ -519,11 +520,11 @@ func TestKeyHierarchy(t *testing.T) {
 		hierarchy := &spec.KeyHierarchy{
 			Name: "test-hierarchy",
 			KeySpecs: []spec.KeySpec{
-				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 			},
 		}
 
@@ -550,11 +551,11 @@ func TestKeyHierarchy(t *testing.T) {
 		hierarchy := &spec.KeyHierarchy{
 			Name: "test-hierarchy",
 			KeySpecs: []spec.KeySpec{
-				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 			},
 		}
 

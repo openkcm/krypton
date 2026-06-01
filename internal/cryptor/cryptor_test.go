@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/securemem"
@@ -11,6 +12,19 @@ import (
 
 func TestDecryptRequestValidate(t *testing.T) {
 	// given
+	validData, err := securemem.NewData("valid", 1)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = validData.Destroy()
+	})
+
+	destroyedData, err := securemem.NewData("destroyed", 1)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = destroyedData.Destroy()
+	})
+	_ = destroyedData.Destroy()
+
 	tts := []struct {
 		name    string
 		req     cryptor.DecryptRequest
@@ -22,7 +36,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: 1,
-				Ciphertext: &securemem.Data{},
+				Ciphertext: validData,
 			},
 			wantErr: nil,
 		},
@@ -32,7 +46,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: -1,
-				Ciphertext: &securemem.Data{},
+				Ciphertext: validData,
 			},
 			wantErr: nil,
 		},
@@ -73,6 +87,26 @@ func TestDecryptRequestValidate(t *testing.T) {
 			},
 			wantErr: cryptor.ErrRequest,
 		},
+		{
+			name: "destroyed ciphertext",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: destroyedData,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty securememe data",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
 	}
 
 	for _, tt := range tts {
@@ -88,6 +122,19 @@ func TestDecryptRequestValidate(t *testing.T) {
 
 func TestEncryptRequestValidate(t *testing.T) {
 	// given
+	validData, err := securemem.NewData("valid", 1)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = validData.Destroy()
+	})
+
+	destroyedData, err := securemem.NewData("destroyed", 1)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = destroyedData.Destroy()
+	})
+	_ = destroyedData.Destroy()
+
 	tts := []struct {
 		name    string
 		req     cryptor.EncryptRequest
@@ -99,7 +146,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: 1,
-				Plaintext:  &securemem.Data{},
+				Plaintext:  validData,
 			},
 			wantErr: nil,
 		},
@@ -109,7 +156,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: -1,
-				Plaintext:  &securemem.Data{},
+				Plaintext:  validData,
 			},
 			wantErr: nil,
 		},
@@ -147,6 +194,26 @@ func TestEncryptRequestValidate(t *testing.T) {
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: 1,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "destroyed plaintext",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  destroyedData,
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty securemem data",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  &securemem.Data{},
 			},
 			wantErr: cryptor.ErrRequest,
 		},

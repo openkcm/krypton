@@ -108,9 +108,9 @@ func TestHandlerRequestRun(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, resp)
 
-			actBytes, ok := resp.MemVault().Get("foo")
+			actData, ok := resp.MemVault().Get("foo")
 			assert.True(t, ok)
-			assert.Equal(t, "bar", string(actBytes))
+			assert.Equal(t, "bar", string(actData.SecureBytes()))
 		})
 
 		t.Run("should not persist values in tmp vault", func(t *testing.T) {
@@ -139,9 +139,9 @@ func TestHandlerRequestRun(t *testing.T) {
 				}
 				copy(b, []byte("bar"))
 
-				actBytes, ok := req.TemporaryVault().Get("foo")
+				actData, ok := req.TemporaryVault().Get("foo")
 				assert.True(t, ok)
-				assert.Equal(t, "bar", string(actBytes))
+				assert.Equal(t, "bar", string(actData.SecureBytes()))
 				return nil
 			})
 
@@ -159,9 +159,9 @@ func TestHandlerRequestRun(t *testing.T) {
 				}
 				copy(b, []byte("bar"))
 
-				actBytes, ok := req.PersistentVault().Get("foo")
+				actData, ok := req.PersistentVault().Get("foo")
 				assert.True(t, ok)
-				assert.Equal(t, "bar", string(actBytes))
+				assert.Equal(t, "bar", string(actData.SecureBytes()))
 				return nil
 			})
 

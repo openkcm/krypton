@@ -38,7 +38,7 @@ func TestGet(t *testing.T) {
 
 		// then
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes(data), actResult)
+		assert.Equal(t, securemem.SecureBytes(data), actResult.SecureBytes())
 	})
 
 	t.Run("should return false when data does not exist in vault", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestReserve(t *testing.T) {
 			// then
 			actResult, ok := subj.Get(name)
 			assert.True(t, ok)
-			assert.Equal(t, name, string(actResult))
+			assert.Equal(t, name, string(actResult.SecureBytes()))
 		}
 	})
 
@@ -165,13 +165,13 @@ func TestReserve(t *testing.T) {
 
 		actResult, ok := subj.Get(name)
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes(data), actResult)
+		assert.Equal(t, securemem.SecureBytes(data), actResult.SecureBytes())
 
 		data[0] = 'S'
 
 		actResult, ok = subj.Get(name)
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes([]byte("secret")), actResult)
+		assert.Equal(t, securemem.SecureBytes([]byte("secret")), actResult.SecureBytes())
 	})
 }
 
@@ -212,17 +212,17 @@ func TestVaultDestroy(t *testing.T) {
 			assert.NoError(t, err)
 
 			// then
-			actBytes, ok := subj.Get(name1)
+			actData, ok := subj.Get(name1)
 			assert.False(t, ok)
-			assert.Nil(t, actBytes)
+			assert.Nil(t, actData)
 
-			actBytes, ok = subj.Get(name2)
+			actData, ok = subj.Get(name2)
 			assert.True(t, ok)
-			assert.Equal(t, securemem.SecureBytes(data2), actBytes)
+			assert.Equal(t, securemem.SecureBytes(data2), actData.SecureBytes())
 
-			actBytes, ok = subj.Get(name3)
+			actData, ok = subj.Get(name3)
 			assert.False(t, ok)
-			assert.Nil(t, actBytes)
+			assert.Nil(t, actData)
 		})
 
 		t.Run("should be idempotent when destroying data", func(t *testing.T) {
@@ -297,9 +297,9 @@ func TestVaultDestroy(t *testing.T) {
 			copy(b, data2)
 
 			// then
-			actBytes, ok := subj.Get(name)
+			actData, ok := subj.Get(name)
 			assert.True(t, ok)
-			assert.Equal(t, securemem.SecureBytes(data2), actBytes)
+			assert.Equal(t, securemem.SecureBytes(data2), actData.SecureBytes())
 		})
 	})
 
@@ -417,13 +417,13 @@ func TestVaultDestroy(t *testing.T) {
 			copy(b, data2)
 
 			// then
-			actBytes, ok := subj.Get(name1)
+			actData, ok := subj.Get(name1)
 			assert.True(t, ok)
-			assert.Equal(t, securemem.SecureBytes(data1), actBytes)
+			assert.Equal(t, securemem.SecureBytes(data1), actData.SecureBytes())
 
-			actBytes, ok = subj.Get(name2)
+			actData, ok = subj.Get(name2)
 			assert.True(t, ok)
-			assert.Equal(t, securemem.SecureBytes(data2), actBytes)
+			assert.Equal(t, securemem.SecureBytes(data2), actData.SecureBytes())
 		})
 	})
 }
@@ -456,13 +456,13 @@ func TestVaultMarkReadOnly(t *testing.T) {
 		assert.NoError(t, err)
 
 		// then
-		actBytes, ok := subj.Get(name1)
+		actData, ok := subj.Get(name1)
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes(data1), actBytes)
+		assert.Equal(t, securemem.SecureBytes(data1), actData.SecureBytes())
 
-		actBytes, ok = subj.Get(name2)
+		actData, ok = subj.Get(name2)
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes(data2), actBytes)
+		assert.Equal(t, securemem.SecureBytes(data2), actData.SecureBytes())
 	})
 
 	t.Run("should be idempotent when marking all data as read-only", func(t *testing.T) {
@@ -489,9 +489,9 @@ func TestVaultMarkReadOnly(t *testing.T) {
 		assert.NoError(t, err)
 
 		// then
-		actBytes, ok := subj.Get(name)
+		actData, ok := subj.Get(name)
 		assert.True(t, ok)
-		assert.Equal(t, securemem.SecureBytes(data), actBytes)
+		assert.Equal(t, securemem.SecureBytes(data), actData.SecureBytes())
 	})
 
 	t.Run("should not return an error when vault is empty", func(t *testing.T) {

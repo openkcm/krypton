@@ -46,14 +46,14 @@ func main() {
 	}()
 
 	// Attempt to retrieve the secret data from the vault and print it.
-	b, ok := res.MemVault().Get("secret")
+	d, ok := res.MemVault().Get("secret")
 	if !ok {
 		panic(errors.New("secret not found in vault"))
 	}
 
 	// Print the secret data. This should work fine.
-	log.Println(string(b))
+	log.Println(string(d.SecureBytes()))
 
 	// Attempt to modify the secret data. This should cause a panic due to read-only memory.
-	b[0] = 'X' // This should cause a panic due to read-only memory
+	d.SecureBytes()[0] = 'X' // This should cause a panic due to read-only memory
 }

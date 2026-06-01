@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
 )
 
@@ -13,11 +14,11 @@ func testHierarchy() spec.KeyHierarchy {
 	return spec.KeyHierarchy{
 		Name: "test-hierarchy",
 		KeySpecs: []spec.KeySpec{
-			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: spec.KeyAlgorithmAES256},
-			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: spec.KeyAlgorithmAES256},
-			{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: spec.KeyAlgorithmAES256},
-			{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: spec.KeyAlgorithmAES256},
+			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 		},
 	}
 }

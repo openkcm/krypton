@@ -3,14 +3,13 @@ package spec
 import (
 	"errors"
 
+	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
 type (
 	// KeyRole identifies the role of a key within a hierarchy.
 	KeyRole string
-	// KeyAlgorithm identifies the encryption algorithm used by a key.
-	KeyAlgorithm string
 )
 
 const (
@@ -24,12 +23,9 @@ const (
 	KeyRoleTek KeyRole = "tek"
 )
 
-// KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
-const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
-
 // validKeyAlgorithms defines the set of supported KeyAlgorithm values.
-var validKeyAlgorithms = map[KeyAlgorithm]struct{}{
-	KeyAlgorithmAES256: {},
+var validKeyAlgorithms = map[cryptor.KeyAlgorithm]struct{}{
+	cryptor.KeyAlgorithmAES256: {},
 }
 
 var (
@@ -50,10 +46,10 @@ var (
 
 // KeySpec defines the properties of a key within a hierarchy, including its kind, role, and algorithm.
 type KeySpec struct {
-	Kind       model.KeyKind `yaml:"kind"`
-	Role       KeyRole       `yaml:"role"`
-	Algorithm  KeyAlgorithm  `yaml:"algorithm"`
-	LabelsSpec LabelsSpec    `yaml:"labels_spec"`
+	Kind       model.KeyKind        `yaml:"kind"`
+	Role       KeyRole              `yaml:"role"`
+	Algorithm  cryptor.KeyAlgorithm `yaml:"algorithm"`
+	LabelsSpec LabelsSpec           `yaml:"labels_spec"`
 }
 
 // Usage returns the KeyUsage associated with the KeySpec's role.
@@ -96,7 +92,7 @@ func (k KeySpec) Validate() error {
 }
 
 // IsSupportedAlgorithm checks if the provided KeyAlgorithm is supported by the system.
-func IsSupportedAlgorithm(alg KeyAlgorithm) bool {
+func IsSupportedAlgorithm(alg cryptor.KeyAlgorithm) bool {
 	_, ok := validKeyAlgorithms[alg]
 	return ok
 }

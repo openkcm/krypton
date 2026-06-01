@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
 )
 
@@ -21,7 +22,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:      "K0",
 					Role:      spec.KeyRoleRoot,
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 				expUsage: spec.KeyUsageWrap | spec.KeyUsageUnwrap,
 			},
@@ -30,7 +31,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:      "K0",
 					Role:      spec.KeyRoleKek,
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 				expUsage: spec.KeyUsageWrap | spec.KeyUsageUnwrap,
 			},
@@ -39,7 +40,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:      "K0",
 					Role:      spec.KeyRoleTek,
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 				expUsage: spec.KeyUsageWrap | spec.KeyUsageUnwrap,
 			},
@@ -48,7 +49,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:      "K0",
 					Role:      spec.KeyRoleDek,
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 				expUsage: spec.KeyUsageEncrypt | spec.KeyUsageDecrypt,
 			},
@@ -57,7 +58,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:      "K0",
 					Role:      "invalid-role",
-					Algorithm: spec.KeyAlgorithmAES256,
+					Algorithm: cryptor.KeyAlgorithmAES256,
 				},
 				expUsage: spec.KeyUsageNone,
 			},
@@ -85,7 +86,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "",
 					Role:       spec.KeyRoleRoot,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecKindEmpty,
@@ -95,7 +96,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       "invalid-role",
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 				expErr: spec.ErrKeySpecRoleInvalid,
@@ -125,7 +126,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       spec.KeyRoleRoot,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 			},
@@ -134,7 +135,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       spec.KeyRoleKek,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 			},
@@ -143,7 +144,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       spec.KeyRoleDek,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 			},
@@ -152,7 +153,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       spec.KeyRoleTek,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: true},
 				},
 			},
@@ -161,7 +162,7 @@ func TestKeySpec(t *testing.T) {
 				input: spec.KeySpec{
 					Kind:       "K0",
 					Role:       spec.KeyRoleTek,
-					Algorithm:  spec.KeyAlgorithmAES256,
+					Algorithm:  cryptor.KeyAlgorithmAES256,
 					LabelsSpec: spec.LabelsSpec{AllowUserLabels: false},
 				},
 				expErr: spec.ErrLabelsSpecRequirementEmpty,
@@ -187,12 +188,12 @@ func TestKeySpec(t *testing.T) {
 	t.Run("IsSupportedAlgorithm", func(t *testing.T) {
 		tts := []struct {
 			name  string
-			input spec.KeyAlgorithm
+			input cryptor.KeyAlgorithm
 			expOk bool
 		}{
 			{
 				name:  "should return true for 'AES256'",
-				input: spec.KeyAlgorithmAES256,
+				input: cryptor.KeyAlgorithmAES256,
 				expOk: true,
 			},
 			{
