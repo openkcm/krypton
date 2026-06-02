@@ -11,29 +11,43 @@ import (
 
 type KeyKind string
 
-type KeyState string
+type KeyLifeCycleState string
 
 const (
-	KeyStatePreActivation  KeyState = "pre-activation"
-	KeyStateActive         KeyState = "active"
-	KeyStateSuspended      KeyState = "suspended"
-	KeyStateDeactivated    KeyState = "deactivated"
-	KeyStateCompromised    KeyState = "compromised"
-	KeyStateDestroyed      KeyState = "destroyed"
-	KeyStateAnnounceFailed KeyState = "announce-failed"
+	KeyLifeCyclePreActivation KeyLifeCycleState = "pre-activation"
+	KeyLifeCycleActive        KeyLifeCycleState = "active"
+	KeyLifeCycleSuspended     KeyLifeCycleState = "suspended"
+	KeyLifeCycleDeactivated   KeyLifeCycleState = "deactivated"
+	KeyLifeCycleCompromised   KeyLifeCycleState = "compromised"
+	KeyLifeCycleDestroyed     KeyLifeCycleState = "destroyed"
+)
+
+// KeyProcessingState captures the state of asynchronous work performed on a
+// key (e.g. announce-key reconciliation).
+type KeyProcessingState struct {
+	Status string `json:"status"`
+	JobID  string `json:"job_id,omitempty"`
+}
+
+const (
+	KeyProcessingPending    = "pending"
+	KeyProcessingInProgress = "in-progress"
+	KeyProcessingCompleted  = "completed"
+	KeyProcessingFailed     = "failed"
 )
 
 type Key struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	TenantID  string         `json:"tenant_id"`
-	Kind      KeyKind        `json:"kind"`
-	ParentID  *string        `json:"parent_id"`
-	ManagedBy string         `json:"managed_by"`
-	Labels    Labels         `json:"labels"`
-	State     KeyState       `json:"state"`
-	CreatedAt clock.UnixNano `json:"created_at"`
-	UpdatedAt clock.UnixNano `json:"updated_at"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	TenantID           string             `json:"tenant_id"`
+	Kind               KeyKind            `json:"kind"`
+	ParentID           *string            `json:"parent_id"`
+	ManagedBy          string             `json:"managed_by"`
+	Labels             Labels             `json:"labels"`
+	LifeCycleState     KeyLifeCycleState  `json:"life_cycle_state"`
+	KeyProcessingState KeyProcessingState `json:"key_processing_state"`
+	CreatedAt          clock.UnixNano     `json:"created_at"`
+	UpdatedAt          clock.UnixNano     `json:"updated_at"`
 }
 
 // KeyTree represents a hierarchical structure of keys, where each inner
@@ -55,16 +69,17 @@ type KeyTreeTraverser interface {
 func NewKey(tenantID, name string, kind string, parentID *string, managedBy string, labels Labels) Key {
 	now := clock.Now()
 	return Key{
-		ID:        uuid.NewString(),
-		Name:      name,
-		TenantID:  tenantID,
-		Kind:      KeyKind(kind),
-		ParentID:  parentID,
-		ManagedBy: managedBy,
-		Labels:    labels,
-		State:     KeyStatePreActivation,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                 uuid.NewString(),
+		Name:               name,
+		TenantID:           tenantID,
+		Kind:               KeyKind(kind),
+		ParentID:           parentID,
+		ManagedBy:          managedBy,
+		Labels:             labels,
+		LifeCycleState:     KeyLifeCyclePreActivation,
+		KeyProcessingState: KeyProcessingState{Status: KeyProcessingPending},
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 }
 

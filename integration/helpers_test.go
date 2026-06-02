@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 )
 
 // testEnvironment holds the shared infrastructure for tests that require root + agent.
@@ -234,9 +236,12 @@ func awaitKeyExists(t *testing.T, db *sql.DB, keyID, tenantID string, timeout ti
 	}
 }
 
-// awaitKeyState polls the keys table until the key reaches the expected state.
-// Fails the test if the timeout is exceeded.
-func awaitKeyState(t *testing.T, db *sql.DB, keyID, tenantID, expectedState string, timeout time.Duration) {
+// awaitKeyProcessingStatusViaGRPC polls the root admin gRPC API until the key's
+// processing status reaches expected. Fails the test if the timeout is exceeded.
+//
+// We use the gRPC client (not raw SQL) so the test exercises the same wire path
+// production clients use to observe key state.
+func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli admin.KeyServiceClient, keyID, tenantID, expected string, timeout time.Duration) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
@@ -246,16 +251,13 @@ func awaitKeyState(t *testing.T, db *sql.DB, keyID, tenantID, expectedState stri
 	defer ticker.Stop()
 
 	for {
-		var state string
-		err := db.QueryRowContext(ctx,
-			"SELECT state FROM keys WHERE id = $1 AND tenant_id = $2", keyID, tenantID,
-		).Scan(&state)
-		if err == nil && state == expectedState {
+		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{Id: keyID, TenantId: tenantID})
+		if err == nil && resp.GetKey().GetKeyProcessingState().GetStatus() == expected {
 			return
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatalf("timed out waiting for key %s to reach state %s", keyID, expectedState)
+			t.Fatalf("timed out waiting for key %s to reach processing status %s", keyID, expected)
 		case <-ticker.C:
 		}
 	}

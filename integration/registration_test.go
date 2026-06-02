@@ -56,11 +56,14 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("agent registration", func(t *testing.T) {
 		// given
+		_, agentDBConnStr := createDatabase(t)
 		agentCfgPath := writeAgentConfig(t, agentName, "localhost:"+rootPort)
 		agentCmd := createCmd(t, agentBinary, []string{
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"ROOT_SERVER_PORT=" + rootPort,
+			"AGENT_DATABASE_URL=" + agentDBConnStr,
+			"AGENT_PORT=" + agentPort,
 		})
 
 		// when

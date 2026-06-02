@@ -20,9 +20,8 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/openkcm/krypton/internal/agent/handler"
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/reconciler/handler/announcekey"
+	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -75,17 +74,13 @@ func main() {
 
 	// agent-side operator: own database, rpc.Server, handler registration
 	agentDB, rpcServer, operator := setupOperator(ctx)
-	if agentDB != nil {
-		defer agentDB.Close()
-	}
+	defer agentDB.Close()
 
-	if operator != nil {
-		go func() {
-			if err := operator.ListenAndRespond(ctx); err != nil {
-				log.Printf("operator stopped: %v", err)
-			}
-		}()
-	}
+	go func() {
+		if err := operator.ListenAndRespond(ctx); err != nil {
+			log.Printf("operator stopped: %v", err)
+		}
+	}()
 
 	// graceful shutdown on SIGINT/SIGTERM
 	signalChan := make(chan os.Signal, 1)
@@ -94,10 +89,8 @@ func main() {
 	<-signalChan
 	fmt.Println("Received termination signal, shutting down...")
 	wrkr.Stop()
-	if rpcServer != nil {
-		if err := rpcServer.Close(context.Background()); err != nil {
-			log.Printf("failed to close rpc server: %v", err)
-		}
+	if err := rpcServer.Close(context.Background()); err != nil {
+		log.Printf("failed to close rpc server: %v", err)
 	}
 
 	log.Println("Deregistering agent...")
@@ -141,8 +134,7 @@ func loadConfig() *config.AgentBootstrapConfig {
 func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator) {
 	dsn := os.Getenv("AGENT_DATABASE_URL")
 	if dsn == "" {
-		log.Println("AGENT_DATABASE_URL not set, operator disabled")
-		return nil, nil, nil
+		log.Fatal("AGENT_DATABASE_URL environment variable is required")
 	}
 
 	db, err := sql.Open("postgres", dsn)
@@ -167,7 +159,7 @@ func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator
 	op, err := orbital.NewOperator(orbital.TargetOperator{Client: rpcServer})
 	handleErr(err, "failed to create operator")
 
-	err = op.RegisterHandler(announcekey.TaskType, handler.NewAnnounceKey(keyStore))
+	err = op.RegisterHandler(announcekey.TaskType, announcekey.NewTaskHandler(keyStore))
 	handleErr(err, "failed to register announce-key handler")
 
 	log.Printf("agent operator listening on :%s", agentPort)

@@ -65,11 +65,39 @@ func TestAnnounceKey(t *testing.T) {
 		assert.NotEmpty(t, res.GetKey().GetId())
 		assert.Equal(t, "K0", res.GetKey().GetKind())
 		assert.Equal(t, "root", res.GetKey().GetManagedBy())
-		assert.Equal(t, "pre-activation", res.GetKey().GetState())
+		assert.Equal(t, "pre-activation", res.GetKey().GetLifeCycleState())
+		assert.Equal(t, model.KeyProcessingInProgress, res.GetKey().GetKeyProcessingState().GetStatus())
+		assert.NotEmpty(t, res.GetKey().GetKeyProcessingState().GetJobId())
 		assert.Equal(t, tenant.ID, res.GetKey().GetTenantId())
 		assert.Equal(t, "prod", res.GetKey().GetLabels()["env"])
 		assert.NotZero(t, res.GetKey().GetCreatedAt())
 		assert.NotZero(t, res.GetKey().GetUpdatedAt())
+	})
+
+	t.Run("should be idempotent on duplicate (tenant, name)", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, keyStore)
+		name := "idempotent-" + uuid.NewString()
+
+		first, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, first.GetKey().GetId())
+		require.NotEmpty(t, first.GetKey().GetKeyProcessingState().GetJobId())
+
+		second, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, first.GetKey().GetId(), second.GetKey().GetId())
+		assert.Equal(t, first.GetKey().GetKeyProcessingState().GetJobId(), second.GetKey().GetKeyProcessingState().GetJobId())
 	})
 
 	t.Run("should create key with parent", func(t *testing.T) {

@@ -23,8 +23,8 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
+	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/reconciler"
-	"github.com/openkcm/krypton/internal/reconciler/handler/announcekey"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
@@ -86,7 +86,7 @@ func main() {
 		&cfg.Reconciler,
 		repo,
 		targetProvider,
-		[]reconciler.JobHandler{announcekey.NewHandler(keyStore)},
+		[]reconciler.JobHandler{announcekey.NewJobHandler(keyStore)},
 		reconcilerOpts...,
 	)
 	handleErr(err, "failed to create reconciler manager")

@@ -14,34 +14,19 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-const (
-	JobType  = "announce-key"
-	TaskType = "announce-key"
-)
-
-type TaskData struct {
-	KeyID    string            `json:"key_id"`
-	TenantID string            `json:"tenant_id"`
-	Kind     string            `json:"kind"`
-	Name     string            `json:"name"`
-	ParentID string            `json:"parent_id,omitempty"`
-	Target   string            `json:"target"`
-	Labels   map[string]string `json:"labels,omitempty"`
-}
-
-type Handler struct {
+type JobHandler struct {
 	keyStore store.Key
 }
 
-func NewHandler(keyStore store.Key) *Handler {
-	return &Handler{keyStore: keyStore}
+func NewJobHandler(keyStore store.Key) *JobHandler {
+	return &JobHandler{keyStore: keyStore}
 }
 
-func (h *Handler) JobType() string {
+func (h *JobHandler) JobType() string {
 	return JobType
 }
 
-func (h *Handler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
+func (h *JobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return orbital.CancelJobConfirmer(fmt.Sprintf("invalid job data: %v", err)), nil
@@ -58,7 +43,7 @@ func (h *Handler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobC
 	return orbital.CompleteJobConfirmer(), nil
 }
 
-func (h *Handler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
+func (h *JobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return orbital.CancelTaskResolver(fmt.Sprintf("invalid job data: %v", err)), nil
@@ -71,33 +56,34 @@ func (h *Handler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.Tas
 	}}), nil
 }
 
-func (h *Handler) OnJobDone(ctx context.Context, job orbital.Job) error {
+func (h *JobHandler) OnJobDone(ctx context.Context, job orbital.Job) error {
 	slogctx.Info(ctx, "announce-key job completed", "jobID", job.ID)
-	return nil
+	return h.markProcessing(ctx, job, model.KeyProcessingCompleted)
 }
 
-func (h *Handler) OnJobFailed(ctx context.Context, job orbital.Job) error {
+func (h *JobHandler) OnJobFailed(ctx context.Context, job orbital.Job) error {
 	slogctx.Error(ctx, "announce-key job failed", "jobID", job.ID, "error", job.ErrorMessage)
-	return h.markKeyAnnounceFailed(ctx, job)
+	return h.markProcessing(ctx, job, model.KeyProcessingFailed)
 }
 
-func (h *Handler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
+func (h *JobHandler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "announce-key job canceled", "jobID", job.ID)
-	return h.markKeyAnnounceFailed(ctx, job)
+	return h.markProcessing(ctx, job, model.KeyProcessingFailed)
 }
 
-func (h *Handler) markKeyAnnounceFailed(ctx context.Context, job orbital.Job) error {
+func (h *JobHandler) markProcessing(ctx context.Context, job orbital.Job, status string) error {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return fmt.Errorf("unmarshal job data: %w", err)
 	}
 
-	if err := h.keyStore.UpdateKeyState(ctx, store.UpdateKeyStateQuery{
-		ID:       data.KeyID,
-		TenantID: data.TenantID,
-		NewState: model.KeyStateAnnounceFailed,
+	if err := h.keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+		ID:        data.KeyID,
+		TenantID:  data.TenantID,
+		NewStatus: status,
+		NewJobID:  job.ID.String(),
 	}); err != nil {
-		return fmt.Errorf("update key state: %w", err)
+		return fmt.Errorf("update key processing state: %w", err)
 	}
 
 	return nil

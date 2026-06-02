@@ -190,5 +190,8 @@ func createTenant(t *testing.T, db *sql.DB) model.Tenant {
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
+	if job.ID == uuid.Nil {
+		job.ID = uuid.Must(uuid.NewUUID())
+	}
 	return job, nil
 }
