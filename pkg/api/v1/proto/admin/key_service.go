@@ -91,8 +91,8 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 
 	job := orbital.NewJob(announcekey.JobType, data).WithExternalID(key.ID)
 	prepared, prepErr := s.jobPreparer.PrepareJob(ctx, job)
-	switch prepErr {
-	case nil:
+	switch {
+	case prepErr == nil:
 		key.KeyProcessingState = model.KeyProcessingState{
 			Status: model.KeyProcessingInProgress,
 			JobID:  prepared.ID.String(),
@@ -108,6 +108,13 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 			// when the job terminates.
 			slogctx.Warn(ctx, "failed to record job linkage on key", "err", err, "keyID", key.ID)
 		}
+	case errors.Is(prepErr, orbital.ErrJobAlreadyExists):
+		// Concurrent racer beat us to PrepareJob with the same ExternalID.
+		// Orbital deduped the job; the winner will (or already did) record
+		// the JobID on the key. Return what we have — the next GetKey call
+		// will reflect the linkage once the winner finishes its
+		// UpdateKeyProcessingState.
+		slogctx.Info(ctx, "announce-key job already exists for this ExternalID, returning existing key", "keyID", key.ID)
 	default:
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.Internal, "failed to prepare announce key job"),

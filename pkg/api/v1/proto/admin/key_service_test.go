@@ -1,9 +1,12 @@
 package admin_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -14,6 +17,16 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+// errJobPreparer is a JobPreparer stub that always returns the configured
+// error. Used to simulate concurrent-race / failure paths from PrepareJob.
+type errJobPreparer struct {
+	err error
+}
+
+func (e errJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
+	return job, e.err
+}
 
 // keyHierarchy holds a test key tree with the following structure:
 //
@@ -98,6 +111,35 @@ func TestAnnounceKey(t *testing.T) {
 
 		assert.Equal(t, first.GetKey().GetId(), second.GetKey().GetId())
 		assert.Equal(t, first.GetKey().GetKeyProcessingState().GetJobId(), second.GetKey().GetKeyProcessingState().GetJobId())
+	})
+
+	t.Run("should succeed when orbital reports job already exists", func(t *testing.T) {
+		// Concurrent racer has already prepared the job for the same
+		// ExternalID. Orbital returns ErrJobAlreadyExists; AnnounceKey
+		// must succeed and return the key as-is rather than surfacing
+		// RETRY to the client.
+		svc := admin.NewKeyService(keyStore, errJobPreparer{err: orbital.ErrJobAlreadyExists})
+		resp, err := svc.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       "racer-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.GetKey().GetId())
+	})
+
+	t.Run("should surface RETRY on other PrepareJob errors", func(t *testing.T) {
+		svc := admin.NewKeyService(keyStore, errJobPreparer{err: errors.New("boom")})
+		_, err := svc.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       "boom-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
 	})
 
 	t.Run("should create key with parent", func(t *testing.T) {
