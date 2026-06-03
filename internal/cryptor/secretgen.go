@@ -45,10 +45,9 @@ func (a *AES256SecretGenerator) GenerateSecret(ctx context.Context) (*GenerateSe
 			return fmt.Errorf("failed to allocate new securemem bytes: %w", err)
 		}
 
-		_, err = rand.Read(b)
-		if err != nil {
-			return fmt.Errorf("failed to generate random bytes: %w", err)
-		}
+		// ignoring the error because crypto/rand.Read always returns len(b), nil;
+		// it never returns an error (it panics on catastrophic system entropy failure).
+		rand.Read(b)
 
 		return nil
 	})
