@@ -1,4 +1,4 @@
-package vault_test
+package sqlitevault_test
 
 import (
 	"path/filepath"
@@ -8,11 +8,12 @@ import (
 
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 )
 
-func newTestSQLiteVault(t *testing.T) *vault.UnsafeSQLite {
+func newTestUnsafeVault(t *testing.T) *sqlitevault.Unsafe {
 	t.Helper()
-	v, err := vault.NewUnsafeSQLite(t.Context(), "test", vault.SQLiteMemory)
+	v, err := sqlitevault.NewUnsafe(t.Context(), "test", sqlitevault.MemorySource)
 	assert.NoError(t, err)
 	t.Cleanup(func() {
 		_ = v.Close()
@@ -31,9 +32,9 @@ func newTestSecureData(t *testing.T, data []byte) *securemem.Data {
 	return d
 }
 
-func TestUnsafeSQLite_ImportAndExportKey(t *testing.T) {
+func TestUnsafe_ImportAndExportKey(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 	keyBytes := []byte("this-is-a-32-byte-test-key-mat!")
 	aad := []byte("additional-authenticated-data")
@@ -64,9 +65,9 @@ func TestUnsafeSQLite_ImportAndExportKey(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafeSQLite_ImportKeyErrors(t *testing.T) {
+func TestUnsafe_ImportKeyErrors(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
@@ -126,9 +127,9 @@ func TestUnsafeSQLite_ImportKeyErrors(t *testing.T) {
 	}
 }
 
-func TestUnsafeSQLite_ExportKeyLatestVersion(t *testing.T) {
+func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	versions := []struct {
@@ -163,9 +164,9 @@ func TestUnsafeSQLite_ExportKeyLatestVersion(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafeSQLite_ExportKeySpecificVersion(t *testing.T) {
+func TestUnsafe_ExportKeySpecificVersion(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	v1Data := []byte("key-material-version-1-padding!")
@@ -203,9 +204,9 @@ func TestUnsafeSQLite_ExportKeySpecificVersion(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafeSQLite_ExportKeyNotFound(t *testing.T) {
+func TestUnsafe_ExportKeyNotFound(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	// when
@@ -220,9 +221,9 @@ func TestUnsafeSQLite_ExportKeyNotFound(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
-func TestUnsafeSQLite_DestroyKey(t *testing.T) {
+func TestUnsafe_DestroyKey(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	for _, ver := range []string{"v1", "v2", "v3"} {
@@ -254,9 +255,9 @@ func TestUnsafeSQLite_DestroyKey(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
-func TestUnsafeSQLite_DestroyKeyNoneExist(t *testing.T) {
+func TestUnsafe_DestroyKeyNoneExist(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	// when
@@ -270,9 +271,9 @@ func TestUnsafeSQLite_DestroyKeyNoneExist(t *testing.T) {
 	assert.Empty(t, resp.DestroyedVersions)
 }
 
-func TestUnsafeSQLite_DestroyKeyVersion(t *testing.T) {
+func TestUnsafe_DestroyKeyVersion(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	v1Data := []byte("key-material-version-1-padding!")
@@ -323,9 +324,9 @@ func TestUnsafeSQLite_DestroyKeyVersion(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafeSQLite_DestroyKeyVersionNotFound(t *testing.T) {
+func TestUnsafe_DestroyKeyVersionNotFound(t *testing.T) {
 	// given
-	v := newTestSQLiteVault(t)
+	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	// when
@@ -339,10 +340,10 @@ func TestUnsafeSQLite_DestroyKeyVersionNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
 }
 
-func TestUnsafeSQLite_Info(t *testing.T) {
+func TestUnsafe_Info(t *testing.T) {
 	t.Run("memory source", func(t *testing.T) {
 		// given
-		v := newTestSQLiteVault(t)
+		v := newTestUnsafeVault(t)
 
 		// when
 		info := v.Info()
@@ -355,7 +356,7 @@ func TestUnsafeSQLite_Info(t *testing.T) {
 	t.Run("file source", func(t *testing.T) {
 		// given
 		dbPath := filepath.Join(t.TempDir(), "test.db")
-		v, err := vault.NewUnsafeSQLite(t.Context(), "file-vault", vault.SQLiteFile(dbPath))
+		v, err := sqlitevault.NewUnsafe(t.Context(), "file-vault", sqlitevault.FileSource(dbPath))
 		assert.NoError(t, err)
 		t.Cleanup(func() {
 			_ = v.Close()
@@ -370,14 +371,14 @@ func TestUnsafeSQLite_Info(t *testing.T) {
 	})
 }
 
-func TestUnsafeSQLite_FileSourcePersistence(t *testing.T) {
+func TestUnsafe_FileSourcePersistence(t *testing.T) {
 	// given
 	dbPath := filepath.Join(t.TempDir(), "persistent.db")
 	ctx := t.Context()
 	keyBytes := []byte("persistent-key-material-32byte!")
 	aad := []byte("persistent-aad")
 
-	v, err := vault.NewUnsafeSQLite(ctx, "persist-test", vault.SQLiteFile(dbPath))
+	v, err := sqlitevault.NewUnsafe(ctx, "persist-test", sqlitevault.FileSource(dbPath))
 	assert.NoError(t, err)
 
 	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
@@ -391,7 +392,7 @@ func TestUnsafeSQLite_FileSourcePersistence(t *testing.T) {
 	assert.NoError(t, v.Close())
 
 	// when - reopen the same file source
-	v2, err := vault.NewUnsafeSQLite(ctx, "persist-test", vault.SQLiteFile(dbPath))
+	v2, err := sqlitevault.NewUnsafe(ctx, "persist-test", sqlitevault.FileSource(dbPath))
 	assert.NoError(t, err)
 	t.Cleanup(func() {
 		_ = v2.Close()

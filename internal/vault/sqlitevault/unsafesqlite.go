@@ -1,4 +1,4 @@
-package vault
+package sqlitevault
 
 import (
 	"context"
@@ -9,11 +9,12 @@ import (
 
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/vault"
 )
 
-// SQLiteMemory is the data source for an in-memory SQLite database with shared cache,
+// MemorySource is the data source for an in-memory SQLite database with shared cache,
 // allowing multiple connections from the same process to access the same database.
-const SQLiteMemory SQLiteDataSource = "file::memory:?cache=shared"
+const MemorySource DataSource = "file::memory:?cache=shared"
 
 const initDB = `
 CREATE TABLE IF NOT EXISTS keys (
@@ -28,23 +29,23 @@ CREATE TABLE IF NOT EXISTS keys (
 `
 
 type (
-	// UnsafeSQLite is a Vault implementation backed by an unencrypted SQLite database.
+	// Unsafe is a SQLite Vault implementation backed by an unencrypted SQLite database.
 	// It stores key material in plaintext and is intended for local development and
 	// testing only. Do not use in production.
-	UnsafeSQLite struct {
+	Unsafe struct {
 		name   string
-		source SQLiteDataSource
+		source DataSource
 		db     *sql.DB
 	}
 
-	// SQLiteDataSource specifies the connection target for a SQLite database.
-	SQLiteDataSource string
+	// DataSource specifies the connection target for a SQLite database.
+	DataSource string
 )
 
-var _ Vault = &UnsafeSQLite{}
+var _ vault.Vault = &Unsafe{}
 
-// NewUnsafeSQLite opens or creates an unencrypted SQLite vault at the given data source.
-func NewUnsafeSQLite(ctx context.Context, name string, source SQLiteDataSource) (*UnsafeSQLite, error) {
+// NewUnsafe opens or creates an unencrypted SQLite vault at the given data source.
+func NewUnsafe(ctx context.Context, name string, source DataSource) (*Unsafe, error) {
 	db, err := sql.Open("sqlite", string(source))
 	if err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ func NewUnsafeSQLite(ctx context.Context, name string, source SQLiteDataSource) 
 	if err != nil {
 		return nil, err
 	}
-	v := &UnsafeSQLite{
+	v := &Unsafe{
 		name:   name,
 		source: source,
 		db:     db,
@@ -65,31 +66,31 @@ func NewUnsafeSQLite(ctx context.Context, name string, source SQLiteDataSource) 
 	return v, nil
 }
 
-// SQLiteFile returns a SQLiteDataSource pointing to the given file path.
-func SQLiteFile(path string) SQLiteDataSource {
-	return SQLiteDataSource(path)
+// FileSource returns a DataSource pointing to the given file path.
+func FileSource(path string) DataSource {
+	return DataSource(path)
 }
 
-func (s *UnsafeSQLite) migrate(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, initDB)
+func (u *Unsafe) migrate(ctx context.Context) error {
+	_, err := u.db.ExecContext(ctx, initDB)
 	return err
 }
 
-func (s *UnsafeSQLite) ImportKey(ctx context.Context, req ImportKeyRequest) (*ImportKeyResponse, error) {
+func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
 	if req.KeyMaterial == nil {
-		return nil, ErrInvalidRequest
+		return nil, vault.ErrInvalidRequest
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := u.db.ExecContext(ctx,
 		"INSERT INTO keys (tenant_id, key_id, key_version, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		req.TenantID, req.KeyID, req.KeyVersion, []byte(req.KeyMaterial.SecureBytes()), req.AAD, int64(clock.Now()),
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &ImportKeyResponse{}, nil
+	return &vault.ImportKeyResponse{}, nil
 }
 
-func (s *UnsafeSQLite) ExportKey(ctx context.Context, req ExportKeyRequest) (*ExportKeyResponse, error) {
+func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
 	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? ORDER BY created_at DESC LIMIT 1"
 	args := []any{req.TenantID, req.KeyID}
 	if req.KeyVersion != "" {
@@ -99,10 +100,10 @@ func (s *UnsafeSQLite) ExportKey(ctx context.Context, req ExportKeyRequest) (*Ex
 
 	var rawKey []byte
 	var aad []byte
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(&rawKey, &aad)
+	err := u.db.QueryRowContext(ctx, query, args...).Scan(&rawKey, &aad)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrKeyNotFound
+			return nil, vault.ErrKeyNotFound
 		}
 		return nil, err
 	}
@@ -113,14 +114,14 @@ func (s *UnsafeSQLite) ExportKey(ctx context.Context, req ExportKeyRequest) (*Ex
 	}
 	copy(data.SecureBytes(), rawKey)
 
-	return &ExportKeyResponse{
+	return &vault.ExportKeyResponse{
 		KeyMaterial: data,
 		AAD:         aad,
 	}, nil
 }
 
-func (s *UnsafeSQLite) DestroyKey(ctx context.Context, req DestroyKeyRequest) (*DestroyKeyResponse, error) {
-	rows, err := s.db.QueryContext(ctx,
+func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
+	rows, err := u.db.QueryContext(ctx,
 		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? RETURNING key_version",
 		req.TenantID, req.KeyID,
 	)
@@ -141,11 +142,11 @@ func (s *UnsafeSQLite) DestroyKey(ctx context.Context, req DestroyKeyRequest) (*
 		return nil, err
 	}
 
-	return &DestroyKeyResponse{DestroyedVersions: destroyed}, nil
+	return &vault.DestroyKeyResponse{DestroyedVersions: destroyed}, nil
 }
 
-func (s *UnsafeSQLite) DestroyKeyVersion(ctx context.Context, req DestroyKeyVersionRequest) (*DestroyKeyVersionResponse, error) {
-	result, err := s.db.ExecContext(ctx,
+func (u *Unsafe) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVersionRequest) (*vault.DestroyKeyVersionResponse, error) {
+	result, err := u.db.ExecContext(ctx,
 		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?",
 		req.TenantID, req.KeyID, req.KeyVersion,
 	)
@@ -158,24 +159,24 @@ func (s *UnsafeSQLite) DestroyKeyVersion(ctx context.Context, req DestroyKeyVers
 		return nil, err
 	}
 	if affected == 0 {
-		return nil, ErrKeyNotFound
+		return nil, vault.ErrKeyNotFound
 	}
 
-	return &DestroyKeyVersionResponse{}, nil
+	return &vault.DestroyKeyVersionResponse{}, nil
 }
 
-func (s *UnsafeSQLite) Info() Info {
+func (u *Unsafe) Info() vault.Info {
 	source := "file"
-	if s.source == SQLiteMemory {
+	if u.source == MemorySource {
 		source = "memory"
 	}
-	return Info{
-		Name: s.name,
+	return vault.Info{
+		Name: u.name,
 		Type: "sqlite:" + source,
 	}
 }
 
 // Close closes the underlying database connection.
-func (s *UnsafeSQLite) Close() error {
-	return s.db.Close()
+func (u *Unsafe) Close() error {
+	return u.db.Close()
 }
