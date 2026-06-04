@@ -1,7 +1,6 @@
 package cryptor_test
 
 import (
-	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,9 +35,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 
 	t.Run("should fail if encryption secret is missing", func(t *testing.T) {
 		// given
-		plainText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = plainText.Destroy() })
+		plainText := newSecureMemData(t, []byte("plaintext"))
 
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
@@ -59,16 +56,8 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 
 	t.Run("should fail to encrypt if plaintext data is destroyed", func(t *testing.T) {
 		// given
-		plainText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = plainText.Destroy() })
-
-		secret, err := securemem.NewData("key", 32)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = secret.Destroy() })
-
-		_, err = rand.Read(secret.SecureBytes())
-		require.NoError(t, err)
+		plainText := newSecureMemData(t, []byte("plaintext"))
+		secret := newSecretKey(t)
 
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
@@ -92,9 +81,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 
 	t.Run("should fail if secret key size is invalid", func(t *testing.T) {
 		// given
-		plainText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = plainText.Destroy() })
+		plainText := newSecureMemData(t, []byte("plaintext"))
 
 		// invalid secret size (should be 32 bytes for AES-256)
 		secret, err := securemem.NewData("key", 16)
@@ -120,16 +107,8 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 
 	t.Run("should generate different ciphertext for same plaintext and key", func(t *testing.T) {
 		// given
-		plainText, err := securemem.NewData("same-plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = plainText.Destroy() })
-
-		secret, err := securemem.NewData("same-key", 32)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = secret.Destroy() })
-
-		_, err = rand.Read(secret.SecureBytes())
-		require.NoError(t, err)
+		plainText := newSecureMemData(t, []byte("plaintext"))
+		secret := newSecretKey(t)
 
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
@@ -155,16 +134,8 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 
 	t.Run("should not destroy secret and plaintext after encryption", func(t *testing.T) {
 		// given
-		plainText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = plainText.Destroy() })
-
-		secret, err := securemem.NewData("key", 32)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = secret.Destroy() })
-
-		_, err = rand.Read(secret.SecureBytes())
-		require.NoError(t, err)
+		plainText := newSecureMemData(t, []byte("plaintext"))
+		secret := newSecretKey(t)
 
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
@@ -209,11 +180,9 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
-	t.Run("should fail if encryption secret is missing", func(t *testing.T) {
+	t.Run("should fail if decrypt request secret is missing", func(t *testing.T) {
 		// given
-		cipherText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = cipherText.Destroy() })
+		cipherText := newSecureMemData(t, []byte("ciphertext"))
 
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
@@ -234,9 +203,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 
 	t.Run("should fail if secret key size is invalid", func(t *testing.T) {
 		// given
-		cipherText, err := securemem.NewData("plaintext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = cipherText.Destroy() })
+		cipherText := newSecureMemData(t, []byte("ciphertext"))
 
 		// invalid secret size (should be 32 bytes for AES-256)
 		secret, err := securemem.NewData("key", 16)
@@ -262,16 +229,8 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 
 	t.Run("should fail to decrypt if ciphertext data is destroyed", func(t *testing.T) {
 		// given
-		cipherText, err := securemem.NewData("ciphertext", 1)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = cipherText.Destroy() })
-
-		secret, err := securemem.NewData("key", 32)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = secret.Destroy() })
-
-		_, err = rand.Read(secret.SecureBytes())
-		require.NoError(t, err)
+		cipherText := newSecureMemData(t, []byte("ciphertext"))
+		secret := newSecretKey(t)
 
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
@@ -299,41 +258,11 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	ctx := t.Context()
 	subj := cryptor.NewAES256GCM()
 
-	// given
-	// allocate a 32-byte AES key in secure memory
-	newSecretKey := func(t *testing.T) *securemem.Data {
-		t.Helper()
-
-		key, err := securemem.NewData("test-key", 32)
-		require.NoError(t, err)
-
-		_, err = rand.Read(key.SecureBytes())
-		require.NoError(t, err)
-
-		t.Cleanup(func() { _ = key.Destroy() })
-
-		return key
-	}
-
-	// allocate plaintext in secure memory
-	newPlaintext := func(t *testing.T, content []byte) *securemem.Data {
-		t.Helper()
-
-		pt, err := securemem.NewData("test-plaintext", len(content))
-		require.NoError(t, err)
-
-		copy(pt.SecureBytes(), content)
-
-		t.Cleanup(func() { _ = pt.Destroy() })
-
-		return pt
-	}
-
 	t.Run("should encrypt and decrypt plaintext successfully", func(t *testing.T) {
 		// given
 		secret := newSecretKey(t)
 		text := []byte("hello, secure world!")
-		plainText := newPlaintext(t, text)
+		plainText := newSecureMemData(t, text)
 
 		// when
 		// encrypt
@@ -376,7 +305,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 		// given
 		secret := newSecretKey(t)
 		text := []byte("authenticated payload")
-		plainText := newPlaintext(t, text)
+		plainText := newSecureMemData(t, text)
 		aad := []byte("context-binding-data")
 
 		// when
@@ -417,7 +346,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	t.Run("should fail to decrypt with wrong AAD", func(t *testing.T) {
 		// given
 		secretKey := newSecretKey(t)
-		plainText := newPlaintext(t, []byte("secret"))
+		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
@@ -455,7 +384,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 		// given
 		secret1 := newSecretKey(t)
 		secret2 := newSecretKey(t)
-		plainText := newPlaintext(t, []byte("secret"))
+		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
@@ -490,7 +419,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	t.Run("should fail to decrypt tampered ciphertext", func(t *testing.T) {
 		// given
 		secret := newSecretKey(t)
-		plaintText := newPlaintext(t, []byte("do not tamper"))
+		plaintText := newSecureMemData(t, []byte("do not tamper"))
 
 		// when
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
@@ -534,7 +463,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	t.Run("should fail to decrypt if cipher is too short to contain nonce and tag", func(t *testing.T) {
 		// given
 		secret := newSecretKey(t)
-		plainText := newPlaintext(t, []byte("short cipher"))
+		plainText := newSecureMemData(t, []byte("short cipher"))
 
 		// when
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
@@ -576,7 +505,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	t.Run("should not destroy secret and ciphertext after decryption attempt", func(t *testing.T) {
 		// given
 		secret := newSecretKey(t)
-		plainText := newPlaintext(t, []byte("plaintext"))
+		plainText := newSecureMemData(t, []byte("plaintext"))
 
 		// when
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
