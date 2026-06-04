@@ -22,6 +22,9 @@ type InfoName string
 // InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
 const InfoNameAES256GCM InfoName = "AES256-GCM"
 
+// InfoNameStaticSecret indicates a Cryptor that manages its own static key material.
+const InfoNameStaticSecret InfoName = "STATIC-SECRET"
+
 // EncryptRequest contains parameters for an encryption operation.
 type EncryptRequest struct {
 	// TenantID identifies the tenant owning the key.

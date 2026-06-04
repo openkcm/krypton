@@ -9,7 +9,7 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
-// allocate a 32-byte AES key in secure memory
+// newSecretKey allocate a 32-byte AES key in secure memory
 func newSecretKey(t *testing.T) *securemem.Data {
 	t.Helper()
 
@@ -24,7 +24,7 @@ func newSecretKey(t *testing.T) *securemem.Data {
 	return key
 }
 
-// allocate plaintext in secure memory
+// newSecureMemData allocate in secure memory
 func newSecureMemData(t *testing.T, content []byte) *securemem.Data {
 	t.Helper()
 
