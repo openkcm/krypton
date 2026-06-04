@@ -20,7 +20,7 @@ const initDB = `
 CREATE TABLE IF NOT EXISTS keys (
 	tenant_id TEXT NOT NULL CHECK(tenant_id != ''),
 	key_id TEXT NOT NULL CHECK(key_id != ''),
-	key_version TEXT NOT NULL,
+	key_version INTEGER NOT NULL,
 	key_material BLOB NOT NULL,
 	aad BLOB,
 	created_at INTEGER NOT NULL,
@@ -91,11 +91,11 @@ func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*va
 }
 
 func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? ORDER BY created_at DESC LIMIT 1"
+	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? ORDER BY key_version DESC LIMIT 1"
 	args := []any{req.TenantID, req.KeyID}
-	if req.KeyVersion != "" {
+	if req.KeyVersion != nil {
 		query = "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?"
-		args = append(args, req.KeyVersion)
+		args = append(args, *req.KeyVersion)
 	}
 
 	var rawKey []byte
@@ -130,9 +130,9 @@ func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*
 	}
 	defer rows.Close()
 
-	var destroyed []string
+	var destroyed []int
 	for rows.Next() {
-		var version string
+		var version int
 		if err := rows.Scan(&version); err != nil {
 			return nil, err
 		}

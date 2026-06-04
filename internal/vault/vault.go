@@ -27,7 +27,7 @@ type Vault interface {
 type ImportKeyRequest struct {
 	TenantID    string
 	KeyID       string
-	KeyVersion  string
+	KeyVersion  int
 	KeyMaterial *securemem.Data
 	AAD         []byte
 }
@@ -41,7 +41,7 @@ type ImportKeyResponse struct {
 type ExportKeyRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion string // defaults to latest if empty
+	KeyVersion *int // defaults to latest if nil
 }
 
 // ExportKeyResponse holds the retrieved key material and its associated authenticated data.
@@ -58,14 +58,14 @@ type DestroyKeyRequest struct {
 
 // DestroyKeyResponse holds the list of key versions that were destroyed.
 type DestroyKeyResponse struct {
-	DestroyedVersions []string
+	DestroyedVersions []int
 }
 
 // DestroyKeyVersionRequest contains parameters for destroying a specific key version.
 type DestroyKeyVersionRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion string
+	KeyVersion int
 }
 
 // DestroyKeyVersionResponse holds the result of a version destruction operation.
