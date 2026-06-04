@@ -105,7 +105,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore, reconcilerMgr))
+	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore, tenantStore, cfg.Hierarchy, reconcilerMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")

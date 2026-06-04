@@ -76,6 +76,7 @@ func main() {
 	agentDB, rpcServer, operator := setupOperator(ctx)
 	defer agentDB.Close()
 
+	log.Println("Starting operator listener")
 	go func() {
 		if err := operator.ListenAndRespond(ctx); err != nil {
 			log.Printf("operator stopped: %v", err)

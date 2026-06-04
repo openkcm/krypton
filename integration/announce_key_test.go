@@ -29,12 +29,15 @@ func TestAnnounceKey(t *testing.T) {
 		tenantName := tenantResp.GetTenant().GetName()
 
 		insertTenant(t, env.AgentDB, tenantID, tenantName)
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "test-key-" + uuid.NewString()
 		resp, err := keyCli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
+			ParentId:   parentID,
 			TargetName: "agent-k1",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -62,12 +65,14 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		// Intentionally NOT inserting tenant in agent DB
 		// → agent CreateKey fails with FK violation → resp.Fail() → job FAILED
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
 
 		keyName := "test-key-fail-" + uuid.NewString()
 		resp, err := keyCli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
+			ParentId:   parentID,
 			TargetName: "agent-k1",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -89,12 +94,15 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, err)
 		tenantID := tenantResp.GetTenant().GetId()
 		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "idempotent-key-" + uuid.NewString()
 		first, err := keyCli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
+			ParentId:   parentID,
 			TargetName: "agent-k1",
 		})
 		require.NoError(t, err)
@@ -107,6 +115,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
+			ParentId:   parentID,
 			TargetName: "agent-k1",
 		})
 		require.NoError(t, err)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -124,26 +125,120 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 }
 
 func TestJobHandler_ConfirmJob(t *testing.T) {
-	t.Run("completes when key exists", func(t *testing.T) {
+	completeType := orbital.CompleteJobConfirmer().Type()
+	cancelType := orbital.CancelJobConfirmer("").Type()
+	continueType := orbital.ContinueJobConfirmer().Type()
+
+	t.Run("completes when key is in pre-activation, in-progress, and linked to this job", func(t *testing.T) {
 		db := newTestDB(t)
 		key := seedTenantAndKey(t, db)
 		keyStore := storesql.NewKeyStore(db)
+		jobID := uuid.Must(uuid.NewUUID())
+
+		require.NoError(t, keyStore.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingInProgress,
+			NewJobID:  jobID.String(),
+		}))
+
 		handler := announcekey.NewJobHandler(keyStore)
+		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID})
 
-		data := announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID}
-		jobData, _ := json.Marshal(data)
-
-		_, err := handler.ConfirmJob(t.Context(), orbital.Job{Data: jobData})
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: jobData})
 		require.NoError(t, err)
+		assert.Equal(t, completeType, res.Type())
 	})
 
-	t.Run("returns error on invalid data — surfaced as cancel", func(t *testing.T) {
+	t.Run("continues when key is missing — may not be committed yet", func(t *testing.T) {
 		db := newTestDB(t)
 		keyStore := storesql.NewKeyStore(db)
 		handler := announcekey.NewJobHandler(keyStore)
 
-		_, err := handler.ConfirmJob(t.Context(), orbital.Job{Data: []byte("not-json")})
-		require.NoError(t, err) // cancel is conveyed via result, not error
+		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: uuid.NewString(), TenantID: uuid.NewString()})
+
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: uuid.Must(uuid.NewUUID()), Data: jobData})
+		require.NoError(t, err)
+		assert.Equal(t, continueType, res.Type())
+	})
+
+	t.Run("cancels when key lifecycle is not pre-activation", func(t *testing.T) {
+		db := newTestDB(t)
+		key := seedTenantAndKey(t, db)
+		keyStore := storesql.NewKeyStore(db)
+		jobID := uuid.Must(uuid.NewUUID())
+
+		require.NoError(t, keyStore.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingInProgress,
+			NewJobID:  jobID.String(),
+		}))
+		require.NoError(t, keyStore.UpdateKeyLifeCycleState(t.Context(), store.UpdateKeyLifeCycleStateQuery{
+			ID:       key.ID,
+			TenantID: key.TenantID,
+			NewState: model.KeyLifeCycleActive,
+		}))
+
+		handler := announcekey.NewJobHandler(keyStore)
+		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID})
+
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: jobData})
+		require.NoError(t, err)
+		assert.Equal(t, cancelType, res.Type())
+	})
+
+	t.Run("cancels when key processing status is not in-progress", func(t *testing.T) {
+		db := newTestDB(t)
+		key := seedTenantAndKey(t, db)
+		keyStore := storesql.NewKeyStore(db)
+		jobID := uuid.Must(uuid.NewUUID())
+
+		require.NoError(t, keyStore.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingFailed,
+			NewJobID:  jobID.String(),
+		}))
+
+		handler := announcekey.NewJobHandler(keyStore)
+		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID})
+
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: jobData})
+		require.NoError(t, err)
+		assert.Equal(t, cancelType, res.Type())
+	})
+
+	t.Run("cancels when JobID does not match", func(t *testing.T) {
+		db := newTestDB(t)
+		key := seedTenantAndKey(t, db)
+		keyStore := storesql.NewKeyStore(db)
+
+		linkedJobID := uuid.Must(uuid.NewUUID())
+		require.NoError(t, keyStore.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingInProgress,
+			NewJobID:  linkedJobID.String(),
+		}))
+
+		handler := announcekey.NewJobHandler(keyStore)
+		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID})
+
+		// Different job ID than the one linked on the key.
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: uuid.Must(uuid.NewUUID()), Data: jobData})
+		require.NoError(t, err)
+		assert.Equal(t, cancelType, res.Type())
+	})
+
+	t.Run("cancels on invalid job data", func(t *testing.T) {
+		db := newTestDB(t)
+		keyStore := storesql.NewKeyStore(db)
+		handler := announcekey.NewJobHandler(keyStore)
+
+		res, err := handler.ConfirmJob(t.Context(), orbital.Job{Data: []byte("not-json")})
+		require.NoError(t, err)
+		assert.Equal(t, cancelType, res.Type())
 	})
 }
 

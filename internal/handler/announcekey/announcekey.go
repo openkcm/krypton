@@ -20,6 +20,11 @@ const (
 // TaskData is the payload exchanged between the root job handler and the
 // agent task handler. It is JSON-encoded into the orbital Job/Task data
 // field.
+//
+// TODO: when a second handler is added, fields shared across handlers
+// (e.g. Target, Labels, TenantID) should be lifted into a common
+// envelope such as common.TaskInfo, leaving handler-specific fields
+// (KeyID, Kind, Name, ParentID) on this struct.
 type TaskData struct {
 	KeyID    string            `json:"key_id"`
 	TenantID string            `json:"tenant_id"`

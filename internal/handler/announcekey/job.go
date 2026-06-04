@@ -26,18 +26,33 @@ func (h *JobHandler) JobType() string {
 	return JobType
 }
 
+// ConfirmJob is the second commit in the orbital double-commit pattern. It
+// only confirms the job if the key exists in pre-activation lifecycle and is
+// linked to *this* job's ID via KeyProcessingState — i.e. AnnounceKey wrote
+// the linkage successfully and no later announce has rotated the JobID.
 func (h *JobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return orbital.CancelJobConfirmer(fmt.Sprintf("invalid job data: %v", err)), nil
 	}
 
-	_, err := h.keyStore.GetKeyByID(ctx, data.KeyID, data.TenantID)
+	key, err := h.keyStore.GetKeyByID(ctx, data.KeyID, data.TenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrKeyNotFound) {
-			return orbital.CancelJobConfirmer(fmt.Sprintf("key not found: %v", err)), nil
+			// ConfirmJob is idempotent and orbital will eventually
+			// time out the job if the key never lands.
+			return orbital.ContinueJobConfirmer(), nil
 		}
 		return nil, fmt.Errorf("confirm job: %w", err)
+	}
+
+	if key.LifeCycleState != model.KeyLifeCyclePreActivation {
+		return orbital.CancelJobConfirmer(fmt.Sprintf("key not in pre-activation: %s", key.LifeCycleState)), nil
+	}
+
+	if key.KeyProcessingState.Status != model.KeyProcessingInProgress ||
+		key.KeyProcessingState.JobID != job.ID.String() {
+		return orbital.CancelJobConfirmer("key not linked to this job"), nil
 	}
 
 	return orbital.CompleteJobConfirmer(), nil

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -175,11 +176,39 @@ krypton_root:
 func insertTenant(t *testing.T, db *sql.DB, tenantID, tenantName string) {
 	t.Helper()
 	now := time.Now().UnixNano()
-	_, err := db.ExecContext(t.Context(),
+	_, err := db.ExecContext(
+		t.Context(),
 		`INSERT INTO tenants (id, name, labels, created_at, updated_at) VALUES ($1, $2, '{}', $3, $4)`,
 		tenantID, tenantName, now, now,
 	)
 	require.NoError(t, err, "failed to insert tenant into database")
+}
+
+// insertActiveParentKey inserts an Active key directly into the root DB so it
+// can serve as the parent for an AnnounceKey call. Used by integration tests
+// to bypass the multi-step parent announce flow when only the child path is
+// under test.
+func insertActiveParentKey(t *testing.T, db *sql.DB, tenantID, kind string) string {
+	t.Helper()
+	keyID := uuid.NewString()
+	insertActiveParentKeyWithID(t, db, tenantID, kind, keyID)
+	return keyID
+}
+
+// insertActiveParentKeyWithID is the same as insertActiveParentKey but lets
+// the caller pin the key ID — used to mirror a parent key into both root and
+// agent databases when the agent's CreateKey FK on (tenant_id, parent_id)
+// requires it.
+func insertActiveParentKeyWithID(t *testing.T, db *sql.DB, tenantID, kind, keyID string) {
+	t.Helper()
+	now := time.Now().UnixNano()
+	_, err := db.ExecContext(
+		t.Context(),
+		`INSERT INTO keys (id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, NULL, $5, '{}', $6, $7, NULL, $8, $9)`,
+		keyID, tenantID, kind, "parent-"+keyID, "root", "active", "completed", now, now,
+	)
+	require.NoError(t, err, "failed to insert active parent key")
 }
 
 // awaitJobStatus polls the jobs table until the job with the given external ID
@@ -195,7 +224,8 @@ func awaitJobStatus(t *testing.T, db *sql.DB, externalID, expectedStatus string,
 
 	for {
 		var status string
-		err := db.QueryRowContext(ctx,
+		err := db.QueryRowContext(
+			ctx,
 			"SELECT status FROM jobs WHERE external_id = $1", externalID,
 		).Scan(&status)
 		if err == nil && status == expectedStatus {
@@ -222,7 +252,8 @@ func awaitKeyExists(t *testing.T, db *sql.DB, keyID, tenantID string, timeout ti
 
 	for {
 		var id string
-		err := db.QueryRowContext(ctx,
+		err := db.QueryRowContext(
+			ctx,
 			"SELECT id FROM keys WHERE id = $1 AND tenant_id = $2", keyID, tenantID,
 		).Scan(&id)
 		if err == nil {
@@ -238,9 +269,6 @@ func awaitKeyExists(t *testing.T, db *sql.DB, keyID, tenantID string, timeout ti
 
 // awaitKeyProcessingStatusViaGRPC polls the root admin gRPC API until the key's
 // processing status reaches expected. Fails the test if the timeout is exceeded.
-//
-// We use the gRPC client (not raw SQL) so the test exercises the same wire path
-// production clients use to observe key state.
 func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli admin.KeyServiceClient, keyID, tenantID, expected string, timeout time.Duration) {
 	t.Helper()
 
