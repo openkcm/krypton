@@ -31,12 +31,26 @@ func TestDecryptRequestValidate(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "valid request",
+			name: "valid request without secret",
 			req: cryptor.DecryptRequest{
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid request with secret",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      validData,
+				},
 			},
 			wantErr: nil,
 		},
@@ -98,7 +112,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 			wantErr: cryptor.ErrRequest,
 		},
 		{
-			name: "empty securememe data",
+			name: "empty ciphertext data",
 			req: cryptor.DecryptRequest{
 				TenantID:   "tenant1",
 				KeyID:      "key1",
@@ -196,12 +210,26 @@ func TestEncryptRequestValidate(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "valid request",
+			name: "valid request without secret",
 			req: cryptor.EncryptRequest{
 				TenantID:   "tenant1",
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid request with secret",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      validData,
+				},
 			},
 			wantErr: nil,
 		},
@@ -263,7 +291,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 			wantErr: cryptor.ErrRequest,
 		},
 		{
-			name: "empty securemem data",
+			name: "empty ciphertext data",
 			req: cryptor.EncryptRequest{
 				TenantID:   "tenant1",
 				KeyID:      "key1",

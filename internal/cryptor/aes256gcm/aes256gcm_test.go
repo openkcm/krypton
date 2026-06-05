@@ -15,7 +15,7 @@ import (
 func TestAES256GCM_Encrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
-	subj := aes256gcm.NewAES256GCM()
+	subj := aes256gcm.New()
 
 	t.Run("should fail if encrypt request validation fails", func(t *testing.T) {
 		// given
@@ -215,7 +215,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 func TestAES256GCM_Decrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
-	subj := aes256gcm.NewAES256GCM()
+	subj := aes256gcm.New()
 
 	t.Run("should fail if decrypt request validation fails", func(t *testing.T) {
 		// given
@@ -376,7 +376,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
-	subj := aes256gcm.NewAES256GCM()
+	subj := aes256gcm.New()
 
 	t.Run("should encrypt and decrypt plaintext successfully", func(t *testing.T) {
 		// given
@@ -687,13 +687,13 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 
 func TestAES256GCM_Info(t *testing.T) {
 	// given
-	subj := aes256gcm.NewAES256GCM()
+	subj := aes256gcm.New()
 
 	// when
 	info := subj.Info()
 
 	// then
-	assert.Equal(t, cryptor.InfoNameAES256GCM, info.Name)
+	assert.Equal(t, aes256gcm.InfoNameAES256GCM, info.Name)
 	assert.True(t, info.DecryptionSecretRequired)
 }
 

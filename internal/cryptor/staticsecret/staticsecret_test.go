@@ -26,7 +26,7 @@ func TestStaticSecret_New(t *testing.T) {
 	}{
 		{
 			name:    "should not return error for valid name and key",
-			nameArg: cryptor.InfoNameStaticSecret,
+			nameArg: staticsecret.InfoNameStaticSecret,
 			keyArg:  newSecretKey(t),
 			wantErr: false,
 		},
@@ -38,19 +38,19 @@ func TestStaticSecret_New(t *testing.T) {
 		},
 		{
 			name:    "should return error for nil secret",
-			nameArg: cryptor.InfoNameStaticSecret,
+			nameArg: staticsecret.InfoNameStaticSecret,
 			keyArg:  nil,
 			wantErr: true,
 		},
 		{
 			name:    "should return error for empty secret",
-			nameArg: cryptor.InfoNameStaticSecret,
+			nameArg: staticsecret.InfoNameStaticSecret,
 			keyArg:  &securemem.Data{},
 			wantErr: true,
 		},
 		{
 			name:    "should return error for invalid secret size",
-			nameArg: cryptor.InfoNameStaticSecret,
+			nameArg: staticsecret.InfoNameStaticSecret,
 			keyArg:  secretWithInvalidLen,
 			wantErr: true,
 		},
@@ -65,7 +65,7 @@ func TestStaticSecret_New(t *testing.T) {
 	for _, tt := range tts {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			subj, err := staticsecret.NewStaticSecret(tt.nameArg, tt.keyArg)
+			subj, err := staticsecret.New(tt.nameArg, tt.keyArg)
 
 			// then
 			if tt.wantErr {
@@ -83,7 +83,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
 
-	subj, err := staticsecret.NewStaticSecret(cryptor.InfoNameStaticSecret, newSecretKey(t))
+	subj, err := staticsecret.New(staticsecret.InfoNameStaticSecret, newSecretKey(t))
 	require.NoError(t, err)
 
 	t.Run("should fail if encrypt request validation fails", func(t *testing.T) {
@@ -237,7 +237,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 func TestStaticSecret_Decrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
-	subj, err := staticsecret.NewStaticSecret(cryptor.InfoNameStaticSecret, newSecretKey(t))
+	subj, err := staticsecret.New(staticsecret.InfoNameStaticSecret, newSecretKey(t))
 	require.NoError(t, err)
 
 	t.Run("should fail if decrypt request validation fails", func(t *testing.T) {
@@ -369,7 +369,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 	// given
 	ctx := t.Context()
 
-	subj, err := staticsecret.NewStaticSecret(cryptor.InfoNameStaticSecret, newSecretKey(t))
+	subj, err := staticsecret.New(staticsecret.InfoNameStaticSecret, newSecretKey(t))
 	require.NoError(t, err)
 
 	t.Run("should encrypt and decrypt plaintext successfully", func(t *testing.T) {
@@ -497,7 +497,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 
 		// when
 		// decrypt with different staticsecret must fail
-		subj1, err := staticsecret.NewStaticSecret(cryptor.InfoNameStaticSecret, newSecretKey(t))
+		subj1, err := staticsecret.New(staticsecret.InfoNameStaticSecret, newSecretKey(t))
 		require.NoError(t, err)
 
 		decResp, err := subj1.Decrypt(ctx, cryptor.DecryptRequest{
@@ -618,14 +618,14 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 
 func TestStaticSecret_Info(t *testing.T) {
 	// given
-	subj, err := staticsecret.NewStaticSecret(cryptor.InfoNameStaticSecret, newSecretKey(t))
+	subj, err := staticsecret.New(staticsecret.InfoNameStaticSecret, newSecretKey(t))
 	require.NoError(t, err)
 
 	// when
 	info := subj.Info()
 
 	// then
-	assert.Equal(t, cryptor.InfoNameStaticSecret, info.Name)
+	assert.Equal(t, staticsecret.InfoNameStaticSecret, info.Name)
 	assert.False(t, info.DecryptionSecretRequired)
 }
 

@@ -30,15 +30,18 @@ type AES256GCM struct {
 
 var _ cryptor.Cryptor = &AES256GCM{}
 
+// InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
+const InfoNameAES256GCM cryptor.InfoName = "AES256-GCM"
+
 // ErrAllocatedDataNotFound indicates that data reserved in the secure memory vault
 // could not be retrieved after the cryptographic operation completed.
 var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 
-// NewAES256GCM returns a ready-to-use AES-256-GCM cryptor.
-func NewAES256GCM() *AES256GCM {
+// New returns a ready-to-use AES-256-GCM cryptor.
+func New() *AES256GCM {
 	return &AES256GCM{
 		info: cryptor.Info{
-			Name:                     cryptor.InfoNameAES256GCM,
+			Name:                     InfoNameAES256GCM,
 			DecryptionSecretRequired: true,
 		},
 	}

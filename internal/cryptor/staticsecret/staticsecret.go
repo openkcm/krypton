@@ -24,16 +24,19 @@ type StaticSecret struct {
 	info      cryptor.Info
 }
 
-// ErrInitializationFailed indicates that NewStaticSecret could not be constructed
+// ErrInitializationFailed indicates that New could not be constructed
 // due to an unsupported algorithm or invalid key material.
 var ErrInitializationFailed = errors.New("static secret initialization failed")
 
 var _ cryptor.Cryptor = &StaticSecret{}
 
-// NewStaticSecret returns a StaticSecret for the given algorithm name and key material.
+// InfoNameStaticSecret indicates a Cryptor that manages its own static key material.
+const InfoNameStaticSecret cryptor.InfoName = "AES256-GCM-STATIC-SECRET"
+
+// New returns a StaticSecret for the given algorithm name and key material.
 // Currently only [InfoNameStaticSecret] is supported. The secret must be non-nil and non-empty.
-func NewStaticSecret(name cryptor.InfoName, secret *securemem.Data) (*StaticSecret, error) {
-	if name != cryptor.InfoNameStaticSecret {
+func New(name cryptor.InfoName, secret *securemem.Data) (*StaticSecret, error) {
+	if name != InfoNameStaticSecret {
 		return nil, fmt.Errorf("unsupported algorithm name: %s: %w", name, ErrInitializationFailed)
 	}
 
@@ -43,7 +46,7 @@ func NewStaticSecret(name cryptor.InfoName, secret *securemem.Data) (*StaticSecr
 
 	return &StaticSecret{
 		secret:    secret,
-		aes256gcm: aes256gcm.NewAES256GCM(),
+		aes256gcm: aes256gcm.New(),
 		info: cryptor.Info{
 			Name:                     name,
 			DecryptionSecretRequired: false,

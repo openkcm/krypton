@@ -19,12 +19,6 @@ const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 // InfoName identifies the type of information returned by the Info() method of a Cryptor.
 type InfoName string
 
-// InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
-const InfoNameAES256GCM InfoName = "AES256-GCM"
-
-// InfoNameStaticSecret indicates a Cryptor that manages its own static key material.
-const InfoNameStaticSecret InfoName = "AES256-GCM-STATIC-SECRET"
-
 // CryptorSecret pairs a key algorithm with its key material stored in secure memory.
 type CryptorSecret struct {
 	// Algorithm is the encryption algorithm to apply.
@@ -119,15 +113,7 @@ func (req EncryptRequest) Validate() error {
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid plaintext: %w", ErrRequest)
 	}
-	if req.Secret != nil {
-		if req.Secret.Algorithm == "" {
-			return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
-		}
-		if req.Secret.Data == nil || len(req.Secret.Data.SecureBytes()) == 0 {
-			return fmt.Errorf("invalid secret data: %w", ErrRequest)
-		}
-	}
-	return nil
+	return req.Secret.Validate()
 }
 
 func (req DecryptRequest) Validate() error {
@@ -143,11 +129,15 @@ func (req DecryptRequest) Validate() error {
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid ciphertext: %w", ErrRequest)
 	}
-	if req.Secret != nil {
-		if req.Secret.Algorithm == "" {
+	return req.Secret.Validate()
+}
+
+func (cs *CryptorSecret) Validate() error {
+	if cs != nil {
+		if cs.Algorithm == "" {
 			return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
 		}
-		if req.Secret.Data == nil || len(req.Secret.Data.SecureBytes()) == 0 {
+		if cs.Data == nil || len(cs.Data.SecureBytes()) == 0 {
 			return fmt.Errorf("invalid secret data: %w", ErrRequest)
 		}
 	}
