@@ -36,10 +36,13 @@ CREATE TABLE IF NOT EXISTS keys (
 	parent_id UUID NULL,
 	managed_by TEXT NOT NULL,
 	labels JSONB,
-	state TEXT NOT NULL,
+	life_cycle_state TEXT NOT NULL,
+	processing_status TEXT NOT NULL DEFAULT 'pending',
+	processing_job_id UUID NULL,
 	created_at BIGINT NOT NULL,
 	updated_at BIGINT NOT NULL,
 
+	UNIQUE (tenant_id, name),
 	UNIQUE (tenant_id, id),
 	FOREIGN KEY (tenant_id, parent_id) REFERENCES keys(tenant_id, id)
 );

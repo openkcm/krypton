@@ -1,9 +1,12 @@
 package admin_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -12,8 +15,19 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+// errJobPreparer is a JobPreparer stub that always returns the configured
+// error. Used to simulate concurrent-race / failure paths from PrepareJob.
+type errJobPreparer struct {
+	err error
+}
+
+func (e errJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
+	return job, e.err
+}
 
 // keyHierarchy holds a test key tree with the following structure:
 //
@@ -37,6 +51,18 @@ type keyHierarchy struct {
 	h      model.Key
 }
 
+// activateKey flips a freshly-announced key into Active so it can serve as a
+// parent in subsequent AnnounceKey calls (per the strict "parent must be
+// Active" rule enforced in KeyService.AnnounceKey).
+func activateKey(t *testing.T, ks *storesql.KeyStore, id, tenantID string) {
+	t.Helper()
+	require.NoError(t, ks.UpdateKeyLifeCycleState(t.Context(), store.UpdateKeyLifeCycleStateQuery{
+		ID:       id,
+		TenantID: tenantID,
+		NewState: model.KeyLifeCycleActive,
+	}))
+}
+
 func TestAnnounceKey(t *testing.T) {
 	// given
 	ctx := t.Context()
@@ -49,7 +75,7 @@ func TestAnnounceKey(t *testing.T) {
 
 	t.Run("should create key successfully", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, db)
 
 		// when
 		res, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
@@ -65,16 +91,81 @@ func TestAnnounceKey(t *testing.T) {
 		assert.NotEmpty(t, res.GetKey().GetId())
 		assert.Equal(t, "K0", res.GetKey().GetKind())
 		assert.Equal(t, "root", res.GetKey().GetManagedBy())
-		assert.Equal(t, "pre-activation", res.GetKey().GetState())
+		assert.Equal(t, "pre-activation", res.GetKey().GetLifeCycleState())
+		assert.Equal(t, model.KeyProcessingInProgress, res.GetKey().GetKeyProcessingState().GetStatus())
+		assert.NotEmpty(t, res.GetKey().GetKeyProcessingState().GetJobId())
 		assert.Equal(t, tenant.ID, res.GetKey().GetTenantId())
 		assert.Equal(t, "prod", res.GetKey().GetLabels()["env"])
 		assert.NotZero(t, res.GetKey().GetCreatedAt())
 		assert.NotZero(t, res.GetKey().GetUpdatedAt())
 	})
 
+	t.Run("should be idempotent on duplicate (tenant, name)", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+		name := "idempotent-" + uuid.NewString()
+
+		first, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, first.GetKey().GetId())
+		require.NotEmpty(t, first.GetKey().GetKeyProcessingState().GetJobId())
+
+		second, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, first.GetKey().GetId(), second.GetKey().GetId())
+		assert.Equal(t, first.GetKey().GetKeyProcessingState().GetJobId(), second.GetKey().GetKeyProcessingState().GetJobId())
+	})
+
+	t.Run("should succeed when orbital reports job already exists for fresh key", func(t *testing.T) {
+		// Pre-seed the key so the lookup-by-name fallback (after orbital
+		// dedupe) finds it.
+		name := "racer-" + uuid.NewString()
+		seed := model.NewKey(tenant.ID, name, "K0", nil, "root", nil)
+		seed.KeyProcessingState = model.KeyProcessingState{
+			Status: model.KeyProcessingInProgress,
+			JobID:  uuid.NewString(),
+		}
+		require.NoError(t, keyStore.CreateKey(ctx, seed))
+
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists})
+		// Subsequent call short-circuits via existing in-progress key,
+		// without ever needing PrepareJob.
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, seed.ID, resp.GetKey().GetId())
+	})
+
+	t.Run("should surface RETRY on other PrepareJob errors", func(t *testing.T) {
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: errors.New("boom")})
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       "boom-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
+	})
+
 	t.Run("should create key with parent", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, db)
 
 		parentRes, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -83,6 +174,8 @@ func TestAnnounceKey(t *testing.T) {
 			TargetName: "root",
 		})
 		require.NoError(t, err)
+		// Parent must be Active to be usable as a parent.
+		activateKey(t, keyStore, parentRes.GetKey().GetId(), tenant.ID)
 
 		// when
 		res, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
@@ -99,21 +192,316 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "root", res.GetKey().GetManagedBy())
 	})
 
+	t.Run("should reject when tenant does not exist", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   uuid.NewString(),
+			Kind:       "K0",
+			Name:       "no-tenant-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject when kind is not in hierarchy", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "KX",
+			Name:       "bad-kind-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject non-root kind without parent", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K1",
+			Name:       "rootless-child-" + uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject root kind with parent", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		// Pre-seed an Active K0 to use as the (illegal) parent.
+		other := model.NewKey(tenant.ID, "other-root-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, other))
+		activateKey(t, keyStore, other.ID, tenant.ID)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       "rooted-root-" + uuid.NewString(),
+			ParentId:   other.ID,
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject when parent does not exist in tenant", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K1",
+			Name:       "missing-parent-" + uuid.NewString(),
+			ParentId:   uuid.NewString(),
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject when parent is not active", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		// Pre-seed a K0 without activating it.
+		parent := model.NewKey(tenant.ID, "inactive-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, parent))
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K1",
+			Name:       "child-of-inactive-" + uuid.NewString(),
+			ParentId:   parent.ID,
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should reject when child kind is not adjacent to parent kind", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		// Pre-seed an Active K0; try announcing K2 directly under it (skipping K1).
+		parent := model.NewKey(tenant.ID, "skip-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, parent))
+		activateKey(t, keyStore, parent.ID, tenant.ID)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K2",
+			Name:       "skip-child-" + uuid.NewString(),
+			ParentId:   parent.ID,
+			TargetName: "root",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should retry by preparing a new job when previous job failed", func(t *testing.T) {
+		cli := setupKeyServerAndClient(t, db)
+
+		// Pre-seed a key already in Failed state from a prior attempt.
+		failedJobID := uuid.NewString()
+		key := model.NewKey(tenant.ID, "retry-me-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingFailed,
+			NewJobID:  failedJobID,
+		}))
+
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       key.Name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, key.ID, resp.GetKey().GetId(), "retry must reuse the existing key.ID")
+		assert.Equal(t, model.KeyProcessingInProgress, resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.NotEmpty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
+		assert.NotEqual(t, failedJobID, resp.GetKey().GetKeyProcessingState().GetJobId(), "retry must produce a new job ID")
+
+		// And the linkage on disk reflects the new in-progress JobID.
+		stored, err := keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyProcessingInProgress, stored.KeyProcessingState.Status)
+		assert.Equal(t, resp.GetKey().GetKeyProcessingState().GetJobId(), stored.KeyProcessingState.JobID)
+	})
+
+	t.Run("ExternalID is key.ID for fresh creation", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+
+		name := "spy-fresh-" + uuid.NewString()
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		require.Len(t, spy.jobs, 1)
+		assert.Equal(t, resp.GetKey().GetId(), spy.jobs[0].ExternalID,
+			"fresh-create ExternalID must equal the new key.ID for orbital dedup")
+	})
+
+	t.Run("ExternalID is key.ID:retry:prevJobID for failed retry", func(t *testing.T) {
+		failedJobID := uuid.NewString()
+		key := model.NewKey(tenant.ID, "spy-retry-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingFailed,
+			NewJobID:  failedJobID,
+		}))
+
+		spy := &spyJobPreparer{}
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       key.Name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		require.Len(t, spy.jobs, 1)
+		want := key.ID + ":retry:" + failedJobID
+		assert.Equal(t, want, spy.jobs[0].ExternalID,
+			"failed-retry ExternalID must scope to the previous failed JobID so distinct retries don't collide on orbital's dedup index")
+	})
+
+	t.Run("consecutive failed retries produce distinct ExternalIDs", func(t *testing.T) {
+		// Each failure rotates KeyProcessingState.JobID, so the next retry must
+		// build its ExternalID off that newer JobID — otherwise both retries
+		// would collide on the same dedup row.
+		key := model.NewKey(tenant.ID, "spy-multi-retry-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		firstFailedJobID := uuid.NewString()
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: key.ID, TenantID: key.TenantID,
+			NewStatus: model.KeyProcessingFailed, NewJobID: firstFailedJobID,
+		}))
+
+		spy := &spyJobPreparer{}
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+
+		_, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId: tenant.ID, Kind: "K0", Name: key.Name, TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		// Simulate the second-attempt job also failing, with a brand-new JobID.
+		secondFailedJobID := uuid.NewString()
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: key.ID, TenantID: key.TenantID,
+			NewStatus: model.KeyProcessingFailed, NewJobID: secondFailedJobID,
+		}))
+
+		_, err = cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId: tenant.ID, Kind: "K0", Name: key.Name, TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		require.Len(t, spy.jobs, 2)
+		assert.NotEqual(t, spy.jobs[0].ExternalID, spy.jobs[1].ExternalID,
+			"two consecutive retries must produce distinct ExternalIDs so each gets its own orbital row")
+		assert.Equal(t, key.ID+":retry:"+firstFailedJobID, spy.jobs[0].ExternalID)
+		assert.Equal(t, key.ID+":retry:"+secondFailedJobID, spy.jobs[1].ExternalID)
+	})
+
+	t.Run("retries when existing key is Pending", func(t *testing.T) {
+		// A key in Pending state (CreateKey succeeded but linkage write didn't,
+		// or the key was created by some other path) should be retried as a
+		// fresh job with ExternalID = key.ID — no :retry: suffix because there
+		// is no previous failed JobID to scope against.
+		key := model.NewKey(tenant.ID, "pending-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		spy := &spyJobPreparer{}
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       key.Name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, key.ID, resp.GetKey().GetId(), "pending re-attempt must reuse the existing key.ID")
+		assert.Equal(t, model.KeyProcessingInProgress, resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.NotEmpty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
+
+		require.Len(t, spy.jobs, 1)
+		assert.Equal(t, key.ID, spy.jobs[0].ExternalID,
+			"pending retry ExternalID must equal key.ID (no :retry: suffix without a previous failed JobID)")
+
+		// Linkage on disk reflects the new in-progress JobID.
+		stored, err := keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyProcessingInProgress, stored.KeyProcessingState.Status)
+		assert.Equal(t, resp.GetKey().GetKeyProcessingState().GetJobId(), stored.KeyProcessingState.JobID)
+	})
+
+	t.Run("concurrent retry collides on deterministic ExternalID", func(t *testing.T) {
+		// Two simultaneous retries for the same Failed key compute the same
+		// ExternalID and the second PrepareJob should return ErrJobAlreadyExists,
+		// which the service swallows and returns the existing key.
+		failedJobID := uuid.NewString()
+		key := model.NewKey(tenant.ID, "racy-retry-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  key.TenantID,
+			NewStatus: model.KeyProcessingFailed,
+			NewJobID:  failedJobID,
+		}))
+
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists})
+		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       key.Name,
+			TargetName: "root",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, key.ID, resp.GetKey().GetId())
+	})
+
 	t.Run("should return internal error on database failure", func(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
-		tmpKeyStore := storesql.NewKeyStore(tmpDB)
-
+		// Seed a tenant in the temp DB so tenant-existence passes; then drop
+		// the keys table so the downstream lookup fails.
+		tmpTenant := createTenant(t, tmpDB)
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpDB)
 
 		// when
 		resp, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
-			TenantId:   uuid.NewString(),
+			TenantId:   tmpTenant.ID,
 			Kind:       "K0",
 			Name:       "will-fail",
 			TargetName: "root",
@@ -132,13 +520,12 @@ func TestGetKeyService(t *testing.T) {
 	db := createDatabase(t)
 
 	require.NoError(t, storesql.Migrate(ctx, db))
-	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, db)
 
 	t.Run("should get key successfully", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, db)
 
 		// when
 		created, err := cli.AnnounceKey(ctx, &admin.AnnounceKeyRequest{
@@ -165,7 +552,7 @@ func TestGetKeyService(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, keyStore)
+		cli := setupKeyServerAndClient(t, db)
 
 		// when
 		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{
@@ -185,12 +572,11 @@ func TestGetKeyService(t *testing.T) {
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
-		tmpKeyStore := storesql.NewKeyStore(tmpDB)
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpDB)
 
 		// when
 		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{
@@ -218,7 +604,7 @@ func TestGetParentKeys(t *testing.T) {
 
 	ha := createKeyHierarchy(t, keyStore, tenant)
 
-	cli := setupKeyServerAndClient(t, keyStore)
+	cli := setupKeyServerAndClient(t, db)
 
 	t.Run("should get parent keys successfully for intermediate", func(t *testing.T) {
 		// when
@@ -270,12 +656,11 @@ func TestGetParentKeys(t *testing.T) {
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
-		tmpKeyStore := storesql.NewKeyStore(tmpDB)
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpDB)
 
 		// when
 		resp, err := cli.GetParentKeys(ctx, &admin.GetParentKeysRequest{
@@ -303,7 +688,7 @@ func TestGetDescendantKeys(t *testing.T) {
 
 	ha := createKeyHierarchy(t, keyStore, tenant)
 
-	cli := setupKeyServerAndClient(t, keyStore)
+	cli := setupKeyServerAndClient(t, db)
 
 	t.Run("should get descendant keys successfully for root", func(t *testing.T) {
 		// when
@@ -388,12 +773,11 @@ func TestGetDescendantKeys(t *testing.T) {
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
-		tmpKeyStore := storesql.NewKeyStore(tmpDB)
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpKeyStore)
+		cli := setupKeyServerAndClient(t, tmpDB)
 
 		// when
 		resp, err := cli.GetDescendantKeys(ctx, &admin.GetDescendantKeysRequest{
@@ -425,28 +809,36 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.
 	ctx := t.Context()
 
 	root := model.NewKey(tenant.ID, "A", "K0", nil, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, root))
+	err := keyStore.CreateKey(ctx, root)
+	require.NoError(t, err)
 
 	b := model.NewKey(tenant.ID, "B", "K1", &root.ID, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, b))
+	err = keyStore.CreateKey(ctx, b)
+	require.NoError(t, err)
 
 	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, c))
+	err = keyStore.CreateKey(ctx, c)
+	require.NoError(t, err)
 
 	d := model.NewKey(tenant.ID, "D", "K2", &b.ID, "agent-aws", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, d))
+	err = keyStore.CreateKey(ctx, d)
+	require.NoError(t, err)
 
 	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, e))
+	err = keyStore.CreateKey(ctx, e)
+	require.NoError(t, err)
 
 	f := model.NewKey(tenant.ID, "F", "K2", &c.ID, "agent-gcp", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, f))
+	err = keyStore.CreateKey(ctx, f)
+	require.NoError(t, err)
 
 	g := model.NewKey(tenant.ID, "G", "K2", &c.ID, "agent-onprem", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, g))
+	err = keyStore.CreateKey(ctx, g)
+	require.NoError(t, err)
 
 	h := model.NewKey(tenant.ID, "H", "K3", &g.ID, "agent-onprem-2", nil)
-	require.NoError(t, keyStore.CreateKey(ctx, h))
+	err = keyStore.CreateKey(ctx, h)
+	require.NoError(t, err)
 
 	return keyHierarchy{
 		tenant: tenant,

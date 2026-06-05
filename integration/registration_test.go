@@ -39,9 +39,12 @@ func TestRegistration(t *testing.T) {
 
 	// Use a dynamic rootPort to avoid conflicts with other test runs
 	rootPort := freePort(t)
+	agentPort := freePort(t)
+	rootCfgPath := writeRootConfig(t, agentName, agentPort)
 
 	// Start root server process
 	rootCmd := createCmd(t, rootBinary, []string{
+		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + dbConnStr,
 		"SERVER_PORT=" + rootPort,
 	})
@@ -53,9 +56,14 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("agent registration", func(t *testing.T) {
 		// given
+		_, agentDBConnStr := createDatabase(t)
+		agentCfgPath := writeAgentConfig(t, agentName, "localhost:"+rootPort)
 		agentCmd := createCmd(t, agentBinary, []string{
 			"AGENT_ID=" + agentID,
+			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"ROOT_SERVER_PORT=" + rootPort,
+			"AGENT_DATABASE_URL=" + agentDBConnStr,
+			"AGENT_PORT=" + agentPort,
 		})
 
 		// when

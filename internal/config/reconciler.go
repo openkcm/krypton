@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,7 @@ var (
 type ReconcilerConfig struct {
 	Targets           []ReconcilerTarget `yaml:"targets"`
 	MaxReconcileCount uint64             `yaml:"maxReconcileCount"`
+	ExecInterval      time.Duration      `yaml:"execInterval"`
 }
 
 // ReconcilerTarget describes one gRPC target that can receive Orbital task requests.

@@ -64,7 +64,9 @@ func TestCreateKey(t *testing.T) {
 		assert.Equal(t, key.Kind, got.Kind)
 		assert.Nil(t, got.ParentID)
 		assert.Equal(t, "root", got.ManagedBy)
-		assert.Equal(t, model.KeyStatePreActivation, got.State)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, got.KeyProcessingState.Status)
+		assert.Empty(t, got.KeyProcessingState.JobID)
 		assert.Equal(t, "prod", got.Labels["env"])
 		assert.NotZero(t, got.CreatedAt)
 		assert.NotZero(t, got.UpdatedAt)
@@ -136,7 +138,7 @@ func TestGetKey(t *testing.T) {
 		assert.Equal(t, key.Kind, got.Kind)
 		assert.Nil(t, got.ParentID)
 		assert.Equal(t, "root", got.ManagedBy)
-		assert.Equal(t, model.KeyStatePreActivation, got.State)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
 		assert.Equal(t, "staging", got.Labels["env"])
 		assert.Equal(t, key.CreatedAt, got.CreatedAt)
 		assert.Equal(t, key.UpdatedAt, got.UpdatedAt)
@@ -167,6 +169,168 @@ func TestGetKey(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		_, err := keyStore.GetKeyByID(ctx, key.ID, uuid.NewString())
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}
+
+func TestUpdateKeyLifeCycleState(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should update key life cycle state", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "lifecycle-key", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		err := keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+			ID: key.ID, TenantID: tenant.ID, NewState: model.KeyLifeCycleActive,
+		})
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleActive, got.LifeCycleState)
+		assert.Greater(t, got.UpdatedAt, got.CreatedAt)
+	})
+
+	t.Run("should return not found for nonexistent key", func(t *testing.T) {
+		err := keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+			ID: uuid.NewString(), TenantID: tenant.ID, NewState: model.KeyLifeCycleActive,
+		})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+
+	t.Run("should return not found for wrong tenant", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "wrong-tenant-lifecycle", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		err := keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+			ID: key.ID, TenantID: uuid.NewString(), NewState: model.KeyLifeCycleActive,
+		})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}
+
+func TestUpdateKeyProcessingState(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should update key processing state with job id", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "processing-key", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		jobID := uuid.NewString()
+		err := keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: key.ID, TenantID: tenant.ID,
+			NewStatus: model.KeyProcessingInProgress,
+			NewJobID:  jobID,
+		})
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyProcessingInProgress, got.KeyProcessingState.Status)
+		assert.Equal(t, jobID, got.KeyProcessingState.JobID)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState, "lifecycle state must not be mutated")
+	})
+
+	t.Run("should clear job id when empty", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "processing-key-2", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		err := keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: key.ID, TenantID: tenant.ID,
+			NewStatus: model.KeyProcessingFailed,
+			NewJobID:  "",
+		})
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyProcessingFailed, got.KeyProcessingState.Status)
+		assert.Empty(t, got.KeyProcessingState.JobID)
+	})
+
+	t.Run("should return not found for nonexistent key", func(t *testing.T) {
+		err := keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: uuid.NewString(), TenantID: tenant.ID,
+			NewStatus: model.KeyProcessingFailed,
+		})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}
+
+func TestCreateKey_DuplicateName(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	first := model.NewKey(tenant.ID, "dup-name", "K0", nil, "root", nil)
+	require.NoError(t, keyStore.CreateKey(ctx, first))
+
+	second := model.NewKey(tenant.ID, "dup-name", "K0", nil, "root", nil)
+	err = keyStore.CreateKey(ctx, second)
+	assert.ErrorIs(t, err, store.ErrKeyAlreadyExists)
+}
+
+func TestGetKeyByName(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should get key by name", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "named-key", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		got, err := keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{TenantID: tenant.ID, Name: "named-key"})
+		require.NoError(t, err)
+		assert.Equal(t, key.ID, got.ID)
+		assert.Equal(t, "named-key", got.Name)
+	})
+
+	t.Run("should return not found for unknown name", func(t *testing.T) {
+		_, err := keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{TenantID: tenant.ID, Name: "missing"})
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+
+	t.Run("should return not found for wrong tenant", func(t *testing.T) {
+		key := model.NewKey(tenant.ID, "tenant-scoped", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		_, err := keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{TenantID: uuid.NewString(), Name: "tenant-scoped"})
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }
