@@ -1,4 +1,6 @@
-package cryptor
+// Package aes256gcm provides an AES-256-GCM [cryptor.Cryptor] implementation.
+// All sensitive data is handled in mlock'd memory via securemem.
+package aes256gcm
 
 import (
 	"context"
@@ -8,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
@@ -22,10 +25,10 @@ const (
 // All key material and intermediate plaintext/ciphertext are handled in mlock'd
 // memory via securemem to prevent leakage into swap or core dumps.
 type AES256GCM struct {
-	info Info
+	info cryptor.Info
 }
 
-var _ Cryptor = &AES256GCM{}
+var _ cryptor.Cryptor = &AES256GCM{}
 
 // ErrAllocatedDataNotFound indicates that data reserved in the secure memory vault
 // could not be retrieved after the cryptographic operation completed.
@@ -34,36 +37,40 @@ var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 // NewAES256GCM returns a ready-to-use AES-256-GCM cryptor.
 func NewAES256GCM() *AES256GCM {
 	return &AES256GCM{
-		info: Info{
-			Name:                     InfoNameAES256GCM,
+		info: cryptor.Info{
+			Name:                     cryptor.InfoNameAES256GCM,
 			DecryptionSecretRequired: true,
 		},
 	}
 }
 
 // Info returns metadata about the AES256GCM cryptor.
-func (a *AES256GCM) Info() Info {
+func (a *AES256GCM) Info() cryptor.Info {
 	return a.info
 }
 
 // Encrypt encrypts the plaintext using AES-256 in GCM mode with the provided key and AAD.
-func (a *AES256GCM) Encrypt(ctx context.Context, req EncryptRequest) (*EncryptResponse, error) {
+func (a *AES256GCM) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
 	if req.Secret == nil {
-		return nil, fmt.Errorf("missing encryption secret: %w", ErrRequest)
+		return nil, fmt.Errorf("missing encryption secret: %w", cryptor.ErrRequest)
 	}
 
-	secretSize := len(req.Secret.SecureBytes())
+	if req.Secret.Algorithm != cryptor.KeyAlgorithmAES256 {
+		return nil, fmt.Errorf("invalid key algorithm: expected %s, got %s: %w", cryptor.KeyAlgorithmAES256, req.Secret.Algorithm, cryptor.ErrRequest)
+	}
+
+	secretSize := len(req.Secret.Data.SecureBytes())
 	if secretSize != 32 {
-		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, ErrRequest)
+		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, cryptor.ErrRequest)
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
 		// 1. Initialize AES-256 block cipher from the 32-byte key.
-		block, err := aes.NewCipher(req.Secret.SecureBytes())
+		block, err := aes.NewCipher(req.Secret.Data.SecureBytes())
 		if err != nil {
 			return fmt.Errorf("failed to create AES cipher: %w", err)
 		}
@@ -111,29 +118,33 @@ func (a *AES256GCM) Encrypt(ctx context.Context, req EncryptRequest) (*EncryptRe
 		return nil, fmt.Errorf("allocated ciphertext not found in vault after encryption: %w", ErrAllocatedDataNotFound)
 	}
 
-	return &EncryptResponse{
+	return &cryptor.EncryptResponse{
 		Ciphertext: cipherText,
 	}, nil
 }
 
 // Decrypt decrypts the ciphertext using AES-256 in GCM mode with the provided key and AAD.
-func (a *AES256GCM) Decrypt(ctx context.Context, req DecryptRequest) (*DecryptResponse, error) {
+func (a *AES256GCM) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
 	if req.Secret == nil {
-		return nil, fmt.Errorf("missing decryption secret: %w", ErrRequest)
+		return nil, fmt.Errorf("missing decryption secret: %w", cryptor.ErrRequest)
 	}
 
-	secretSize := len(req.Secret.SecureBytes())
+	if req.Secret.Algorithm != cryptor.KeyAlgorithmAES256 {
+		return nil, fmt.Errorf("invalid key algorithm: expected %s, got %s: %w", cryptor.KeyAlgorithmAES256, req.Secret.Algorithm, cryptor.ErrRequest)
+	}
+
+	secretSize := len(req.Secret.Data.SecureBytes())
 	if secretSize != 32 {
-		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, ErrRequest)
+		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, cryptor.ErrRequest)
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
 		// 1. Initialize AES-256 block cipher from the 32-byte key.
-		block, err := aes.NewCipher(req.Secret.SecureBytes())
+		block, err := aes.NewCipher(req.Secret.Data.SecureBytes())
 		if err != nil {
 			return fmt.Errorf("failed to create AES cipher: %w", err)
 		}
@@ -149,7 +160,7 @@ func (a *AES256GCM) Decrypt(ctx context.Context, req DecryptRequest) (*DecryptRe
 
 		// 3. Verify the ciphertext is at least nonce + tag bytes long.
 		if cipherTextSize < nonceSize+gcm.Overhead() {
-			return fmt.Errorf("ciphertext too short: %w", ErrRequest)
+			return fmt.Errorf("ciphertext too short: %w", cryptor.ErrRequest)
 		}
 
 		// 4. Compute plaintext size: total - nonce - tag.
@@ -194,7 +205,7 @@ func (a *AES256GCM) Decrypt(ctx context.Context, req DecryptRequest) (*DecryptRe
 		return nil, fmt.Errorf("allocated plaintext not found in vault after decryption: %w", ErrAllocatedDataNotFound)
 	}
 
-	return &DecryptResponse{
+	return &cryptor.DecryptResponse{
 		Plaintext: plainText,
 	}, nil
 }

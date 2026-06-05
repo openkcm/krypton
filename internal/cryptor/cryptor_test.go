@@ -107,6 +107,61 @@ func TestDecryptRequestValidate(t *testing.T) {
 			},
 			wantErr: cryptor.ErrRequest,
 		},
+		{
+			name: "empty algorithm in secret",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: validData,
+				Secret: &cryptor.CryptorSecret{
+					Data: validData,
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty data in secret",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      &securemem.Data{},
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "destroyed data in secret",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      destroyedData,
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "nil data in secret",
+			req: cryptor.DecryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Ciphertext: validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      nil,
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
 	}
 
 	for _, tt := range tts {
@@ -214,6 +269,61 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  &securemem.Data{},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty algorithm in secret",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  validData,
+				Secret: &cryptor.CryptorSecret{
+					Data: validData,
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "empty data in secret",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      &securemem.Data{},
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "destroyed data in secret",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      destroyedData,
+				},
+			},
+			wantErr: cryptor.ErrRequest,
+		},
+		{
+			name: "nil data in secret",
+			req: cryptor.EncryptRequest{
+				TenantID:   "tenant1",
+				KeyID:      "key1",
+				KeyVersion: 1,
+				Plaintext:  validData,
+				Secret: &cryptor.CryptorSecret{
+					Algorithm: cryptor.KeyAlgorithmAES256,
+					Data:      nil,
+				},
 			},
 			wantErr: cryptor.ErrRequest,
 		},
