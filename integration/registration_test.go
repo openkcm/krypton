@@ -30,7 +30,6 @@ func TestRegistration(t *testing.T) {
 	db, dbConnStr := createDatabase(t)
 
 	// Create agent store
-	require.NoError(t, sql.Migrate(ctx, db))
 	agentStore := sql.NewAgentStore(db)
 
 	// Build binaries for root server and agent

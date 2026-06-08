@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -19,6 +20,8 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
@@ -120,15 +123,22 @@ func newCLICommand(ctx context.Context, homeDir string, args ...string) *exec.Cm
 	return cmd
 }
 
-// newTestStore creates a new isolated database and store for testing.
-// The database is automatically dropped when the test completes.
-func newTestStore(t *testing.T) store.Tenant {
+// newTenantStore creates a tenant store
+func newTenantStore(t *testing.T, db *sql.DB) store.Tenant {
 	t.Helper()
-	ctx := t.Context()
+	if db == nil {
+		db, _ = createDatabase(t)
+	}
+	return storesql.NewTenantStore(db)
+}
 
-	testDB, _ := createDatabase(t)
-	require.NoError(t, storesql.Migrate(ctx, testDB))
-	return storesql.NewTenantStore(testDB)
+// newKeyStore creates a key store.
+func newKeyStore(t *testing.T, db *sql.DB) store.Key {
+	t.Helper()
+	if db == nil {
+		db, _ = createDatabase(t)
+	}
+	return storesql.NewKeyStore(db)
 }
 
 // createDatabase creates a new PostgreSQL database for testing and returns a connection to it.
@@ -165,6 +175,10 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 			db.Close()
 		}
 	})
+
+	// migrate
+	require.NoError(t, storesql.Migrate(ctx, sqlDB))
+
 	return sqlDB, pgConStr
 }
 
@@ -174,7 +188,7 @@ type RegisterFunc func(*grpc.Server)
 // startGRPCServer starts a gRPC server and returns the server address.
 // The register function is called to register services to the server.
 // The server is automatically stopped when the test completes.
-func startGRPCServer(t *testing.T, register RegisterFunc) string {
+func startGRPCServer(t *testing.T, registerFns ...RegisterFunc) string {
 	t.Helper()
 
 	lis, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "localhost:0")
@@ -183,7 +197,9 @@ func startGRPCServer(t *testing.T, register RegisterFunc) string {
 	}
 
 	srv := grpc.NewServer()
-	register(srv)
+	for _, registerFn := range registerFns {
+		registerFn(srv)
+	}
 
 	go func() {
 		if err := srv.Serve(lis); err != nil {
@@ -196,4 +212,27 @@ func startGRPCServer(t *testing.T, register RegisterFunc) string {
 	})
 
 	return lis.Addr().String()
+}
+
+// defaultTestHierarchy mirrors the K0(root) → K1(kek) → K2(tek) → K3(dek)
+// hierarchy used by the existing fixture builders below.
+func defaultTestHierarchy() spec.KeyHierarchy {
+	return spec.KeyHierarchy{
+		Name: "test-hierarchy",
+		KeySpecs: []spec.KeySpec{
+			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
+		},
+	}
+}
+
+type noopJobPreparer struct{}
+
+func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
+	if job.ID == uuid.Nil {
+		job.ID = uuid.Must(uuid.NewUUID())
+	}
+	return job, nil
 }

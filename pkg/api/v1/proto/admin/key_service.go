@@ -341,6 +341,6 @@ func (s *KeyService) GetDescendantKeys(ctx context.Context, req *GetDescendantKe
 	}
 
 	return &GetDescendantKeysResponse{
-		KeyTree: KeyTreeToProto(res.KeyTree),
+		KeyTree: KeyTreeTraverserToProto(res.KeyTree),
 	}, nil
 }

@@ -25,7 +25,7 @@ type expTenant struct {
 }
 
 func TestCreateTenant(t *testing.T) {
-	tenantStore := newTestStore(t)
+	tenantStore := newTenantStore(t, nil)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
@@ -103,7 +103,7 @@ func TestCreateTenant(t *testing.T) {
 }
 
 func TestGetTenant(t *testing.T) {
-	tenantStore := newTestStore(t)
+	tenantStore := newTenantStore(t, nil)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
@@ -163,7 +163,7 @@ func TestGetTenant(t *testing.T) {
 func TestListTenants(t *testing.T) {
 	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
 		// given
-		tenantStore := newTestStore(t)
+		tenantStore := newTenantStore(t, nil)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
@@ -180,7 +180,7 @@ func TestListTenants(t *testing.T) {
 
 	t.Run("lists created tenants", func(t *testing.T) {
 		// given
-		tenantStore := newTestStore(t)
+		tenantStore := newTenantStore(t, nil)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
@@ -223,7 +223,7 @@ func TestListTenants(t *testing.T) {
 // Integration tests use exec.Command which provides piped stdin, not a real TTY.
 // Interactive selection is covered by unit tests in cli/output/terminal/.
 func TestSelectTenant(t *testing.T) {
-	tenantStore := newTestStore(t)
+	tenantStore := newTenantStore(t, nil)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
