@@ -47,7 +47,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      validData,
 				},
@@ -128,7 +128,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Data: validData,
 				},
 			},
@@ -141,7 +141,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      &securemem.Data{},
 				},
@@ -155,7 +155,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      destroyedData,
 				},
@@ -169,7 +169,7 @@ func TestDecryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Ciphertext: validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      nil,
 				},
@@ -226,7 +226,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      validData,
 				},
@@ -307,7 +307,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Data: validData,
 				},
 			},
@@ -320,7 +320,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      &securemem.Data{},
 				},
@@ -334,7 +334,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      destroyedData,
 				},
@@ -348,7 +348,7 @@ func TestEncryptRequestValidate(t *testing.T) {
 				KeyID:      "key1",
 				KeyVersion: 1,
 				Plaintext:  validData,
-				Secret: &cryptor.CryptorSecret{
+				Secret: &cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      nil,
 				},

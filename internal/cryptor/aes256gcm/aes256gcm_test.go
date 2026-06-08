@@ -23,7 +23,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 			},
 			Plaintext: nil, // missing plaintext
@@ -63,7 +63,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: "unknown-algorithm", // unsupported algorithm
 				Data:      newSecretKey(t),
 			},
@@ -86,7 +86,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      nil, // missing secret
 			},
@@ -110,7 +110,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -141,7 +141,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret, // invalid key size
 			},
@@ -165,7 +165,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -194,7 +194,7 @@ func TestAES256GCM_Encrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -223,7 +223,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 			},
 			Ciphertext: nil, // missing ciphertext
@@ -266,7 +266,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -279,7 +279,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: "unknown-algorithm", // unsupported algorithm
 				Data:      secret,
 			},
@@ -302,7 +302,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      nil, // missing secret
 			},
@@ -330,7 +330,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret, // invalid key size
 			},
@@ -354,7 +354,7 @@ func TestAES256GCM_Decrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -390,7 +390,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -410,7 +410,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -438,7 +438,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -456,7 +456,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -481,7 +481,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secretKey,
 			},
@@ -499,7 +499,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secretKey,
 			},
@@ -523,7 +523,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret1,
 			},
@@ -540,7 +540,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret2,
 			},
@@ -562,7 +562,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -588,7 +588,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -610,7 +610,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -634,7 +634,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -656,7 +656,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},
@@ -669,7 +669,7 @@ func TestAES256GCM_EncryptDecrypt(t *testing.T) {
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Algorithm: cryptor.KeyAlgorithmAES256,
 				Data:      secret,
 			},

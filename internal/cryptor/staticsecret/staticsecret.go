@@ -65,7 +65,7 @@ func (s *StaticSecret) Decrypt(ctx context.Context, req cryptor.DecryptRequest) 
 		return nil, fmt.Errorf("decryption secret should not be provided in the request: %w", cryptor.ErrRequest)
 	}
 	// replacing the secret in the request with the static secret
-	req.Secret = &cryptor.CryptorSecret{
+	req.Secret = &cryptor.Secret{
 		Data:      s.secret,
 		Algorithm: cryptor.KeyAlgorithmAES256,
 	}
@@ -84,7 +84,7 @@ func (s *StaticSecret) Encrypt(ctx context.Context, req cryptor.EncryptRequest) 
 		return nil, fmt.Errorf("encryption secret should not be provided in the request: %w", cryptor.ErrRequest)
 	}
 	// replacing the secret in the request with the static secret
-	req.Secret = &cryptor.CryptorSecret{
+	req.Secret = &cryptor.Secret{
 		Data:      s.secret,
 		Algorithm: cryptor.KeyAlgorithmAES256,
 	}

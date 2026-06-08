@@ -112,7 +112,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 			KeyID:      "key-1",
 			KeyVersion: 1,
 			Plaintext:  plainText,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Data:      newSecretKey(t),
 				Algorithm: cryptor.KeyAlgorithmAES256,
 			},
@@ -135,7 +135,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 			KeyID:      "key-1",
 			KeyVersion: 1,
 			Plaintext:  plainText,
-			Secret:     &cryptor.CryptorSecret{},
+			Secret:     &cryptor.Secret{},
 		}
 
 		// when
@@ -273,7 +273,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 			KeyID:      "key-1",
 			KeyVersion: 1,
 			Ciphertext: encResp.Ciphertext,
-			Secret: &cryptor.CryptorSecret{
+			Secret: &cryptor.Secret{
 				Data:      newSecretKey(t),
 				Algorithm: cryptor.KeyAlgorithmAES256,
 			},
@@ -303,7 +303,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 			KeyID:      "key-1",
 			KeyVersion: 1,
 			Ciphertext: encResp.Ciphertext,
-			Secret:     &cryptor.CryptorSecret{},
+			Secret:     &cryptor.Secret{},
 		}
 
 		// when

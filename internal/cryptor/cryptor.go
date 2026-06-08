@@ -19,8 +19,8 @@ const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 // InfoName identifies the type of information returned by the Info() method of a Cryptor.
 type InfoName string
 
-// CryptorSecret pairs a key algorithm with its key material stored in secure memory.
-type CryptorSecret struct {
+// Secret pairs a key algorithm with its key material stored in secure memory.
+type Secret struct {
 	// Algorithm is the encryption algorithm to apply.
 	Algorithm KeyAlgorithm
 	// Data is the raw key bytes in mlock'd memory. Nil if the Cryptor manages its own secrets (e.g., HSM).
@@ -36,7 +36,7 @@ type EncryptRequest struct {
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
 	// Secret holds the key material for encryption. Nil when the Cryptor manages its own secrets.
-	Secret *CryptorSecret
+	Secret *Secret
 	// Plaintext is the data to encrypt.
 	// The Plaintext field should not be nil.
 	Plaintext *securemem.Data
@@ -59,7 +59,7 @@ type DecryptRequest struct {
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
 	// Secret holds the key material for decryption. Nil when the Cryptor manages its own secrets.
-	Secret *CryptorSecret
+	Secret *Secret
 	// Ciphertext is the data to decrypt.
 	// The Ciphertext field should not be nil.
 	Ciphertext *securemem.Data
@@ -132,7 +132,7 @@ func (req DecryptRequest) Validate() error {
 	return req.Secret.Validate()
 }
 
-func (cs *CryptorSecret) Validate() error {
+func (cs *Secret) Validate() error {
 	if cs != nil {
 		if cs.Algorithm == "" {
 			return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
