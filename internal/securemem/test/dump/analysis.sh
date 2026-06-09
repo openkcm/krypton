@@ -13,6 +13,7 @@ cleanup() {
   # Cleanup
   rm -f "$TRIGGER_ID"
   rm -f "secret_${TRIGGER_ID}"
+  rm -f "exposed_${TRIGGER_ID}"
   rm -f "start_${TRIGGER_ID}"
   rm -f "core.${pid}"
   echo "FINISHED"
