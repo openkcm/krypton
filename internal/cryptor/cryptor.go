@@ -19,8 +19,13 @@ const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 // InfoName identifies the type of information returned by the Info() method of a Cryptor.
 type InfoName string
 
-// InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
-const InfoNameAES256GCM InfoName = "AES256-GCM"
+// Secret pairs a key algorithm with its key material stored in secure memory.
+type Secret struct {
+	// Algorithm is the encryption algorithm to apply.
+	Algorithm KeyAlgorithm
+	// Data is the raw key bytes in mlock'd memory. Nil if the Cryptor manages its own secrets (e.g., HSM).
+	Data *securemem.Data
+}
 
 // EncryptRequest contains parameters for an encryption operation.
 type EncryptRequest struct {
@@ -30,11 +35,8 @@ type EncryptRequest struct {
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
-	// Algorithm is the encryption algorithm to apply.
-	Algorithm KeyAlgorithm
-	// Secret is the key material used for encryption.
-	// The Secret is nil if Cryptor manages its own secrets (e.g., HSM).
-	Secret *securemem.Data
+	// Secret holds the key material for encryption. Nil when the Cryptor manages its own secrets.
+	Secret *Secret
 	// Plaintext is the data to encrypt.
 	// The Plaintext field should not be nil.
 	Plaintext *securemem.Data
@@ -56,11 +58,8 @@ type DecryptRequest struct {
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
 	KeyVersion int
-	// Algorithm is the encryption algorithm that was used.
-	Algorithm KeyAlgorithm
-	// Secret is the key material used for decryption.
-	// The Secret is nil if Cryptor manages its own secrets (e.g., HSM).
-	Secret *securemem.Data
+	// Secret holds the key material for decryption. Nil when the Cryptor manages its own secrets.
+	Secret *Secret
 	// Ciphertext is the data to decrypt.
 	// The Ciphertext field should not be nil.
 	Ciphertext *securemem.Data
@@ -114,7 +113,7 @@ func (req EncryptRequest) Validate() error {
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid plaintext: %w", ErrRequest)
 	}
-	return nil
+	return req.Secret.Validate()
 }
 
 func (req DecryptRequest) Validate() error {
@@ -129,6 +128,18 @@ func (req DecryptRequest) Validate() error {
 	}
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid ciphertext: %w", ErrRequest)
+	}
+	return req.Secret.Validate()
+}
+
+func (cs *Secret) Validate() error {
+	if cs != nil {
+		if cs.Algorithm == "" {
+			return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
+		}
+		if cs.Data == nil || len(cs.Data.SecureBytes()) == 0 {
+			return fmt.Errorf("invalid secret data: %w", ErrRequest)
+		}
 	}
 	return nil
 }
