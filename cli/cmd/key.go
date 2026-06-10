@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/cli/output"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 )
 
 type keyTreeRow struct {
@@ -22,7 +22,7 @@ type keyTreeRow struct {
 	Status    string
 }
 
-func newKeyTreeRow(k *admin.Key) keyTreeRow {
+func newKeyTreeRow(k *keys.Key) keyTreeRow {
 	return keyTreeRow{
 		Kind:      k.GetKind(),
 		ID:        k.GetId(),
@@ -52,9 +52,9 @@ func getKeyParentsCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewKeyServiceClient(conn)
+			client := keys.NewKeyServiceClient(conn)
 
-			resp, err := client.GetParentKeys(cmd.Context(), &admin.GetParentKeysRequest{
+			resp, err := client.GetParentKeys(cmd.Context(), &keys.GetParentKeysRequest{
 				Id:       keyID,
 				TenantId: tenantID,
 			})
@@ -108,9 +108,9 @@ func getKeyDescendantsCmd() *cobra.Command {
 			}
 			defer conn.Close()
 
-			client := admin.NewKeyServiceClient(conn)
+			client := keys.NewKeyServiceClient(conn)
 
-			resp, err := client.GetDescendantKeys(cmd.Context(), &admin.GetDescendantKeysRequest{
+			resp, err := client.GetDescendantKeys(cmd.Context(), &keys.GetDescendantKeysRequest{
 				Id:       keyID,
 				TenantId: tenantID,
 			})

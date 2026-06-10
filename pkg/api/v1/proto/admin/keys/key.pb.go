@@ -4,7 +4,7 @@
 // 	protoc        v7.34.1
 // source: key.proto
 
-package admin
+package keys
 
 import (
 	reflect "reflect"
@@ -662,7 +662,7 @@ var File_key_proto protoreflect.FileDescriptor
 
 const file_key_proto_rawDesc = "" +
 	"\n" +
-	"\tkey.proto\x12\x10krypton.v1.admin\"\xcc\x03\n" +
+	"\tkey.proto\x12\x15krypton.v1.admin.keys\"\xd6\x03\n" +
 	"\x03Key\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -670,57 +670,57 @@ const file_key_proto_rawDesc = "" +
 	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1b\n" +
 	"\tparent_id\x18\x05 \x01(\tR\bparentId\x12\x1d\n" +
 	"\n" +
-	"managed_by\x18\x06 \x01(\tR\tmanagedBy\x129\n" +
-	"\x06labels\x18\a \x03(\v2!.krypton.v1.admin.Key.LabelsEntryR\x06labels\x12(\n" +
+	"managed_by\x18\x06 \x01(\tR\tmanagedBy\x12>\n" +
+	"\x06labels\x18\a \x03(\v2&.krypton.v1.admin.keys.Key.LabelsEntryR\x06labels\x12(\n" +
 	"\x10life_cycle_state\x18\b \x01(\tR\x0elifeCycleState\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\t \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\x03R\tupdatedAt\x12V\n" +
-	"\x14key_processing_state\x18\v \x01(\v2$.krypton.v1.admin.KeyProcessingStateR\x12keyProcessingState\x1a9\n" +
+	" \x01(\x03R\tupdatedAt\x12[\n" +
+	"\x14key_processing_state\x18\v \x01(\v2).krypton.v1.admin.keys.KeyProcessingStateR\x12keyProcessingState\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x12KeyProcessingState\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x15\n" +
-	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"\x9c\x02\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"\xa1\x02\n" +
 	"\x12AnnounceKeyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
 	"\tparent_id\x18\x04 \x01(\tR\bparentId\x12\x1f\n" +
 	"\vtarget_name\x18\x05 \x01(\tR\n" +
-	"targetName\x12H\n" +
-	"\x06labels\x18\x06 \x03(\v20.krypton.v1.admin.AnnounceKeyRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"targetName\x12M\n" +
+	"\x06labels\x18\x06 \x03(\v25.krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\">\n" +
-	"\x13AnnounceKeyResponse\x12'\n" +
-	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key\"<\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
+	"\x13AnnounceKeyResponse\x12,\n" +
+	"\x03key\x18\x01 \x01(\v2\x1a.krypton.v1.admin.keys.KeyR\x03key\"<\n" +
 	"\rGetKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"9\n" +
-	"\x0eGetKeyResponse\x12'\n" +
-	"\x03key\x18\x01 \x01(\v2\x15.krypton.v1.admin.KeyR\x03key\"C\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\">\n" +
+	"\x0eGetKeyResponse\x12,\n" +
+	"\x03key\x18\x01 \x01(\v2\x1a.krypton.v1.admin.keys.KeyR\x03key\"C\n" +
 	"\x14GetParentKeysRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"B\n" +
-	"\x15GetParentKeysResponse\x12)\n" +
-	"\x04keys\x18\x01 \x03(\v2\x15.krypton.v1.admin.KeyR\x04keys\"G\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"G\n" +
+	"\x15GetParentKeysResponse\x12.\n" +
+	"\x04keys\x18\x01 \x03(\v2\x1a.krypton.v1.admin.keys.KeyR\x04keys\"G\n" +
 	"\x18GetDescendantKeysRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"4\n" +
-	"\aKeyTree\x12)\n" +
-	"\x04keys\x18\x01 \x03(\v2\x15.krypton.v1.admin.KeyR\x04keys\"Q\n" +
-	"\x19GetDescendantKeysResponse\x124\n" +
-	"\bkey_tree\x18\x01 \x03(\v2\x19.krypton.v1.admin.KeyTreeR\akeyTree2\x85\x03\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"9\n" +
+	"\aKeyTree\x12.\n" +
+	"\x04keys\x18\x01 \x03(\v2\x1a.krypton.v1.admin.keys.KeyR\x04keys\"V\n" +
+	"\x19GetDescendantKeysResponse\x129\n" +
+	"\bkey_tree\x18\x01 \x03(\v2\x1e.krypton.v1.admin.keys.KeyTreeR\akeyTree2\xad\x03\n" +
 	"\n" +
-	"KeyService\x12Z\n" +
-	"\vAnnounceKey\x12$.krypton.v1.admin.AnnounceKeyRequest\x1a%.krypton.v1.admin.AnnounceKeyResponse\x12K\n" +
-	"\x06GetKey\x12\x1f.krypton.v1.admin.GetKeyRequest\x1a .krypton.v1.admin.GetKeyResponse\x12`\n" +
-	"\rGetParentKeys\x12&.krypton.v1.admin.GetParentKeysRequest\x1a'.krypton.v1.admin.GetParentKeysResponse\x12l\n" +
-	"\x11GetDescendantKeys\x12*.krypton.v1.admin.GetDescendantKeysRequest\x1a+.krypton.v1.admin.GetDescendantKeysResponseB3Z1github.com/openkcm/krypton/pkg/api/v1/proto/adminb\x06proto3"
+	"KeyService\x12d\n" +
+	"\vAnnounceKey\x12).krypton.v1.admin.keys.AnnounceKeyRequest\x1a*.krypton.v1.admin.keys.AnnounceKeyResponse\x12U\n" +
+	"\x06GetKey\x12$.krypton.v1.admin.keys.GetKeyRequest\x1a%.krypton.v1.admin.keys.GetKeyResponse\x12j\n" +
+	"\rGetParentKeys\x12+.krypton.v1.admin.keys.GetParentKeysRequest\x1a,.krypton.v1.admin.keys.GetParentKeysResponse\x12v\n" +
+	"\x11GetDescendantKeys\x12/.krypton.v1.admin.keys.GetDescendantKeysRequest\x1a0.krypton.v1.admin.keys.GetDescendantKeysResponseB8Z6github.com/openkcm/krypton/pkg/api/v1/proto/admin/keysb\x06proto3"
 
 var (
 	file_key_proto_rawDescOnce sync.Once
@@ -736,37 +736,37 @@ func file_key_proto_rawDescGZIP() []byte {
 
 var file_key_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_key_proto_goTypes = []any{
-	(*Key)(nil),                       // 0: krypton.v1.admin.Key
-	(*KeyProcessingState)(nil),        // 1: krypton.v1.admin.KeyProcessingState
-	(*AnnounceKeyRequest)(nil),        // 2: krypton.v1.admin.AnnounceKeyRequest
-	(*AnnounceKeyResponse)(nil),       // 3: krypton.v1.admin.AnnounceKeyResponse
-	(*GetKeyRequest)(nil),             // 4: krypton.v1.admin.GetKeyRequest
-	(*GetKeyResponse)(nil),            // 5: krypton.v1.admin.GetKeyResponse
-	(*GetParentKeysRequest)(nil),      // 6: krypton.v1.admin.GetParentKeysRequest
-	(*GetParentKeysResponse)(nil),     // 7: krypton.v1.admin.GetParentKeysResponse
-	(*GetDescendantKeysRequest)(nil),  // 8: krypton.v1.admin.GetDescendantKeysRequest
-	(*KeyTree)(nil),                   // 9: krypton.v1.admin.KeyTree
-	(*GetDescendantKeysResponse)(nil), // 10: krypton.v1.admin.GetDescendantKeysResponse
-	nil,                               // 11: krypton.v1.admin.Key.LabelsEntry
-	nil,                               // 12: krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
+	(*Key)(nil),                       // 0: krypton.v1.admin.keys.Key
+	(*KeyProcessingState)(nil),        // 1: krypton.v1.admin.keys.KeyProcessingState
+	(*AnnounceKeyRequest)(nil),        // 2: krypton.v1.admin.keys.AnnounceKeyRequest
+	(*AnnounceKeyResponse)(nil),       // 3: krypton.v1.admin.keys.AnnounceKeyResponse
+	(*GetKeyRequest)(nil),             // 4: krypton.v1.admin.keys.GetKeyRequest
+	(*GetKeyResponse)(nil),            // 5: krypton.v1.admin.keys.GetKeyResponse
+	(*GetParentKeysRequest)(nil),      // 6: krypton.v1.admin.keys.GetParentKeysRequest
+	(*GetParentKeysResponse)(nil),     // 7: krypton.v1.admin.keys.GetParentKeysResponse
+	(*GetDescendantKeysRequest)(nil),  // 8: krypton.v1.admin.keys.GetDescendantKeysRequest
+	(*KeyTree)(nil),                   // 9: krypton.v1.admin.keys.KeyTree
+	(*GetDescendantKeysResponse)(nil), // 10: krypton.v1.admin.keys.GetDescendantKeysResponse
+	nil,                               // 11: krypton.v1.admin.keys.Key.LabelsEntry
+	nil,                               // 12: krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
 }
 var file_key_proto_depIdxs = []int32{
-	11, // 0: krypton.v1.admin.Key.labels:type_name -> krypton.v1.admin.Key.LabelsEntry
-	1,  // 1: krypton.v1.admin.Key.key_processing_state:type_name -> krypton.v1.admin.KeyProcessingState
-	12, // 2: krypton.v1.admin.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.AnnounceKeyRequest.LabelsEntry
-	0,  // 3: krypton.v1.admin.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.Key
-	0,  // 4: krypton.v1.admin.GetKeyResponse.key:type_name -> krypton.v1.admin.Key
-	0,  // 5: krypton.v1.admin.GetParentKeysResponse.keys:type_name -> krypton.v1.admin.Key
-	0,  // 6: krypton.v1.admin.KeyTree.keys:type_name -> krypton.v1.admin.Key
-	9,  // 7: krypton.v1.admin.GetDescendantKeysResponse.key_tree:type_name -> krypton.v1.admin.KeyTree
-	2,  // 8: krypton.v1.admin.KeyService.AnnounceKey:input_type -> krypton.v1.admin.AnnounceKeyRequest
-	4,  // 9: krypton.v1.admin.KeyService.GetKey:input_type -> krypton.v1.admin.GetKeyRequest
-	6,  // 10: krypton.v1.admin.KeyService.GetParentKeys:input_type -> krypton.v1.admin.GetParentKeysRequest
-	8,  // 11: krypton.v1.admin.KeyService.GetDescendantKeys:input_type -> krypton.v1.admin.GetDescendantKeysRequest
-	3,  // 12: krypton.v1.admin.KeyService.AnnounceKey:output_type -> krypton.v1.admin.AnnounceKeyResponse
-	5,  // 13: krypton.v1.admin.KeyService.GetKey:output_type -> krypton.v1.admin.GetKeyResponse
-	7,  // 14: krypton.v1.admin.KeyService.GetParentKeys:output_type -> krypton.v1.admin.GetParentKeysResponse
-	10, // 15: krypton.v1.admin.KeyService.GetDescendantKeys:output_type -> krypton.v1.admin.GetDescendantKeysResponse
+	11, // 0: krypton.v1.admin.keys.Key.labels:type_name -> krypton.v1.admin.keys.Key.LabelsEntry
+	1,  // 1: krypton.v1.admin.keys.Key.key_processing_state:type_name -> krypton.v1.admin.keys.KeyProcessingState
+	12, // 2: krypton.v1.admin.keys.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
+	0,  // 3: krypton.v1.admin.keys.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
+	0,  // 4: krypton.v1.admin.keys.GetKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
+	0,  // 5: krypton.v1.admin.keys.GetParentKeysResponse.keys:type_name -> krypton.v1.admin.keys.Key
+	0,  // 6: krypton.v1.admin.keys.KeyTree.keys:type_name -> krypton.v1.admin.keys.Key
+	9,  // 7: krypton.v1.admin.keys.GetDescendantKeysResponse.key_tree:type_name -> krypton.v1.admin.keys.KeyTree
+	2,  // 8: krypton.v1.admin.keys.KeyService.AnnounceKey:input_type -> krypton.v1.admin.keys.AnnounceKeyRequest
+	4,  // 9: krypton.v1.admin.keys.KeyService.GetKey:input_type -> krypton.v1.admin.keys.GetKeyRequest
+	6,  // 10: krypton.v1.admin.keys.KeyService.GetParentKeys:input_type -> krypton.v1.admin.keys.GetParentKeysRequest
+	8,  // 11: krypton.v1.admin.keys.KeyService.GetDescendantKeys:input_type -> krypton.v1.admin.keys.GetDescendantKeysRequest
+	3,  // 12: krypton.v1.admin.keys.KeyService.AnnounceKey:output_type -> krypton.v1.admin.keys.AnnounceKeyResponse
+	5,  // 13: krypton.v1.admin.keys.KeyService.GetKey:output_type -> krypton.v1.admin.keys.GetKeyResponse
+	7,  // 14: krypton.v1.admin.keys.KeyService.GetParentKeys:output_type -> krypton.v1.admin.keys.GetParentKeysResponse
+	10, // 15: krypton.v1.admin.keys.KeyService.GetDescendantKeys:output_type -> krypton.v1.admin.keys.GetDescendantKeysResponse
 	12, // [12:16] is the sub-list for method output_type
 	8,  // [8:12] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name

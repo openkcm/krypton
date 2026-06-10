@@ -16,6 +16,7 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
+	"github.com/openkcm/krypton/pkg/validator"
 )
 
 var pgConnStr string
@@ -108,4 +109,20 @@ type stubProcessingStateUpdater struct {
 
 func (s *stubProcessingStateUpdater) UpdateKeyProcessingState(_ context.Context, _ store.UpdateKeyProcessingStateQuery) error {
 	return s.err
+}
+
+// stubValidator implements validator.KeyValidator for tests.
+// If err is nil, ValidateAnnounceKey returns nil (valid). Otherwise it
+// returns the configured ValidationError.
+type stubValidator struct {
+	err *validator.ValidationError
+}
+
+func (s *stubValidator) ValidateAnnounceKey(_ context.Context, _ validator.AnnounceInput) *validator.ValidationError {
+	return s.err
+}
+
+// passingValidator returns a stubValidator that accepts every input.
+func passingValidator() *stubValidator {
+	return &stubValidator{}
 }

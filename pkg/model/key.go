@@ -50,6 +50,24 @@ type Key struct {
 	UpdatedAt          clock.UnixNano     `json:"updated_at"`
 }
 
+func (k *Key) Equals(other *Key) bool {
+	if !equalStringPtr(k.ParentID, other.ParentID) {
+		return false
+	}
+
+	return k.Name == other.Name &&
+		k.TenantID == other.TenantID &&
+		k.ManagedBy == other.ManagedBy &&
+		k.Kind == other.Kind
+}
+
+func equalStringPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 // KeyTree represents a hierarchical structure of keys, where each inner
 // slice represents a layer of keys in the hierarchy.
 type KeyTree [][]Key

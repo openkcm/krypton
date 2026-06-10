@@ -4,7 +4,7 @@
 // - protoc             v7.34.1
 // source: key.proto
 
-package admin
+package keys
 
 import (
 	context "context"
@@ -20,10 +20,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KeyService_AnnounceKey_FullMethodName       = "/krypton.v1.admin.KeyService/AnnounceKey"
-	KeyService_GetKey_FullMethodName            = "/krypton.v1.admin.KeyService/GetKey"
-	KeyService_GetParentKeys_FullMethodName     = "/krypton.v1.admin.KeyService/GetParentKeys"
-	KeyService_GetDescendantKeys_FullMethodName = "/krypton.v1.admin.KeyService/GetDescendantKeys"
+	KeyService_AnnounceKey_FullMethodName       = "/krypton.v1.admin.keys.KeyService/AnnounceKey"
+	KeyService_GetKey_FullMethodName            = "/krypton.v1.admin.keys.KeyService/GetKey"
+	KeyService_GetParentKeys_FullMethodName     = "/krypton.v1.admin.keys.KeyService/GetParentKeys"
+	KeyService_GetDescendantKeys_FullMethodName = "/krypton.v1.admin.keys.KeyService/GetDescendantKeys"
 )
 
 // KeyServiceClient is the client API for KeyService service.
@@ -211,7 +211,7 @@ func _KeyService_GetDescendantKeys_Handler(srv interface{}, ctx context.Context,
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var KeyService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "krypton.v1.admin.KeyService",
+	ServiceName: "krypton.v1.admin.keys.KeyService",
 	HandlerType: (*KeyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

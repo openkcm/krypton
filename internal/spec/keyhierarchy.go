@@ -125,3 +125,15 @@ func (h KeyHierarchy) KindsBetween(start, end model.KeyKind) ([]KeySpec, error) 
 
 	return h.KeySpecs[startIdx : endIdx+1], nil
 }
+
+func (h KeyHierarchy) SegmentContains(seg HierarchySegment, kind model.KeyKind) bool {
+	start := h.IndexOf(model.KeyKind(seg.StartKind))
+	end := h.IndexOf(model.KeyKind(seg.EndKind))
+	idx := h.IndexOf(kind)
+
+	if start < 0 || end < 0 || idx < 0 {
+		return false
+	}
+
+	return idx >= start && idx <= end
+}

@@ -1,4 +1,4 @@
-package admin
+package keys
 
 import (
 	"github.com/openkcm/krypton/internal/clock"

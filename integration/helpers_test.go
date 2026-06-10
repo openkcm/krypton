@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 )
 
 // testEnvironment holds the shared infrastructure for tests that require root + agent.
@@ -269,7 +269,7 @@ func awaitKeyExists(t *testing.T, db *sql.DB, keyID, tenantID string, timeout ti
 
 // awaitKeyProcessingStatusViaGRPC polls the root admin gRPC API until the key's
 // processing status reaches expected. Fails the test if the timeout is exceeded.
-func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli admin.KeyServiceClient, keyID, tenantID, expected string, timeout time.Duration) {
+func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli keys.KeyServiceClient, keyID, tenantID, expected string, timeout time.Duration) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
@@ -279,7 +279,7 @@ func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli admin.KeyServiceClient, k
 	defer ticker.Stop()
 
 	for {
-		resp, err := cli.GetKey(ctx, &admin.GetKeyRequest{Id: keyID, TenantId: tenantID})
+		resp, err := cli.GetKey(ctx, &keys.GetKeyRequest{Id: keyID, TenantId: tenantID})
 		if err == nil && resp.GetKey().GetKeyProcessingState().GetStatus() == expected {
 			return
 		}
