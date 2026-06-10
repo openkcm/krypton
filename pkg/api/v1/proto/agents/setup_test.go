@@ -20,7 +20,9 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
@@ -142,12 +144,15 @@ func validRootConfig(agentName string) config.RootConfig {
 		},
 		KeyBindings: map[string]spec.KeyBinding{
 			"binding1": {
-				Vault: spec.VaultSpec{
-					Name: "vault1",
-					Type: spec.VaultTypeInMemory,
-					Config: &spec.InMemoryConfig{
-						Prefix: "vault1",
-					},
+				Vault: &spec.VaultSpec{
+					Name:   "vault1",
+					Type:   sqlitevault.TypeUnsafeMemory,
+					Config: &sqlitevault.UnsafeMemoryConfig{},
+				},
+				Cryptor: spec.CryptorSpec{
+					Name:   "test-cryptor",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.CryptorConfig{},
 				},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: agentName,

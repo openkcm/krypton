@@ -12,7 +12,15 @@ var (
 	ErrKeyNotFound = errors.New("key not found")
 	// ErrInvalidRequest is returned when a request contains invalid or missing parameters.
 	ErrInvalidRequest = errors.New("invalid request")
+	// ErrUnknownType is returned when a vault type is not recognized.
+	ErrUnknownType = errors.New("unknown vault type")
+	// ErrConfigInvalid is returned when a vault configuration is invalid.
+	ErrConfigInvalid = errors.New("invalid vault config")
 )
+
+type Config interface {
+	ValidateVaultConfig() error
+}
 
 // Vault provides secure storage and retrieval of versioned key material.
 type Vault interface {
@@ -22,6 +30,8 @@ type Vault interface {
 	DestroyKeyVersion(ctx context.Context, req DestroyKeyVersionRequest) (*DestroyKeyVersionResponse, error)
 	Info() Info
 }
+
+type Type string
 
 // ImportKeyRequest contains parameters for storing key material in the vault.
 type ImportKeyRequest struct {

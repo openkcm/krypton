@@ -12,6 +12,18 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
+const TypeHSM cryptor.Type = "hsm"
+
+// CryptorConfig is the configuration for the static-secret (HSM-simulated) cryptor.
+type CryptorConfig struct{}
+
+var _ cryptor.Config = (*CryptorConfig)(nil)
+
+func (c *CryptorConfig) ValidateCryptorConfig() error {
+	// TODO: validate
+	return nil
+}
+
 // StaticSecret is a [Cryptor] that wraps [AES256GCM] with a pre-configured key,
 // so callers don't need to supply secrets per-request. It rejects requests that
 // include a secret, and injects its own before delegating to the underlying cipher.

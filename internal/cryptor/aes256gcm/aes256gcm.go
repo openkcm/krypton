@@ -21,6 +21,18 @@ const (
 	cipherTextKey = "cipherText"
 )
 
+const TypeAES256GCM cryptor.Type = "aes256gcm"
+
+// CryptorConfig is the configuration for an AES-256-GCM cryptor.
+type CryptorConfig struct{}
+
+var _ cryptor.Config = (*CryptorConfig)(nil)
+
+func (c *CryptorConfig) ValidateCryptorConfig() error {
+	// TODO: validate
+	return nil
+}
+
 // AES256GCM implements the Cryptor interface using AES-256 in Galois/Counter Mode.
 // All key material and intermediate plaintext/ciphertext are handled in mlock'd
 // memory via securemem to prevent leakage into swap or core dumps.

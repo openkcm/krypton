@@ -4,12 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
+)
+
+const (
+	TypeUnsafe       vault.Type = "unsafe-sqlite"
+	TypeUnsafeMemory vault.Type = "unsafe-sqlite-memory"
 )
 
 // MemorySource is the data source for an in-memory SQLite database with shared cache,
@@ -40,9 +46,20 @@ type (
 
 	// DataSource specifies the connection target for a SQLite database.
 	DataSource string
+
+	UnsafeMemoryConfig struct{}
+
+	UnsafeConfig struct {
+		Path string `yaml:"path"`
+	}
 )
 
-var _ vault.Vault = &Unsafe{}
+var (
+	_ vault.Vault = &Unsafe{}
+
+	_ vault.Config = (*UnsafeConfig)(nil)
+	_ vault.Config = (*UnsafeMemoryConfig)(nil)
+)
 
 // NewUnsafe opens or creates an unencrypted SQLite vault at the given data source.
 func NewUnsafe(ctx context.Context, name string, source DataSource) (*Unsafe, error) {
@@ -166,17 +183,28 @@ func (u *Unsafe) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVers
 }
 
 func (u *Unsafe) Info() vault.Info {
-	source := "file"
+	vaultType := string(TypeUnsafe)
 	if u.source == MemorySource {
-		source = "memory"
+		vaultType = string(TypeUnsafeMemory)
 	}
 	return vault.Info{
 		Name: u.name,
-		Type: "sqlite:" + source,
+		Type: vaultType,
 	}
 }
 
 // Close closes the underlying database connection.
 func (u *Unsafe) Close() error {
 	return u.db.Close()
+}
+
+func (c *UnsafeConfig) ValidateVaultConfig() error {
+	if c.Path == "" {
+		return fmt.Errorf("path cannot be empty: %w", vault.ErrConfigInvalid)
+	}
+	return nil
+}
+
+func (c *UnsafeMemoryConfig) ValidateVaultConfig() error {
+	return nil
 }

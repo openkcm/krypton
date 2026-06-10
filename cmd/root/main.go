@@ -24,7 +24,9 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
@@ -46,6 +48,8 @@ func main() {
 	if dsn == "" {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
+
+	ctx := context.Background()
 
 	db, err := sql.Open("postgres", dsn)
 	handleErr(err, "failed to connect to database")
@@ -104,6 +108,10 @@ func main() {
 	// gRPC server setup for agent API
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
+	_, err = keyprocessor.NewRepository(ctx, cfg.Hierarchy, cfg.KeyBindings)
+	handleErr(err, "failed to initialize key processor repository")
+	// TODO: pass key processor repo to key service or intermediate key manager
+
 	// gRPC server setup for keys API
 	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore, tenantStore, cfg.Hierarchy, reconcilerMgr))
 
@@ -141,6 +149,9 @@ func loadConfig() *config.RootConfig {
 
 	rCfg, err := config.LoadRootConfig(path)
 	handleErr(err, "failed to load root config from "+path)
+
+	err = spec.ValidateTopologyAgainstHierarchy(rCfg.Hierarchy, rCfg.Topology, rCfg.Segment, rCfg.KeyBindings)
+	handleErr(err, "failed to validate root config")
 
 	return rCfg
 }

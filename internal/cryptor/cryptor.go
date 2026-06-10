@@ -91,6 +91,9 @@ type Decryptor interface {
 	Decrypt(ctx context.Context, req DecryptRequest) (*DecryptResponse, error)
 }
 
+// Type identifies a cryptor backend (e.g. "aes256gcm", "hsm").
+type Type string
+
 // Cryptor combines Encryptor and Decryptor with metadata introspection.
 type Cryptor interface {
 	Encryptor
@@ -98,7 +101,16 @@ type Cryptor interface {
 	Info() Info
 }
 
-var ErrRequest = errors.New("invalid cryptographic request")
+// Config is implemented by every cryptor backend's configuration struct.
+type Config interface {
+	ValidateCryptorConfig() error
+}
+
+var (
+	ErrRequest       = errors.New("invalid cryptographic request")
+	ErrUnknownType   = errors.New("unknown cryptor type")
+	ErrConfigInvalid = errors.New("invalid cryptor config")
+)
 
 func (req EncryptRequest) Validate() error {
 	if req.TenantID == "" {

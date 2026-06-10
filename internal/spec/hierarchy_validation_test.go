@@ -7,6 +7,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 )
 
 // testHierarchy returns a 5-key hierarchy: K0(root) → K1(kek) → K2(tek) → K3(kek) → K4(dek)
@@ -23,8 +24,12 @@ func testHierarchy() spec.KeyHierarchy {
 	}
 }
 
-func validVault() spec.VaultSpec {
-	return spec.VaultSpec{Name: "v", Type: "aws-kms"}
+func validVault() *spec.VaultSpec {
+	return &spec.VaultSpec{
+		Name:   "v",
+		Type:   sqlitevault.TypeUnsafeMemory,
+		Config: &sqlitevault.UnsafeMemoryConfig{},
+	}
 }
 
 func TestValidateSegmentAgainstHierarchy(t *testing.T) {

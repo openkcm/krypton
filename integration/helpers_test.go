@@ -88,17 +88,16 @@ selector_labels:
   environment: production
 key_bindings:
   K0:
-    vault:
-      name: root-hsm-vault
-      type: in-memory
-      config:
-        prefix: root-hsm
+    cryptor:
+      name: root-cryptor
+      type: hsm
   K1:
     vault:
       name: root-vault
-      type: in-memory
-      config:
-        prefix: root-kek
+      type: unsafe-sqlite-memory
+    cryptor:
+      name: root-cryptor
+      type: aes256gcm
     parent_key_provider:
       agent_name: root
 hierarchy:
@@ -134,17 +133,19 @@ topology:
         K2:
           vault:
             name: agent-vault
-            type: in-memory
-            config:
-              prefix: agent-tek
+            type: unsafe-sqlite-memory
+          cryptor:
+            name: agent-cryptor
+            type: aes256gcm
           parent_key_provider:
             agent_name: root
         K3:
           vault:
             name: agent-dek-vault
-            type: in-memory
-            config:
-              prefix: agent-dek
+            type: unsafe-sqlite-memory
+          cryptor:
+            name: agent-cryptor
+            type: hsm
       selector_labels:
         cloud: aws
 reconciler:
