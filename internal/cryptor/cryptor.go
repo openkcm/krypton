@@ -73,7 +73,7 @@ type DecryptResponse struct {
 	Plaintext *securemem.Data
 }
 
-// Info describes a Cryptor instance's identity and capabilities.
+// Info describes a Cryptor instance's capabilities.
 type Info struct {
 	// Name is a user-defined instance name from configuration.
 	Name string
