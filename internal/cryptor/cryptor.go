@@ -16,8 +16,8 @@ type KeyAlgorithm string
 // KeyAlgorithmAES256 represents the AES-256 encryption algorithm.
 const KeyAlgorithmAES256 KeyAlgorithm = "AES256"
 
-// InfoName identifies the type of information returned by the Info() method of a Cryptor.
-type InfoName string
+// Type identifies a cryptor implementation for configuration deserialization.
+type Type string
 
 // Secret pairs a key algorithm with its key material stored in secure memory.
 type Secret struct {
@@ -73,12 +73,20 @@ type DecryptResponse struct {
 	Plaintext *securemem.Data
 }
 
-// Info describes a Cryptor implementation's capabilities.
+// Info describes a Cryptor instance's identity and capabilities.
 type Info struct {
-	// Name is a human-readable identifier for the implementation.
-	Name InfoName
+	// Name is a user-defined instance name from configuration.
+	Name string
+	// Type identifies the cryptor implementation (e.g., "aes256gcm").
+	Type Type
 	// DecryptionSecretRequired is false if cryptor manages its own secret (e.g., HSM).
 	DecryptionSecretRequired bool
+}
+
+// Bundle pairs a Cryptor with an optional SecretGenerator for key material creation.
+type Bundle struct {
+	Cryptor         Cryptor
+	SecretGenerator SecretGenerator
 }
 
 // Encryptor performs encryption.
@@ -98,7 +106,16 @@ type Cryptor interface {
 	Info() Info
 }
 
-var ErrRequest = errors.New("invalid cryptographic request")
+// Config is implemented by cryptor-specific configuration structs to support validation.
+type Config interface {
+	ValidateCryptorConfig() error
+}
+
+var (
+	ErrRequest       = errors.New("invalid cryptographic request")
+	ErrUnknownType   = errors.New("unknown cryptor type")
+	ErrConfigInvalid = errors.New("invalid cryptor config")
+)
 
 func (req EncryptRequest) Validate() error {
 	if req.TenantID == "" {
