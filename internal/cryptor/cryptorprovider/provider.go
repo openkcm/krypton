@@ -19,6 +19,7 @@ var ErrCryptorNameEmpty = errors.New("cryptor name is empty")
 type Spec struct {
 	Name   string         `yaml:"name"`
 	Type   cryptor.Type   `yaml:"type"`
+	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
 	Config cryptor.Config `yaml:"-"`
 }
 

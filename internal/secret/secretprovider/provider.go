@@ -17,6 +17,7 @@ var ErrUnknownType = errors.New("unknown secret source type")
 // Spec describes which secret source implementation to use and how to configure it.
 type Spec struct {
 	Type   secret.Type   `yaml:"type"`
+	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
 	Config secret.Config `yaml:"-"`
 }
 
