@@ -17,8 +17,8 @@ var ErrCryptorNameEmpty = errors.New("cryptor name is empty")
 
 // Spec describes which cryptor implementation to use and how to configure it.
 type Spec struct {
-	Name   string         `yaml:"name"`
-	Type   cryptor.Type   `yaml:"type"`
+	Name string       `yaml:"name"`
+	Type cryptor.Type `yaml:"type"`
 	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
 	Config cryptor.Config `yaml:"-"`
 }
