@@ -115,35 +115,27 @@ func TestGetKeys(t *testing.T) {
 			assert.NoError(t, err, "command should succeed, output: %s", string(output))
 
 			actRes := decodeKeyTreeRow(t, output)
-			assert.Len(t, actRes, 12)
+			assert.Len(t, actRes, 8)
 
 			assert.Equal(t, "A", actRes[0].Name)
 			assert.Equal(t, hierarchy.root.Kind, actRes[0].Kind)
 
-			assert.Empty(t, actRes[1].Name)
+			assert.Equal(t, "B", actRes[1].Name)
+			assert.Equal(t, hierarchy.b.Kind, actRes[1].Kind)
+			assert.Equal(t, "C", actRes[2].Name)
+			assert.Equal(t, hierarchy.c.Kind, actRes[2].Kind)
 
-			assert.Equal(t, "B", actRes[2].Name)
-			assert.Equal(t, hierarchy.b.Kind, actRes[2].Kind)
-			assert.Equal(t, "C", actRes[3].Name)
-			assert.Equal(t, hierarchy.c.Kind, actRes[3].Kind)
+			assert.Equal(t, "D", actRes[3].Name)
+			assert.Equal(t, hierarchy.d.Kind, actRes[3].Kind)
+			assert.Equal(t, "E", actRes[4].Name)
+			assert.Equal(t, hierarchy.e.Kind, actRes[4].Kind)
+			assert.Equal(t, "F", actRes[5].Name)
+			assert.Equal(t, hierarchy.f.Kind, actRes[5].Kind)
+			assert.Equal(t, "G", actRes[6].Name)
+			assert.Equal(t, hierarchy.g.Kind, actRes[6].Kind)
 
-			assert.Empty(t, actRes[4].Name)
-
-			assert.Equal(t, "D", actRes[5].Name)
-			assert.Equal(t, hierarchy.d.Kind, actRes[5].Kind)
-			assert.Equal(t, "E", actRes[6].Name)
-			assert.Equal(t, hierarchy.e.Kind, actRes[6].Kind)
-			assert.Equal(t, "F", actRes[7].Name)
-			assert.Equal(t, hierarchy.f.Kind, actRes[7].Kind)
-			assert.Equal(t, "G", actRes[8].Name)
-			assert.Equal(t, hierarchy.g.Kind, actRes[8].Kind)
-
-			assert.Empty(t, actRes[9].Name)
-
-			assert.Equal(t, "H", actRes[10].Name)
-			assert.Equal(t, hierarchy.h.Kind, actRes[10].Kind)
-
-			assert.Empty(t, actRes[11].Name)
+			assert.Equal(t, "H", actRes[7].Name)
+			assert.Equal(t, hierarchy.h.Kind, actRes[7].Kind)
 		})
 
 		t.Run("should fail if no descendant keys exist", func(t *testing.T) {

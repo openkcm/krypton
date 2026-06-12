@@ -124,7 +124,10 @@ func getKeyDescendantsCmd() *cobra.Command {
 			totalLen := 0
 			trees := resp.GetKeyTree()
 			for i := range trees {
-				totalLen += len(trees[i].GetKeys()) + 1
+				totalLen += len(trees[i].GetKeys())
+				if !asJSON {
+					totalLen++
+				}
 			}
 
 			treeRows := make([]keyTreeRow, 0, totalLen)
@@ -132,7 +135,9 @@ func getKeyDescendantsCmd() *cobra.Command {
 				for _, k := range tree.GetKeys() {
 					treeRows = append(treeRows, newKeyTreeRow(k))
 				}
-				treeRows = append(treeRows, keyTreeRow{}) // add empty row for space between layers
+				if !asJSON {
+					treeRows = append(treeRows, keyTreeRow{}) // add empty row for space between layers
+				}
 			}
 
 			builder, err := output.From(treeRows)
