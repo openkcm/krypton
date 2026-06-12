@@ -19,7 +19,6 @@ func TestNewAgentConfig(t *testing.T) {
 		},
 		KeyBindings: map[string]spec.KeyBinding{
 			"binding1": {
-				Vault:             spec.VaultSpec{},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{},
 			},
 		},

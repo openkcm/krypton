@@ -9,17 +9,11 @@ key_bindings:
   K0:
     vault:
       name: root-hsm-vault
-      type: in-memory
-      config:
-        prefix: root-hsm
+      type: unsafe-sqlite-memory
   K1:
     vault:
       name: root-vault
-      type: in-memory
-      config:
-        prefix: root-kek
-    parent_key_provider:
-      agent_name: root
+      type: unsafe-sqlite-memory
 hierarchy:
   name: production-hierarchy
   key_specs:
@@ -53,17 +47,13 @@ topology:
         K2:
           vault:
             name: agent-vault
-            type: in-memory
-            config:
-              prefix: agent-tek
+            type: unsafe-sqlite-memory
           parent_key_provider:
             agent_name: root
         K3:
           vault:
             name: agent-dek-vault
-            type: in-memory
-            config:
-              prefix: agent-dek
+            type: unsafe-sqlite-memory
       selector_labels:
         cloud: aws
 reconciler:

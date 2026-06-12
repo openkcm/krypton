@@ -33,9 +33,8 @@ type (
 	// It stores key material in plaintext and is intended for local development and
 	// testing only. Do not use in production.
 	Unsafe struct {
-		name   string
-		source DataSource
-		db     *sql.DB
+		info vault.Info
+		db   *sql.DB
 	}
 
 	// DataSource specifies the connection target for a SQLite database.
@@ -54,10 +53,16 @@ func NewUnsafe(ctx context.Context, name string, source DataSource) (*Unsafe, er
 	if err != nil {
 		return nil, err
 	}
+	t := TypeUnsafe
+	if source == MemorySource {
+		t = TypeUnsafeMemory
+	}
 	v := &Unsafe{
-		name:   name,
-		source: source,
-		db:     db,
+		info: vault.Info{
+			Name: name,
+			Type: t,
+		},
+		db: db,
 	}
 	err = v.migrate(ctx)
 	if err != nil {
@@ -166,14 +171,7 @@ func (u *Unsafe) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVers
 }
 
 func (u *Unsafe) Info() vault.Info {
-	source := "file"
-	if u.source == MemorySource {
-		source = "memory"
-	}
-	return vault.Info{
-		Name: u.name,
-		Type: "sqlite:" + source,
-	}
+	return u.info
 }
 
 // Close closes the underlying database connection.

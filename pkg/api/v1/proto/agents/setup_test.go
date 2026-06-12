@@ -142,13 +142,6 @@ func validRootConfig(agentName string) config.RootConfig {
 		},
 		KeyBindings: map[string]spec.KeyBinding{
 			"binding1": {
-				Vault: spec.VaultSpec{
-					Name: "vault1",
-					Type: spec.VaultTypeInMemory,
-					Config: &spec.InMemoryConfig{
-						Prefix: "vault1",
-					},
-				},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: agentName,
 				},

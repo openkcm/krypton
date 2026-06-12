@@ -22,11 +22,8 @@ func validRootConfig() *RootConfig {
 		},
 		SelectorLabels: spec.SelectorLabels{"env": "prod"},
 		KeyBindings: map[string]spec.KeyBinding{
-			"K0": {
-				Vault: spec.VaultSpec{Name: "v", Type: "aws-kms"},
-			},
+			"K0": {},
 			"K1": {
-				Vault:             spec.VaultSpec{Name: "v2", Type: "open-bao"},
 				ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
 			},
 		},
@@ -109,7 +106,7 @@ func TestValidateRootConfig(t *testing.T) {
 								EndKind:   "K3",
 							},
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
+								"K2": {},
 							},
 						},
 					},
@@ -166,8 +163,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K1", EndKind: "K2"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K1": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
-					"K2": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+					"K1": {},
+					"K2": {},
 				}
 				c.Topology = spec.Topology{}
 			},
@@ -186,8 +183,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
-					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+					"K0": {},
+					"K1": {},
 				}
 				c.Topology = spec.Topology{}
 			},
@@ -206,8 +203,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
-					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+					"K0": {},
+					"K1": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
 					Segments: []spec.TopologySegment{
@@ -215,7 +212,7 @@ func TestValidateRootConfig(t *testing.T) {
 							Name:    "agent-bad",
 							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"}, // K2 is dek, not tek
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K2": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							},
 						},
 					},
@@ -237,8 +234,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {Vault: spec.VaultSpec{Name: "v", Type: "t"}},
-					"K1": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+					"K0": {},
+					"K1": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
 					Segments: []spec.TopologySegment{
@@ -246,8 +243,8 @@ func TestValidateRootConfig(t *testing.T) {
 							Name:    "agent-aws",
 							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {Vault: spec.VaultSpec{Name: "v", Type: "t"}, ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
-								"K3": {Vault: spec.VaultSpec{Name: "v2", Type: "t"}},
+								"K2": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K3": {},
 							},
 						},
 					},
@@ -327,11 +324,11 @@ key_bindings:
   K0:
     vault:
       name: "root-hsm-vault"
-      type: "open-bao"
+      type: "unsafe-sqlite-memory"
   K1:
     vault:
       name: "root-vault"
-      type: "open-bao"
+      type: "unsafe-sqlite-memory"
     parent_key_provider:
       agent_name: "root"
 hierarchy:
@@ -381,13 +378,13 @@ topology:
         K2:
           vault:
             name: "aws-vault"
-            type: "open-bao"
+            type: "unsafe-sqlite-memory"
           parent_key_provider:
             agent_name: "root"
         K3:
           vault:
             name: "aws-dek-vault"
-            type: "in-memory"
+            type: "unsafe-sqlite-memory"
       selector_labels:
         cloud: "aws"
 reconciler:
@@ -415,8 +412,8 @@ reconciler:
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
 				assert.Len(t, cfg.KeyBindings, 2)
-				assert.Equal(t, "root-hsm-vault", cfg.KeyBindings["K0"].Vault.Name)
-				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].Vault.Name)
+				assert.Equal(t, "root-hsm-vault", cfg.KeyBindings["K0"].VaultSpec.Name)
+				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].VaultSpec.Name)
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
 				assert.Equal(t, "production-hierarchy", cfg.Hierarchy.Name)
 				assert.Len(t, cfg.Hierarchy.KeySpecs, 4)
@@ -444,7 +441,7 @@ key_bindings:
   K0:
     vault:
       name: "vault"
-      type: "open-bao"
+      type: "unsafe-sqlite-memory"
 hierarchy:
   name: "h"
   key_specs:
