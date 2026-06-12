@@ -84,7 +84,6 @@ func (s *Spec) Validate() error {
 func GetBundle(ctx context.Context, spec Spec) (cryptor.Bundle, error) {
 	switch c := spec.Config.(type) {
 	case *aes256gcm.Config:
-		_ = c // no config fields to use
 		return cryptor.Bundle{
 			Cryptor:         aes256gcm.New(spec.Name),
 			SecretGenerator: cryptor.NewAES256SecretGenerator(),
