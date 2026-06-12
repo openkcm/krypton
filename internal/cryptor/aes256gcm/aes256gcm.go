@@ -14,12 +14,27 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
+// TypeAES256GCM identifies the AES-256-GCM cryptor implementation.
+const TypeAES256GCM cryptor.Type = "aes256gcm"
+
 const (
 	// plainTextKey is the vault key used to store decrypted plaintext in secure memory.
 	plainTextKey = "plainText"
 	// cipherTextKey is the vault key used to store encrypted ciphertext in secure memory.
 	cipherTextKey = "cipherText"
 )
+
+// KeySize is the required key size in bytes for AES-256.
+const KeySize = 32
+
+// Config holds configuration for the AES-256-GCM cryptor.
+type Config struct{}
+
+var _ cryptor.Config = (*Config)(nil)
+
+func (c *Config) ValidateCryptorConfig() error {
+	return nil
+}
 
 // AES256GCM implements the Cryptor interface using AES-256 in Galois/Counter Mode.
 // All key material and intermediate plaintext/ciphertext are handled in mlock'd
@@ -30,18 +45,16 @@ type AES256GCM struct {
 
 var _ cryptor.Cryptor = &AES256GCM{}
 
-// InfoNameAES256GCM indicates that the Cryptor supports AES-256 in Galois/Counter Mode (GCM).
-const InfoNameAES256GCM cryptor.InfoName = "AES256-GCM"
-
 // ErrAllocatedDataNotFound indicates that data reserved in the secure memory vault
 // could not be retrieved after the cryptographic operation completed.
 var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 
-// New returns a ready-to-use AES-256-GCM cryptor.
-func New() *AES256GCM {
+// New returns a ready-to-use AES-256-GCM cryptor with the given instance name.
+func New(name string) *AES256GCM {
 	return &AES256GCM{
 		info: cryptor.Info{
-			Name:                     InfoNameAES256GCM,
+			Name:                     name,
+			Type:                     TypeAES256GCM,
 			DecryptionSecretRequired: true,
 		},
 	}
@@ -67,8 +80,8 @@ func (a *AES256GCM) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*c
 	}
 
 	secretSize := len(req.Secret.Data.SecureBytes())
-	if secretSize != 32 {
-		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, cryptor.ErrRequest)
+	if secretSize != KeySize {
+		return nil, fmt.Errorf("invalid key size: expected %d bytes, got %d: %w", KeySize, secretSize, cryptor.ErrRequest)
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
@@ -141,8 +154,8 @@ func (a *AES256GCM) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*c
 	}
 
 	secretSize := len(req.Secret.Data.SecureBytes())
-	if secretSize != 32 {
-		return nil, fmt.Errorf("invalid key size: expected 32 bytes, got %d: %w", secretSize, cryptor.ErrRequest)
+	if secretSize != KeySize {
+		return nil, fmt.Errorf("invalid key size: expected %d bytes, got %d: %w", KeySize, secretSize, cryptor.ErrRequest)
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {

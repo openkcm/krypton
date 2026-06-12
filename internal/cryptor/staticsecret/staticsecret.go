@@ -9,8 +9,23 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 )
+
+// TypeStaticSecret identifies the static-secret cryptor implementation.
+const TypeStaticSecret cryptor.Type = "aes256gcm-staticsecret"
+
+// Config holds configuration for the static-secret cryptor.
+type Config struct {
+	Secret secretprovider.Spec `yaml:"secret"`
+}
+
+var _ cryptor.Config = (*Config)(nil)
+
+func (c *Config) ValidateCryptorConfig() error {
+	return c.Secret.Validate()
+}
 
 // StaticSecret is a [Cryptor] that wraps [AES256GCM] with a pre-configured key,
 // so callers don't need to supply secrets per-request. It rejects requests that
@@ -30,25 +45,23 @@ var ErrInitializationFailed = errors.New("static secret initialization failed")
 
 var _ cryptor.Cryptor = &StaticSecret{}
 
-// InfoNameStaticSecret indicates a Cryptor that manages its own static key material.
-const InfoNameStaticSecret cryptor.InfoName = "AES256-GCM-STATIC-SECRET"
-
-// New returns a StaticSecret for the given algorithm name and key material.
-// Currently only [InfoNameStaticSecret] is supported. The secret must be non-nil and non-empty.
-func New(name cryptor.InfoName, secret *securemem.Data) (*StaticSecret, error) {
-	if name != InfoNameStaticSecret {
-		return nil, fmt.Errorf("unsupported algorithm name: %s: %w", name, ErrInitializationFailed)
+// New returns a StaticSecret with the given instance name and key material.
+// The secret must be non-nil and exactly 32 bytes (AES-256).
+func New(name string, secret *securemem.Data) (*StaticSecret, error) {
+	if name == "" {
+		return nil, fmt.Errorf("name must not be empty: %w", ErrInitializationFailed)
 	}
 
-	if secret == nil || len(secret.SecureBytes()) != 32 {
+	if secret == nil || len(secret.SecureBytes()) != aes256gcm.KeySize {
 		return nil, fmt.Errorf("invalid secret: %w", ErrInitializationFailed)
 	}
 
 	return &StaticSecret{
 		secret:    secret,
-		aes256gcm: aes256gcm.New(),
+		aes256gcm: aes256gcm.New(name),
 		info: cryptor.Info{
 			Name:                     name,
+			Type:                     TypeStaticSecret,
 			DecryptionSecretRequired: false,
 		},
 	}, nil
