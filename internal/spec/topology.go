@@ -71,6 +71,16 @@ type Topology struct {
 	Segments []TopologySegment `yaml:"segments"` // List of agent segments (0 to N agents)
 }
 
+func (t *Topology) GetSegemntByName(name string) *TopologySegment {
+	for _, seg := range t.Segments {
+		if seg.Name == name {
+			return &seg
+		}
+	}
+
+	return nil
+}
+
 func (hs *HierarchySegment) Validate() error {
 	// NOTE: we dont have key kinds defined yet but when we do we should validate that EndKind > StartKind.
 	// So key kind should implement some sort of comparable interface.

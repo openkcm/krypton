@@ -27,9 +27,11 @@ import (
 	"github.com/openkcm/krypton/internal/reconciler"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
+	"github.com/openkcm/krypton/pkg/validator"
 )
 
 // Simple krypton server for manual testing and development.
@@ -63,6 +65,8 @@ func main() {
 	agentStore := storesql.NewAgentStore(db)
 	keyStore := storesql.NewKeyStore(db)
 
+	keyValidator := validator.NewValidator(cfg.Name, cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
+
 	// orbital reconciler setup
 	orbitalStore, err := orbitalstore.New(context.Background(), db)
 	handleErr(err, "failed to create orbital store")
@@ -86,7 +90,7 @@ func main() {
 		&cfg.Reconciler,
 		repo,
 		targetProvider,
-		[]reconciler.JobHandler{announcekey.NewJobHandler(keyStore)},
+		[]reconciler.JobHandler{announcekey.NewJobHandler(keyStore, keyValidator)},
 		reconcilerOpts...,
 	)
 	handleErr(err, "failed to create reconciler manager")
@@ -105,7 +109,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	admin.RegisterKeyServiceServer(grpcServer, admin.NewKeyService(keyStore, tenantStore, cfg.Hierarchy, reconcilerMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyValidator, reconcilerMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")

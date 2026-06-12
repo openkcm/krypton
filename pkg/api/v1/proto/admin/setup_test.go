@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -20,13 +19,9 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/openkcm/krypton/internal/cryptor"
-	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
-	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
-	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 var pgConnStr string
@@ -98,66 +93,6 @@ func setupTenantServerAndClient(t *testing.T, store store.Tenant) admin.TenantSe
 	return admin.NewTenantServiceClient(conn)
 }
 
-// defaultTestHierarchy mirrors the K0(root) → K1(kek) → K2(tek) → K3(dek)
-// hierarchy used by the existing fixture builders below.
-func defaultTestHierarchy() spec.KeyHierarchy {
-	return spec.KeyHierarchy{
-		Name: "test-hierarchy",
-		KeySpecs: []spec.KeySpec{
-			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
-		},
-	}
-}
-
-// setupKeyServerAndClient wires KeyService against the given DB using the
-// default test hierarchy and a noop job preparer that assigns deterministic
-// job IDs.
-func setupKeyServerAndClient(t *testing.T, db *sql.DB) admin.KeyServiceClient {
-	t.Helper()
-	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{})
-}
-
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer admin.JobPreparer) admin.KeyServiceClient {
-	t.Helper()
-
-	keyStore := storesql.NewKeyStore(db)
-	tenantStore := storesql.NewTenantStore(db)
-
-	srv := grpc.NewServer()
-	admin.RegisterKeyServiceServer(srv, admin.NewKeyService(keyStore, tenantStore, hierarchy, preparer))
-
-	const bufSize = 1024 * 1024
-	lis := bufconn.Listen(bufSize)
-	go func() {
-		if err := srv.Serve(lis); err != nil {
-			assert.Fail(t, "key service server error", err)
-		}
-	}()
-	dialer := func(context.Context, string) (net.Conn, error) {
-		return lis.Dial()
-	}
-
-	t.Cleanup(func() {
-		srv.GracefulStop()
-	})
-
-	conn, err := grpc.NewClient(
-		"passthrough:///bufconn",
-		grpc.WithContextDialer(dialer),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		conn.Close()
-	})
-
-	return admin.NewKeyServiceClient(conn)
-}
-
 func createDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 	ctx := t.Context()
@@ -203,37 +138,4 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 	dt, ok := dts[0].(*proto.ErrorDetails)
 	require.True(t, ok, "expected error details of type proto.ErrorDetails")
 	assert.Equal(t, expCode, dt.GetCode())
-}
-
-func createTenant(t *testing.T, db *sql.DB) model.Tenant {
-	t.Helper()
-	ctx := t.Context()
-	tenantStore := storesql.NewTenantStore(db)
-	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
-	result, err := tenantStore.CreateTenant(ctx, store.CreateTenantQuery{Tenant: tenant})
-	require.NoError(t, err)
-	return result.Tenant
-}
-
-type noopJobPreparer struct{}
-
-func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil {
-		job.ID = uuid.Must(uuid.NewUUID())
-	}
-	return job, nil
-}
-
-// spyJobPreparer records each orbital.Job it sees and behaves like
-// noopJobPreparer otherwise.
-type spyJobPreparer struct {
-	jobs []orbital.Job
-}
-
-func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil {
-		job.ID = uuid.Must(uuid.NewUUID())
-	}
-	s.jobs = append(s.jobs, job)
-	return job, nil
 }

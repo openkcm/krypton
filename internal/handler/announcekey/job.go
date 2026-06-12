@@ -12,47 +12,63 @@ import (
 
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
+	"github.com/openkcm/krypton/pkg/validator"
 )
 
 type JobHandler struct {
-	keyStore store.Key
+	keyValidator validator.KeyValidator
+	keyStore     store.Key
 }
 
-func NewJobHandler(keyStore store.Key) *JobHandler {
-	return &JobHandler{keyStore: keyStore}
+func NewJobHandler(keyStore store.Key, keyValidator validator.KeyValidator) *JobHandler {
+	return &JobHandler{keyStore: keyStore, keyValidator: keyValidator}
 }
 
 func (h *JobHandler) JobType() string {
 	return JobType
 }
 
-// ConfirmJob is the second commit in the orbital double-commit pattern. It
-// only confirms the job if the key exists in pre-activation lifecycle and is
-// linked to *this* job's ID via KeyProcessingState — i.e. AnnounceKey wrote
-// the linkage successfully and no later announce has rotated the JobID.
+// ConfirmJob checks that the key is present in the database and still valid.
+// If everything is valid it confirms the job otherwise it cancels the job and marks the key as filed.
+// If a job is stale it does not update the key status.
 func (h *JobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return orbital.CancelJobConfirmer(fmt.Sprintf("invalid job data: %v", err)), nil
 	}
 
+	// @TODO: should be performed in a transaction
 	key, err := h.keyStore.GetKeyByID(ctx, data.KeyID, data.TenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrKeyNotFound) {
-			// ConfirmJob is idempotent and orbital will eventually
-			// time out the job if the key never lands.
 			return orbital.ContinueJobConfirmer(), nil
 		}
 		return nil, fmt.Errorf("confirm job: %w", err)
+	}
+
+	if key.KeyProcessingState.JobID != job.ID.String() {
+		return orbital.CancelJobConfirmer("stale job: key is linked to a different job"), nil
 	}
 
 	if key.LifeCycleState != model.KeyLifeCyclePreActivation {
 		return orbital.CancelJobConfirmer(fmt.Sprintf("key not in pre-activation: %s", key.LifeCycleState)), nil
 	}
 
-	if key.KeyProcessingState.Status != model.KeyProcessingInProgress ||
-		key.KeyProcessingState.JobID != job.ID.String() {
-		return orbital.CancelJobConfirmer("key not linked to this job"), nil
+	if vErr := h.keyValidator.ValidateAnnounceKey(ctx, validator.AnnounceInput{
+		TenantID:   data.TenantID,
+		KeyKind:    data.Kind,
+		Name:       data.Name,
+		ParentID:   data.ParentID,
+		TargetName: data.Target,
+	}); vErr != nil {
+		if err := h.markProcessing(ctx, job, model.KeyProcessingFailed); err != nil {
+			return nil, err
+		}
+		return orbital.CancelJobConfirmer(fmt.Sprintf("announce no longer valid: %v", vErr)), nil
+	}
+
+	if err := h.markProcessing(ctx, job, model.KeyProcessingInProgress); err != nil {
+		return nil, err
 	}
 
 	return orbital.CompleteJobConfirmer(), nil
@@ -83,10 +99,10 @@ func (h *JobHandler) OnJobFailed(ctx context.Context, job orbital.Job) error {
 
 func (h *JobHandler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "announce-key job canceled", "jobID", job.ID)
-	return h.markProcessing(ctx, job, model.KeyProcessingFailed)
+	return nil
 }
 
-func (h *JobHandler) markProcessing(ctx context.Context, job orbital.Job, status string) error {
+func (h *JobHandler) markProcessing(ctx context.Context, job orbital.Job, status model.KeyProcessingStatus) error {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return fmt.Errorf("unmarshal job data: %w", err)

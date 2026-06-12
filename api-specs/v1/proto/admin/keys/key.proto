@@ -1,9 +1,9 @@
 syntax = "proto3";
 
 
-package krypton.v1.admin;
+package krypton.v1.admin.keys;
 
-option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin";
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys";
 
 service KeyService {
   rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
@@ -74,4 +74,3 @@ message KeyTree {
 message GetDescendantKeysResponse {
   repeated KeyTree key_tree = 1;
 }
-

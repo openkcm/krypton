@@ -9,9 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
+	"github.com/openkcm/krypton/pkg/validator"
 )
 
 func TestGetKeys(t *testing.T) {
@@ -20,9 +23,19 @@ func TestGetKeys(t *testing.T) {
 	tenantStore := newTenantStore(t, testDB)
 	keyStore := newKeyStore(t, testDB)
 
+	hierarchySpec := defaultTestHierarchy()
+	topology := spec.Topology{
+		Segments: []spec.TopologySegment{
+			{Name: "root", Segment: spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}},
+			{Name: "agent", Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}},
+		},
+	}
+	rootSegment := spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
+	keyValidator := validator.NewValidator("root", rootSegment, topology, hierarchySpec, tenantStore, keyStore)
+
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		admin.RegisterKeyServiceServer(srv, admin.NewKeyService(keyStore, tenantStore, defaultTestHierarchy(), &noopJobPreparer{}))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", keyStore, keyValidator, &noopJobPreparer{}))
 	})
 
 	// create tenant
