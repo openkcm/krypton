@@ -54,6 +54,6 @@ type UpdateKeyLifeCycleStateQuery struct {
 type UpdateKeyProcessingStateQuery struct {
 	ID        string
 	TenantID  string
-	NewStatus string
+	NewStatus model.KeyProcessingStatus
 	NewJobID  string
 }

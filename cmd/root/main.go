@@ -65,7 +65,7 @@ func main() {
 	agentStore := storesql.NewAgentStore(db)
 	keyStore := storesql.NewKeyStore(db)
 
-	keyValidator := validator.NewValidator(cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
+	keyValidator := validator.NewValidator(cfg.Name, cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
 
 	// orbital reconciler setup
 	orbitalStore, err := orbitalstore.New(context.Background(), db)

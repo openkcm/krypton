@@ -78,16 +78,19 @@ func defaultTestHierarchy() spec.KeyHierarchy {
 	}
 }
 
-// defaultTestTopology pairs with defaultTestHierarchy and exposes two
-// segments: "root" (K0..K0) and "agent" (K1..K3).
+// defaultTestTopology pairs with defaultTestHierarchy and exposes the
+// "agent" segment (K1..K3). The root is configured separately via
+// testRootName + testRootSegment, mirroring how RootConfig keeps the
+// root's segment outside Topology.Segments in production.
 func defaultTestTopology() spec.Topology {
 	return spec.Topology{
 		Segments: []spec.TopologySegment{
-			{Name: testRootName, Segment: spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}},
 			{Name: testAgentName, Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}},
 		},
 	}
 }
+
+var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 
 const (
 	testRootName  = "root"
@@ -107,7 +110,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 
 	keyStore := storesql.NewKeyStore(db)
 	tenantStore := storesql.NewTenantStore(db)
-	v := validator.NewValidator(defaultTestTopology(), hierarchy, tenantStore, keyStore)
+	v := validator.NewValidator(testRootName, testRootSegment, defaultTestTopology(), hierarchy, tenantStore, keyStore)
 
 	srv := grpc.NewServer()
 	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, keyStore, v, preparer))

@@ -10,10 +10,12 @@ import (
 )
 
 type keyValidator struct {
-	tenants   store.Tenant
-	keys      store.Key
-	topology  spec.Topology
-	hierarchy spec.KeyHierarchy
+	rootName    string
+	rootSegment spec.HierarchySegment
+	tenants     store.Tenant
+	keys        store.Key
+	topology    spec.Topology
+	hierarchy   spec.KeyHierarchy
 }
 
 var (
@@ -31,12 +33,14 @@ var (
 	ErrParentKeyAdjecency         = errors.New("key is not adjecent to parent key")
 )
 
-func NewValidator(topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
+func NewValidator(rootName string, rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
 	return &keyValidator{
-		topology:  topology,
-		hierarchy: hierarchy,
-		tenants:   tenants,
-		keys:      keys,
+		rootName:    rootName,
+		rootSegment: rootSegment,
+		topology:    topology,
+		hierarchy:   hierarchy,
+		tenants:     tenants,
+		keys:        keys,
 	}
 }
 
@@ -80,13 +84,18 @@ func (v *keyValidator) ValidateAnnounceKey(ctx context.Context, input AnnounceIn
 		return ve
 	}
 
-	topologySegment := v.topology.GetSegemntByName(input.TargetName)
-	if topologySegment == nil {
-		ve.code, ve.err = FailedCondition, ErrTargetNotInTopolgy
-		return ve
+	segment := v.rootSegment
+	if input.TargetName != v.rootName {
+		topologySegment := v.topology.GetSegemntByName(input.TargetName)
+		if topologySegment == nil {
+			ve.code, ve.err = FailedCondition, ErrTargetNotInTopolgy
+			return ve
+		}
+
+		segment = topologySegment.Segment
 	}
 
-	if !v.hierarchy.SegmentContains(topologySegment.Segment, keySpec.Kind) {
+	if !v.hierarchy.SegmentContains(segment, keySpec.Kind) {
 		ve.code, ve.err = FailedCondition, ErrTargetDoesNotManageKeyKind
 		return ve
 	}

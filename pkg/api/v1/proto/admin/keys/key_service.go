@@ -119,17 +119,25 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		return &AnnounceKeyResponse{Key: KeyToProto(newKey)}, nil
 	}
 
-	// key exssist but our announce data doesn't match
-	if !existing.Equals(&newKey) {
-		return nil, proto.ErrDetailsWithCode(
+	// key already exists so we retry
+	if err := s.retryAnnounce(ctx, existing, &newKey); err != nil {
+		return nil, err
+	}
+
+	return &AnnounceKeyResponse{Key: KeyToProto(*existing)}, nil
+}
+
+func (s *KeyService) retryAnnounce(ctx context.Context, existing, newKey *model.Key) error {
+	if !existing.IsSame(newKey) {
+		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, conflictingKeyErrMsg),
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
 
 	// idempotent if key is was already announced successfully or still being processed
-	if existing.KeyProcessingState.Status == model.KeyProcessingInProgress || existing.KeyProcessingState.Status == model.KeyProcessingCompleted {
-		return &AnnounceKeyResponse{Key: KeyToProto(*existing)}, nil
+	if existing.KeyProcessingState.Status.IsOneOf(model.KeyProcessingInProgress, model.KeyProcessingCompleted) {
+		return nil
 	}
 
 	// we are only here when we had a non root managed key whose job is still pending/failed
@@ -141,9 +149,10 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		// @TODO: drop this branch once transactions land and Pending is moved
 		// into the idempotent short-circuit above.
 		if errors.Is(err, orbital.ErrJobAlreadyExists) {
-			return &AnnounceKeyResponse{Key: KeyToProto(*existing)}, nil
+			return nil
 		}
-		return nil, proto.ErrDetailsWithCode(
+
+		return proto.ErrDetailsWithCode(
 			status.New(codes.Internal, fmt.Sprintf("failed to create job, err: %v", err)),
 			proto.Code_ERROR_CODE_RETRY,
 		)
@@ -155,7 +164,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		NewStatus: model.KeyProcessingPending,
 		NewJobID:  job.ID.String(),
 	}); err != nil {
-		return nil, proto.ErrDetailsWithCode(
+		return proto.ErrDetailsWithCode(
 			status.New(codes.Internal, fmt.Sprintf("failed to update key with job id, err: %v", err)),
 			proto.Code_ERROR_CODE_RETRY,
 		)
@@ -166,7 +175,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		JobID:  job.ID.String(),
 	}
 
-	return &AnnounceKeyResponse{Key: KeyToProto(*existing)}, nil
+	return nil
 }
 
 func (s *KeyService) prepareJob(ctx context.Context, key *model.Key) (orbital.Job, error) {

@@ -30,7 +30,8 @@ func TestGetKeys(t *testing.T) {
 			{Name: "agent", Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}},
 		},
 	}
-	keyValidator := validator.NewValidator(topology, hierarchySpec, tenantStore, keyStore)
+	rootSegment := spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
+	keyValidator := validator.NewValidator("root", rootSegment, topology, hierarchySpec, tenantStore, keyStore)
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))

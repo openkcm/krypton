@@ -25,16 +25,22 @@ const (
 // KeyProcessingState captures the state of asynchronous work performed on a
 // key (e.g. announce-key reconciliation).
 type KeyProcessingState struct {
-	Status string `json:"status"`
-	JobID  string `json:"job_id,omitempty"`
+	Status KeyProcessingStatus `json:"status"`
+	JobID  string              `json:"job_id,omitempty"`
 }
 
+type KeyProcessingStatus string
+
 const (
-	KeyProcessingPending    = "pending"
-	KeyProcessingInProgress = "in-progress"
-	KeyProcessingCompleted  = "completed"
-	KeyProcessingFailed     = "failed"
+	KeyProcessingPending    KeyProcessingStatus = "pending"
+	KeyProcessingInProgress KeyProcessingStatus = "in-progress"
+	KeyProcessingCompleted  KeyProcessingStatus = "completed"
+	KeyProcessingFailed     KeyProcessingStatus = "failed"
 )
+
+func (s KeyProcessingStatus) IsOneOf(statuses ...KeyProcessingStatus) bool {
+	return slices.Contains(statuses, s)
+}
 
 type Key struct {
 	ID                 string             `json:"id"`
@@ -50,7 +56,10 @@ type Key struct {
 	UpdatedAt          clock.UnixNano     `json:"updated_at"`
 }
 
-func (k *Key) Equals(other *Key) bool {
+func (k *Key) IsSame(other *Key) bool {
+	if k == nil || other == nil {
+		return false
+	}
 	if !equalStringPtr(k.ParentID, other.ParentID) {
 		return false
 	}

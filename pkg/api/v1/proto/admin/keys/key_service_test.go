@@ -93,7 +93,7 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "root", res.GetKey().GetManagedBy())
 		assert.Equal(t, "pre-activation", res.GetKey().GetLifeCycleState())
 		// Root-managed keys do not need a job — persisted as Completed immediately.
-		assert.Equal(t, model.KeyProcessingCompleted, res.GetKey().GetKeyProcessingState().GetStatus())
+		assert.Equal(t, string(model.KeyProcessingCompleted), res.GetKey().GetKeyProcessingState().GetStatus())
 		assert.Empty(t, res.GetKey().GetKeyProcessingState().GetJobId())
 		assert.Equal(t, tenant.ID, res.GetKey().GetTenantId())
 		assert.Equal(t, "prod", res.GetKey().GetLabels()["env"])
@@ -337,7 +337,7 @@ func TestAnnounceKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, key.ID, resp.GetKey().GetId(), "retry must reuse the existing key.ID")
-		assert.Equal(t, model.KeyProcessingPending, resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.Equal(t, string(model.KeyProcessingPending), resp.GetKey().GetKeyProcessingState().GetStatus())
 		assert.NotEmpty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
 		assert.NotEqual(t, failedJobID, resp.GetKey().GetKeyProcessingState().GetJobId(), "retry must produce a new job ID")
 
@@ -384,7 +384,7 @@ func TestAnnounceKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Empty(t, spy.jobs, "root-managed announce must not enqueue a job")
-		assert.Equal(t, model.KeyProcessingCompleted, resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.Equal(t, string(model.KeyProcessingCompleted), resp.GetKey().GetKeyProcessingState().GetStatus())
 		assert.Empty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
 	})
 
@@ -435,7 +435,7 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, key.ID, resp.GetKey().GetId(), "pending re-attempt must reuse the existing key.ID")
-		assert.Equal(t, model.KeyProcessingPending, resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.Equal(t, string(model.KeyProcessingPending), resp.GetKey().GetKeyProcessingState().GetStatus())
 		assert.NotEmpty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
 
 		require.Len(t, spy.jobs, 1)

@@ -102,7 +102,7 @@ func (h *JobHandler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
 	return nil
 }
 
-func (h *JobHandler) markProcessing(ctx context.Context, job orbital.Job, status string) error {
+func (h *JobHandler) markProcessing(ctx context.Context, job orbital.Job, status model.KeyProcessingStatus) error {
 	var data TaskData
 	if err := json.Unmarshal(job.Data, &data); err != nil {
 		return fmt.Errorf("unmarshal job data: %w", err)

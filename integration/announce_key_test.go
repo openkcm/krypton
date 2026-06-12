@@ -18,6 +18,30 @@ func TestAnnounceKey(t *testing.T) {
 	tenantCli := admin.NewTenantServiceClient(env.Conn)
 	keyCli := keypb.NewKeyServiceClient(env.Conn)
 
+	t.Run("should announce root-managed key without enqueuing a job", func(t *testing.T) {
+		ctx := t.Context()
+
+		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
+			Name: "announce-root-test-" + uuid.NewString(),
+		})
+		require.NoError(t, err)
+		tenantID := tenantResp.GetTenant().GetId()
+
+		keyName := "root-key-" + uuid.NewString()
+		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
+			TenantId:   tenantID,
+			Kind:       "K0",
+			Name:       keyName,
+			TargetName: "root",
+			Labels:     map[string]string{"cloud": "aws"},
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, "root", resp.GetKey().GetManagedBy())
+		assert.Equal(t, "completed", resp.GetKey().GetKeyProcessingState().GetStatus())
+		assert.Empty(t, resp.GetKey().GetKeyProcessingState().GetJobId())
+	})
+
 	t.Run("should announce key to agent and complete job", func(t *testing.T) {
 		ctx := t.Context()
 

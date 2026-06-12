@@ -20,7 +20,7 @@ func KeyToProto(k model.Key) *Key {
 		Labels:         k.Labels,
 		LifeCycleState: string(k.LifeCycleState),
 		KeyProcessingState: &KeyProcessingState{
-			Status: k.KeyProcessingState.Status,
+			Status: string(k.KeyProcessingState.Status),
 			JobId:  k.KeyProcessingState.JobID,
 		},
 		CreatedAt: int64(k.CreatedAt),
@@ -51,7 +51,7 @@ func KeyFromProto(k *Key) model.Key {
 	}
 	processingState := model.KeyProcessingState{}
 	if ps := k.GetKeyProcessingState(); ps != nil {
-		processingState.Status = ps.GetStatus()
+		processingState.Status = model.KeyProcessingStatus(ps.GetStatus())
 		processingState.JobID = ps.GetJobId()
 	}
 	return model.Key{

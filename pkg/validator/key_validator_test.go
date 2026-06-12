@@ -48,11 +48,14 @@ func testHierarchy() spec.KeyHierarchy {
 func testTopology() spec.Topology {
 	return spec.Topology{
 		Segments: []spec.TopologySegment{
-			{Name: "agent-root", Segment: spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}},
 			{Name: "agent-derived", Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K2"}},
 		},
 	}
 }
+
+const testRootName = "root"
+
+var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 
 func tenantFound() store.Tenant {
 	return &stubTenantStore{
@@ -182,7 +185,7 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 		},
 		{
 			name:     "root key with parentID is rejected",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "agent-root", ParentID: "some-parent"},
+			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: testRootName, ParentID: "some-parent"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrRootKeyParent,
@@ -237,16 +240,24 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 		},
 		{
 			name:    "valid root key with empty parentID",
-			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "agent-root", ParentID: ""},
+			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: testRootName, ParentID: ""},
 			tenants: tenantFound(),
 			keys:    &stubKeyStore{},
 			wantErr: nil,
+		},
+		{
+			name:     "rootName target does not manage non-root kind",
+			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: testRootName, ParentID: "parent-id"},
+			tenants:  tenantFound(),
+			keys:     &stubKeyStore{},
+			wantErr:  validator.ErrTargetDoesNotManageKeyKind,
+			wantCode: codes.FailedPrecondition,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			v := validator.NewValidator(testTopology(), testHierarchy(), tc.tenants, tc.keys)
+			v := validator.NewValidator(testRootName, testRootSegment, testTopology(), testHierarchy(), tc.tenants, tc.keys)
 
 			ve := v.ValidateAnnounceKey(t.Context(), tc.input)
 
