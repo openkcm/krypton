@@ -350,7 +350,7 @@ func TestUnsafe_Info(t *testing.T) {
 
 		// then
 		assert.Equal(t, "test", info.Name)
-		assert.Equal(t, "sqlite:memory", info.Type)
+		assert.Equal(t, sqlitevault.TypeUnsafeMemory, info.Type)
 	})
 
 	t.Run("file source", func(t *testing.T) {
@@ -367,7 +367,7 @@ func TestUnsafe_Info(t *testing.T) {
 
 		// then
 		assert.Equal(t, "file-vault", info.Name)
-		assert.Equal(t, "sqlite:file", info.Type)
+		assert.Equal(t, sqlitevault.TypeUnsafe, info.Type)
 	})
 }
 

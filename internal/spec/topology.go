@@ -4,15 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
 
 var (
 	ErrStartKindEmpty              = errors.New("start kind cannot be empty")
 	ErrEndKindEmpty                = errors.New("end kind cannot be empty")
-	ErrVaultConfigMissing          = errors.New("vault configuration missing for key binding")
-	ErrVaultNameEmpty              = errors.New("vault name cannot be empty")
-	ErrVaultTypeEmpty              = errors.New("vault type cannot be empty")
 	ErrParentKeyProviderAgentEmpty = errors.New("parent key provider agent name cannot be empty")
 	ErrAgentNameEmpty              = errors.New("agent name cannot be empty")
 	ErrKeyBindingsEmpty            = errors.New("key bindings cannot be empty")
@@ -20,14 +17,6 @@ var (
 
 // SelectorLabels is a key-value map for metadata
 type SelectorLabels map[string]string
-
-// VaultType defines the type of vault (e.g., "open-bao", "aws-kms", "gcp-kms")
-type VaultType string
-
-const (
-	VaultTypeInMemory VaultType = "in-memory"
-	VaultTypeOpenBAO  VaultType = "open-bao"
-)
 
 // HierarchySegment represents a contiguous range of key kinds in the hierarchy
 type HierarchySegment struct {
@@ -40,21 +29,9 @@ type ParentKeyProviderRef struct {
 	AgentName string `yaml:"agent_name"` // Agent name that provides parent keys
 }
 
-var (
-	_ yaml.Unmarshaler = (*VaultSpec)(nil)
-	_ yaml.Marshaler   = VaultSpec{}
-)
-
-// VaultSpec holds storage backend configuration
-type VaultSpec struct {
-	Name   string      `yaml:"name"` // Vault identifier
-	Type   VaultType   `yaml:"type"` // Vault type (e.g., "open-bao", "aws-kms", "gcp-kms")
-	Config VaultConfig `yaml:"-"`    // Decoded vault config (not from YAML)
-}
-
 // KeyBinding encapsulates all dependencies needed to implement a key kind
 type KeyBinding struct {
-	Vault             VaultSpec             `yaml:"vault"`                         // Storage backend configuration
+	VaultSpec         *vaultprovider.Spec   `yaml:"vault,omitempty"`               // Storage backend configuration
 	ParentKeyProvider *ParentKeyProviderRef `yaml:"parent_key_provider,omitempty"` // Where to get parent keys for unwrapping
 }
 
@@ -95,14 +72,10 @@ func (hs *HierarchySegment) Validate() error {
 }
 
 func (kb *KeyBinding) Validate() error {
-	if kb.Vault.Name == "" && kb.Vault.Type == "" {
-		return ErrVaultConfigMissing
-	}
-	if kb.Vault.Name == "" {
-		return ErrVaultNameEmpty
-	}
-	if kb.Vault.Type == "" {
-		return ErrVaultTypeEmpty
+	if kb.VaultSpec != nil {
+		if err := kb.VaultSpec.Validate(); err != nil {
+			return err
+		}
 	}
 	if kb.ParentKeyProvider != nil && kb.ParentKeyProvider.AgentName == "" {
 		return ErrParentKeyProviderAgentEmpty
@@ -132,50 +105,5 @@ func (t *Topology) Validate() error {
 			return fmt.Errorf("segment at index %d: %w", i, err)
 		}
 	}
-	return nil
-}
-
-// MarshalYAML implements [yaml.Marshaler].
-// Required because Config is tagged yaml:"-" to prevent interface decode issues.
-func (v VaultSpec) MarshalYAML() (any, error) {
-	type alias VaultSpec
-	return struct {
-		alias `yaml:",inline"`
-
-		Config VaultConfig `yaml:"config"`
-	}{
-		alias:  alias(v),
-		Config: v.Config,
-	}, nil
-}
-
-// UnmarshalYAML implements [yaml.Unmarshaler].
-func (v *VaultSpec) UnmarshalYAML(node *yaml.Node) error {
-	type alias VaultSpec
-	var raw struct {
-		alias `yaml:",inline"`
-
-		Config yaml.Node `yaml:"config"`
-	}
-	if err := node.Decode(&raw); err != nil {
-		return fmt.Errorf("failed to decode vault spec: %w", err)
-	}
-
-	var config VaultConfig
-	switch raw.Type {
-	case VaultTypeOpenBAO:
-		config = &OpenBAOConfig{}
-	case VaultTypeInMemory:
-		config = &InMemoryConfig{}
-	default:
-		return fmt.Errorf("unsupported vault type '%s': %w", raw.Type, ErrVaultConfigInvalid)
-	}
-
-	if err := raw.Config.Decode(config); err != nil {
-		return fmt.Errorf("failed to decode vault config: %w", err)
-	}
-
-	*v = VaultSpec(raw.alias)
-	v.Config = config
 	return nil
 }
