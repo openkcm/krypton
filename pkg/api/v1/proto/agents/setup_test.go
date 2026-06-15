@@ -20,6 +20,8 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
@@ -132,6 +134,14 @@ func createDatabase(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
+func validCryptorSpec() cryptorprovider.Spec {
+	return cryptorprovider.Spec{
+		Name:   "test-crypto",
+		Type:   aes256gcm.TypeAES256GCM,
+		Config: &aes256gcm.Config{},
+	}
+}
+
 func validRootConfig(agentName string) config.RootConfig {
 	expSegment := spec.TopologySegment{
 		Name:           agentName,
@@ -142,6 +152,7 @@ func validRootConfig(agentName string) config.RootConfig {
 		},
 		KeyBindings: map[string]spec.KeyBinding{
 			"binding1": {
+				CryptorSpec: validCryptorSpec(),
 				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: agentName,
 				},

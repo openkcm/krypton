@@ -5,10 +5,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
+
+func validCryptorSpec() cryptorprovider.Spec {
+	return cryptorprovider.Spec{
+		Name:   "test-crypto",
+		Type:   aes256gcm.TypeAES256GCM,
+		Config: &aes256gcm.Config{},
+	}
+}
 
 func TestValidateHierarchySegment(t *testing.T) {
 	tests := []struct {
@@ -79,6 +89,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "valid binding with all fields",
 			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
@@ -92,6 +103,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "valid binding without parent key provider",
 			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
@@ -100,8 +112,31 @@ func TestValidateKeyBinding(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name: "valid binding with cryptor spec only (no vault)",
+			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
+			},
+			wantErr: nil,
+		},
+		{
+			name: "empty cryptor spec name",
+			binding: KeyBinding{
+				CryptorSpec: cryptorprovider.Spec{
+					Name:   "",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name: "my-vault",
+					Type: sqlitevault.TypeUnsafeMemory,
+				},
+			},
+			wantErr: cryptorprovider.ErrCryptorNameEmpty,
+		},
+		{
 			name: "empty vault name",
 			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "",
 					Type: sqlitevault.TypeUnsafeMemory,
@@ -112,6 +147,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "empty vault type",
 			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: "",
@@ -122,6 +158,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		{
 			name: "empty parent key provider agent name",
 			binding: KeyBinding{
+				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
@@ -149,6 +186,7 @@ func TestValidateKeyBinding(t *testing.T) {
 func TestValidateTopologySegment(t *testing.T) {
 	validKeyBindings := map[string]KeyBinding{
 		"K2": {
+			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
 				Name: "vault-k2",
 				Type: "aws-kms",
@@ -263,6 +301,7 @@ func TestValidateTopologySegment(t *testing.T) {
 func TestValidateTopology(t *testing.T) {
 	validKeyBindings := map[string]KeyBinding{
 		"K2": {
+			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
 				Name: "vault-k2",
 				Type: "aws-kms",

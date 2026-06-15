@@ -8,9 +8,19 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 )
+
+func validCryptorSpec() cryptorprovider.Spec {
+	return cryptorprovider.Spec{
+		Name:   "test-crypto",
+		Type:   aes256gcm.TypeAES256GCM,
+		Config: &aes256gcm.Config{},
+	}
+}
 
 func validRootConfig() *RootConfig {
 	return &RootConfig{
@@ -22,8 +32,9 @@ func validRootConfig() *RootConfig {
 		},
 		SelectorLabels: spec.SelectorLabels{"env": "prod"},
 		KeyBindings: map[string]spec.KeyBinding{
-			"K0": {},
+			"K0": {CryptorSpec: validCryptorSpec()},
 			"K1": {
+				CryptorSpec:       validCryptorSpec(),
 				ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
 			},
 		},
@@ -106,7 +117,7 @@ func TestValidateRootConfig(t *testing.T) {
 								EndKind:   "K3",
 							},
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {},
+								"K2": {CryptorSpec: validCryptorSpec()},
 							},
 						},
 					},
@@ -163,8 +174,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K1", EndKind: "K2"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K1": {},
-					"K2": {},
+					"K1": {CryptorSpec: validCryptorSpec()},
+					"K2": {CryptorSpec: validCryptorSpec()},
 				}
 				c.Topology = spec.Topology{}
 			},
@@ -183,8 +194,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {},
-					"K1": {},
+					"K0": {CryptorSpec: validCryptorSpec()},
+					"K1": {CryptorSpec: validCryptorSpec()},
 				}
 				c.Topology = spec.Topology{}
 			},
@@ -203,8 +214,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {},
-					"K1": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+					"K0": {CryptorSpec: validCryptorSpec()},
+					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
 					Segments: []spec.TopologySegment{
@@ -212,7 +223,7 @@ func TestValidateRootConfig(t *testing.T) {
 							Name:    "agent-bad",
 							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"}, // K2 is dek, not tek
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K2": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							},
 						},
 					},
@@ -234,8 +245,8 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {},
-					"K1": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+					"K0": {CryptorSpec: validCryptorSpec()},
+					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
 					Segments: []spec.TopologySegment{
@@ -243,8 +254,8 @@ func TestValidateRootConfig(t *testing.T) {
 							Name:    "agent-aws",
 							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
 							KeyBindings: map[string]spec.KeyBinding{
-								"K2": {ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
-								"K3": {},
+								"K2": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K3": {CryptorSpec: validCryptorSpec()},
 							},
 						},
 					},
@@ -322,10 +333,16 @@ selector_labels:
   environment: "production"
 key_bindings:
   K0:
+    crypto:
+      name: "root-crypto"
+      type: "aes256gcm"
     vault:
       name: "root-hsm-vault"
       type: "unsafe-sqlite-memory"
   K1:
+    crypto:
+      name: "kek-crypto"
+      type: "aes256gcm"
     vault:
       name: "root-vault"
       type: "unsafe-sqlite-memory"
@@ -376,12 +393,18 @@ topology:
         end_kind: "K3"
       key_bindings:
         K2:
+          crypto:
+            name: "tek-crypto"
+            type: "aes256gcm"
           vault:
             name: "aws-vault"
             type: "unsafe-sqlite-memory"
           parent_key_provider:
             agent_name: "root"
         K3:
+          crypto:
+            name: "dek-crypto"
+            type: "aes256gcm"
           vault:
             name: "aws-dek-vault"
             type: "unsafe-sqlite-memory"
@@ -412,6 +435,7 @@ reconciler:
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
 				assert.Len(t, cfg.KeyBindings, 2)
+				assert.Equal(t, "root-crypto", cfg.KeyBindings["K0"].CryptorSpec.Name)
 				assert.Equal(t, "root-hsm-vault", cfg.KeyBindings["K0"].VaultSpec.Name)
 				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].VaultSpec.Name)
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
@@ -439,6 +463,9 @@ segment:
   end_kind: "K1"
 key_bindings:
   K0:
+    crypto:
+      name: "test-crypto"
+      type: "aes256gcm"
     vault:
       name: "vault"
       type: "unsafe-sqlite-memory"

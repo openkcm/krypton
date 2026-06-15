@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
 
@@ -31,6 +32,7 @@ type ParentKeyProviderRef struct {
 
 // KeyBinding encapsulates all dependencies needed to implement a key kind
 type KeyBinding struct {
+	CryptorSpec       cryptorprovider.Spec  `yaml:"crypto"`
 	VaultSpec         *vaultprovider.Spec   `yaml:"vault,omitempty"`               // Storage backend configuration
 	ParentKeyProvider *ParentKeyProviderRef `yaml:"parent_key_provider,omitempty"` // Where to get parent keys for unwrapping
 }
@@ -72,6 +74,10 @@ func (hs *HierarchySegment) Validate() error {
 }
 
 func (kb *KeyBinding) Validate() error {
+	if err := kb.CryptorSpec.Validate(); err != nil {
+		return err
+	}
+
 	if kb.VaultSpec != nil {
 		if err := kb.VaultSpec.Validate(); err != nil {
 			return err
