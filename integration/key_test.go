@@ -204,16 +204,19 @@ type keyTreeRow struct {
 	Status    string
 }
 
-// keyHierarchy holds a test key tree with the following structure:
+// keyHierarchy holds a test key tree with 8 keys across 4 levels (K0-K3).
+// Each key is assigned to a different managing agent to test cross-agent hierarchy traversal.
 //
-//	A(K0)
-//	  B(K1)
-//	    D(K2)
-//	    E(K2)
-//	  C(K1)
-//	    F(K2)
-//	    G(K2)
-//	      H(K3)
+// Tree structure:
+//
+//	A (K0, root)
+//	├── B (K1, root)
+//	│   ├── D (K2, agent-aws)
+//	│   └── E (K2, agent-azure)
+//	└── C (K1, root)
+//	    ├── F (K2, agent-gcp)
+//	    └── G (K2, agent-onprem)
+//	        └── H (K3, agent-onprem-2)
 type keyHierarchy struct {
 	root model.Key // A
 	b    model.Key
@@ -225,17 +228,9 @@ type keyHierarchy struct {
 	h    model.Key
 }
 
-// createKeyHierarchy sets up a test key hierarchy with 8 keys across 4 levels and returns the created keys for reference in tests.
-// keyHierarchy holds a test key tree with the following structure:
-//
-//	A(K0)
-//	  B(K1)
-//	    D(K2)
-//	    E(K2)
-//	  C(K1)
-//	    F(K2)
-//	    G(K2)
-//	      H(K3)
+// createKeyHierarchy creates 8 keys forming the tree documented on [keyHierarchy].
+// All keys start in pre-activation state with no labels. Each key is assigned to a distinct
+// managing agent to support integration tests for cross-agent key distribution and hierarchy queries.
 func createKeyHierarchy(t *testing.T, keyStore store.Key, tenantID string) keyHierarchy {
 	t.Helper()
 	ctx := t.Context()

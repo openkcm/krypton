@@ -18,6 +18,7 @@ type Key interface {
 	GetKeyByName(ctx context.Context, query GetKeyByNameQuery) (*model.Key, error)
 	GetParentKeys(ctx context.Context, query GetParentKeysQuery) (GetParentKeysResult, error)
 	GetDescendantKeys(ctx context.Context, query GetDescendantKeysQuery) (GetDescendantKeysResult, error)
+	ListKeys(ctx context.Context, query ListKeysQuery) (ListKeysResult, error)
 	UpdateKeyLifeCycleState(ctx context.Context, query UpdateKeyLifeCycleStateQuery) error
 	UpdateKeyProcessingState(ctx context.Context, query UpdateKeyProcessingStateQuery) error
 }
@@ -43,6 +44,23 @@ type GetDescendantKeysQuery struct {
 
 type GetDescendantKeysResult struct {
 	KeyTree model.KeyTreeTraverser
+}
+
+type ListKeysQuery struct {
+	TenantID              string
+	Name                  string
+	Kind                  model.KeyKind
+	State                 model.KeyLifeCycleState
+	ManagedBy             string
+	Labels                model.Labels
+	IsOrderByCreatedAtAsc bool
+	Cursor                string
+	Limit                 int
+}
+
+type ListKeysResult struct {
+	Keys   []model.Key
+	Cursor string
 }
 
 type UpdateKeyLifeCycleStateQuery struct {

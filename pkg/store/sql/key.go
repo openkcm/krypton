@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
 
@@ -215,43 +217,102 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	return store.GetDescendantKeysResult{KeyTree: layers}, nil
 }
 
-func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
-	var key model.Key
-	var labelsData []byte
-	var processingJobID sql.NullString
+func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (store.ListKeysResult, error) {
+	params := make([]any, 0, 12)
+	nextParam := func(vals ...any) string {
+		placeholders := make([]string, len(vals))
+		for i, v := range vals {
+			params = append(params, v)
+			placeholders[i] = fmt.Sprintf("$%d", len(params))
+		}
+		return strings.Join(placeholders, ", ")
+	}
 
-	err := row.Scan(
-		&key.ID,
-		&key.TenantID,
-		&key.Kind,
-		&key.Name,
-		&key.ParentID,
-		&key.ManagedBy,
-		&labelsData,
-		&key.LifeCycleState,
-		&key.KeyProcessingState.Status,
-		&processingJobID,
-		&key.CreatedAt,
-		&key.UpdatedAt,
-	)
+	var q strings.Builder
+
+	fmt.Fprintf(&q, `SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at 
+	FROM keys 
+	WHERE tenant_id = %s `, nextParam(query.TenantID))
+
+	if query.Kind != "" {
+		fmt.Fprintf(&q, "AND kind = %s ", nextParam(query.Kind))
+	}
+
+	if query.State != "" {
+		fmt.Fprintf(&q, "AND life_cycle_state = %s ", nextParam(query.State))
+	}
+
+	if query.Name != "" {
+		fmt.Fprintf(&q, "AND name ILIKE %s ", nextParam("%"+query.Name+"%"))
+	}
+
+	if query.ManagedBy != "" {
+		fmt.Fprintf(&q, "AND managed_by = %s ", nextParam(query.ManagedBy))
+	}
+
+	for k, v := range query.Labels {
+		labelJSON, err := json.Marshal(map[string]string{k: v})
+		if err != nil {
+			return store.ListKeysResult{}, err
+		}
+		fmt.Fprintf(&q, "AND labels @> %s::jsonb ", nextParam(string(labelJSON)))
+	}
+
+	if query.Cursor != "" {
+		cursor, err := DecodeCursor(query.Cursor)
+		if err != nil {
+			return store.ListKeysResult{}, fmt.Errorf("invalid cursor: %w", err)
+		}
+		op := "<"
+		if query.IsOrderByCreatedAtAsc {
+			op = ">"
+		}
+		fmt.Fprintf(&q, "AND (created_at, id) %s (%s) ", op, nextParam(cursor.CreatedAt, cursor.ID))
+	}
+
+	if query.IsOrderByCreatedAtAsc {
+		q.WriteString("ORDER BY created_at ASC, id ASC ")
+	} else {
+		q.WriteString("ORDER BY created_at DESC, id DESC ")
+	}
+
+	pageSize := query.Limit
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	fetchLimit := pageSize + 1
+
+	fmt.Fprintf(&q, "LIMIT %s ", nextParam(fetchLimit))
+
+	rows, err := ks.db.QueryContext(ctx, q.String(), params...)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, store.ErrKeyNotFound
+		return store.ListKeysResult{}, err
+	}
+	defer rows.Close()
+
+	keys := make([]model.Key, 0, fetchLimit)
+	for rows.Next() {
+		key, err := scanKey(rows)
+		if err != nil {
+			return store.ListKeysResult{}, err
 		}
-		return nil, err
+		keys = append(keys, *key)
+	}
+	if err := rows.Err(); err != nil {
+		return store.ListKeysResult{}, err
 	}
 
-	if processingJobID.Valid {
-		key.KeyProcessingState.JobID = processingJobID.String
-	}
-
-	if len(labelsData) > 0 {
-		if err := json.Unmarshal(labelsData, &key.Labels); err != nil {
-			return nil, err
+	var cursor string
+	if len(keys) == fetchLimit {
+		last := keys[pageSize-1]
+		cursor, err = NewCursor(last.ID, last.CreatedAt).Encode()
+		if err != nil {
+			return store.ListKeysResult{}, err
 		}
+		keys = keys[:pageSize]
 	}
 
-	return &key, nil
+	return store.ListKeysResult{Keys: keys, Cursor: cursor}, nil
 }
 
 func (ks *KeyStore) UpdateKeyLifeCycleState(ctx context.Context, query store.UpdateKeyLifeCycleStateQuery) error {
@@ -301,4 +362,43 @@ func nullableJobID(jobID string) any {
 		return nil
 	}
 	return jobID
+}
+
+func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
+	var key model.Key
+	var labelsData []byte
+	var processingJobID sql.NullString
+
+	err := row.Scan(
+		&key.ID,
+		&key.TenantID,
+		&key.Kind,
+		&key.Name,
+		&key.ParentID,
+		&key.ManagedBy,
+		&labelsData,
+		&key.LifeCycleState,
+		&key.KeyProcessingState.Status,
+		&processingJobID,
+		&key.CreatedAt,
+		&key.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrKeyNotFound
+		}
+		return nil, err
+	}
+
+	if processingJobID.Valid {
+		key.KeyProcessingState.JobID = processingJobID.String
+	}
+
+	if len(labelsData) > 0 {
+		if err := json.Unmarshal(labelsData, &key.Labels); err != nil {
+			return nil, err
+		}
+	}
+
+	return &key, nil
 }
