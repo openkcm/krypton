@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"testing"
 
 	"github.com/google/uuid"
@@ -15,19 +16,27 @@ import (
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-// keyHierarchy holds a test key tree with the following structure:
+// keyHierarchy holds a test key tree with 10 keys across 4 levels (K0-K3).
+// Each key has a distinct lifecycle state, managing agent, and labels to enable
+// targeted filtering, lifecycle transition, and hierarchy traversal tests.
 //
-//	A(K0)
-//	  B(K1)
-//	    D(K2)
-//	    E(K2)
-//	  C(K1)
-//	    F(K2)
-//	    G(K2)
-//	      H(K3)
+// Tree structure:
+//
+//	A (K0, root, active, cloud=gcp)
+//	├── aB (K1, root, pre-activation, cloud=gcp)
+//	├── BA (K1, root, pre-activation, cloud=aws1)
+//	├── B (K1, root, active, cloud=gcp)
+//	│   ├── D (K2, agent-aws, suspended, cloud=aws)
+//	│   └── E (K2, agent-azure, pre-activation, cloud=azure, environment=prod)
+//	└── C (K1, root, pre-activation, cloud=azure)
+//	    ├── F (K2, agent-gcp, pre-activation, cloud=aws, environment=prod)
+//	    └── G (K2, agent-onprem, pre-activation, cloud=azure)
+//	        └── H (K3, agent-onprem-2, pre-activation, cloud=aws)
 type keyHierarchy struct {
 	tenant model.Tenant
 	root   model.Key // A
+	ab     model.Key // aB
+	ba     model.Key // BA
 	b      model.Key
 	c      model.Key
 	d      model.Key
@@ -457,14 +466,16 @@ func TestGetDescendantKeys(t *testing.T) {
 				require.Len(t, layer, 1)                // depth 0: A
 				assert.Equal(t, k.root.ID, layer[0].ID) // A
 			case 1:
-				require.Len(t, layer, 2)             // depth 1: B, C
-				assert.Equal(t, k.b.ID, layer[0].ID) // B
-				assert.Equal(t, k.c.ID, layer[1].ID) // C
+				require.Len(t, layer, 4)              // depth 1: AB,BA, B, C
+				assert.Equal(t, k.ab.ID, layer[0].ID) // AB
+				assert.Equal(t, k.ba.ID, layer[1].ID) // BA
+				assert.Equal(t, k.b.ID, layer[2].ID)  // B
+				assert.Equal(t, k.c.ID, layer[3].ID)  // C
 			case 2:
 				require.Len(t, layer, 4)             // depth 2: D, E, F, G
+				assert.Equal(t, k.f.ID, layer[2].ID) // F
 				assert.Equal(t, k.d.ID, layer[0].ID) // D
 				assert.Equal(t, k.e.ID, layer[1].ID) // E
-				assert.Equal(t, k.f.ID, layer[2].ID) // F
 				assert.Equal(t, k.g.ID, layer[3].ID) // G
 			case 3:
 				require.Len(t, layer, 1)             // depth 3: H
@@ -547,50 +558,361 @@ func TestGetDescendantKeys(t *testing.T) {
 	})
 }
 
-// createKeyHierarchy sets up a test key hierarchy with 8 keys across 4 levels and returns the created keys for reference in tests.
-// keyHierarchy holds a test key tree with the following structure:
-//
-//	A(K0)
-//	  B(K1)
-//	    D(K2)
-//	    E(K2)
-//	  C(K1)
-//	    F(K2)
-//	    G(K2)
-//	      H(K3)
+func TestListKeys(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	h := createKeyHierarchy(t, keyStore, tenantStore)
+
+	t.Run("should list all keys in descending order", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, IsOrderByCreatedAtAsc: false}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 10)
+		assert.Equal(t, h.h.ID, result.Keys[0].ID)    // H
+		assert.Equal(t, h.g.ID, result.Keys[1].ID)    // G
+		assert.Equal(t, h.f.ID, result.Keys[2].ID)    // F
+		assert.Equal(t, h.e.ID, result.Keys[3].ID)    // E
+		assert.Equal(t, h.d.ID, result.Keys[4].ID)    // D
+		assert.Equal(t, h.c.ID, result.Keys[5].ID)    // C
+		assert.Equal(t, h.b.ID, result.Keys[6].ID)    // B
+		assert.Equal(t, h.ba.ID, result.Keys[7].ID)   // BA
+		assert.Equal(t, h.ab.ID, result.Keys[8].ID)   // AB
+		assert.Equal(t, h.root.ID, result.Keys[9].ID) // A
+	})
+
+	t.Run("should list all keys in ascending order", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, IsOrderByCreatedAtAsc: true}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 10)
+		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
+		assert.Equal(t, h.ab.ID, result.Keys[1].ID)   // AB
+		assert.Equal(t, h.ba.ID, result.Keys[2].ID)   // BA
+		assert.Equal(t, h.b.ID, result.Keys[3].ID)    // B
+		assert.Equal(t, h.c.ID, result.Keys[4].ID)    // C
+		assert.Equal(t, h.d.ID, result.Keys[5].ID)    // D
+		assert.Equal(t, h.e.ID, result.Keys[6].ID)    // E
+		assert.Equal(t, h.f.ID, result.Keys[7].ID)    // F
+		assert.Equal(t, h.g.ID, result.Keys[8].ID)    // G
+		assert.Equal(t, h.h.ID, result.Keys[9].ID)    // H
+	})
+
+	t.Run("pagination", func(t *testing.T) {
+		t.Run("should paginate through all pages in descending order", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{TenantID: h.tenant.ID, Limit: 3}
+
+			// when
+			result, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 3)
+
+			assert.Equal(t, h.h.ID, result.Keys[0].ID) // H
+			assert.Equal(t, h.g.ID, result.Keys[1].ID) // G
+			assert.Equal(t, h.f.ID, result.Keys[2].ID) // F
+			assert.NotEmpty(t, result.Cursor)
+
+			query.Cursor = result.Cursor
+			result, err = keyStore.ListKeys(ctx, query)
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 3)
+			assert.Equal(t, h.e.ID, result.Keys[0].ID) // E
+			assert.Equal(t, h.d.ID, result.Keys[1].ID) // D
+			assert.Equal(t, h.c.ID, result.Keys[2].ID) // C
+			assert.NotEmpty(t, result.Cursor)
+
+			query.Cursor = result.Cursor
+			result, err = keyStore.ListKeys(ctx, query)
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 3)
+			assert.Equal(t, h.b.ID, result.Keys[0].ID)  // B
+			assert.Equal(t, h.ba.ID, result.Keys[1].ID) // BA
+			assert.Equal(t, h.ab.ID, result.Keys[2].ID) // AB
+			assert.NotEmpty(t, result.Cursor)
+
+			query.Cursor = result.Cursor
+			result, err = keyStore.ListKeys(ctx, query)
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 1)
+			assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
+			assert.Empty(t, result.Cursor)
+		})
+
+		t.Run("should return empty cursor when limit equals total records", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{TenantID: h.tenant.ID, Limit: 10}
+
+			// when
+			result, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 10)
+			assert.Empty(t, result.Cursor)
+		})
+
+		t.Run("should return empty cursor when limit exceeds total records", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{TenantID: h.tenant.ID, Limit: 20}
+
+			// when
+			result, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 10)
+			assert.Empty(t, result.Cursor)
+		})
+
+		t.Run("should return empty cursor when limit is negative as default limit is 50", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{TenantID: h.tenant.ID, Limit: -1}
+
+			// when
+			result, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 10)
+			assert.Empty(t, result.Cursor)
+		})
+
+		t.Run("should return empty cursor when limit is zero as default limit is 50", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{TenantID: h.tenant.ID, Limit: 0}
+
+			// when
+			result, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, result.Keys, 10)
+			assert.Empty(t, result.Cursor)
+		})
+
+		t.Run("should return error for tampered cursor", func(t *testing.T) {
+			// given
+			query := store.ListKeysQuery{
+				TenantID: h.tenant.ID,
+				Cursor:   base64.RawURLEncoding.EncodeToString([]byte("{not json")),
+			}
+
+			// when
+			_, err := keyStore.ListKeys(ctx, query)
+
+			// then
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid cursor")
+		})
+	})
+
+	t.Run("should return empty list for tenant with no keys", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+		query := store.ListKeysQuery{TenantID: tenant.ID}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, result.Keys)
+	})
+
+	t.Run("should filter by kind", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, Kind: "K1"}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 4)
+		assert.Equal(t, h.ab.ID, result.Keys[3].ID) // AB
+		assert.Equal(t, h.ba.ID, result.Keys[2].ID) // BA
+		assert.Equal(t, h.b.ID, result.Keys[1].ID)  // B
+		assert.Equal(t, h.c.ID, result.Keys[0].ID)  // C
+	})
+
+	t.Run("should filter by lifecycle state", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, State: model.KeyLifeCycleSuspended}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 1)
+		assert.Equal(t, h.d.ID, result.Keys[0].ID) // D
+	})
+
+	t.Run("should filter by managing agent", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, ManagedBy: "agent-onprem"}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 1)
+		assert.Equal(t, h.g.ID, result.Keys[0].ID) // G
+	})
+
+	t.Run("should filter by labels", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, Labels: model.Labels{"cloud": "aws"}}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 3)
+		assert.Equal(t, h.h.ID, result.Keys[0].ID) // H
+		assert.Equal(t, h.f.ID, result.Keys[1].ID) // F
+		assert.Equal(t, h.d.ID, result.Keys[2].ID) // D
+	})
+
+	t.Run("should filter by multiple labels", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, Labels: model.Labels{"cloud": "azure", "environment": "prod"}}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 1)
+		assert.Equal(t, h.e.ID, result.Keys[0].ID) // E
+	})
+
+	t.Run("should filter by name substring", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, Name: "a"}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 3)
+		assert.Equal(t, h.root.ID, result.Keys[2].ID) // A
+		assert.Equal(t, h.ab.ID, result.Keys[1].ID)   // AB
+		assert.Equal(t, h.ba.ID, result.Keys[0].ID)   // BA
+	})
+
+	t.Run("should filter by multiple criteria", func(t *testing.T) {
+		// given
+		query := store.ListKeysQuery{
+			TenantID:  h.tenant.ID,
+			Kind:      "K2",
+			State:     model.KeyLifeCyclePreActivation,
+			ManagedBy: "agent-azure",
+			Labels:    model.Labels{"environment": "prod"},
+		}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, result.Keys, 1)
+		assert.Equal(t, h.e.ID, result.Keys[0].ID) // E
+	})
+}
+
+// createKeyHierarchy creates a tenant and inserts 10 keys forming the tree documented on [keyHierarchy].
+// Keys are created with varying lifecycle states (active, suspended, pre-activation), managing agents
+// (root, agent-aws, agent-azure, agent-gcp, agent-onprem, agent-onprem-2), and labels (cloud, environment)
+// to support filtering, lifecycle transition, and hierarchy traversal tests.
 func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *storesql.TenantStore) keyHierarchy {
 	t.Helper()
 	ctx := t.Context()
 
 	tenant := createTenant(t, tenantStore)
 
-	root := model.NewKey(tenant.ID, "A", "K0", nil, "root", nil)
+	root := model.NewKey(tenant.ID, "A", "K0", nil, "root", model.Labels{
+		"cloud": "gcp",
+	})
+	root.LifeCycleState = model.KeyLifeCycleActive
 	require.NoError(t, keyStore.CreateKey(ctx, root))
 
-	b := model.NewKey(tenant.ID, "B", "K1", &root.ID, "root", nil)
+	ab := model.NewKey(tenant.ID, "aB", "K1", &root.ID, "root", model.Labels{
+		"cloud": "gcp",
+	})
+	require.NoError(t, keyStore.CreateKey(ctx, ab))
+
+	ba := model.NewKey(tenant.ID, "BA", "K1", &root.ID, "root", model.Labels{
+		"cloud": "aws1",
+	})
+	require.NoError(t, keyStore.CreateKey(ctx, ba))
+
+	b := model.NewKey(tenant.ID, "B", "K1", &root.ID, "root", model.Labels{
+		"cloud": "gcp",
+	})
+	b.LifeCycleState = model.KeyLifeCycleActive
 	require.NoError(t, keyStore.CreateKey(ctx, b))
 
-	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", nil)
+	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", model.Labels{
+		"cloud": "azure",
+	})
 	require.NoError(t, keyStore.CreateKey(ctx, c))
 
-	d := model.NewKey(tenant.ID, "D", "K2", &b.ID, "agent-aws", nil)
+	d := model.NewKey(tenant.ID, "D", "K2", &b.ID, "agent-aws", model.Labels{
+		"cloud": "aws",
+	})
+	d.LifeCycleState = model.KeyLifeCycleSuspended
 	require.NoError(t, keyStore.CreateKey(ctx, d))
 
-	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", nil)
+	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", model.Labels{
+		"cloud":       "azure",
+		"environment": "prod",
+	})
 	require.NoError(t, keyStore.CreateKey(ctx, e))
 
-	f := model.NewKey(tenant.ID, "F", "K2", &c.ID, "agent-gcp", nil)
+	f := model.NewKey(tenant.ID, "F", "K2", &c.ID, "agent-gcp", model.Labels{
+		"cloud":       "aws",
+		"environment": "prod",
+	})
 	require.NoError(t, keyStore.CreateKey(ctx, f))
 
-	g := model.NewKey(tenant.ID, "G", "K2", &c.ID, "agent-onprem", nil)
+	g := model.NewKey(tenant.ID, "G", "K2", &c.ID, "agent-onprem", model.Labels{
+		"cloud": "azure",
+	})
 	require.NoError(t, keyStore.CreateKey(ctx, g))
 
-	h := model.NewKey(tenant.ID, "H", "K3", &g.ID, "agent-onprem-2", nil)
+	h := model.NewKey(tenant.ID, "H", "K3", &g.ID, "agent-onprem-2", model.Labels{
+		"cloud": "aws",
+	})
 	require.NoError(t, keyStore.CreateKey(ctx, h))
 
 	return keyHierarchy{
 		tenant: tenant,
 		root:   root,
+		ab:     ab,
+		ba:     ba,
 		b:      b,
 		c:      c,
 		d:      d,
