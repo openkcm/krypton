@@ -32,7 +32,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenantID,
 			Kind:       "K0",
 			Name:       keyName,
-			TargetName: "root",
+			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
 		require.NoError(t, err)
