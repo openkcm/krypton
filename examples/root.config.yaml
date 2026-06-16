@@ -7,10 +7,18 @@ selector_labels:
   environment: production
 key_bindings:
   K0:
-    vault:
-      name: root-hsm-vault
-      type: unsafe-sqlite-memory
+    crypto:
+      name: root-key-crypto
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
   K1:
+    crypto:
+      name: kek-crypto
+      type: aes256gcm
     vault:
       name: root-vault
       type: unsafe-sqlite-memory
@@ -45,12 +53,18 @@ topology:
         end_kind: K3
       key_bindings:
         K2:
+          crypto:
+            name: tek-crypto
+            type: aes256gcm
           vault:
             name: agent-vault
             type: unsafe-sqlite-memory
           parent_key_provider:
             agent_name: root
         K3:
+          crypto:
+            name: dek-crypto
+            type: aes256gcm
           vault:
             name: agent-dek-vault
             type: unsafe-sqlite-memory
