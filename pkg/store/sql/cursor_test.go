@@ -66,6 +66,7 @@ func TestCursorEncodeDecode(t *testing.T) {
 }
 
 func TestDecodeCursor_Invalid(t *testing.T) {
+	// given
 	tests := []struct {
 		name  string
 		input string
@@ -85,8 +86,11 @@ func TestDecodeCursor_Invalid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// when
 			_, err := sql.DecodeCursor(tt.input)
-			require.Error(t, err)
+
+			// then
+			assert.Error(t, err)
 		})
 	}
 }
