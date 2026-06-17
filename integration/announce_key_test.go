@@ -1,6 +1,10 @@
 package integration
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -198,4 +202,80 @@ func TestAnnounceKey(t *testing.T) {
 		awaitKeyExists(t, env.AgentDB, keyID, tenantID, 30*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 60*time.Second)
 	})
+
+	t.Run("should announce agent-managed key via CLI and complete job", func(t *testing.T) {
+		ctx := t.Context()
+
+		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
+			Name: "announce-cli-test-" + uuid.NewString(),
+		})
+		require.NoError(t, err)
+
+		tenantID := tenantResp.GetTenant().GetId()
+		tenantName := tenantResp.GetTenant().GetName()
+
+		insertTenant(t, env.AgentDB, tenantID, tenantName)
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
+
+		homeDir := t.TempDir()
+		seedSelectedTenant(t, homeDir, tenantID, tenantName)
+
+		keyName := "cli-key-" + uuid.NewString()
+		cmd := newCLICommand(ctx, homeDir, "announce", "key",
+			"--kind", "K2",
+			"--name", keyName,
+			"--parent", parentID,
+			"--target-name", "agent-k1",
+			"--label", "cloud=aws",
+			"--json",
+			"--server", "localhost:"+env.RootPort,
+		)
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "command should succeed, output: %s", string(output))
+
+		rows := decodeAnnouncedKey(t, output)
+		require.Len(t, rows, 1)
+		key := rows[0]
+
+		assert.Equal(t, "K2", key.Kind)
+		assert.Equal(t, keyName, key.Name)
+		assert.Equal(t, parentID, key.ParentID)
+		assert.Equal(t, "agent-k1", key.ManagedBy)
+		assert.Equal(t, "pending", key.Status)
+		assert.NotEmpty(t, key.ID)
+		assert.NotEmpty(t, key.JobID)
+
+		awaitJobStatus(t, env.RootDB, key.ID, "DONE", 30*time.Second)
+		awaitKeyExists(t, env.AgentDB, key.ID, tenantID, 10*time.Second)
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, key.ID, tenantID, "completed", 30*time.Second)
+	})
+}
+
+type announcedKeyRow struct {
+	ID        string
+	Kind      string
+	Name      string
+	ParentID  string
+	ManagedBy string
+	Labels    map[string]string
+	Status    string
+	JobID     string
+}
+
+func decodeAnnouncedKey(t *testing.T, output []byte) []announcedKeyRow {
+	t.Helper()
+	var rows []announcedKeyRow
+	if err := json.Unmarshal(output, &rows); err != nil {
+		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
+	}
+	return rows
+}
+
+func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
+	t.Helper()
+	dir := filepath.Join(homeDir, ".krypton")
+	require.NoError(t, os.MkdirAll(dir, 0700))
+	payload := fmt.Appendf(nil, `{"tenant":{"id":%q,"name":%q}}`, tenantID, tenantName)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
 }
