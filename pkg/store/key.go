@@ -50,7 +50,7 @@ type ListKeysQuery struct {
 	TenantID              string
 	Name                  string
 	Kind                  model.KeyKind
-	State                 model.KeyLifeCycleState
+	LifeCycleState        model.KeyLifeCycleState
 	ManagedBy             string
 	Labels                model.Labels
 	IsOrderByCreatedAtAsc bool

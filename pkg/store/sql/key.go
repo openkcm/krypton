@@ -238,8 +238,8 @@ func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (st
 		fmt.Fprintf(&q, "AND kind = %s ", nextParam(query.Kind))
 	}
 
-	if query.State != "" {
-		fmt.Fprintf(&q, "AND life_cycle_state = %s ", nextParam(query.State))
+	if query.LifeCycleState != "" {
+		fmt.Fprintf(&q, "AND life_cycle_state = %s ", nextParam(query.LifeCycleState))
 	}
 
 	if query.Name != "" {
@@ -250,8 +250,8 @@ func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (st
 		fmt.Fprintf(&q, "AND managed_by = %s ", nextParam(query.ManagedBy))
 	}
 
-	for k, v := range query.Labels {
-		labelJSON, err := json.Marshal(map[string]string{k: v})
+	if len(query.Labels) > 0 {
+		labelJSON, err := json.Marshal(query.Labels)
 		if err != nil {
 			return store.ListKeysResult{}, err
 		}
@@ -310,6 +310,10 @@ func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (st
 			return store.ListKeysResult{}, err
 		}
 		keys = keys[:pageSize]
+	}
+
+	if len(keys) == 0 {
+		return store.ListKeysResult{Keys: keys, Cursor: ""}, store.ErrKeyNotFound
 	}
 
 	return store.ListKeysResult{Keys: keys, Cursor: cursor}, nil

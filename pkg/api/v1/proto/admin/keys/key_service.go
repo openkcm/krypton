@@ -264,3 +264,35 @@ func (s *KeyService) GetDescendantKeys(ctx context.Context, req *GetDescendantKe
 		KeyTree: KeyTreeTraverserToProto(res.KeyTree),
 	}, nil
 }
+
+func (s *KeyService) ListKeys(ctx context.Context, req *ListKeysRequest) (*ListKeysResponse, error) {
+	res, err := s.keyStore.ListKeys(ctx, store.ListKeysQuery{
+		TenantID:              req.GetTenantId(),
+		Name:                  req.GetName(),
+		Kind:                  model.KeyKind(req.GetKind()),
+		LifeCycleState:        model.KeyLifeCycleState(req.GetLifeCycleState()),
+		ManagedBy:             req.GetManagedBy(),
+		Labels:                req.GetLabels(),
+		IsOrderByCreatedAtAsc: req.GetIsOrderByCreatedAtAsc(),
+		Cursor:                req.GetCursor(),
+		Limit:                 int(req.GetLimit()),
+	})
+
+	if err != nil {
+		if errors.Is(err, store.ErrKeyNotFound) {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "keys not found"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to list keys"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	return &ListKeysResponse{
+		Keys:   KeysToProto(res.Keys),
+		Cursor: res.Cursor,
+	}, nil
+}
