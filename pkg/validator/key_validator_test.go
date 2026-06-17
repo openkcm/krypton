@@ -53,8 +53,6 @@ func testTopology() spec.Topology {
 	}
 }
 
-const testRootName = "root"
-
 var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 
 func tenantFound() store.Tenant {
@@ -185,7 +183,7 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 		},
 		{
 			name:     "root key with parentID is rejected",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: testRootName, ParentID: "some-parent"},
+			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "", ParentID: "some-parent"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrRootKeyParent,
@@ -240,14 +238,14 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 		},
 		{
 			name:    "valid root key with empty parentID",
-			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: testRootName, ParentID: ""},
+			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "", ParentID: ""},
 			tenants: tenantFound(),
 			keys:    &stubKeyStore{},
 			wantErr: nil,
 		},
 		{
-			name:     "rootName target does not manage non-root kind",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: testRootName, ParentID: "parent-id"},
+			name:     "empty target does not manage non-root kind",
+			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrTargetDoesNotManageKeyKind,
@@ -257,7 +255,7 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			v := validator.NewValidator(testRootName, testRootSegment, testTopology(), testHierarchy(), tc.tenants, tc.keys)
+			v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tc.tenants, tc.keys)
 
 			ve := v.ValidateAnnounceKey(t.Context(), tc.input)
 

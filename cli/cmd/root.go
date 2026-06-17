@@ -23,4 +23,5 @@ func init() {
 	rootCmd.AddCommand(createCmd())
 	rootCmd.AddCommand(getCmd())
 	rootCmd.AddCommand(selectCmd())
+	rootCmd.AddCommand(announceCmd())
 }

@@ -79,12 +79,17 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		parentID = &p
 	}
 
+	target := s.rootName
+	if req.GetTargetName() != "" {
+		target = req.GetTargetName()
+	}
+
 	newKey := model.NewKey(
 		req.GetTenantId(),
 		req.GetName(),
 		req.GetKind(),
 		parentID,
-		req.GetTargetName(),
+		target,
 		req.GetLabels(),
 	)
 	newKey.KeyProcessingState = model.KeyProcessingState{
@@ -94,7 +99,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 	// case we are announcing a new key
 	if errors.Is(err, store.ErrKeyNotFound) {
 		// non root case
-		if req.GetTargetName() != s.rootName {
+		if target != s.rootName {
 			job, err := s.prepareJob(ctx, &newKey)
 			if err != nil {
 				return nil, proto.ErrDetailsWithCode(
@@ -102,6 +107,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 					proto.Code_ERROR_CODE_RETRY,
 				)
 			}
+
 			newKey.KeyProcessingState = model.KeyProcessingState{
 				JobID:  job.ID.String(),
 				Status: model.KeyProcessingPending,

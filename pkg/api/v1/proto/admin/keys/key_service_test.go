@@ -82,7 +82,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "root-key-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
 
@@ -109,7 +109,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, first.GetKey().GetId())
@@ -118,7 +118,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 
@@ -144,7 +144,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		assert.Equal(t, seed.ID, resp.GetKey().GetId())
@@ -178,7 +178,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "parent-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		// Parent must be Active to be usable as a parent.
@@ -206,7 +206,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   uuid.NewString(),
 			Kind:       "K0",
 			Name:       "no-tenant-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
@@ -220,7 +220,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "KX",
 			Name:       "bad-kind-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -254,7 +254,7 @@ func TestAnnounceKey(t *testing.T) {
 			Kind:       "K0",
 			Name:       "rooted-root-" + uuid.NewString(),
 			ParentId:   other.ID,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -333,7 +333,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       key.Name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		assert.Equal(t, key.ID, resp.GetKey().GetId(), "retry must reuse the existing key.ID")
@@ -380,7 +380,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "root-no-job-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		assert.Empty(t, spy.jobs, "root-managed announce must not enqueue a job")
@@ -406,7 +406,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       key.Name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 
@@ -430,7 +430,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       key.Name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 
@@ -468,7 +468,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       key.Name,
-			TargetName: "root",
+			TargetName: "",
 		})
 		require.NoError(t, err)
 		assert.Equal(t, key.ID, resp.GetKey().GetId())
@@ -492,7 +492,7 @@ func TestAnnounceKey(t *testing.T) {
 			TenantId:   tmpTenant.ID,
 			Kind:       "K0",
 			Name:       "will-fail",
-			TargetName: "root",
+			TargetName: "",
 		})
 
 		// then
@@ -558,7 +558,7 @@ func TestGetKeyService(t *testing.T) {
 			TenantId:   tenant.ID,
 			Kind:       "K0",
 			Name:       "get-me-" + uuid.NewString(),
-			TargetName: "root",
+			TargetName: "",
 			Labels:     map[string]string{"env": "staging"},
 		})
 

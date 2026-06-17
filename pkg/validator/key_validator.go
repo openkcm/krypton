@@ -10,7 +10,6 @@ import (
 )
 
 type keyValidator struct {
-	rootName    string
 	rootSegment spec.HierarchySegment
 	tenants     store.Tenant
 	keys        store.Key
@@ -33,9 +32,8 @@ var (
 	ErrParentKeyAdjecency         = errors.New("key is not adjecent to parent key")
 )
 
-func NewValidator(rootName string, rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
+func NewValidator(rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
 	return &keyValidator{
-		rootName:    rootName,
 		rootSegment: rootSegment,
 		topology:    topology,
 		hierarchy:   hierarchy,
@@ -85,7 +83,7 @@ func (v *keyValidator) ValidateAnnounceKey(ctx context.Context, input AnnounceIn
 	}
 
 	segment := v.rootSegment
-	if input.TargetName != v.rootName {
+	if input.TargetName != "" {
 		topologySegment := v.topology.GetSegemntByName(input.TargetName)
 		if topologySegment == nil {
 			ve.code, ve.err = FailedCondition, ErrTargetNotInTopolgy

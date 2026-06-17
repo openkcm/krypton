@@ -110,7 +110,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 
 	keyStore := storesql.NewKeyStore(db)
 	tenantStore := storesql.NewTenantStore(db)
-	v := validator.NewValidator(testRootName, testRootSegment, defaultTestTopology(), hierarchy, tenantStore, keyStore)
+	v := validator.NewValidator(testRootSegment, defaultTestTopology(), hierarchy, tenantStore, keyStore)
 
 	srv := grpc.NewServer()
 	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, keyStore, v, preparer))
