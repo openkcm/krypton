@@ -819,6 +819,182 @@ func TestGetDescendantKeys(t *testing.T) {
 	})
 }
 
+func TestListKeys(t *testing.T) {
+	// given
+	ctx := t.Context()
+	db := createDatabase(t)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, db)
+
+	ha := createKeyHierarchy(t, keyStore, tenant)
+
+	cli := setupKeyServerAndClient(t, db)
+
+	t.Run("should return all keys for a tenantID", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: ha.tenant.ID,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 8)
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should return keys filtered by kind", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: ha.tenant.ID,
+			Kind:     "K2",
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 4)
+		assert.Equal(t, ha.d.ID, res.GetKeys()[3].GetId())
+		assert.Equal(t, ha.e.ID, res.GetKeys()[2].GetId())
+		assert.Equal(t, ha.f.ID, res.GetKeys()[1].GetId())
+		assert.Equal(t, ha.g.ID, res.GetKeys()[0].GetId())
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should return keys filtered by managed by", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId:  ha.tenant.ID,
+			ManagedBy: ha.d.ManagedBy,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.d.ID, res.GetKeys()[0].GetId())
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should return keys filtered by name", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: ha.tenant.ID,
+			Name:     ha.c.Name,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.c.ID, res.GetKeys()[0].GetId())
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should return keys filtered by life cycle state", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId:       ha.tenant.ID,
+			LifeCycleState: string(ha.g.LifeCycleState),
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.g.ID, res.GetKeys()[0].GetId())
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should return keys filtered by labels", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: ha.tenant.ID,
+			Labels:   ha.e.Labels,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.e.ID, res.GetKeys()[0].GetId())
+		assert.Empty(t, res.GetCursor())
+	})
+
+	t.Run("should paginate with limit and return cursor in descending order", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: ha.tenant.ID,
+			Limit:    1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.h.ID, res.GetKeys()[0].GetId())
+		assert.NotEmpty(t, res.GetCursor())
+	})
+
+	t.Run("should paginate with limit and return cursor in ascending order", func(t *testing.T) {
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId:              ha.tenant.ID,
+			Limit:                 1,
+			IsOrderByCreatedAtAsc: true,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Len(t, res.GetKeys(), 1)
+		assert.Equal(t, ha.root.ID, res.GetKeys()[0].GetId())
+		assert.NotEmpty(t, res.GetCursor())
+	})
+
+	t.Run("should return key not found error for an unknown tenantID", func(t *testing.T) {
+		// given
+		unknownTenantID := uuid.NewString()
+
+		// when
+		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: unknownTenantID,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return internal error on database failure", func(t *testing.T) {
+		// given
+		tmpDB := createDatabase(t)
+
+		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		require.NoError(t, err)
+
+		cli := setupKeyServerAndClient(t, tmpDB)
+
+		// when
+		resp, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
+			TenantId: uuid.NewString(),
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
+	})
+}
+
 // createKeyHierarchy sets up a test key hierarchy with 8 keys across 4 levels and returns the created keys for reference in tests.
 // keyHierarchy holds a test key tree with the following structure:
 //
@@ -842,7 +1018,9 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.
 	err = keyStore.CreateKey(ctx, b)
 	require.NoError(t, err)
 
-	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", nil)
+	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", model.Labels{
+		"env": "staging",
+	})
 	err = keyStore.CreateKey(ctx, c)
 	require.NoError(t, err)
 
@@ -850,7 +1028,9 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.
 	err = keyStore.CreateKey(ctx, d)
 	require.NoError(t, err)
 
-	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", nil)
+	e := model.NewKey(tenant.ID, "E", "K2", &b.ID, "agent-azure", model.Labels{
+		"env": "prod",
+	})
 	err = keyStore.CreateKey(ctx, e)
 	require.NoError(t, err)
 
@@ -859,6 +1039,7 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.
 	require.NoError(t, err)
 
 	g := model.NewKey(tenant.ID, "G", "K2", &c.ID, "agent-onprem", nil)
+	g.LifeCycleState = model.KeyLifeCycleCompromised
 	err = keyStore.CreateKey(ctx, g)
 	require.NoError(t, err)
 

@@ -734,7 +734,8 @@ func TestListKeys(t *testing.T) {
 		result, err := keyStore.ListKeys(ctx, query)
 
 		// then
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 		assert.Empty(t, result.Keys)
 	})
 
@@ -756,7 +757,7 @@ func TestListKeys(t *testing.T) {
 
 	t.Run("should filter by lifecycle state", func(t *testing.T) {
 		// given
-		query := store.ListKeysQuery{TenantID: h.tenant.ID, State: model.KeyLifeCycleSuspended}
+		query := store.ListKeysQuery{TenantID: h.tenant.ID, LifeCycleState: model.KeyLifeCycleSuspended}
 
 		// when
 		result, err := keyStore.ListKeys(ctx, query)
@@ -826,11 +827,11 @@ func TestListKeys(t *testing.T) {
 	t.Run("should filter by multiple criteria", func(t *testing.T) {
 		// given
 		query := store.ListKeysQuery{
-			TenantID:  h.tenant.ID,
-			Kind:      "K2",
-			State:     model.KeyLifeCyclePreActivation,
-			ManagedBy: "agent-azure",
-			Labels:    model.Labels{"environment": "prod"},
+			TenantID:       h.tenant.ID,
+			Kind:           "K2",
+			LifeCycleState: model.KeyLifeCyclePreActivation,
+			ManagedBy:      "agent-azure",
+			Labels:         model.Labels{"environment": "prod"},
 		}
 
 		// when
@@ -840,6 +841,38 @@ func TestListKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 1)
 		assert.Equal(t, h.e.ID, result.Keys[0].ID) // E
+	})
+
+	t.Run("should return key not found error if there are no matching keys for given filter", func(t *testing.T) {
+		// given
+		unknownTenantID := uuid.NewString()
+		query := store.ListKeysQuery{
+			TenantID: unknownTenantID,
+		}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+		assert.Empty(t, result.Keys)
+	})
+
+	t.Run("should return error for invalid tenant ID format", func(t *testing.T) {
+		// given
+		notValidUUID := "not-valid-uuid"
+		query := store.ListKeysQuery{
+			TenantID: notValidUUID,
+		}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "invalid input syntax for type uuid")
+		assert.Empty(t, result.Keys)
 	})
 }
 
