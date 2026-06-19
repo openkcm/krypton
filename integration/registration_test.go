@@ -70,6 +70,9 @@ func TestRegistration(t *testing.T) {
 		err = agentCmd.Start()
 		require.NoError(t, err, "failed to start agent process")
 
+		// wait for agent to be fully ready (operator RPC server listening)
+		waitForPort(t, agentPort)
+
 		// then
 		// wait for agent registration to appear in store with registered status
 		require.Eventually(t, func() bool {
