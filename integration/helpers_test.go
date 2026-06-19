@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -305,4 +306,12 @@ func writeTempFile(t *testing.T, pattern, content string) string {
 	require.NoError(t, f.Close())
 
 	return f.Name()
+}
+
+func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
+	t.Helper()
+	dir := filepath.Join(homeDir, ".krypton")
+	require.NoError(t, os.MkdirAll(dir, 0700))
+	payload := fmt.Appendf(nil, `{"tenant":{"id":%q,"name":%q}}`, tenantID, tenantName)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
 }

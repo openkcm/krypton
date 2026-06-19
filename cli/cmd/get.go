@@ -14,6 +14,7 @@ func getCmd() *cobra.Command {
 	cmd.AddCommand(getTenantsCmd())
 	cmd.AddCommand(getKeyParentsCmd())
 	cmd.AddCommand(getKeyDescendantsCmd())
+	cmd.AddCommand(getKeysCmd())
 
 	return cmd
 }
