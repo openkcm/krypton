@@ -2,9 +2,6 @@ package integration
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -270,12 +267,4 @@ func decodeAnnouncedKey(t *testing.T, output []byte) []announcedKeyRow {
 		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
 	}
 	return rows
-}
-
-func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
-	t.Helper()
-	dir := filepath.Join(homeDir, ".krypton")
-	require.NoError(t, os.MkdirAll(dir, 0700))
-	payload := fmt.Appendf(nil, `{"tenant":{"id":%q,"name":%q}}`, tenantID, tenantName)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
 }
