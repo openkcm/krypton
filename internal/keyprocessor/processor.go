@@ -85,21 +85,13 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 	sec := genResp.Secret
 
 	if p.internal != nil {
-		_, err := p.internal.CreateSecret(ctx, CreateSecretRequest{
-			KeyChain: []model.Key{{TenantID: key.TenantID, ID: key.ID}},
-			AAD:      req.AAD,
-		})
-		if err != nil {
-			return CreateSecretResponse{}, errors.Join(err, destroySec(sec))
-		}
-
 		resp, err := p.internal.WrapSecret(ctx, WrapSecretRequest{
 			KeyChain: []model.Key{{TenantID: key.TenantID, ID: key.ID}},
 			Secret:   sec,
 			AAD:      req.AAD,
 		})
 		if err := errors.Join(err, destroySec(sec)); err != nil {
-			return CreateSecretResponse{}, err
+			return CreateSecretResponse{}, errors.Join(err, destroySec(resp.WrappedSecret))
 		}
 		sec = resp.WrappedSecret
 	}
@@ -111,7 +103,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 			AAD:      req.AAD,
 		})
 		if err := errors.Join(err, destroySec(sec)); err != nil {
-			return CreateSecretResponse{}, err
+			return CreateSecretResponse{}, errors.Join(err, destroySec(resp.WrappedSecret))
 		}
 		sec = resp.WrappedSecret
 	}
@@ -192,8 +184,8 @@ func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (
 	}, nil
 }
 
-// DeleteSecret removes the processor's secret and its internal processor's secret from the vault.
-// It is a no-op when the cryptor manages its own decryption key regardless of internal or parent configuration.
+// DeleteSecret removes the processor's secret from the vault.
+// It is a no-op when the cryptor manages its own decryption.
 func (p *Processor) DeleteSecret(ctx context.Context, req DeleteSecretRequest) (DeleteSecretResponse, error) {
 	if !p.cryptor.Info().DecryptionSecretRequired {
 		return DeleteSecretResponse{}, nil
@@ -205,12 +197,6 @@ func (p *Processor) DeleteSecret(ctx context.Context, req DeleteSecretRequest) (
 	})
 	if err != nil {
 		return DeleteSecretResponse{}, err
-	}
-
-	if p.internal != nil {
-		return p.internal.DeleteSecret(ctx, DeleteSecretRequest{
-			Key: model.Key{TenantID: req.Key.TenantID, ID: req.Key.ID},
-		})
 	}
 
 	return DeleteSecretResponse{}, nil
@@ -244,7 +230,7 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 			AAD:           aad,
 		})
 		if err := errors.Join(err, destroySec(sec)); err != nil {
-			return nil, err
+			return nil, errors.Join(err, destroySec(resp.Secret))
 		}
 		sec = resp.Secret
 	}
@@ -256,7 +242,7 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 			AAD:           aad,
 		})
 		if err := errors.Join(err, destroySec(sec)); err != nil {
-			return nil, err
+			return nil, errors.Join(err, destroySec(resp.Secret))
 		}
 		sec = resp.Secret
 	}

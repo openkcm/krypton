@@ -63,42 +63,6 @@ func TestCreateSecret(t *testing.T) {
 		assert.ErrorIs(t, err, genErr)
 	})
 
-	t.Run("should return error if internal secret creation fails", func(t *testing.T) {
-		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
-
-		var captured *securemem.Data
-		realGen := newTestSecretGen()
-		gen := &secretGenWrapper{
-			generateSecretFn: func(ctx context.Context) (*cryptor.GenerateSecretResponse, error) {
-				resp, err := realGen.GenerateSecret(ctx)
-				if err == nil {
-					captured = resp.Secret
-				}
-				return resp, err
-			},
-		}
-
-		internalGen := &secretGenWrapper{
-			generateSecretFn: func(ctx context.Context) (*cryptor.GenerateSecretResponse, error) {
-				return nil, errors.New("internal gen failed")
-			},
-		}
-		v := newTestVault(t)
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), internalGen, nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), gen, internal, nil)
-
-		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
-		})
-
-		// then
-		assert.ErrorContains(t, err, "internal gen failed")
-		assert.Nil(t, captured.SecureBytes())
-	})
-
 	t.Run("should return error if internal wrap fails", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
@@ -156,6 +120,7 @@ func TestCreateSecret(t *testing.T) {
 		parentVault := &vaultWrapper{Vault: newTestVault(t)}
 		parentVault.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
+			assert.Equal(t, parentID, req.KeyID)
 			return nil, errors.New("parent vault down")
 		}
 		parent := keyprocessor.NewProcessor("", parentVault, newTestCryptor(), newTestSecretGen(), nil, nil)
@@ -208,10 +173,14 @@ func TestCreateSecret(t *testing.T) {
 		}
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, internalCryptor, newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), gen, internal, parent)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
@@ -242,8 +211,12 @@ func TestCreateSecret(t *testing.T) {
 
 		parentV := newTestVault(t)
 		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := parentInternal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
+		})
+		assert.NoError(t, err)
 		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
-		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
 		assert.NoError(t, err)
@@ -273,10 +246,14 @@ func TestCreateSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 
@@ -290,9 +267,7 @@ func TestCreateSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -315,9 +290,7 @@ func TestCreateSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -325,6 +298,10 @@ func TestCreateSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err = internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, parent)
 
 		// when
@@ -380,18 +357,16 @@ func TestResolveSecret(t *testing.T) {
 		keyID := uuid.NewString()
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
-		})
-		assert.NoError(t, err)
-
 		v.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
 			assert.Equal(t, keyID, req.KeyID)
 			return nil, errors.New("connection reset")
 		}
+		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 
 		// when
 		_, err = processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: keyID}})
@@ -407,8 +382,7 @@ func TestResolveSecret(t *testing.T) {
 		parentID := uuid.NewString()
 
 		parentVault := &vaultWrapper{Vault: newTestVault(t)}
-		parentInternal := keyprocessor.NewProcessor("internal", parentVault, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentVault, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", parentVault, newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -431,6 +405,7 @@ func TestResolveSecret(t *testing.T) {
 		}
 		parentVault.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
+			assert.Equal(t, parentID, req.KeyID)
 			return nil, errors.New("parent unavailable")
 		}
 
@@ -450,10 +425,13 @@ func TestResolveSecret(t *testing.T) {
 
 		internalVault := &vaultWrapper{Vault: newTestVault(t)}
 		internal := keyprocessor.NewProcessor("internal", internalVault, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
@@ -488,8 +466,12 @@ func TestResolveSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
@@ -509,9 +491,7 @@ func TestResolveSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -538,9 +518,7 @@ func TestResolveSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -548,6 +526,10 @@ func TestResolveSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err = internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, parent)
 		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
@@ -588,8 +570,12 @@ func TestWrapSecret(t *testing.T) {
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
@@ -643,8 +629,12 @@ func TestWrapSecret(t *testing.T) {
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
@@ -685,9 +675,7 @@ func TestWrapSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -724,9 +712,7 @@ func TestWrapSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -734,6 +720,10 @@ func TestWrapSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err = internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, parent)
 		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
@@ -763,9 +753,7 @@ func TestWrapSecret(t *testing.T) {
 func TestUnwrapSecret(t *testing.T) {
 	t.Run("should return error if resolve fails", func(t *testing.T) {
 		// given
-		v := newTestVault(t)
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
+		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 
 		// when
 		_, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
@@ -782,9 +770,7 @@ func TestUnwrapSecret(t *testing.T) {
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 
-		v := newTestVault(t)
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
+		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
@@ -816,9 +802,7 @@ func TestUnwrapSecret(t *testing.T) {
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 
-		v := newTestVault(t)
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
+		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 			AAD:      []byte("create-aad"),
@@ -850,8 +834,12 @@ func TestUnwrapSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
@@ -881,9 +869,7 @@ func TestUnwrapSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -920,9 +906,7 @@ func TestUnwrapSecret(t *testing.T) {
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
 		})
@@ -930,6 +914,10 @@ func TestUnwrapSecret(t *testing.T) {
 
 		v := newTestVault(t)
 		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err = internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
+		})
+		assert.NoError(t, err)
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, parent)
 		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
@@ -978,14 +966,13 @@ func TestDeleteSecret(t *testing.T) {
 		assert.False(t, called)
 	})
 
-	t.Run("should return error if primary key destroy fails", func(t *testing.T) {
+	t.Run("should return error if key destroy fails", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
+		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
@@ -1006,62 +993,22 @@ func TestDeleteSecret(t *testing.T) {
 		assert.ErrorContains(t, err, "vault locked")
 	})
 
-	t.Run("should return error if internal key destroy fails", func(t *testing.T) {
-		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
-
-		v := &vaultWrapper{Vault: newTestVault(t)}
-		internal := keyprocessor.NewProcessor("internal", v, newTestCryptor(), newTestSecretGen(), nil, nil)
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
-		})
-		assert.NoError(t, err)
-
-		callCount := 0
-		v.destroyKeyFn = func(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-			callCount++
-			if callCount == 2 {
-				assert.Equal(t, "internal/"+keyID, req.KeyID)
-				return nil, errors.New("internal key stuck")
-			}
-			return v.Vault.DestroyKey(ctx, req)
-		}
-
-		// when
-		_, err = processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
-			Key: model.Key{TenantID: tenantID, ID: keyID},
-		})
-
-		// then
-		assert.ErrorContains(t, err, "internal key stuck")
-	})
-
-	t.Run("should succeed for processor without internal", func(t *testing.T) {
+	t.Run("should succeed", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 		parentID := uuid.NewString()
 
-		parentV := newTestVault(t)
-		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
-		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}},
-		})
-		assert.NoError(t, err)
-
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), nil, parent)
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 		assert.NoError(t, err)
 
-		var destroyedKeys []string
 		v.destroyKeyFn = func(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-			destroyedKeys = append(destroyedKeys, req.KeyID)
+			assert.Equal(t, tenantID, req.TenantID)
+			assert.Equal(t, keyID, req.KeyID)
 			return v.Vault.DestroyKey(ctx, req)
 		}
 
@@ -1072,7 +1019,6 @@ func TestDeleteSecret(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.Equal(t, []string{keyID}, destroyedKeys)
 	})
 }
 
@@ -1081,8 +1027,12 @@ func TestHierarchy(t *testing.T) {
 		// given
 		parentV := newTestVault(t)
 		parentInternal := keyprocessor.NewProcessor("internal", parentV, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err := parentInternal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: "t1", ID: "parent-1"}},
+		})
+		assert.NoError(t, err)
 		parent := keyprocessor.NewProcessor("", parentV, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
-		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		_, err = parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: "t1", ID: "parent-1"}},
 		})
 		assert.NoError(t, err)
@@ -1120,6 +1070,10 @@ func TestHierarchy(t *testing.T) {
 
 		midV := newTestVault(t)
 		midInternal := keyprocessor.NewProcessor("internal", midV, newTestCryptor(), newTestSecretGen(), nil, nil)
+		_, err = midInternal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyChain: []model.Key{{TenantID: "t1", ID: "mid-1"}},
+		})
+		assert.NoError(t, err)
 		mid := keyprocessor.NewProcessor("", midV, newTestCryptor(), newTestSecretGen(), midInternal, root)
 		_, err = mid.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: "t1", ID: "root-1"}, {TenantID: "t1", ID: "mid-1"}},
@@ -1152,8 +1106,7 @@ func TestHierarchy(t *testing.T) {
 	t.Run("should return error if parent vault fails during child resolve", func(t *testing.T) {
 		// given
 		parentVault := &vaultWrapper{Vault: newTestVault(t)}
-		parentInternal := keyprocessor.NewProcessor("internal", parentVault, newTestCryptor(), newTestSecretGen(), nil, nil)
-		parent := keyprocessor.NewProcessor("", parentVault, newTestCryptor(), newTestSecretGen(), parentInternal, nil)
+		parent := keyprocessor.NewProcessor("", parentVault, newTestCryptor(), newTestSecretGen(), nil, nil)
 		_, err := parent.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: "t1", ID: "parent-1"}},
 		})
