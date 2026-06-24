@@ -90,7 +90,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 			AAD:      req.AAD,
 		})
 		if err != nil {
-			return CreateSecretResponse{}, errors.Join(err, destroyAll(genResp.Secret))
+			return CreateSecretResponse{}, errors.Join(err, destroySec(sec))
 		}
 
 		resp, err := p.internal.WrapSecret(ctx, WrapSecretRequest{
@@ -98,10 +98,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 			Secret:   sec,
 			AAD:      req.AAD,
 		})
-		if err != nil {
-			return CreateSecretResponse{}, errors.Join(err, destroyAll(genResp.Secret))
-		}
-		if err := destroyAll(sec); err != nil {
+		if err := errors.Join(err, destroySec(sec)); err != nil {
 			return CreateSecretResponse{}, err
 		}
 		sec = resp.WrappedSecret
@@ -113,10 +110,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 			Secret:   sec,
 			AAD:      req.AAD,
 		})
-		if err != nil {
-			return CreateSecretResponse{}, errors.Join(err, destroyAll(genResp.Secret, sec))
-		}
-		if err := destroyAll(sec); err != nil {
+		if err := errors.Join(err, destroySec(sec)); err != nil {
 			return CreateSecretResponse{}, err
 		}
 		sec = resp.WrappedSecret
@@ -129,14 +123,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 		KeyMaterial: sec,
 		AAD:         req.AAD,
 	})
-	if err != nil {
-		return CreateSecretResponse{}, errors.Join(err, destroyAll(genResp.Secret, sec))
-	}
-
-	if err := destroyAll(genResp.Secret, sec); err != nil {
-		return CreateSecretResponse{}, err
-	}
-	return CreateSecretResponse{}, nil
+	return CreateSecretResponse{}, errors.Join(err, destroySec(sec))
 }
 
 // WrapSecret resolves the processor's secret from the vault and uses it to encrypt the given plaintext.
@@ -149,7 +136,7 @@ func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (Wrap
 
 	key, err := lastKey(req.KeyChain)
 	if err != nil {
-		return WrapSecretResponse{}, errors.Join(err, destroyAll(sec))
+		return WrapSecretResponse{}, errors.Join(err, destroySec(sec))
 	}
 
 	encResp, err := p.cryptor.Encrypt(ctx, cryptor.EncryptRequest{
@@ -160,13 +147,10 @@ func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (Wrap
 		Plaintext:  req.Secret,
 		AAD:        req.AAD,
 	})
-	if err != nil {
-		return WrapSecretResponse{}, errors.Join(err, destroyAll(sec))
-	}
-
-	if err := destroyAll(sec); err != nil {
+	if err := errors.Join(err, destroySec(sec)); err != nil {
 		return WrapSecretResponse{}, err
 	}
+
 	return WrapSecretResponse{
 		WrappedSecret: encResp.Ciphertext,
 	}, nil
@@ -182,7 +166,7 @@ func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (
 
 	key, err := lastKey(req.KeyChain)
 	if err != nil {
-		return UnwrapSecretResponse{}, errors.Join(err, destroyAll(sec))
+		return UnwrapSecretResponse{}, errors.Join(err, destroySec(sec))
 	}
 
 	decResp, err := p.cryptor.Decrypt(ctx, cryptor.DecryptRequest{
@@ -193,13 +177,10 @@ func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (
 		Ciphertext: req.WrappedSecret,
 		AAD:        req.AAD,
 	})
-	if err != nil {
-		return UnwrapSecretResponse{}, errors.Join(err, destroyAll(sec))
-	}
-
-	if err := destroyAll(sec); err != nil {
+	if err := errors.Join(err, destroySec(sec)); err != nil {
 		return UnwrapSecretResponse{}, err
 	}
+
 	return UnwrapSecretResponse{
 		Secret: decResp.Plaintext,
 	}, nil
@@ -221,12 +202,9 @@ func (p *Processor) DeleteSecret(ctx context.Context, req DeleteSecretRequest) (
 	}
 
 	if p.internal != nil {
-		_, err = p.internal.DeleteSecret(ctx, DeleteSecretRequest{
+		return p.internal.DeleteSecret(ctx, DeleteSecretRequest{
 			Key: model.Key{TenantID: req.Key.TenantID, ID: req.Key.ID},
 		})
-		if err != nil {
-			return DeleteSecretResponse{}, err
-		}
 	}
 
 	return DeleteSecretResponse{}, nil
@@ -259,10 +237,7 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 			WrappedSecret: sec,
 			AAD:           aad,
 		})
-		if err != nil {
-			return nil, errors.Join(err, destroyAll(sec))
-		}
-		if err := destroyAll(sec); err != nil {
+		if err := errors.Join(err, destroySec(sec)); err != nil {
 			return nil, err
 		}
 		sec = resp.Secret
@@ -274,10 +249,7 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 			WrappedSecret: sec,
 			AAD:           aad,
 		})
-		if err != nil {
-			return nil, errors.Join(err, destroyAll(sec))
-		}
-		if err := destroyAll(sec); err != nil {
+		if err := errors.Join(err, destroySec(sec)); err != nil {
 			return nil, err
 		}
 		sec = resp.Secret
@@ -300,16 +272,11 @@ func lastKey(keyChain []model.Key) (model.Key, error) {
 	return keyChain[len(keyChain)-1], nil
 }
 
-func destroyAll(secrets ...*securemem.Data) error {
-	var errs []error
-	for _, s := range secrets {
-		if s != nil {
-			if err := s.Destroy(); err != nil {
-				errs = append(errs, err)
-			}
-		}
+func destroySec(sec *securemem.Data) error {
+	if sec != nil {
+		return sec.Destroy()
 	}
-	return errors.Join(errs...)
+	return nil
 }
 
 func toCryptorSecret(data *securemem.Data) *cryptor.Secret {
