@@ -148,6 +148,9 @@ func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (Wrap
 		AAD:        req.AAD,
 	})
 	if err := errors.Join(err, destroySec(sec)); err != nil {
+		if encResp != nil {
+			return WrapSecretResponse{}, errors.Join(err, destroySec(encResp.Ciphertext))
+		}
 		return WrapSecretResponse{}, err
 	}
 
@@ -178,6 +181,9 @@ func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (
 		AAD:        req.AAD,
 	})
 	if err := errors.Join(err, destroySec(sec)); err != nil {
+		if decResp != nil {
+			return UnwrapSecretResponse{}, errors.Join(err, destroySec(decResp.Plaintext))
+		}
 		return UnwrapSecretResponse{}, err
 	}
 
