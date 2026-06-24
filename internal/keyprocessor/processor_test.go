@@ -442,6 +442,7 @@ func TestResolveSecret(t *testing.T) {
 		_, err := internal.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
+		assert.NoError(t, err)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
