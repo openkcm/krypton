@@ -25,12 +25,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newStaticSecretCryptor(t), newTestSecretGen(), nil, nil)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if key chain is empty", func(t *testing.T) {
@@ -38,10 +39,11 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{})
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{})
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrEmptyKeyChain)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if secret generation fails", func(t *testing.T) {
@@ -55,12 +57,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), gen, nil, nil)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}},
 		})
 
 		// then
 		assert.ErrorIs(t, err, genErr)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if internal wrap fails", func(t *testing.T) {
@@ -90,12 +93,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), gen, internal, nil)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.ErrorContains(t, err, "internal export failed")
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 		assert.Nil(t, captured.SecureBytes())
 	})
 
@@ -127,12 +131,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), gen, nil, parent)
 
 		// when
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.ErrorContains(t, err, "parent vault down")
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 		assert.Nil(t, captured.SecureBytes())
 	})
 
@@ -180,12 +185,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), gen, internal, parent)
 
 		// when
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.ErrorContains(t, err, "parent vault down")
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 		assert.Nil(t, captured.SecureBytes())
 		assert.NotNil(t, internalWrapOutput)
 		assert.Nil(t, internalWrapOutput.SecureBytes())
@@ -230,12 +236,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), gen, nil, parent)
 
 		// when
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.ErrorContains(t, err, "disk full")
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 		assert.Nil(t, captured.SecureBytes())
 	})
 
@@ -253,12 +260,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
 
 		// when
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
 	t.Run("should succeed for processor with parent wrap", func(t *testing.T) {
@@ -276,12 +284,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, parent)
 
 		// when
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
 	t.Run("should succeed for processor with internal and parent wrap", func(t *testing.T) {
@@ -305,12 +314,13 @@ func TestCreateSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, parent)
 
 		// when
-		_, err = processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 }
 
@@ -332,10 +342,11 @@ func TestResolveSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 
 		// when
-		_, err := processor.ResolveSecret(t.Context(), []model.Key{})
+		resp, err := processor.ResolveSecret(t.Context(), []model.Key{})
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrEmptyKeyChain)
+		assert.Nil(t, resp)
 	})
 
 	t.Run("should return error if key is not found", func(t *testing.T) {
@@ -345,10 +356,11 @@ func TestResolveSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
 
 		// when
-		_, err := processor.ResolveSecret(t.Context(), []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}})
+		resp, err := processor.ResolveSecret(t.Context(), []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}})
 
 		// then
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Nil(t, resp)
 	})
 
 	t.Run("should return error if vault export fails", func(t *testing.T) {
@@ -369,10 +381,11 @@ func TestResolveSecret(t *testing.T) {
 		assert.NoError(t, err)
 
 		// when
-		_, err = processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: keyID}})
+		resp, err := processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: keyID}})
 
 		// then
 		assert.ErrorContains(t, err, "connection reset")
+		assert.Nil(t, resp)
 	})
 
 	t.Run("should return error if parent unwrap fails", func(t *testing.T) {
@@ -410,10 +423,11 @@ func TestResolveSecret(t *testing.T) {
 		}
 
 		// when
-		_, err = processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}})
+		resp, err := processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: parentID}, {TenantID: tenantID, ID: keyID}})
 
 		// then
 		assert.ErrorContains(t, err, "parent unavailable")
+		assert.Nil(t, resp)
 		assert.NotNil(t, exported)
 		assert.Nil(t, exported.SecureBytes())
 	})
@@ -451,10 +465,11 @@ func TestResolveSecret(t *testing.T) {
 		}
 
 		// when
-		_, err = processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: keyID}})
+		resp, err := processor.ResolveSecret(t.Context(), []model.Key{{TenantID: tenantID, ID: keyID}})
 
 		// then
 		assert.ErrorContains(t, err, "internal export failed")
+		assert.Nil(t, resp)
 		assert.NotNil(t, exported)
 		assert.Nil(t, exported.SecureBytes())
 	})
@@ -554,13 +569,14 @@ func TestWrapSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", v, newTestCryptor(), newTestSecretGen(), internal, nil)
 
 		// when
-		_, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
+		resp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
 			KeyChain: []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}},
 			Secret:   newTestData(t, []byte("data")),
 		})
 
 		// then
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if encryption fails", func(t *testing.T) {
@@ -590,13 +606,14 @@ func TestWrapSecret(t *testing.T) {
 		}
 
 		// when — nil plaintext is rejected by aes256gcm
-		_, err = processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
+		resp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
 			KeyChain: []model.Key{{TenantID: tenantID, ID: keyID}},
 			Secret:   nil,
 		})
 
 		// then
 		assert.Error(t, err)
+		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
 		assert.Nil(t, exported.SecureBytes())
 	})
 
@@ -756,13 +773,14 @@ func TestUnwrapSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor("", newTestVault(t), newTestCryptor(), newTestSecretGen(), nil, nil)
 
 		// when
-		_, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
+		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
 			KeyChain:      []model.Key{{TenantID: uuid.NewString(), ID: uuid.NewString()}},
 			WrappedSecret: newTestData(t, []byte("ciphertext")),
 		})
 
 		// then
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if decryption fails with tampered ciphertext", func(t *testing.T) {
@@ -788,13 +806,14 @@ func TestUnwrapSecret(t *testing.T) {
 		tampered[0] ^= 0xFF
 
 		// when
-		_, err = processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
+		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
 			KeyChain:      []model.Key{{TenantID: tenantID, ID: keyID}},
 			WrappedSecret: newTestData(t, tampered),
 		})
 
 		// then
 		assert.Error(t, err)
+		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
 	})
 
 	t.Run("should return error if decryption fails with wrong AAD", func(t *testing.T) {
@@ -817,7 +836,7 @@ func TestUnwrapSecret(t *testing.T) {
 		assert.NoError(t, err)
 
 		// when
-		_, err = processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
+		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
 			KeyChain:      []model.Key{{TenantID: tenantID, ID: keyID}},
 			WrappedSecret: wrapResp.WrappedSecret,
 			AAD:           []byte("wrong-aad"),
@@ -825,6 +844,7 @@ func TestUnwrapSecret(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
+		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
 	})
 
 	t.Run("should succeed for processor with internal wrap", func(t *testing.T) {
@@ -957,12 +977,13 @@ func TestDeleteSecret(t *testing.T) {
 		}
 
 		// when
-		_, err := processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
+		resp, err := processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
 			Key: model.Key{TenantID: uuid.NewString(), ID: uuid.NewString()},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.DeleteSecretResponse{}, resp)
 		assert.False(t, called)
 	})
 
@@ -985,12 +1006,13 @@ func TestDeleteSecret(t *testing.T) {
 		}
 
 		// when
-		_, err = processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
+		resp, err := processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
 			Key: model.Key{TenantID: tenantID, ID: keyID},
 		})
 
 		// then
 		assert.ErrorContains(t, err, "vault locked")
+		assert.Equal(t, keyprocessor.DeleteSecretResponse{}, resp)
 	})
 
 	t.Run("should succeed", func(t *testing.T) {
@@ -1013,12 +1035,13 @@ func TestDeleteSecret(t *testing.T) {
 		}
 
 		// when
-		_, err = processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
+		resp, err := processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
 			Key: model.Key{TenantID: tenantID, ID: keyID},
 		})
 
 		// then
 		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.DeleteSecretResponse{}, resp)
 	})
 }
 
@@ -1123,13 +1146,14 @@ func TestHierarchy(t *testing.T) {
 		}
 
 		// when
-		_, err = child.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
+		resp, err := child.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
 			KeyChain: []model.Key{{TenantID: "t1", ID: "parent-1"}, {TenantID: "t1", ID: "child-1"}},
 			Secret:   newTestData(t, []byte("data")),
 		})
 
 		// then
 		assert.ErrorContains(t, err, "parent compromised")
+		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
 	})
 }
 
