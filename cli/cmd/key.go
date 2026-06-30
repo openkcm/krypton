@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/cli/output"
+	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 )
@@ -17,6 +18,20 @@ import (
 type keyRows struct {
 	Keys   []keyRow
 	Cursor string
+}
+
+type key struct {
+	ID                 string
+	Name               string
+	TenantID           string
+	Kind               model.KeyKind
+	ParentID           *string
+	ManagedBy          string
+	Labels             model.Labels
+	LifeCycleState     model.KeyLifeCycleState
+	KeyProcessingState model.KeyProcessingState
+	CreatedAt          clock.UnixNano
+	UpdatedAt          clock.UnixNano
 }
 
 type keyRow struct {
@@ -41,6 +56,80 @@ func newKeyRow(k *keys.Key) keyRow {
 		ManagedBy:      k.GetManagedBy(),
 		Status:         model.KeyProcessingStatus(k.GetKeyProcessingState().GetStatus()),
 	}
+}
+
+func newKey(k *keys.Key) key {
+	mk := keys.KeyFromProto(k)
+	return key{
+		ID:                 mk.ID,
+		Name:               mk.Name,
+		TenantID:           mk.TenantID,
+		Kind:               mk.Kind,
+		ParentID:           mk.ParentID,
+		ManagedBy:          mk.ManagedBy,
+		Labels:             mk.Labels,
+		LifeCycleState:     mk.LifeCycleState,
+		KeyProcessingState: mk.KeyProcessingState,
+		CreatedAt:          mk.CreatedAt,
+		UpdatedAt:          mk.UpdatedAt,
+	}
+}
+
+func getKeyCmd() *cobra.Command {
+	var keyID, tenantID string
+	var asJSON bool
+
+	cmd := &cobra.Command{
+		Use:   "key",
+		Short: "Get a single key by its tenant ID and key ID",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if tenantID == "" {
+				tID, err := selectedTenantID()
+				if err != nil {
+					return fmt.Errorf("failed to get selected tenant: %w", err)
+				}
+				tenantID = tID
+			}
+
+			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
+			conn, err := grpc.NewClient(
+				serverAddr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to connect: %w", err)
+			}
+			defer conn.Close()
+
+			client := keys.NewKeyServiceClient(conn)
+
+			resp, err := client.GetKey(cmd.Context(), &keys.GetKeyRequest{
+				Id:       keyID,
+				TenantId: tenantID,
+			})
+			if err != nil {
+				if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+					return fmt.Errorf("key for tenant:[%s] and key:[%s] not found", tenantID, keyID)
+				}
+				return fmt.Errorf("failed to get key: %w", err)
+			}
+
+			builder, err := output.From(newKey(resp.GetKey()))
+			if err != nil {
+				return fmt.Errorf("failed to format output: %w", err)
+			}
+
+			return formatOutput(builder, asJSON).To(cmd.OutOrStdout())
+		},
+	}
+
+	cmd.Flags().StringVar(&keyID, "key-id", "", "id of the key")
+	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "id of the tenant")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output in JSON format")
+	_ = cmd.MarkFlagRequired("key-id")
+
+	return cmd
 }
 
 func getKeyParentsCmd() *cobra.Command {
