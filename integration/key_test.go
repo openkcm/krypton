@@ -39,7 +39,6 @@ func TestGetKeys(t *testing.T) {
 	})
 
 	// create tenant
-	// `kr create tenant --name <name> --json --server <server-addr>`
 	expTenantName := "tenant-" + uuid.NewString()
 	cmd := newCLICommand(
 		t.Context(),
@@ -61,6 +60,140 @@ func TestGetKeys(t *testing.T) {
 
 	// create hierarchy
 	hierarchy := createKeyHierarchy(t, keyStore, tenantID)
+
+	t.Run("key", func(t *testing.T) {
+		t.Run("should get key for tenant and a key ID", func(t *testing.T) {
+			// when
+			cmd = newCLICommand(
+				t.Context(),
+				t.TempDir(),
+				"get",
+				"key",
+				"--tenant-id", tenantID,
+				"--key-id", hierarchy.e.ID,
+				"--json",
+				"--server", serverAddr)
+
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.NoError(t, err, "command should succeed, output: %s", string(output))
+
+			actKeys := decodeKeys(t, output)
+			require.Len(t, actKeys, 1)
+			assert.Equal(t, hierarchy.e.Name, actKeys[0].Name)
+			assert.Equal(t, tenantID, actKeys[0].TenantID)
+			assert.Equal(t, hierarchy.e.Kind, actKeys[0].Kind)
+			assert.Equal(t, hierarchy.e.ParentID, actKeys[0].ParentID)
+			assert.Equal(t, "agent-azure", actKeys[0].ManagedBy)
+			assert.Nil(t, actKeys[0].Labels)
+			assert.Equal(t, model.KeyLifeCycleActive, actKeys[0].LifeCycleState)
+			assert.Equal(t, model.KeyProcessingPending, actKeys[0].KeyProcessingState.Status)
+			assert.Empty(t, actKeys[0].KeyProcessingState.JobID)
+			assert.NotEmpty(t, actKeys[0].UpdatedAt)
+			assert.NotEmpty(t, actKeys[0].CreatedAt)
+		})
+
+		t.Run("should fail if key does not exist", func(t *testing.T) {
+			// when
+			unknownKeyID := uuid.NewString()
+			cmd = newCLICommand(
+				t.Context(),
+				t.TempDir(),
+				"get",
+				"key",
+				"--tenant-id", tenantID,
+				"--key-id", unknownKeyID,
+				"--json",
+				"--server", serverAddr)
+
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.Error(t, err, "command should fail, output: %s", string(output))
+			assert.Contains(t, string(output), "not found")
+		})
+
+		t.Run("should fail if key ID parameter is not provided", func(t *testing.T) {
+			// when
+			cmd = newCLICommand(
+				t.Context(),
+				t.TempDir(),
+				"get",
+				"key",
+				"--tenant-id", tenantID,
+				"--json",
+				"--server", serverAddr)
+
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.Error(t, err, "command should fail, output: %s", string(output))
+			assert.Contains(t, string(output), "required flag(s) \"key-id\" not set")
+		})
+
+		t.Run("should fail if tenant does not exist", func(t *testing.T) {
+			// when
+			unknownTenantID := uuid.NewString()
+			cmd = newCLICommand(
+				t.Context(),
+				t.TempDir(),
+				"get",
+				"key",
+				"--tenant-id", unknownTenantID,
+				"--key-id", hierarchy.e.ID,
+				"--json",
+				"--server", serverAddr)
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.Error(t, err)
+			assert.Contains(t, string(output), "not found")
+		})
+
+		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
+			//given
+			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
+			tmpDir := t.TempDir()
+			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
+
+			// when
+			cmd = newCLICommand(
+				t.Context(),
+				tmpDir,
+				"get",
+				"key",
+				"--key-id", hierarchy.h.ID,
+				"--json",
+				"--server", serverAddr)
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.NoError(t, err, "command should succeed, output: %s", string(output))
+
+			actKeys := decodeKeys(t, output)
+			require.Len(t, actKeys, 1)
+			assert.Equal(t, hierarchy.h.Name, actKeys[0].Name)
+			assert.Equal(t, tenantID, actKeys[0].TenantID)
+		})
+
+		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
+			// when
+			cmd = newCLICommand(
+				t.Context(),
+				t.TempDir(),
+				"get",
+				"key",
+				"--key-id", hierarchy.e.ID,
+				"--json",
+				"--server", serverAddr)
+			output, err = cmd.CombinedOutput()
+
+			// then
+			assert.Error(t, err)
+			assert.Contains(t, string(output), "no tenant selected")
+		})
+	})
 
 	t.Run("parent-keys", func(t *testing.T) {
 		t.Run("should get all parent keys", func(t *testing.T) {
@@ -731,6 +864,20 @@ func TestGetKeys(t *testing.T) {
 	})
 }
 
+type key struct {
+	ID                 string
+	Name               string
+	TenantID           string
+	Kind               model.KeyKind
+	ParentID           *string
+	ManagedBy          string
+	Labels             model.Labels
+	LifeCycleState     model.KeyLifeCycleState
+	KeyProcessingState model.KeyProcessingState
+	CreatedAt          string
+	UpdatedAt          string
+}
+
 type keyRow struct {
 	Kind           model.KeyKind
 	ID             string
@@ -828,6 +975,16 @@ func createKeyHierarchy(t *testing.T, keyStore store.Key, tenantID string) keyHi
 func decodeKeyRow(t *testing.T, output []byte) []keyRow {
 	t.Helper()
 	var ts []keyRow
+	err := json.Unmarshal(output, &ts)
+	if err != nil {
+		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)
+	}
+	return ts
+}
+
+func decodeKeys(t *testing.T, output []byte) []key {
+	t.Helper()
+	var ts []key
 	err := json.Unmarshal(output, &ts)
 	if err != nil {
 		assert.FailNowf(t, "failed to decode response", "output: %s, error: %v", string(output), err)

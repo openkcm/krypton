@@ -12,6 +12,7 @@ func getCmd() *cobra.Command {
 
 	cmd.AddCommand(getTenantCmd())
 	cmd.AddCommand(getTenantsCmd())
+	cmd.AddCommand(getKeyCmd())
 	cmd.AddCommand(getKeyParentsCmd())
 	cmd.AddCommand(getKeyDescendantsCmd())
 	cmd.AddCommand(getKeysCmd())
