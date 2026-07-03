@@ -456,6 +456,11 @@ func TestSubSlicingRetainstheUnderlyingdatastructure(t *testing.T) {
 		data, err := securemem.NewData("test-data", 10)
 		require.NoError(t, err)
 
+		t.Cleanup(func() {
+			err := data.Destroy()
+			assert.NoError(t, err)
+		})
+
 		dataByteA := data.SecureBytes()
 		for i := range dataByteA {
 			dataByteA[i] = byte(i)
@@ -504,5 +509,64 @@ func TestSubSlicingRetainstheUnderlyingdatastructure(t *testing.T) {
 		assert.True(t, sameUnderLying(dataByteA[2:][:3], dataByteA))
 		assert.True(t, sameUnderLying(dataByteA[2:5], dataByteA))
 		assert.True(t, sameUnderLying(dataByteA[2:5][:1], dataByteA))
+	})
+}
+
+func TestDataCleanup(t *testing.T) {
+	t.Run("should destroy data if cleanupref destroy is executed", func(t *testing.T) {
+		// given
+		subj, err := securemem.NewData("test-cleanup", 1)
+		require.NoError(t, err)
+
+		// ref captures a copy of the slice header (pointer+len+cap) pointing to
+		// the same mmap'd memory as subj.data. It does NOT hold a *Data reference.
+		ref := securemem.NewDataCleanupRef(subj.Name(), subj.SecureBytes())
+
+		// ref.Destroy() creates a temporary Data{isReadOnly: true}, which triggers:
+		//   1. readwrite() — mprotect(RW) succeeds (memory still mapped)
+		//   2. unalloc()   — Zero() + Munlock() + Munmap()
+		// After this, the underlying page is unmapped from the process address space.
+		// However, subj.data still holds the old (now-dangling) slice header because
+		// ref has no way to set subj.data = nil.
+		err = ref.Destroy()
+		require.NoError(t, err)
+
+		// when
+		// We cannot safely dereference subj.SecureBytes()[0] — that would SIGSEGV
+		// because the page is munmapped. Instead, we use MarkReadOnly() which calls
+		// mprotect() — a syscall that safely returns ENOMEM on unmapped addresses
+		// rather than crashing. This proves the memory was successfully destroyed.
+		err = subj.MarkReadOnly()
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "cannot allocate memory")
+	})
+
+	t.Run("should fail if cleanup ref destroys already-unmapped memory", func(t *testing.T) {
+		// given
+		subj, err := securemem.NewData("test-cleanup", 1)
+		require.NoError(t, err)
+
+		// ref captures the slice header before subj is destroyed.
+		ref := securemem.NewDataCleanupRef(subj.Name(), subj.SecureBytes())
+
+		// subj.Destroy() properly zeroes + munmaps the memory AND sets subj.data = nil.
+		err = subj.Destroy()
+		assert.NoError(t, err)
+		assert.Nil(t, subj.SecureBytes())
+
+		// when
+		// ref.Destroy() still holds the old (now-invalid) slice header. It creates a
+		// temporary Data{isReadOnly: true} and calls Destroy() on it. Because
+		// isReadOnly=true, it first calls readwrite() (mprotect RW) as a safety
+		// canary. Since the page is already munmapped, mprotect returns ENOMEM —
+		// this prevents unalloc()/Zero() from writing to unmapped memory (which
+		// would SIGSEGV).
+		err = ref.Destroy()
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "cannot allocate memory")
 	})
 }
