@@ -16,6 +16,9 @@ type MemVault struct {
 // with the same name already exists in the vault.
 var ErrVaultDataAlreadyExists = errors.New("vault data with the same name already exists")
 
+// ErrDataIsNil is returned by MemVault.Import when the provided Data instance is nil.
+var ErrDataIsNil = errors.New("data is nil")
+
 // NewMemVault creates a new MemVault instance with an empty data map.
 func NewMemVault() *MemVault {
 	return &MemVault{
@@ -116,4 +119,24 @@ func (v *MemVault) MarkAllReadOnly() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// Import stores an existing Data instance in the vault under the given name.
+func (v *MemVault) Import(name string, d *Data) error {
+	if d == nil {
+		return ErrDataIsNil
+	}
+
+	v.mux.Lock()
+	defer v.mux.Unlock()
+
+	_, ok := v.store[name]
+	if ok {
+		slog.Error("vault data with the same name already exists", "name", name)
+		return ErrVaultDataAlreadyExists
+	}
+
+	v.store[name] = d
+
+	return nil
 }

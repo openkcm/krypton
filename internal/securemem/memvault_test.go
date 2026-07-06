@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/securemem"
 )
@@ -537,5 +538,94 @@ func TestVaultMarkReadOnly(t *testing.T) {
 		actBytes, ok := subj.Get(name)
 		assert.False(t, ok)
 		assert.Nil(t, actBytes)
+	})
+}
+
+func TestMemVaultImport(t *testing.T) {
+	t.Run("should import data into vault", func(t *testing.T) {
+		// given
+		subj := securemem.NewMemVault()
+
+		t.Cleanup(func() {
+			err := subj.DestroyAll()
+			assert.NoError(t, err)
+		})
+
+		data, err := securemem.NewData("import-test", 6)
+		require.NoError(t, err)
+
+		copy(data.SecureBytes(), []byte("secret"))
+
+		t.Cleanup(func() {
+			err := data.Destroy()
+			assert.NoError(t, err)
+		})
+
+		// when
+		name := "test"
+		err = subj.Import(name, data)
+
+		// then
+		assert.NoError(t, err)
+
+		actData, ok := subj.Get(name)
+		assert.True(t, ok)
+		assert.Equal(t, securemem.SecureBytes([]byte("secret")), actData.SecureBytes())
+	})
+
+	t.Run("should return error when importing data with same name", func(t *testing.T) {
+		// given
+		subj := securemem.NewMemVault()
+
+		t.Cleanup(func() {
+			err := subj.DestroyAll()
+			assert.NoError(t, err)
+		})
+
+		data1, err := securemem.NewData("import-test1", 6)
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			err := data1.Destroy()
+			assert.NoError(t, err)
+		})
+
+		data2, err := securemem.NewData("import-test2", 6)
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			err := data2.Destroy()
+			assert.NoError(t, err)
+		})
+
+		name := "test"
+		err = subj.Import(name, data1)
+		assert.NoError(t, err)
+
+		// when
+		err = subj.Import(name, data2)
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, securemem.ErrVaultDataAlreadyExists)
+	})
+
+	t.Run("should return error when importing nil data", func(t *testing.T) {
+		// given
+		subj := securemem.NewMemVault()
+
+		t.Cleanup(func() {
+			err := subj.DestroyAll()
+			assert.NoError(t, err)
+		})
+
+		name := "test"
+
+		// when
+		err := subj.Import(name, nil)
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, securemem.ErrDataIsNil)
 	})
 }
