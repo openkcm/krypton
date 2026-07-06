@@ -9,14 +9,13 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
-func NewProcessor(name string, v vault.Vault, c cryptor.Cryptor, sg cryptor.SecretGenerator, internal *Processor, parent *Processor) *Processor {
+func NewProcessor(generator cryptor.SecretGenerator, wrapper, sealer cryptor.Cryptor, v vault.Vault, parent *Processor) *Processor {
 	return &Processor{
-		name:            name,
-		vault:           v,
-		cryptor:         c,
-		secretGenerator: sg,
-		internal:        internal,
-		parent:          parent,
+		generator: generator,
+		wrapper:   wrapper,
+		sealer:    sealer,
+		vault:     v,
+		parent:    parent,
 	}
 }
 
