@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"sync"
 )
 
@@ -26,6 +27,12 @@ type Data struct {
 	data       SecureBytes
 	isReadOnly bool
 	mux        sync.RWMutex
+	cleanup    runtime.Cleanup
+}
+
+type dataCleanupRef struct {
+	name string
+	data SecureBytes
 }
 
 var (
@@ -65,10 +72,21 @@ func NewData(name string, size int) (*Data, error) {
 		return nil, err
 	}
 
-	return &Data{
+	d := &Data{
 		name: name,
 		data: b,
-	}, nil
+	}
+
+	d.cleanup = runtime.AddCleanup(d, func(m *dataCleanupRef) {
+		slog.Debug("securemem: cleanup started")
+		err := m.Destroy()
+		if err != nil {
+			slog.Error("securemem: failed to destroy secure memory region", "error", err)
+		}
+		slog.Debug("securemem: cleanup finished")
+	}, &dataCleanupRef{name: d.name, data: d.data})
+
+	return d, nil
 }
 
 // SecureBytes returns the underlying byte slice of the secure memory region. If the
@@ -93,13 +111,17 @@ func (m *Data) Destroy() error {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 
+	slog.Debug("securemem: destroy started", "name", m.name)
+
 	if m.data == nil {
+		slog.Debug("securemem: destroy skipped, already destroyed", "name", m.name)
 		return nil
 	}
 
 	if m.isReadOnly {
 		err := readwrite(m.data)
 		if err != nil {
+			slog.Error("securemem: destroy marking readwrite failed", "name", m.name, "error", err)
 			return err
 		}
 		m.isReadOnly = false
@@ -107,9 +129,17 @@ func (m *Data) Destroy() error {
 
 	defer func() {
 		m.data = nil
+		m.cleanup.Stop()
 	}()
 
-	return unalloc(m.data)
+	err := unalloc(m.data)
+	if err != nil {
+		slog.Error("securemem: destroy failed", "name", m.name, "error", err)
+	} else {
+		slog.Debug("securemem: destroy finished", "name", m.name)
+	}
+
+	return err
 }
 
 // MarkReadOnly sets the memory protection of the underlying buffer to read-only,
@@ -196,4 +226,14 @@ func (s SecureBytes) MarshalText() (text []byte, err error) {
 // MarshalJSON implements [json.Marshaler].
 func (s SecureBytes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(Redacted)
+}
+
+// Destroy securely wipes and unmaps the memory region referenced by this cleanup ref.
+// It creates a temporary Data with isReadOnly=true so that Destroy() always calls
+// readwrite() (mprotect) first — this acts as a safe guard that returns ENOMEM if the
+// memory was already unmapped by a prior Destroy() call, preventing Zero() from writing
+// to invalid memory (which would SIGSEGV).
+func (m *dataCleanupRef) Destroy() error {
+	data := &Data{data: m.data, isReadOnly: true, name: m.name}
+	return data.Destroy()
 }
