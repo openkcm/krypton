@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/spec"
 )
 
@@ -48,6 +49,7 @@ type RootConfig struct {
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
 	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
+	KMIP           *kmip.Config               `yaml:"kmip,omitempty"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
@@ -86,6 +88,11 @@ func (cfg *RootConfig) Validate() error {
 	}
 	if err := spec.ValidateTopologyAgainstHierarchy(cfg.Hierarchy, cfg.Topology, cfg.Segment, cfg.KeyBindings); err != nil {
 		return fmt.Errorf("topology: %w", err)
+	}
+	if cfg.KMIP != nil {
+		if err := cfg.KMIP.Validate(); err != nil {
+			return fmt.Errorf("kmip: %w", err)
+		}
 	}
 
 	return nil

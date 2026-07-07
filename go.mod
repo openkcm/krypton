@@ -64,6 +64,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/openkcm/common-sdk v1.16.0 // indirect
+	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
@@ -99,3 +100,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/ovh/kmip-go => github.com/openkcm/kmip-go v0.0.0-20260702131124-6619ae325ac4
