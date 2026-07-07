@@ -2,6 +2,8 @@ package kmip
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
 	"testing"
@@ -141,13 +143,23 @@ func TestServerIntegration(t *testing.T) {
 	})
 
 	t.Run("no client cert fails handshake", func(t *testing.T) {
-		c, err := kmipclient.Dial(addr,
-			kmipclient.WithRootCAPem(pki.caPEM),
-			kmipclient.WithServerName("127.0.0.1"),
-		)
-		if err == nil {
-			_ = c.Close()
-			t.Fatal("expected Dial to fail without client cert")
+		// Use raw tls.Dial (not kmipclient.Dial) to avoid an upstream data
+		// race in kmipclient's connection teardown when the server rejects
+		// the handshake. TLS 1.3 completes the client-side handshake before
+		// the server's bad_certificate alert arrives, so we force the
+		// failure to surface with an explicit Read.
+		conn, err := tls.Dial("tcp", addr, &tls.Config{
+			RootCAs:    poolFromPEM(t, pki.caPEM),
+			ServerName: "127.0.0.1",
+			MinVersion: tls.VersionTLS12,
+		})
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if _, err := conn.Read(make([]byte, 1)); err == nil {
+			t.Fatal("expected read to fail after server rejects missing client cert")
 		}
 	})
 }
@@ -192,4 +204,13 @@ func waitTLSReady(t *testing.T, addr string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("KMIP server did not start listening on %s in time", addr)
+}
+
+func poolFromPEM(t *testing.T, pemBytes []byte) *x509.CertPool {
+	t.Helper()
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		t.Fatal("failed to parse PEM into cert pool")
+	}
+	return pool
 }
