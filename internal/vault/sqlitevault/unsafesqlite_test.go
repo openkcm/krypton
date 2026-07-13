@@ -43,7 +43,7 @@ func TestUnsafe_ImportAndExportKey(t *testing.T) {
 	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  1,
+		KeyVersion:  "1",
 		KeyMaterial: newTestSecureData(t, keyBytes),
 		AAD:         aad,
 	})
@@ -55,7 +55,7 @@ func TestUnsafe_ImportAndExportKey(t *testing.T) {
 	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(1),
+		KeyVersion: "1",
 	})
 
 	// then
@@ -73,7 +73,7 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  1,
+		KeyVersion:  "1",
 		KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
 	})
 	assert.NoError(t, err)
@@ -87,7 +87,7 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			req: vault.ImportKeyRequest{
 				TenantID:    "",
 				KeyID:       "key-1",
-				KeyVersion:  1,
+				KeyVersion:  "1",
 				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
 			},
 		},
@@ -96,7 +96,7 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			req: vault.ImportKeyRequest{
 				TenantID:    "tenant-1",
 				KeyID:       "",
-				KeyVersion:  1,
+				KeyVersion:  "1",
 				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
 			},
 		},
@@ -105,7 +105,7 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			req: vault.ImportKeyRequest{
 				TenantID:    "tenant-1",
 				KeyID:       "key-1",
-				KeyVersion:  1,
+				KeyVersion:  "1",
 				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
 			},
 		},
@@ -114,7 +114,7 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			req: vault.ImportKeyRequest{
 				TenantID:   "tenant-1",
 				KeyID:      "key-2",
-				KeyVersion: 1,
+				KeyVersion: "1",
 			},
 		},
 	}
@@ -133,12 +133,12 @@ func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {
 	ctx := t.Context()
 
 	versions := []struct {
-		version int
+		version string
 		data    []byte
 	}{
-		{1, []byte("key-material-version-1-padding!")},
-		{2, []byte("key-material-version-2-padding!")},
-		{3, []byte("key-material-version-3-padding!")},
+		{"1", []byte("key-material-version-1-padding!")},
+		{"2", []byte("key-material-version-2-padding!")},
+		{"3", []byte("key-material-version-3-padding!")},
 	}
 
 	for _, ver := range versions {
@@ -154,8 +154,9 @@ func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {
 
 	// when
 	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID: "tenant-1",
-		KeyID:    "key-1",
+		TenantID:   "tenant-1",
+		KeyID:      "key-1",
+		KeyVersion: versions[2].version,
 	})
 
 	// then
@@ -175,7 +176,7 @@ func TestUnsafe_ExportKeySpecificVersion(t *testing.T) {
 	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  1,
+		KeyVersion:  "1",
 		KeyMaterial: newTestSecureData(t, v1Data),
 		AAD:         []byte("aad-v1"),
 	})
@@ -184,7 +185,7 @@ func TestUnsafe_ExportKeySpecificVersion(t *testing.T) {
 	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  2,
+		KeyVersion:  "2",
 		KeyMaterial: newTestSecureData(t, v2Data),
 		AAD:         []byte("aad-v2"),
 	})
@@ -194,7 +195,7 @@ func TestUnsafe_ExportKeySpecificVersion(t *testing.T) {
 	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(1),
+		KeyVersion: "1",
 	})
 
 	// then
@@ -213,7 +214,7 @@ func TestUnsafe_ExportKeyNotFound(t *testing.T) {
 	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(1),
+		KeyVersion: "1",
 	})
 
 	// then
@@ -226,63 +227,13 @@ func TestUnsafe_DestroyKey(t *testing.T) {
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	for _, ver := range []int{1, 2, 3} {
-		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    "tenant-1",
-			KeyID:       "key-1",
-			KeyVersion:  ver,
-			KeyMaterial: newTestSecureData(t, []byte("key-material-padding-for-ver!!")),
-		})
-		assert.NoError(t, err)
-	}
-
-	// when
-	destroyResp, err := v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID: "tenant-1",
-		KeyID:    "key-1",
-	})
-
-	// then
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, []int{1, 2, 3}, destroyResp.DestroyedVersions)
-
-	// verify all versions are gone
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID: "tenant-1",
-		KeyID:    "key-1",
-	})
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-	assert.Nil(t, resp)
-}
-
-func TestUnsafe_DestroyKeyNoneExist(t *testing.T) {
-	// given
-	v := newTestUnsafeVault(t)
-	ctx := t.Context()
-
-	// when
-	resp, err := v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID: "tenant-1",
-		KeyID:    "non-existent",
-	})
-
-	// then
-	assert.NoError(t, err)
-	assert.Empty(t, resp.DestroyedVersions)
-}
-
-func TestUnsafe_DestroyKeyVersion(t *testing.T) {
-	// given
-	v := newTestUnsafeVault(t)
-	ctx := t.Context()
-
 	v1Data := []byte("key-material-version-1-padding!")
 	v2Data := []byte("key-material-version-2-padding!")
 
 	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  1,
+		KeyVersion:  "1",
 		KeyMaterial: newTestSecureData(t, v1Data),
 	})
 	assert.NoError(t, err)
@@ -290,16 +241,16 @@ func TestUnsafe_DestroyKeyVersion(t *testing.T) {
 	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  2,
+		KeyVersion:  "2",
 		KeyMaterial: newTestSecureData(t, v2Data),
 	})
 	assert.NoError(t, err)
 
 	// when
-	_, err = v.DestroyKeyVersion(ctx, vault.DestroyKeyVersionRequest{
+	_, err = v.DestroyKey(ctx, vault.DestroyKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: 1,
+		KeyVersion: "1",
 	})
 
 	// then
@@ -308,7 +259,7 @@ func TestUnsafe_DestroyKeyVersion(t *testing.T) {
 	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(1),
+		KeyVersion: "1",
 	})
 	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
 	assert.Nil(t, resp)
@@ -317,23 +268,23 @@ func TestUnsafe_DestroyKeyVersion(t *testing.T) {
 	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(2),
+		KeyVersion: "2",
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, v2Data, []byte(resp.KeyMaterial.SecureBytes()))
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafe_DestroyKeyVersionNotFound(t *testing.T) {
+func TestUnsafe_DestroyKeyNotFound(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	// when
-	_, err := v.DestroyKeyVersion(ctx, vault.DestroyKeyVersionRequest{
+	_, err := v.DestroyKey(ctx, vault.DestroyKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: 99,
+		KeyVersion: "99",
 	})
 
 	// then
@@ -384,7 +335,7 @@ func TestUnsafe_FileSourcePersistence(t *testing.T) {
 	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    "tenant-1",
 		KeyID:       "key-1",
-		KeyVersion:  1,
+		KeyVersion:  "1",
 		KeyMaterial: newTestSecureData(t, keyBytes),
 		AAD:         aad,
 	})
@@ -402,7 +353,7 @@ func TestUnsafe_FileSourcePersistence(t *testing.T) {
 	resp, err := v2.ExportKey(ctx, vault.ExportKeyRequest{
 		TenantID:   "tenant-1",
 		KeyID:      "key-1",
-		KeyVersion: new(1),
+		KeyVersion: "1",
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, keyBytes, []byte(resp.KeyMaterial.SecureBytes()))

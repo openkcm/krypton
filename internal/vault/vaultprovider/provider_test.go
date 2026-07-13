@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/openbaovault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
@@ -61,6 +62,27 @@ func TestSpec_Validate(t *testing.T) {
 				Type: sqlitevault.TypeUnsafe,
 				Config: &sqlitevault.FileConfig{
 					Path: "",
+				},
+			},
+			expErr: true,
+		},
+		{
+			name: "should pass for openbao spec",
+			spec: vaultprovider.Spec{
+				Name: "my-vault",
+				Type: openbaovault.TypeOpenBao,
+				Config: &openbaovault.Config{
+					Address: "https://openbao.example.com",
+				},
+			},
+		},
+		{
+			name: "should fail when openbao config has empty address",
+			spec: vaultprovider.Spec{
+				Name: "my-vault",
+				Type: openbaovault.TypeOpenBao,
+				Config: &openbaovault.Config{
+					Address: "",
 				},
 			},
 			expErr: true,
@@ -129,6 +151,27 @@ config:
 		require.True(t, ok)
 		assert.Equal(t, "/var/data/vault.db", cfg.Path)
 	})
+	t.Run("should unmarshal openbao spec with config", func(t *testing.T) {
+		// given
+		input := `
+name: openbao-vault
+type: openbao
+config:
+  address: http://openbao.example.com
+`
+		// when
+		var spec vaultprovider.Spec
+		err := yaml.Unmarshal([]byte(input), &spec)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "openbao-vault", spec.Name)
+		assert.Equal(t, openbaovault.TypeOpenBao, spec.Type)
+
+		cfg, ok := spec.Config.(*openbaovault.Config)
+		require.True(t, ok)
+		assert.Equal(t, "http://openbao.example.com", cfg.Address)
+	})
 
 	t.Run("should return error for unknown type", func(t *testing.T) {
 		// given
@@ -189,6 +232,29 @@ func TestGetVault(t *testing.T) {
 		info := v.Info()
 		assert.Equal(t, "file-vault", info.Name)
 		assert.Equal(t, sqlitevault.TypeUnsafe, info.Type)
+	})
+
+	t.Run("should create openbao vault", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+		spec := vaultprovider.Spec{
+			Name: "openbao-vault",
+			Type: openbaovault.TypeOpenBao,
+			Config: &openbaovault.Config{
+				Address: "http://openbao.example.com",
+			},
+		}
+
+		// when
+		v, err := vaultprovider.GetVault(ctx, spec)
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, v)
+
+		info := v.Info()
+		assert.Equal(t, "openbao-vault", info.Name)
+		assert.Equal(t, openbaovault.TypeOpenBao, info.Type)
 	})
 
 	t.Run("should return error for unknown type", func(t *testing.T) {

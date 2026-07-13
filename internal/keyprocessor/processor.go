@@ -102,7 +102,7 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 		_, err = p.vault.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    req.Key.TenantID,
 			KeyID:       req.Key.ID,
-			KeyVersion:  1,
+			KeyVersion:  "1",
 			KeyMaterial: wrapSec,
 			AAD:         req.AAD,
 		})
@@ -188,8 +188,9 @@ func (p *Processor) DeleteSecret(ctx context.Context, req DeleteSecretRequest) (
 	}
 
 	_, err := p.vault.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID: req.Key.TenantID,
-		KeyID:    req.Key.ID,
+		TenantID:   req.Key.TenantID,
+		KeyID:      req.Key.ID,
+		KeyVersion: "1",
 	})
 	if err != nil {
 		return DeleteSecretResponse{}, err
@@ -205,8 +206,9 @@ func (p *Processor) resolveSecret(ctx context.Context, key model.Key) (*secureme
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, sreq *securemem.HandlerRequest) error {
 		exported, err := p.vault.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID: key.TenantID,
-			KeyID:    key.ID,
+			TenantID:   key.TenantID,
+			KeyID:      key.ID,
+			KeyVersion: "1",
 		})
 		if err != nil {
 			return err

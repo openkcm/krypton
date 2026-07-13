@@ -7,7 +7,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	openbao "github.com/openbao/openbao/api/v2"
+
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/openbaovault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 )
 
@@ -94,6 +97,14 @@ func GetVault(ctx context.Context, spec Spec) (vault.Vault, error) {
 			return nil, fmt.Errorf("expected *sqlitevault.FileConfig for type %q, got %T", spec.Type, spec.Config)
 		}
 		return sqlitevault.NewUnsafe(ctx, spec.Name, sqlitevault.FileSource(cfg.Path))
+	case openbaovault.TypeOpenBao:
+		cfg, ok := spec.Config.(*openbaovault.Config)
+		if !ok {
+			return nil, fmt.Errorf("expected *openbaovault.Config for type %q, got %T", spec.Type, spec.Config)
+		}
+		return openbaovault.New(spec.Name, func(c *openbao.Client) error {
+			return c.SetAddress(cfg.Address)
+		})
 	default:
 		return nil, fmt.Errorf("%w: %q", vault.ErrUnknownType, spec.Type)
 	}
@@ -106,6 +117,8 @@ func newConfig(t vault.Type) (vault.Config, error) {
 		return &sqlitevault.InMemoryConfig{}, nil
 	case sqlitevault.TypeUnsafe:
 		return &sqlitevault.FileConfig{}, nil
+	case openbaovault.TypeOpenBao:
+		return &openbaovault.Config{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", vault.ErrUnknownType, t)
 	}

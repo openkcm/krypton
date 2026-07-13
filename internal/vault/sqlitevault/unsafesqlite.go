@@ -20,7 +20,7 @@ const initDB = `
 CREATE TABLE IF NOT EXISTS keys (
 	tenant_id TEXT NOT NULL CHECK(tenant_id != ''),
 	key_id TEXT NOT NULL CHECK(key_id != ''),
-	key_version INTEGER NOT NULL,
+	key_version TEXT NOT NULL,
 	key_material BLOB NOT NULL,
 	aad BLOB,
 	created_at INTEGER NOT NULL,
@@ -96,12 +96,8 @@ func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*va
 }
 
 func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? ORDER BY key_version DESC LIMIT 1"
-	args := []any{req.TenantID, req.KeyID}
-	if req.KeyVersion != nil {
-		query = "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?"
-		args = append(args, *req.KeyVersion)
-	}
+	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?"
+	args := []any{req.TenantID, req.KeyID, req.KeyVersion}
 
 	var rawKey []byte
 	var aad []byte
@@ -126,31 +122,6 @@ func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*va
 }
 
 func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-	rows, err := u.db.QueryContext(ctx,
-		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? RETURNING key_version",
-		req.TenantID, req.KeyID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var destroyed []int
-	for rows.Next() {
-		var version int
-		if err := rows.Scan(&version); err != nil {
-			return nil, err
-		}
-		destroyed = append(destroyed, version)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return &vault.DestroyKeyResponse{DestroyedVersions: destroyed}, nil
-}
-
-func (u *Unsafe) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVersionRequest) (*vault.DestroyKeyVersionResponse, error) {
 	result, err := u.db.ExecContext(ctx,
 		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?",
 		req.TenantID, req.KeyID, req.KeyVersion,
@@ -167,7 +138,7 @@ func (u *Unsafe) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVers
 		return nil, vault.ErrKeyNotFound
 	}
 
-	return &vault.DestroyKeyVersionResponse{}, nil
+	return &vault.DestroyKeyResponse{}, nil
 }
 
 func (u *Unsafe) Info() vault.Info {
