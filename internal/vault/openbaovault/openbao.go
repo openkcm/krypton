@@ -20,8 +20,8 @@ const kvSecretName = "kv-secrets"
 
 const securememImportKey = "key_material"
 
-// ConfigOptionsFunc is a function type that can be used to configure the OpenBao client.
-type ConfigOptionsFunc func(*openbao.Client) error
+// Options is a function type that can be used to configure the OpenBao client.
+type Options func(*openbao.Client) error
 
 // Vault is an implementation of the vault.Vault interface that uses OpenBao as the backend.
 type Vault struct {
@@ -46,7 +46,7 @@ var errAllocatedDataNotFound = errors.New("allocated data not found in vault")
 var _ vault.Vault = (*Vault)(nil)
 
 // New creates a new instance of the OpenBao vault.
-func New(name string, opts ...ConfigOptionsFunc) (*Vault, error) {
+func New(name string, opts ...Options) (*Vault, error) {
 	client, err := openbao.NewClient(openbao.DefaultConfig())
 	if err != nil {
 		return nil, err
