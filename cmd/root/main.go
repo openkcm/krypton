@@ -24,6 +24,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/reconciler"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
@@ -125,6 +126,22 @@ func main() {
 	wrkr := initAgentWorker(agentStore)
 	go wrkr.Start(context.Background())
 
+	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
+	// KeyManager is an in-memory fake until the real store-backed adapter lands.
+	var kmipSrv *kmip.Server
+	if cfg.KMIP != nil {
+		km, err := kmip.NewMemKeyManager()
+		handleErr(err, "failed to create kmip key manager")
+		kmipSrv, err = kmip.NewServer(*cfg.KMIP, km)
+		handleErr(err, "failed to create kmip server")
+		go func() {
+			log.Printf("KMIP server listening on %s", kmipSrv.Addr())
+			if err := kmipSrv.Serve(); err != nil {
+				log.Printf("KMIP server stopped: %v", err)
+			}
+		}()
+	}
+
 	// graceful shutdown on SIGINT/SIGTERM
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -132,6 +149,11 @@ func main() {
 	<-signalChan
 	log.Println("Received shutdown signal, stopping server...")
 	grpcServer.GracefulStop()
+	if kmipSrv != nil {
+		if err := kmipSrv.Shutdown(); err != nil {
+			log.Printf("kmip shutdown: %v", err)
+		}
+	}
 	wrkr.Stop()
 	_ = reconcilerMgr.Stop(context.Background())
 	log.Println("Shutdown complete.")

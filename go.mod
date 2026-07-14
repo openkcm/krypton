@@ -7,6 +7,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/moby/moby/api v1.54.2
 	github.com/openkcm/orbital v0.5.2-0.20260518064520-b38bdc42d86e
+	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
@@ -99,3 +100,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/ovh/kmip-go => github.com/openkcm/kmip-go v0.0.0-20260702131124-6619ae325ac4
