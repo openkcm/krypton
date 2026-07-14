@@ -16,10 +16,10 @@ const (
 type KeyVersion struct {
 	TenantID         string                    `json:"tenant_id"`
 	KeyID            string                    `json:"key_id"`
-	Version          int                       `json:"version"`
+	Version          string                    `json:"version"`
 	Revision         int                       `json:"revision"`
 	ParentKeyID      *string                   `json:"parent_key_id,omitempty"`
-	ParentKeyVersion *int                      `json:"parent_key_version,omitempty"`
+	ParentKeyVersion *string                   `json:"parent_key_version,omitempty"`
 	LifeCycleState   KeyLifeCycleState         `json:"life_cycle_state"`
 	ProcessingState  KeyVersionProcessingState `json:"processing_state"`
 	CreatedAt        clock.UnixNano            `json:"created_at"`
