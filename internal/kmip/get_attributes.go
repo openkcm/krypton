@@ -7,6 +7,15 @@ import (
 	"github.com/ovh/kmip-go/payloads"
 )
 
+// defaultAttributeNames is the canonical attribute set returned when a
+// GetAttributes request does not name any specific attributes.
+var defaultAttributeNames = []kmip.AttributeName{
+	kmip.AttributeNameState,
+	kmip.AttributeNameCryptographicAlgorithm,
+	kmip.AttributeNameCryptographicLength,
+	kmip.AttributeNameObjectType,
+}
+
 // handleGetAttributes implements the KMIP GetAttributes operation. Returns
 // State, CryptographicAlgorithm, CryptographicLength, and ObjectType. If the
 // request specifies attribute names, only the intersection with the
@@ -25,26 +34,26 @@ func (h *handler) handleGetAttributes(ctx context.Context, req *payloads.GetAttr
 		return nil, toKMIPError(err)
 	}
 
-	all := []kmip.Attribute{
-		{AttributeName: kmip.AttributeNameState, AttributeValue: kmip.StateActive},
-		{AttributeName: kmip.AttributeNameCryptographicAlgorithm, AttributeValue: kmipAlgorithm(info.Algorithm)},
-		{AttributeName: kmip.AttributeNameCryptographicLength, AttributeValue: info.LengthBits},
-		{AttributeName: kmip.AttributeNameObjectType, AttributeValue: kmip.ObjectTypeSymmetricKey},
+	alg, err := kmipAlgorithm(info.Algorithm)
+	if err != nil {
+		return nil, toKMIPError(err)
 	}
 
-	var attrs []kmip.Attribute
-	if len(req.AttributeName) == 0 {
-		attrs = all
-	} else {
-		requested := make(map[kmip.AttributeName]struct{}, len(req.AttributeName))
-		for _, n := range req.AttributeName {
-			requested[n] = struct{}{}
-		}
-		attrs = make([]kmip.Attribute, 0, len(all))
-		for _, a := range all {
-			if _, ok := requested[a.AttributeName]; ok {
-				attrs = append(attrs, a)
-			}
+	names := req.AttributeName
+	if len(names) == 0 {
+		names = defaultAttributeNames
+	}
+	attrs := make([]kmip.Attribute, 0, len(names))
+	for _, n := range names {
+		switch n {
+		case kmip.AttributeNameState:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: kmip.StateActive})
+		case kmip.AttributeNameCryptographicAlgorithm:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: alg})
+		case kmip.AttributeNameCryptographicLength:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: info.LengthBits})
+		case kmip.AttributeNameObjectType:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: kmip.ObjectTypeSymmetricKey})
 		}
 	}
 

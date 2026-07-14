@@ -1,4 +1,4 @@
-package kmip
+package kmip_test
 
 import (
 	"crypto/ecdsa"
@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // testPKI is a self-contained CA + server cert + client cert(s) suitable for
@@ -37,9 +39,7 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	t.Helper()
 
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("gen CA key: %v", err)
-	}
+	require.NoError(t, err, "gen CA key")
 	caTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		Subject:               pkix.Name{CommonName: "test-ca"},
@@ -50,13 +50,9 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 		IsCA:                  true,
 	}
 	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatalf("sign CA: %v", err)
-	}
+	require.NoError(t, err, "sign CA")
 	caCert, err := x509.ParseCertificate(caDER)
-	if err != nil {
-		t.Fatalf("parse CA: %v", err)
-	}
+	require.NoError(t, err, "parse CA")
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 
 	serverCertPEM, serverKeyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: "kmip-server"}, false, []net.IP{net.ParseIP("127.0.0.1")})
@@ -93,13 +89,9 @@ func (p *testPKI) writeServerFiles(t *testing.T, dir string) (certPath, keyPath 
 func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, subject pkix.Name, client bool, ips []net.IP) (certPEM, keyPEM []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("gen key for %s: %v", subject.CommonName, err)
-	}
+	require.NoError(t, err, "gen key for %s", subject.CommonName)
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		t.Fatalf("gen serial: %v", err)
-	}
+	require.NoError(t, err, "gen serial")
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      subject,
@@ -114,21 +106,15 @@ func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, 
 		tmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, caCert, &key.PublicKey, caKey)
-	if err != nil {
-		t.Fatalf("sign cert for %s: %v", subject.CommonName, err)
-	}
+	require.NoError(t, err, "sign cert for %s", subject.CommonName)
 	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatalf("marshal key for %s: %v", subject.CommonName, err)
-	}
+	require.NoError(t, err, "marshal key for %s", subject.CommonName)
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	return certPEM, keyPEM
 }
 
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
+	require.NoError(t, os.WriteFile(path, data, 0o600), "write %s", path)
 }

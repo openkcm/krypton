@@ -7,20 +7,22 @@ import (
 	"net"
 
 	"github.com/ovh/kmip-go/kmipserver"
+
+	"github.com/openkcm/krypton/internal/securemem"
 )
 
 // Server is a thin wrapper around kmipserver.Server that owns the TLS
-// listener and per-connection wipe registries.
+// listener and per-connection secure-memory vaults.
 type Server struct {
 	inner    *kmipserver.Server
 	listener net.Listener
 }
 
 // NewServer validates the config, opens an mTLS listener, and wires the
-// KMIP handler onto a kmipserver.Server. It attaches a fresh wipeRegistry
-// to each connection via ConnectHook and drains it via TerminateHook so
-// key material buffers referenced by response payloads are zeroed after
-// the connection ends.
+// KMIP handler onto a kmipserver.Server. It attaches a fresh securemem.MemVault
+// to each connection via ConnectHook and destroys it via TerminateHook so
+// key material held for response payloads is zeroed and unmapped after the
+// connection ends.
 func NewServer(cfg Config, km KeyManager) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kmip: invalid config: %w", err)
@@ -37,11 +39,11 @@ func NewServer(cfg Config, km KeyManager) (*Server, error) {
 
 	inner := kmipserver.NewServer(ln, newHandler(km)).
 		WithConnectHook(func(ctx context.Context) (context.Context, error) {
-			return withWipeRegistry(ctx, newWipeRegistry()), nil
+			return withMemVault(ctx, securemem.NewMemVault()), nil
 		}).
 		WithTerminateHook(func(ctx context.Context) {
-			if reg := wipeRegistryFromCtx(ctx); reg != nil {
-				reg.wipeAll()
+			if v := memVaultFromCtx(ctx); v != nil {
+				_ = v.DestroyAll()
 			}
 		})
 

@@ -11,9 +11,11 @@ import (
 // (`tenantID:keyID`), enforces mTLS tenant authorization, fetches the DEK,
 // and returns a SymmetricKey payload.
 //
-// Key material handling: the plaintext bytes are copied out of secure memory
-// into a request-local slice, placed in the response, and registered on the
-// connection's wipe registry so they are zeroed when the connection ends.
+// Key material handling: the plaintext bytes are copied into a locked region
+// reserved from the connection's securemem.MemVault, so the response payload is
+// backed by mlocked memory that the TerminateHook zeroes and unmaps when the
+// connection ends. If no vault is present the handler fails closed rather than
+// fall back to unlocked memory.
 func (h *handler) handleGet(ctx context.Context, req *payloads.GetRequestPayload) (*payloads.GetResponsePayload, error) {
 	tenantID, keyID, err := parseKeyIdentifier(req.UniqueIdentifier)
 	if err != nil {
@@ -28,11 +30,22 @@ func (h *handler) handleGet(ctx context.Context, req *payloads.GetRequestPayload
 		return nil, toKMIPError(err)
 	}
 
-	material := make([]byte, 0, dek.LengthBits/8)
-	material = append(material, dek.Material.SecureBytes()...)
-	if reg := wipeRegistryFromCtx(ctx); reg != nil {
-		reg.register(material)
+	alg, err := kmipAlgorithm(dek.Algorithm)
+	if err != nil {
+		return nil, toKMIPError(err)
 	}
+
+	vault := memVaultFromCtx(ctx)
+	if vault == nil {
+		return nil, toKMIPError(ErrNoSecureVault)
+	}
+	src := dek.Material.SecureBytes()
+	sb, err := vault.Reserve(vaultName(req.UniqueIdentifier), len(src))
+	if err != nil {
+		return nil, toKMIPError(err)
+	}
+	copy(sb, src)
+	material := []byte(sb)
 
 	return &payloads.GetResponsePayload{
 		ObjectType:       kmip.ObjectTypeSymmetricKey,
@@ -40,7 +53,7 @@ func (h *handler) handleGet(ctx context.Context, req *payloads.GetRequestPayload
 		Object: &kmip.SymmetricKey{
 			KeyBlock: kmip.KeyBlock{
 				KeyFormatType:          kmip.KeyFormatTypeRaw,
-				CryptographicAlgorithm: kmipAlgorithm(dek.Algorithm),
+				CryptographicAlgorithm: alg,
 				CryptographicLength:    dek.LengthBits,
 				KeyValue: &kmip.KeyValue{
 					Plain: &kmip.PlainKeyValue{

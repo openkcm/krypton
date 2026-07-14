@@ -1,16 +1,20 @@
-package kmip
+package kmip_test
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/openkcm/krypton/internal/kmip"
 )
 
 func TestConfigValidate(t *testing.T) {
 	t.Parallel()
-	valid := Config{
+	valid := kmip.Config{
 		BindAddr: "0.0.0.0",
 		Port:     5696,
-		TLS: TLSConfig{
+		TLS: kmip.TLSConfig{
 			ServerCert: "/etc/tls/server.pem",
 			ServerKey:  "/etc/tls/server-key.pem",
 			ClientCA:   "/etc/tls/ca.pem",
@@ -19,16 +23,16 @@ func TestConfigValidate(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		mutate  func(*Config)
+		mutate  func(*kmip.Config)
 		wantErr error
 	}{
-		{"valid", func(*Config) {}, nil},
-		{"empty bind addr", func(c *Config) { c.BindAddr = "" }, ErrEmptyBindAddr},
-		{"port too low", func(c *Config) { c.Port = 0 }, ErrInvalidPort},
-		{"port too high", func(c *Config) { c.Port = 65536 }, ErrInvalidPort},
-		{"empty server cert", func(c *Config) { c.TLS.ServerCert = "" }, ErrEmptyServerCert},
-		{"empty server key", func(c *Config) { c.TLS.ServerKey = "" }, ErrEmptyServerKey},
-		{"empty client CA", func(c *Config) { c.TLS.ClientCA = "" }, ErrEmptyClientCA},
+		{"valid", func(*kmip.Config) {}, nil},
+		{"empty bind addr", func(c *kmip.Config) { c.BindAddr = "" }, kmip.ErrEmptyBindAddr},
+		{"port too low", func(c *kmip.Config) { c.Port = 0 }, kmip.ErrInvalidPort},
+		{"port too high", func(c *kmip.Config) { c.Port = 65536 }, kmip.ErrInvalidPort},
+		{"empty server cert", func(c *kmip.Config) { c.TLS.ServerCert = "" }, kmip.ErrEmptyServerCert},
+		{"empty server key", func(c *kmip.Config) { c.TLS.ServerKey = "" }, kmip.ErrEmptyServerKey},
+		{"empty client CA", func(c *kmip.Config) { c.TLS.ClientCA = "" }, kmip.ErrEmptyClientCA},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,22 +41,16 @@ func TestConfigValidate(t *testing.T) {
 			tt.mutate(&cfg)
 			err := cfg.Validate()
 			if tt.wantErr == nil {
-				if err != nil {
-					t.Fatalf("Validate() = %v, want nil", err)
-				}
+				assert.NoError(t, err)
 				return
 			}
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Validate() = %v, want %v", err, tt.wantErr)
-			}
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestConfigListenAddress(t *testing.T) {
 	t.Parallel()
-	cfg := Config{BindAddr: "127.0.0.1", Port: 5696}
-	if got := cfg.listenAddress(); got != "127.0.0.1:5696" {
-		t.Fatalf("listenAddress() = %q, want %q", got, "127.0.0.1:5696")
-	}
+	cfg := kmip.Config{BindAddr: "127.0.0.1", Port: 5696}
+	require.Equal(t, "127.0.0.1:5696", kmip.ListenAddress(&cfg))
 }

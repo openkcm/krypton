@@ -1,11 +1,15 @@
-package kmip
+package kmip_test
 
 import (
 	"crypto/tls"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/openkcm/krypton/internal/kmip"
 )
 
 func TestBuildTLSConfig(t *testing.T) {
@@ -15,27 +19,15 @@ func TestBuildTLSConfig(t *testing.T) {
 	dir := t.TempDir()
 	certPath, keyPath := pki.writeServerFiles(t, dir)
 	caPath := filepath.Join(dir, "client-ca.pem")
-	if err := os.WriteFile(caPath, pki.caPEM, 0o600); err != nil {
-		t.Fatalf("write CA: %v", err)
-	}
+	require.NoError(t, os.WriteFile(caPath, pki.caPEM, 0o600))
 
-	cfg := TLSConfig{ServerCert: certPath, ServerKey: keyPath, ClientCA: caPath}
-	got, err := buildTLSConfig(cfg)
-	if err != nil {
-		t.Fatalf("buildTLSConfig: %v", err)
-	}
-	if got.ClientAuth != tls.RequireAndVerifyClientCert {
-		t.Fatalf("ClientAuth = %v, want RequireAndVerifyClientCert", got.ClientAuth)
-	}
-	if got.MinVersion < tls.VersionTLS12 {
-		t.Fatalf("MinVersion = %v, want >= TLS12", got.MinVersion)
-	}
-	if got.ClientCAs == nil {
-		t.Fatal("ClientCAs is nil")
-	}
-	if len(got.Certificates) != 1 {
-		t.Fatalf("Certificates: got %d, want 1", len(got.Certificates))
-	}
+	cfg := kmip.TLSConfig{ServerCert: certPath, ServerKey: keyPath, ClientCA: caPath}
+	got, err := kmip.BuildTLSConfig(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, tls.RequireAndVerifyClientCert, got.ClientAuth)
+	assert.GreaterOrEqual(t, got.MinVersion, uint16(tls.VersionTLS12))
+	assert.NotNil(t, got.ClientCAs)
+	assert.Len(t, got.Certificates, 1)
 }
 
 func TestBuildTLSConfigErrors(t *testing.T) {
@@ -46,41 +38,33 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 
 	t.Run("missing server cert", func(t *testing.T) {
 		t.Parallel()
-		_, err := buildTLSConfig(TLSConfig{
+		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
 			ServerCert: filepath.Join(dir, "nope.pem"),
 			ServerKey:  keyPath,
 			ClientCA:   filepath.Join(dir, "ca.pem"),
 		})
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("missing CA", func(t *testing.T) {
 		t.Parallel()
-		_, err := buildTLSConfig(TLSConfig{
+		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
 			ServerCert: certPath,
 			ServerKey:  keyPath,
 			ClientCA:   filepath.Join(dir, "no-ca.pem"),
 		})
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		assert.Error(t, err)
 	})
 
 	t.Run("invalid CA PEM", func(t *testing.T) {
 		t.Parallel()
 		badCA := filepath.Join(dir, "bad-ca.pem")
-		if err := os.WriteFile(badCA, []byte("not a certificate"), 0o600); err != nil {
-			t.Fatalf("write: %v", err)
-		}
-		_, err := buildTLSConfig(TLSConfig{
+		require.NoError(t, os.WriteFile(badCA, []byte("not a certificate"), 0o600))
+		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
 			ServerCert: certPath,
 			ServerKey:  keyPath,
 			ClientCA:   badCA,
 		})
-		if !errors.Is(err, ErrClientCAInvalid) {
-			t.Fatalf("err = %v, want ErrClientCAInvalid", err)
-		}
+		assert.ErrorIs(t, err, kmip.ErrClientCAInvalid)
 	})
 }
