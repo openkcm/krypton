@@ -7,18 +7,23 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
 )
 
-func NewProcessor(generator cryptor.SecretGenerator, wrapper, sealer cryptor.Cryptor, v vault.Vault, parent *Processor) *Processor {
+func NewProcessor(generator cryptor.SecretGenerator, wrapper, transportSealer, parent cryptor.Cryptor, v vault.Vault) *Processor {
 	return &Processor{
-		generator: generator,
-		wrapper:   wrapper,
-		sealer:    sealer,
-		vault:     v,
-		parent:    parent,
+		generator:       generator,
+		wrapper:         wrapper,
+		transportSealer: transportSealer,
+		parent:          parent,
+		vault:           v,
 	}
 }
 
-func (p *Processor) ResolveSecret(ctx context.Context, keyChain []model.Key) (*securemem.Data, error) {
-	return p.resolveSecret(ctx, keyChain)
+func NewManager(s store.Key, processors map[model.KeyKind]Processor) *Manager {
+	return &Manager{store: s, processors: processors}
+}
+
+func (p *Processor) ResolveSecret(ctx context.Context, key model.Key) (*securemem.Data, error) {
+	return p.resolveSecret(ctx, key)
 }

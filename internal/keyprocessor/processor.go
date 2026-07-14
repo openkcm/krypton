@@ -14,8 +14,9 @@ import (
 const persistSecName = "persistedSec"
 
 var (
-	// ErrEmptyKeyChain is returned when an operation receives an empty key chain.
-	ErrEmptyKeyChain = errors.New("empty key chain")
+	// ErrMissingParentID is returned when a processor has a parent cryptor set
+	// but the key does not specify a parent ID.
+	ErrMissingParentID = errors.New("parent set but key has no parent ID")
 	// ErrSecNotPersisted is returned when a handler completes successfully
 	// but the secret is missing from the persistent vault, indicating a bug
 	ErrSecNotPersisted = errors.New("persisted secret missing from handler response")
@@ -24,17 +25,17 @@ var (
 // Processor creates, wraps, unwraps, and deletes secrets within a key hierarchy.
 // It destroys all intermediate secrets that pass through its operations.
 type Processor struct {
-	generator cryptor.SecretGenerator
-	wrapper   cryptor.Cryptor
-	sealer    cryptor.Cryptor
-	vault     vault.Vault
-	parent    *Processor
+	generator       cryptor.SecretGenerator
+	wrapper         cryptor.Cryptor
+	transportSealer cryptor.Cryptor
+	parent          cryptor.Cryptor
+	vault           vault.Vault
 }
 
 // CreateSecretRequest is the input for CreateSecret.
 type CreateSecretRequest struct {
-	KeyChain []model.Key
-	AAD      []byte
+	Key model.Key
+	AAD []byte
 }
 
 // CreateSecretResponse is the output of CreateSecret.
@@ -42,9 +43,9 @@ type CreateSecretResponse struct{}
 
 // WrapSecretRequest is the input for WrapSecret.
 type WrapSecretRequest struct {
-	KeyChain []model.Key
-	Secret   *securemem.Data
-	AAD      []byte
+	Key    model.Key
+	Secret *securemem.Data
+	AAD    []byte
 }
 
 // WrapSecretResponse is the output of WrapSecret.
@@ -54,7 +55,7 @@ type WrapSecretResponse struct {
 
 // UnwrapSecretRequest is the input for UnwrapSecret.
 type UnwrapSecretRequest struct {
-	KeyChain      []model.Key
+	Key           model.Key
 	WrappedSecret *securemem.Data
 	AAD           []byte
 }
@@ -79,33 +80,28 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 		return CreateSecretResponse{}, nil
 	}
 
-	key, err := lastKey(req.KeyChain)
-	if err != nil {
-		return CreateSecretResponse{}, err
-	}
-
-	_, err = securemem.Run(ctx, func(ctx context.Context, _ *securemem.HandlerRequest) error {
+	_, err := securemem.Run(ctx, func(ctx context.Context, _ *securemem.HandlerRequest) error {
 		resp, err := p.generator.GenerateSecret(ctx)
 		if err != nil {
 			return err
 		}
 		defer destroySec(resp.Secret)
 
-		sealSec, err := p.seal(ctx, key, resp.Secret, req.AAD)
+		sealSec, err := p.transportSeal(ctx, req.Key, resp.Secret, req.AAD)
 		if err != nil {
 			return err
 		}
 		defer destroySec(sealSec)
 
-		wrapSec, err := p.parentWrap(ctx, req.KeyChain, sealSec, req.AAD)
+		wrapSec, err := p.parentWrap(ctx, req.Key, sealSec, req.AAD)
 		if err != nil {
 			return err
 		}
 		defer destroySec(wrapSec)
 
 		_, err = p.vault.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    key.TenantID,
-			KeyID:       key.ID,
+			TenantID:    req.Key.TenantID,
+			KeyID:       req.Key.ID,
 			KeyVersion:  1,
 			KeyMaterial: wrapSec,
 			AAD:         req.AAD,
@@ -120,20 +116,15 @@ func (p *Processor) CreateSecret(ctx context.Context, req CreateSecretRequest) (
 // When the wrapper manages its own decryption key, it encrypts directly without resolving.
 func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (WrapSecretResponse, error) {
 	resp, err := securemem.Run(ctx, func(ctx context.Context, sreq *securemem.HandlerRequest) error {
-		sec, err := p.resolveSecret(ctx, req.KeyChain)
+		sec, err := p.resolveSecret(ctx, req.Key)
 		if err != nil {
 			return err
 		}
 		defer destroySec(sec)
 
-		key, err := lastKey(req.KeyChain)
-		if err != nil {
-			return err
-		}
-
 		encResp, err := p.wrapper.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   key.TenantID,
-			KeyID:      key.ID,
+			TenantID:   req.Key.TenantID,
+			KeyID:      req.Key.ID,
 			KeyVersion: 1,
 			Secret:     toCryptorSecret(sec),
 			Plaintext:  req.Secret,
@@ -159,20 +150,15 @@ func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (Wrap
 // When the wrapper manages its own decryption key, it decrypts directly without resolving.
 func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (UnwrapSecretResponse, error) {
 	resp, err := securemem.Run(ctx, func(ctx context.Context, sreq *securemem.HandlerRequest) error {
-		sec, err := p.resolveSecret(ctx, req.KeyChain)
+		sec, err := p.resolveSecret(ctx, req.Key)
 		if err != nil {
 			return err
 		}
 		defer destroySec(sec)
 
-		key, err := lastKey(req.KeyChain)
-		if err != nil {
-			return err
-		}
-
 		decResp, err := p.wrapper.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   key.TenantID,
-			KeyID:      key.ID,
+			TenantID:   req.Key.TenantID,
+			KeyID:      req.Key.ID,
 			KeyVersion: 1,
 			Secret:     toCryptorSecret(sec),
 			Ciphertext: req.WrappedSecret,
@@ -212,14 +198,9 @@ func (p *Processor) DeleteSecret(ctx context.Context, req DeleteSecretRequest) (
 	return DeleteSecretResponse{}, nil
 }
 
-func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*securemem.Data, error) {
+func (p *Processor) resolveSecret(ctx context.Context, key model.Key) (*securemem.Data, error) {
 	if !p.wrapper.Info().DecryptionSecretRequired {
 		return nil, nil //nolint:nilnil
-	}
-
-	key, err := lastKey(keyChain)
-	if err != nil {
-		return nil, err
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, sreq *securemem.HandlerRequest) error {
@@ -232,7 +213,7 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 		}
 		defer destroySec(exported.KeyMaterial)
 
-		unwrapSec, err := p.parentUnwrap(ctx, keyChain, exported.KeyMaterial, exported.AAD)
+		unwrapSec, err := p.parentUnwrap(ctx, key, exported.KeyMaterial, exported.AAD)
 		if err != nil {
 			return err
 		}
@@ -259,11 +240,11 @@ func (p *Processor) resolveSecret(ctx context.Context, keyChain []model.Key) (*s
 	return getPersistedSec(resp)
 }
 
-func (p *Processor) seal(ctx context.Context, key model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
-	if p.sealer == nil {
+func (p *Processor) transportSeal(ctx context.Context, key model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
+	if p.transportSealer == nil {
 		return sec, nil
 	}
-	resp, err := p.sealer.Encrypt(ctx, cryptor.EncryptRequest{
+	resp, err := p.transportSealer.Encrypt(ctx, cryptor.EncryptRequest{
 		TenantID:   key.TenantID,
 		KeyID:      key.ID,
 		KeyVersion: 1,
@@ -277,10 +258,10 @@ func (p *Processor) seal(ctx context.Context, key model.Key, sec *securemem.Data
 }
 
 func (p *Processor) unseal(ctx context.Context, key model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
-	if p.sealer == nil {
+	if p.transportSealer == nil {
 		return sec, nil
 	}
-	resp, err := p.sealer.Decrypt(ctx, cryptor.DecryptRequest{
+	resp, err := p.transportSealer.Decrypt(ctx, cryptor.DecryptRequest{
 		TenantID:   key.TenantID,
 		KeyID:      key.ID,
 		KeyVersion: 1,
@@ -293,41 +274,42 @@ func (p *Processor) unseal(ctx context.Context, key model.Key, sec *securemem.Da
 	return resp.Plaintext, nil
 }
 
-func (p *Processor) parentWrap(ctx context.Context, keyChain []model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
+func (p *Processor) parentWrap(ctx context.Context, key model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
 	if p.parent == nil {
 		return sec, nil
 	}
-	resp, err := p.parent.WrapSecret(ctx, WrapSecretRequest{
-		KeyChain: keyChain[:len(keyChain)-1],
-		Secret:   sec,
-		AAD:      aad,
+	if key.ParentID == nil {
+		return nil, ErrMissingParentID
+	}
+	resp, err := p.parent.Encrypt(ctx, cryptor.EncryptRequest{
+		TenantID:  key.TenantID,
+		KeyID:     *key.ParentID,
+		Plaintext: sec,
+		AAD:       aad,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return resp.WrappedSecret, nil
+	return resp.Ciphertext, nil
 }
 
-func (p *Processor) parentUnwrap(ctx context.Context, keyChain []model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
+func (p *Processor) parentUnwrap(ctx context.Context, key model.Key, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
 	if p.parent == nil {
 		return sec, nil
 	}
-	resp, err := p.parent.UnwrapSecret(ctx, UnwrapSecretRequest{
-		KeyChain:      keyChain[:len(keyChain)-1],
-		WrappedSecret: sec,
-		AAD:           aad,
+	if key.ParentID == nil {
+		return nil, ErrMissingParentID
+	}
+	resp, err := p.parent.Decrypt(ctx, cryptor.DecryptRequest{
+		TenantID:   key.TenantID,
+		KeyID:      *key.ParentID,
+		Ciphertext: sec,
+		AAD:        aad,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return resp.Secret, nil
-}
-
-func lastKey(keyChain []model.Key) (model.Key, error) {
-	if len(keyChain) == 0 {
-		return model.Key{}, ErrEmptyKeyChain
-	}
-	return keyChain[len(keyChain)-1], nil
+	return resp.Plaintext, nil
 }
 
 func destroySec(sec *securemem.Data) {
