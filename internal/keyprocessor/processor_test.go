@@ -1106,11 +1106,10 @@ func TestHierarchy(t *testing.T) {
 type vaultWrapper struct {
 	vault.Vault
 
-	importKeyFn         func(context.Context, vault.ImportKeyRequest) (*vault.ImportKeyResponse, error)
-	exportKeyFn         func(context.Context, vault.ExportKeyRequest) (*vault.ExportKeyResponse, error)
-	destroyKeyFn        func(context.Context, vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error)
-	destroyKeyVersionFn func(context.Context, vault.DestroyKeyVersionRequest) (*vault.DestroyKeyVersionResponse, error)
-	infoFn              func() vault.Info
+	importKeyFn  func(context.Context, vault.ImportKeyRequest) (*vault.ImportKeyResponse, error)
+	exportKeyFn  func(context.Context, vault.ExportKeyRequest) (*vault.ExportKeyResponse, error)
+	destroyKeyFn func(context.Context, vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error)
+	infoFn       func() vault.Info
 }
 
 func (w *vaultWrapper) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
@@ -1132,13 +1131,6 @@ func (w *vaultWrapper) DestroyKey(ctx context.Context, req vault.DestroyKeyReque
 		return w.destroyKeyFn(ctx, req)
 	}
 	return w.Vault.DestroyKey(ctx, req)
-}
-
-func (w *vaultWrapper) DestroyKeyVersion(ctx context.Context, req vault.DestroyKeyVersionRequest) (*vault.DestroyKeyVersionResponse, error) {
-	if w.destroyKeyVersionFn != nil {
-		return w.destroyKeyVersionFn(ctx, req)
-	}
-	return w.Vault.DestroyKeyVersion(ctx, req)
 }
 
 func (w *vaultWrapper) Info() vault.Info {

@@ -21,7 +21,6 @@ type Vault interface {
 	ImportKey(ctx context.Context, req ImportKeyRequest) (*ImportKeyResponse, error)
 	ExportKey(ctx context.Context, req ExportKeyRequest) (*ExportKeyResponse, error)
 	DestroyKey(ctx context.Context, req DestroyKeyRequest) (*DestroyKeyResponse, error)
-	DestroyKeyVersion(ctx context.Context, req DestroyKeyVersionRequest) (*DestroyKeyVersionResponse, error)
 	Info() Info
 }
 
@@ -33,11 +32,21 @@ type Config interface {
 // Type identifies a vault implementation for configuration deserialization.
 type Type string
 
+// PrepareTenantRequest contains parameters for preparing a tenant in the vault.
+type PrepareTenantRequest struct {
+	TenantID string
+	Name     string
+}
+
+// PrepareTenantResponse holds the result of a tenant preparation operation.
+type PrepareTenantResponse struct {
+}
+
 // ImportKeyRequest contains parameters for storing key material in the vault.
 type ImportKeyRequest struct {
 	TenantID    string
 	KeyID       string
-	KeyVersion  int
+	KeyVersion  string
 	KeyMaterial *securemem.Data
 	AAD         []byte
 }
@@ -51,7 +60,7 @@ type ImportKeyResponse struct {
 type ExportKeyRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion *int // defaults to latest if nil
+	KeyVersion string
 }
 
 // ExportKeyResponse holds the retrieved key material and its associated authenticated data.
@@ -60,26 +69,15 @@ type ExportKeyResponse struct {
 	AAD         []byte
 }
 
-// DestroyKeyRequest contains parameters for destroying all versions of a key.
+// DestroyKeyRequest contains parameters for destroying a specific key version.
 type DestroyKeyRequest struct {
-	TenantID string
-	KeyID    string
-}
-
-// DestroyKeyResponse holds the list of key versions that were destroyed.
-type DestroyKeyResponse struct {
-	DestroyedVersions []int
-}
-
-// DestroyKeyVersionRequest contains parameters for destroying a specific key version.
-type DestroyKeyVersionRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion int
+	KeyVersion string
 }
 
-// DestroyKeyVersionResponse holds the result of a version destruction operation.
-type DestroyKeyVersionResponse struct {
+// DestroyKeyResponse holds the result of a version destruction operation.
+type DestroyKeyResponse struct {
 	// Empty for now, success indicated by nil error
 }
 
