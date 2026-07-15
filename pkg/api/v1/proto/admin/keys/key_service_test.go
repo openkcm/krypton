@@ -482,7 +482,7 @@ func TestAnnounceKey(t *testing.T) {
 		// Seed a tenant in the temp DB so tenant-existence passes; then drop
 		// the keys table so the downstream lookup fails.
 		tmpTenant := createTenant(t, tmpDB)
-		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
 		cli := setupKeyServerAndClient(t, tmpDB)
@@ -599,7 +599,7 @@ func TestGetKeyService(t *testing.T) {
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
 
-		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
 		cli := setupKeyServerAndClient(t, tmpDB)
@@ -683,7 +683,7 @@ func TestGetParentKeys(t *testing.T) {
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
 
-		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
 		cli := setupKeyServerAndClient(t, tmpDB)
@@ -800,7 +800,7 @@ func TestGetDescendantKeys(t *testing.T) {
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
 
-		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
 		cli := setupKeyServerAndClient(t, tmpDB)
@@ -977,7 +977,7 @@ func TestListKeys(t *testing.T) {
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
 
-		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys")
+		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
 		cli := setupKeyServerAndClient(t, tmpDB)
