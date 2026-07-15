@@ -12,8 +12,8 @@ require (
 	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	github.com/testcontainers/testcontainers-go v0.42.0
-	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
+	github.com/testcontainers/testcontainers-go v0.43.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/veqryn/slog-context v0.9.0
 	golang.org/x/sys v0.46.0
 	golang.org/x/term v0.43.0
@@ -88,7 +88,7 @@ require (
 	github.com/samber/slog-common v0.22.0 // indirect
 	github.com/samber/slog-formatter v1.3.0 // indirect
 	github.com/samber/slog-multi v1.8.0 // indirect
-	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
+	github.com/shirou/gopsutil/v4 v4.26.5 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
