@@ -48,11 +48,30 @@ CREATE TABLE IF NOT EXISTS keys (
 );
 `
 
+const createKeyVersionsTable = `
+CREATE TABLE IF NOT EXISTS key_versions (
+	tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+	key_id UUID NOT NULL,
+	version TEXT NOT NULL,
+	revision INT NOT NULL,
+	parent_key_id UUID NULL,
+	parent_key_version TEXT NULL,
+	life_cycle_state TEXT NOT NULL,
+	processing_state TEXT NOT NULL,
+	created_at BIGINT NOT NULL,
+	updated_at BIGINT NOT NULL,
+
+	PRIMARY KEY (tenant_id, key_id, version, revision),
+	FOREIGN KEY (tenant_id, key_id) REFERENCES keys(tenant_id, id)
+);
+`
+
 func Migrate(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		createTenantsTable,
 		createAgentRegistrationsTable,
 		createKeysTable,
+		createKeyVersionsTable,
 	}
 
 	for _, stmt := range stmts {
