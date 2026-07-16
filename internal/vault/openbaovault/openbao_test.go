@@ -221,6 +221,45 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
+	t.Run("should successfully import key for nil aad", func(t *testing.T) {
+		// given
+		tenantID := uuid.NewString()
+		keyID := uuid.NewString()
+
+		// prepare tenant first
+		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp)
+
+		// when
+		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    tenantID,
+			KeyID:       keyID,
+			KeyVersion:  "1",
+			KeyMaterial: secretData,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("should fail to import key with nil key material", func(t *testing.T) {
+		// given
+		// when
+		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:   uuid.NewString(),
+			KeyID:      uuid.NewString(),
+			KeyVersion: "1",
+			AAD:        []byte{4, 3, 2, 1},
+		})
+
+		// then
+		require.Error(t, err)
+		assert.ErrorIs(t, err, vault.ErrInvalidRequest)
+		assert.Nil(t, resp)
+	})
+
 	t.Run("should be idempotent when importing the same key", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
@@ -334,6 +373,40 @@ func TestExportKey(t *testing.T) {
 		assert.NotNil(t, resp)
 		assert.Equal(t, secretData.SecureBytes(), resp.KeyMaterial.SecureBytes())
 		assert.Equal(t, []byte{4, 3, 2, 1}, resp.AAD)
+	})
+
+	t.Run("should successfully export key for nil aad", func(t *testing.T) {
+		// given
+		tenantID := uuid.NewString()
+		keyID := uuid.NewString()
+
+		// prepare tenant first
+		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp)
+
+		// import key first
+		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    tenantID,
+			KeyID:       keyID,
+			KeyVersion:  "1",
+			KeyMaterial: secretData,
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, iResp)
+
+		// when
+		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   tenantID,
+			KeyID:      keyID,
+			KeyVersion: "1",
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, secretData.SecureBytes(), resp.KeyMaterial.SecureBytes())
+		assert.Equal(t, []byte{}, resp.AAD)
 	})
 
 	t.Run("should fail to export key for non-prepared tenant", func(t *testing.T) {
@@ -455,7 +528,7 @@ func TestDestroyKey(t *testing.T) {
 		assert.Nil(t, eResp)
 	})
 
-	t.Run("should fail to destroy key version for non-prepared tenant", func(t *testing.T) {
+	t.Run("should not return error when destroying key version for non-prepared tenant", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
@@ -468,12 +541,11 @@ func TestDestroyKey(t *testing.T) {
 		})
 
 		// then
-		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-		assert.Nil(t, resp)
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
 	})
 
-	t.Run("should fail to destroy key version for non-existing key", func(t *testing.T) {
+	t.Run("should not return error when destroying key version for non-existing key", func(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
@@ -491,9 +563,8 @@ func TestDestroyKey(t *testing.T) {
 		})
 
 		// then
-		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-		assert.Nil(t, resp)
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
 	})
 }
 
@@ -518,6 +589,181 @@ func TestInfo(t *testing.T) {
 		// then
 		assert.Equal(t, "test-client", info.Name)
 		assert.Equal(t, openbaovault.TypeOpenBao, info.Type)
+	})
+}
+
+func TestDestroyTenant(t *testing.T) {
+	// given
+	ctx := t.Context()
+
+	// start a container
+	port := startOpenBao(t)
+
+	cli, err := openbaovault.New(
+		"test-client",
+		func(c *openbao.Client) error {
+			c.SetToken(validToken)
+			return c.SetAddress("http://localhost:" + port)
+		},
+	)
+	require.NoError(t, err)
+
+	km, err := securemem.NewData("secret", 2)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err := km.Destroy()
+		assert.NoError(t, err)
+	})
+
+	t.Run("should successfully destroy tenant with keys", func(t *testing.T) {
+		// given
+		tenantID := uuid.NewString()
+		kID := uuid.NewString()
+
+		// prepare tenant first
+		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp)
+
+		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    tenantID,
+			KeyID:       kID,
+			KeyVersion:  "1",
+			KeyMaterial: km,
+			AAD:         []byte{},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, iResp)
+
+		// when
+		resp, err := cli.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: tenantID,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+
+		// verify that the tenant is destroyed
+		_, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   tenantID,
+			KeyID:      kID,
+			KeyVersion: "1",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+	})
+
+	t.Run("should successfully destroy tenant with no keys", func(t *testing.T) {
+		// given
+		tenantID := uuid.NewString()
+
+		// prepare tenant first
+		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp)
+
+		// when
+		resp, err := cli.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: tenantID,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("should be idempotent when destroying the same tenant", func(t *testing.T) {
+		// given
+		tenantID := uuid.NewString()
+
+		// prepare tenant first
+		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp)
+
+		// when
+		resp, err := cli.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: tenantID,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+
+		// second call to destroy the same tenant
+		resp, err = cli.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: tenantID,
+		})
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("should not destroy other tenants when destroying a tenant", func(t *testing.T) {
+		// given
+		tenantID1 := uuid.NewString()
+		tenantID2 := uuid.NewString()
+		kID := uuid.NewString()
+
+		// prepare tenant 1
+		tResp1, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID1, Name: "Test Tenant 1"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp1)
+
+		// import a key for tenant 1
+		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    tenantID1,
+			KeyID:       kID,
+			KeyVersion:  "1",
+			KeyMaterial: km,
+			AAD:         []byte{},
+		})
+		require.NoError(t, err)
+
+		// prepare tenant 2
+		tResp2, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID2, Name: "Test Tenant 2"})
+		require.NoError(t, err)
+		assert.NotNil(t, tResp2)
+
+		// import a key for tenant 2
+		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    tenantID2,
+			KeyID:       kID,
+			KeyVersion:  "1",
+			KeyMaterial: km,
+			AAD:         []byte{},
+		})
+		require.NoError(t, err)
+
+		// when
+		resp, err := cli.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: tenantID1,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+
+		// verify that tenant 1 is destroyed
+		eRep, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   tenantID1,
+			KeyID:      kID,
+			KeyVersion: "1",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Nil(t, eRep)
+
+		// verify that tenant 2 is still accessible
+		eRep, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   tenantID2,
+			KeyID:      kID,
+			KeyVersion: "1",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, eRep)
+		assert.Equal(t, km.SecureBytes(), eRep.KeyMaterial.SecureBytes())
 	})
 }
 

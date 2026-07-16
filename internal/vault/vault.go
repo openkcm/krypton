@@ -18,9 +18,11 @@ var (
 
 // Vault provides secure storage and retrieval of versioned key material.
 type Vault interface {
+	PrepareTenant(ctx context.Context, req PrepareTenantRequest) (*PrepareTenantResponse, error)
 	ImportKey(ctx context.Context, req ImportKeyRequest) (*ImportKeyResponse, error)
 	ExportKey(ctx context.Context, req ExportKeyRequest) (*ExportKeyResponse, error)
 	DestroyKey(ctx context.Context, req DestroyKeyRequest) (*DestroyKeyResponse, error)
+	DestroyTenant(ctx context.Context, req DestroyTenantRequest) (*DestroyTenantResponse, error)
 	Info() Info
 }
 
@@ -85,4 +87,14 @@ type DestroyKeyResponse struct {
 type Info struct {
 	Name string
 	Type Type
+}
+
+// DestroyTenantRequest contains parameters for removing a tenant from the vault.
+type DestroyTenantRequest struct {
+	TenantID string
+}
+
+// DestroyTenantResponse holds the result of a tenant destruction operation.
+type DestroyTenantResponse struct {
+	// Empty for now, success indicated by nil error
 }
