@@ -139,20 +139,12 @@ func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*va
 }
 
 func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-	result, err := u.db.ExecContext(ctx,
+	_, err := u.db.ExecContext(ctx,
 		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?",
 		req.TenantID, req.KeyID, req.KeyVersion,
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if affected == 0 {
-		return nil, vault.ErrKeyNotFound
 	}
 
 	return &vault.DestroyKeyResponse{}, nil

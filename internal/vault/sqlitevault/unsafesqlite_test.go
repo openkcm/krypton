@@ -275,22 +275,6 @@ func TestUnsafe_DestroyKey(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafe_DestroyKeyNotFound(t *testing.T) {
-	// given
-	v := newTestUnsafeVault(t)
-	ctx := t.Context()
-
-	// when
-	_, err := v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: "99",
-	})
-
-	// then
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-}
-
 func TestUnsafe_Info(t *testing.T) {
 	t.Run("memory source", func(t *testing.T) {
 		// given
