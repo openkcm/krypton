@@ -49,6 +49,7 @@ type ImportKeyRequest struct {
 	TenantID    string
 	KeyID       string
 	KeyVersion  string
+	KeyRevision int
 	KeyMaterial *securemem.Data
 	AAD         []byte
 }
@@ -60,9 +61,10 @@ type ImportKeyResponse struct {
 
 // ExportKeyRequest contains parameters for retrieving key material from the vault.
 type ExportKeyRequest struct {
-	TenantID   string
-	KeyID      string
-	KeyVersion string
+	TenantID    string
+	KeyID       string
+	KeyVersion  string
+	KeyRevision int
 }
 
 // ExportKeyResponse holds the retrieved key material and its associated authenticated data.
@@ -73,9 +75,10 @@ type ExportKeyResponse struct {
 
 // DestroyKeyRequest contains parameters for destroying a specific key version.
 type DestroyKeyRequest struct {
-	TenantID   string
-	KeyID      string
-	KeyVersion string
+	TenantID    string
+	KeyID       string
+	KeyVersion  string
+	KeyRevision int
 }
 
 // DestroyKeyResponse holds the result of a version destruction operation.

@@ -275,6 +275,93 @@ func TestUnsafe_DestroyKey(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
+func TestUnsafe_RevisionCoexistence(t *testing.T) {
+	// given
+	v := newTestUnsafeVault(t)
+	ctx := t.Context()
+
+	rev0Data := []byte("key-material-revision-0-padded!")
+	rev1Data := []byte("key-material-revision-1-padded!")
+
+	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 0,
+		KeyMaterial: newTestSecureData(t, rev0Data),
+		AAD:         []byte("aad-rev-0"),
+	})
+	assert.NoError(t, err)
+
+	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 1,
+		KeyMaterial: newTestSecureData(t, rev1Data),
+		AAD:         []byte("aad-rev-1"),
+	})
+	assert.NoError(t, err)
+
+	// when - export revision 0
+	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 0,
+	})
+
+	// then
+	assert.NoError(t, err)
+	assert.Equal(t, rev0Data, []byte(resp.KeyMaterial.SecureBytes()))
+	assert.Equal(t, []byte("aad-rev-0"), resp.AAD)
+	_ = resp.KeyMaterial.Destroy()
+
+	// when - export revision 1
+	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 1,
+	})
+
+	// then
+	assert.NoError(t, err)
+	assert.Equal(t, rev1Data, []byte(resp.KeyMaterial.SecureBytes()))
+	assert.Equal(t, []byte("aad-rev-1"), resp.AAD)
+	_ = resp.KeyMaterial.Destroy()
+
+	// when - destroy revision 0 only
+	_, err = v.DestroyKey(ctx, vault.DestroyKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 0,
+	})
+	assert.NoError(t, err)
+
+	// then - revision 0 is gone
+	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 0,
+	})
+	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+	assert.Nil(t, resp)
+
+	// then - revision 1 still exists
+	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  "1",
+		KeyRevision: 1,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, rev1Data, []byte(resp.KeyMaterial.SecureBytes()))
+	_ = resp.KeyMaterial.Destroy()
+}
+
 func TestUnsafe_Info(t *testing.T) {
 	t.Run("memory source", func(t *testing.T) {
 		// given

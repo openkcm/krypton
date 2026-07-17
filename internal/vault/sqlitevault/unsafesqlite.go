@@ -21,10 +21,11 @@ CREATE TABLE IF NOT EXISTS keys (
 	tenant_id TEXT NOT NULL CHECK(tenant_id != ''),
 	key_id TEXT NOT NULL CHECK(key_id != ''),
 	key_version TEXT NOT NULL,
+	key_revision INTEGER NOT NULL DEFAULT 0,
 	key_material BLOB NOT NULL,
 	aad BLOB,
 	created_at INTEGER NOT NULL,
-	PRIMARY KEY(tenant_id, key_id, key_version)
+	PRIMARY KEY(tenant_id, key_id, key_version, key_revision)
 )
 `
 
@@ -103,8 +104,8 @@ func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*va
 		return nil, vault.ErrInvalidRequest
 	}
 	_, err := u.db.ExecContext(ctx,
-		"INSERT INTO keys (tenant_id, key_id, key_version, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		req.TenantID, req.KeyID, req.KeyVersion, []byte(req.KeyMaterial.SecureBytes()), req.AAD, int64(clock.Now()),
+		"INSERT INTO keys (tenant_id, key_id, key_version, key_revision, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision, []byte(req.KeyMaterial.SecureBytes()), req.AAD, int64(clock.Now()),
 	)
 	if err != nil {
 		return nil, err
@@ -113,8 +114,8 @@ func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*va
 }
 
 func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?"
-	args := []any{req.TenantID, req.KeyID, req.KeyVersion}
+	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ? AND key_revision = ?"
+	args := []any{req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision}
 
 	var rawKey []byte
 	var aad []byte
@@ -140,8 +141,8 @@ func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*va
 
 func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
 	_, err := u.db.ExecContext(ctx,
-		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?",
-		req.TenantID, req.KeyID, req.KeyVersion,
+		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ? AND key_revision = ?",
+		req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision,
 	)
 	if err != nil {
 		return nil, err

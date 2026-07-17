@@ -114,7 +114,7 @@ func (v *Vault) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vau
 		return v.cli.KVv1(kvMountPath(req.TenantID)).
 			Put(
 				ctx,
-				kvPath(req.KeyID, req.KeyVersion),
+				kvPath(req.KeyID, req.KeyVersion, req.KeyRevision),
 				data,
 			)
 	})
@@ -130,7 +130,7 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		data, err := v.cli.KVv1(kvMountPath(req.TenantID)).
-			Get(ctx, kvPath(req.KeyID, req.KeyVersion))
+			Get(ctx, kvPath(req.KeyID, req.KeyVersion, req.KeyRevision))
 		if err != nil {
 			return err
 		}
@@ -184,7 +184,7 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 // DestroyKey removes the key material from the vault.
 func (v *Vault) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
 	err := v.cli.KVv1(kvMountPath(req.TenantID)).
-		Delete(ctx, kvPath(req.KeyID, req.KeyVersion))
+		Delete(ctx, kvPath(req.KeyID, req.KeyVersion, req.KeyRevision))
 	if err != nil && !isKVPathDeleted(err) {
 		return nil, err
 	}
@@ -246,8 +246,8 @@ func kvMountPath(tenantID string) string {
 	return fmt.Sprintf("%s/%s", tenantID, kvSecretName)
 }
 
-func kvPath(keyID, keyVersion string) string {
-	return fmt.Sprintf("%s/%s", keyID, keyVersion)
+func kvPath(keyID, keyVersion string, keyRevision int) string {
+	return fmt.Sprintf("%s/%s/%d", keyID, keyVersion, keyRevision)
 }
 
 func kvSecretPath(tenantID string) string {
