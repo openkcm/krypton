@@ -85,7 +85,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  nil, // missing plaintext
 		}
 
@@ -104,7 +104,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 			Secret: &cryptor.Secret{
 				Data:      newSecretKey(t),
@@ -127,7 +127,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 			Secret:     &cryptor.Secret{},
 		}
@@ -147,7 +147,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 			Secret:     nil, // missing secret
 		}
@@ -168,7 +168,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		}
 
@@ -190,7 +190,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		}
 
@@ -214,7 +214,7 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		req := cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		}
 
@@ -239,7 +239,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: nil, // missing ciphertext
 		}
 
@@ -256,7 +256,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
 		})
 		require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 			Secret: &cryptor.Secret{
 				Data:      newSecretKey(t),
@@ -286,7 +286,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
 		})
 		require.NoError(t, err)
@@ -295,7 +295,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 			Secret:     &cryptor.Secret{},
 		}
@@ -313,7 +313,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
 		})
 		require.NoError(t, err)
@@ -322,7 +322,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 			Secret:     nil, // missing secret
 		}
@@ -343,7 +343,7 @@ func TestStaticSecret_Decrypt(t *testing.T) {
 		req := cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: cipherText,
 		}
 
@@ -376,7 +376,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		})
 
@@ -392,7 +392,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 		})
 
@@ -415,7 +415,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 			AAD:        aad,
 		})
@@ -429,7 +429,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 			AAD:        aad,
 		})
@@ -449,7 +449,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 			AAD:        []byte("correct-aad"),
 		})
@@ -463,7 +463,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 			AAD:        []byte("wrong-aad"),
 		})
@@ -481,7 +481,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		})
 
@@ -497,7 +497,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj1.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 		})
 
@@ -514,7 +514,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		})
 
@@ -536,7 +536,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: tampered,
 		})
 
@@ -553,7 +553,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		})
 
@@ -573,7 +573,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: truncated,
 		})
 
@@ -590,7 +590,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Plaintext:  plainText,
 		})
 		require.NoError(t, err)
@@ -599,7 +599,7 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Ciphertext: encResp.Ciphertext,
 		})
 		require.NoError(t, err)
