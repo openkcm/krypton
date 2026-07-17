@@ -21,7 +21,7 @@ func NewProcessor(generator cryptor.SecretGenerator, wrapper, transportSealer, p
 }
 
 func NewManager(s store.Key, kvs store.KeyVersion, processors map[model.KeyKind]Processor) *Manager {
-	return &Manager{store: s, keyVersionStore: kvs, processors: processors}
+	return &Manager{store: s, versionStore: kvs, processors: processors}
 }
 
 func (p *Processor) ResolveSecret(ctx context.Context, kv model.KeyVersion) (*securemem.Data, error) {
