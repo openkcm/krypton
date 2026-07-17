@@ -10,23 +10,33 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-// ErrProcessorNotFound is returned when no processor is registered for a key's kind.
-var ErrProcessorNotFound = errors.New("key processor could not be found")
+var (
+	// ErrProcessorNotFound is returned when no processor is registered for a key's kind.
+	ErrProcessorNotFound = errors.New("key processor could not be found")
+	// ErrNoUsableKeyVersion is returned when no usable key version can be resolved.
+	ErrNoUsableKeyVersion = errors.New("no usable key version found")
+)
 
 // TypeManager identifies the Manager cryptor type.
 const TypeManager cryptor.Type = "manager"
 
-// Manager encrypts and decrypts secrets by looking up the key and delegating
-// to the Processor registered for that key's kind.
+// Manager encrypts and decrypts secrets by resolving the appropriate KeyVersion
+// from the store and delegating to the Processor registered for that key's kind.
 type Manager struct {
-	store      store.Key
-	processors map[model.KeyKind]Processor
+	store        store.Key
+	versionStore store.KeyVersion
+	processors   map[model.KeyKind]Processor
 }
 
 var _ cryptor.Cryptor = &Manager{}
 
-// Encrypt looks up the key and delegates to the matching processor.
+// Encrypt resolves the key version and delegates to the matching processor.
 func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	key, err := km.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
 	if err != nil {
 		return nil, err
@@ -37,9 +47,9 @@ func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cr
 	}
 
 	resp, err := proc.WrapSecret(ctx, WrapSecretRequest{
-		Key:    *key,
-		Secret: req.Plaintext,
-		AAD:    req.AAD,
+		KeyVersion: kv,
+		Secret:     req.Plaintext,
+		AAD:        req.AAD,
 	})
 	if err != nil {
 		return nil, err
@@ -50,8 +60,13 @@ func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cr
 	}, nil
 }
 
-// Decrypt looks up the key and delegates to the matching processor.
+// Decrypt resolves the key version and delegates to the matching processor.
 func (km *Manager) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	key, err := km.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
 	if err != nil {
 		return nil, err
@@ -62,7 +77,7 @@ func (km *Manager) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cr
 	}
 
 	resp, err := proc.UnwrapSecret(ctx, UnwrapSecretRequest{
-		Key:           *key,
+		KeyVersion:    kv,
 		WrappedSecret: req.Ciphertext,
 		AAD:           req.AAD,
 	})
@@ -82,4 +97,22 @@ func (km *Manager) Info() cryptor.Info {
 		Type:                     TypeManager,
 		DecryptionSecretRequired: true,
 	}
+}
+
+func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID, version string) (model.KeyVersion, error) {
+	result, err := km.versionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+		TenantID:              tenantID,
+		KeyID:                 keyID,
+		Version:               version,
+		ProcessingState:       model.KeyVersionUsable,
+		IsOrderByRevisionDesc: true,
+		Limit:                 1,
+	})
+	if err != nil {
+		return model.KeyVersion{}, err
+	}
+	if len(result.KeyVersions) == 0 {
+		return model.KeyVersion{}, fmt.Errorf("%w: key %s version %s", ErrNoUsableKeyVersion, keyID, version)
+	}
+	return result.KeyVersions[0], nil
 }

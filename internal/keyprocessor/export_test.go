@@ -20,10 +20,10 @@ func NewProcessor(generator cryptor.SecretGenerator, wrapper, transportSealer, p
 	}
 }
 
-func NewManager(s store.Key, processors map[model.KeyKind]Processor) *Manager {
-	return &Manager{store: s, processors: processors}
+func NewManager(s store.Key, kvs store.KeyVersion, processors map[model.KeyKind]Processor) *Manager {
+	return &Manager{store: s, keyVersionStore: kvs, processors: processors}
 }
 
-func (p *Processor) ResolveSecret(ctx context.Context, key model.Key) (*securemem.Data, error) {
-	return p.resolveSecret(ctx, key)
+func (p *Processor) ResolveSecret(ctx context.Context, kv model.KeyVersion) (*securemem.Data, error) {
+	return p.resolveSecret(ctx, kv)
 }
