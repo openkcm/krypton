@@ -275,22 +275,6 @@ func TestUnsafe_DestroyKey(t *testing.T) {
 	_ = resp.KeyMaterial.Destroy()
 }
 
-func TestUnsafe_DestroyKeyNotFound(t *testing.T) {
-	// given
-	v := newTestUnsafeVault(t)
-	ctx := t.Context()
-
-	// when
-	_, err := v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: "99",
-	})
-
-	// then
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-}
-
 func TestUnsafe_Info(t *testing.T) {
 	t.Run("memory source", func(t *testing.T) {
 		// given
@@ -359,4 +343,113 @@ func TestUnsafe_FileSourcePersistence(t *testing.T) {
 	assert.Equal(t, keyBytes, []byte(resp.KeyMaterial.SecureBytes()))
 	assert.Equal(t, aad, resp.AAD)
 	_ = resp.KeyMaterial.Destroy()
+}
+
+func TestPrepareTenant(t *testing.T) {
+	// given
+	v := newTestUnsafeVault(t)
+	ctx := t.Context()
+
+	// when
+	resp, err := v.PrepareTenant(ctx, vault.PrepareTenantRequest{
+		TenantID: "tenant-1",
+		Name:     "Test Tenant",
+	})
+
+	// then
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+func TestDestroyTenant(t *testing.T) {
+	// given
+	v := newTestUnsafeVault(t)
+	ctx := t.Context()
+
+	t.Run("destroy tenant with keys", func(t *testing.T) {
+		// given
+		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    "tenant-1",
+			KeyID:       "key-1",
+			KeyVersion:  "1",
+			KeyMaterial: newTestSecureData(t, []byte("key-material")),
+		})
+		assert.NoError(t, err)
+
+		// when
+		resp, err := v.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: "tenant-1",
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+
+		// verify keys are deleted
+		exportResp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: "1",
+		})
+		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Nil(t, exportResp)
+	})
+
+	t.Run("destroy tenant without keys", func(t *testing.T) {
+		// when
+		resp, err := v.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: "tenant-2",
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("should destroy only keys of the specified tenant", func(t *testing.T) {
+		// given
+		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    "tenant-1",
+			KeyID:       "key-1",
+			KeyVersion:  "1",
+			KeyMaterial: newTestSecureData(t, []byte("key-material-1")),
+		})
+		assert.NoError(t, err)
+
+		_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
+			TenantID:    "tenant-2",
+			KeyID:       "key-2",
+			KeyVersion:  "1",
+			KeyMaterial: newTestSecureData(t, []byte("key-material-2")),
+		})
+		assert.NoError(t, err)
+
+		// when
+		resp, err := v.DestroyTenant(ctx, vault.DestroyTenantRequest{
+			TenantID: "tenant-1",
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+
+		// verify keys of tenant-1 are deleted
+		exportResp1, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: "1",
+		})
+		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.Nil(t, exportResp1)
+
+		// verify keys of tenant-2 still exist
+		exportResp2, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:   "tenant-2",
+			KeyID:      "key-2",
+			KeyVersion: "1",
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("key-material-2"), []byte(exportResp2.KeyMaterial.SecureBytes()))
+		_ = exportResp2.KeyMaterial.Destroy()
+	})
 }

@@ -74,54 +74,53 @@ func New(name string, opts ...Options) (*Vault, error) {
 // PrepareTenant creates a namespace and mounts the kv secret engine for the tenant.
 func (v *Vault) PrepareTenant(ctx context.Context, req vault.PrepareTenantRequest) (*vault.PrepareTenantResponse, error) {
 	// create the namespace for the tenant
-	namespacePath := "sys/namespaces/" + req.TenantID
-	_, err := v.cli.Logical().WriteWithContext(ctx, namespacePath, map[string]any{})
+	_, err := v.cli.Logical().WriteWithContext(ctx, namespacePath(req.TenantID), map[string]any{})
 	if err != nil {
 		return nil, err
 	}
 
-	kvSecretPath := req.TenantID + "/sys/mounts/" + kvSecretName
-	// check if the kv secret engine is already mounted for the tenant
-	_, err = v.cli.Logical().ReadWithContext(ctx, kvSecretPath)
-	if err == nil {
-		return &vault.PrepareTenantResponse{}, nil
+	// mount the kv secret engine for the tenant
+	_, err = v.cli.Logical().WriteWithContext(ctx, kvSecretPath(req.TenantID), kvCreateRequest)
+	if err != nil && !isKVPathExists(err) {
+		return nil, err
+	}
+	return &vault.PrepareTenantResponse{}, nil
+}
+
+// DestroyTenant removes the namespace and kv secret engine for the tenant.
+func (v *Vault) DestroyTenant(ctx context.Context, req vault.DestroyTenantRequest) (*vault.DestroyTenantResponse, error) {
+	_, err := v.cli.Logical().DeleteWithContext(ctx, kvSecretPath(req.TenantID))
+	if err != nil && !isKVPathDeleted(err) {
+		return nil, err
 	}
 
-	var respErr *openbao.ResponseError
-	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusBadRequest {
-		for _, e := range respErr.Errors {
-			if strings.Contains(e, "No secret engine mount at "+kvSecretName+"/") {
-				// create the kv secret mount for the tenant
-				_, err = v.cli.Logical().WriteWithContext(ctx, kvSecretPath, kvCreateRequest)
-				if err != nil {
-					return nil, err
-				}
-				return &vault.PrepareTenantResponse{}, nil
-			}
-		}
+	_, err = v.cli.Logical().DeleteWithContext(ctx, namespacePath(req.TenantID))
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	return &vault.DestroyTenantResponse{}, nil
 }
 
 // ImportKey stores the key material in the vault.
 func (v *Vault) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
+	if req.KeyMaterial == nil {
+		return nil, vault.ErrInvalidRequest
+	}
 	_, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		data, err := toKvData(data{KeyMaterial: base64Encode(req.KeyMaterial.SecureBytes()), AAD: base64Encode(req.AAD)})
 		if err != nil {
 			return err
 		}
-		err = v.cli.KVv1(kvMountPath(req.TenantID)).
+		return v.cli.KVv1(kvMountPath(req.TenantID)).
 			Put(
 				ctx,
 				kvPath(req.KeyID, req.KeyVersion),
 				data,
 			)
-		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	return &vault.ImportKeyResponse{}, nil
 }
 
@@ -146,20 +145,15 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 			return err
 		}
 
-		sKm, err := securemem.NewData(req.KeyID, len(b64Km))
-		if err != nil {
-			return err
-		}
-
-		copy(sKm.SecureBytes(), b64Km)
-
 		// clear the temporary buffer to avoid leaving sensitive data in memory
-		securemem.Zero(b64Km)
+		defer securemem.Zero(b64Km)
 
-		err = hreq.PersistentVault().Import(securememImportKey, sKm)
+		sKm, err := hreq.PersistentVault().Reserve(securememImportKey, len(b64Km))
 		if err != nil {
 			return err
 		}
+
+		copy(sKm, b64Km)
 
 		aad, err = base64Decode(kvData.AAD)
 		return err
@@ -189,36 +183,17 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 
 // DestroyKey removes the key material from the vault.
 func (v *Vault) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-	eResp, err := v.ExportKey(ctx, vault.ExportKeyRequest(req))
-	if err != nil {
-		return nil, err
-	}
-
-	err = eResp.KeyMaterial.Destroy()
-	if err != nil {
-		return nil, err
-	}
-
-	err = v.cli.KVv1(kvMountPath(req.TenantID)).
+	err := v.cli.KVv1(kvMountPath(req.TenantID)).
 		Delete(ctx, kvPath(req.KeyID, req.KeyVersion))
-	if err != nil {
+	if err != nil && !isKVPathDeleted(err) {
 		return nil, err
 	}
-
 	return &vault.DestroyKeyResponse{}, nil
 }
 
 // Info returns the vault information.
 func (v *Vault) Info() vault.Info {
 	return v.info
-}
-
-func kvMountPath(tenantID string) string {
-	return fmt.Sprintf("%s/%s", tenantID, kvSecretName)
-}
-
-func kvPath(keyID, keyVersion string) string {
-	return fmt.Sprintf("%s/%s", keyID, keyVersion)
 }
 
 func toKvData(d data) (map[string]any, error) {
@@ -245,4 +220,40 @@ func base64Encode[T securemem.SecureBytes | []byte](b T) string {
 
 func base64Decode(b string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(b)
+}
+
+func isKVPathDeleted(err error) bool {
+	var respErr *openbao.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+		return true
+	}
+	return false
+}
+
+func isKVPathExists(err error) bool {
+	var respErr *openbao.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusBadRequest {
+		for _, e := range respErr.Errors {
+			if strings.Contains(e, fmt.Sprintf("path is already in use at %s/", kvSecretName)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func kvMountPath(tenantID string) string {
+	return fmt.Sprintf("%s/%s", tenantID, kvSecretName)
+}
+
+func kvPath(keyID, keyVersion string) string {
+	return fmt.Sprintf("%s/%s", keyID, keyVersion)
+}
+
+func kvSecretPath(tenantID string) string {
+	return tenantID + "/sys/mounts/" + kvSecretName
+}
+
+func namespacePath(tenantID string) string {
+	return "sys/namespaces/" + tenantID
 }

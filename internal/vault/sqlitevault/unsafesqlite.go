@@ -81,6 +81,23 @@ func (u *Unsafe) migrate(ctx context.Context) error {
 	return err
 }
 
+// PrepareTenant creates a new tenant in the vault. In this unsafe implementation, it does nothing.
+func (u *Unsafe) PrepareTenant(ctx context.Context, req vault.PrepareTenantRequest) (*vault.PrepareTenantResponse, error) {
+	return &vault.PrepareTenantResponse{}, nil
+}
+
+// DestroyTenant removes all keys associated with the given tenant from the vault.
+func (u *Unsafe) DestroyTenant(ctx context.Context, req vault.DestroyTenantRequest) (*vault.DestroyTenantResponse, error) {
+	_, err := u.db.ExecContext(ctx,
+		"DELETE FROM keys WHERE tenant_id = ?",
+		req.TenantID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &vault.DestroyTenantResponse{}, nil
+}
+
 func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
 	if req.KeyMaterial == nil {
 		return nil, vault.ErrInvalidRequest
@@ -122,20 +139,12 @@ func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*va
 }
 
 func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-	result, err := u.db.ExecContext(ctx,
+	_, err := u.db.ExecContext(ctx,
 		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ?",
 		req.TenantID, req.KeyID, req.KeyVersion,
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-	if affected == 0 {
-		return nil, vault.ErrKeyNotFound
 	}
 
 	return &vault.DestroyKeyResponse{}, nil
