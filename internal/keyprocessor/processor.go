@@ -125,7 +125,7 @@ func (p *Processor) WrapSecret(ctx context.Context, req WrapSecretRequest) (Wrap
 		encResp, err := p.wrapper.Encrypt(ctx, cryptor.EncryptRequest{
 			TenantID:   req.Key.TenantID,
 			KeyID:      req.Key.ID,
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Secret:     toCryptorSecret(sec),
 			Plaintext:  req.Secret,
 			AAD:        req.AAD,
@@ -159,7 +159,7 @@ func (p *Processor) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (
 		decResp, err := p.wrapper.Decrypt(ctx, cryptor.DecryptRequest{
 			TenantID:   req.Key.TenantID,
 			KeyID:      req.Key.ID,
-			KeyVersion: 1,
+			KeyVersion: "1",
 			Secret:     toCryptorSecret(sec),
 			Ciphertext: req.WrappedSecret,
 			AAD:        req.AAD,
@@ -249,7 +249,7 @@ func (p *Processor) transportSeal(ctx context.Context, key model.Key, sec *secur
 	resp, err := p.transportSealer.Encrypt(ctx, cryptor.EncryptRequest{
 		TenantID:   key.TenantID,
 		KeyID:      key.ID,
-		KeyVersion: 1,
+		KeyVersion: "1",
 		Plaintext:  sec,
 		AAD:        aad,
 	})
@@ -266,7 +266,7 @@ func (p *Processor) unseal(ctx context.Context, key model.Key, sec *securemem.Da
 	resp, err := p.transportSealer.Decrypt(ctx, cryptor.DecryptRequest{
 		TenantID:   key.TenantID,
 		KeyID:      key.ID,
-		KeyVersion: 1,
+		KeyVersion: "1",
 		Ciphertext: sec,
 		AAD:        aad,
 	})

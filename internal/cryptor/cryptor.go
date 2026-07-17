@@ -34,7 +34,7 @@ type EncryptRequest struct {
 	// KeyID is the unique identifier of the key.
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
-	KeyVersion int
+	KeyVersion string
 	// Secret holds the key material for encryption. Nil when the Cryptor manages its own secrets.
 	Secret *Secret
 	// Plaintext is the data to encrypt.
@@ -57,7 +57,7 @@ type DecryptRequest struct {
 	// KeyID is the unique identifier of the key.
 	KeyID string
 	// KeyVersion specifies which version of the key to use.
-	KeyVersion int
+	KeyVersion string
 	// Secret holds the key material for decryption. Nil when the Cryptor manages its own secrets.
 	Secret *Secret
 	// Ciphertext is the data to decrypt.
@@ -124,7 +124,7 @@ func (req EncryptRequest) Validate() error {
 	if req.KeyID == "" {
 		return fmt.Errorf("invalid key ID: %w", ErrRequest)
 	}
-	if req.KeyVersion == 0 {
+	if req.KeyVersion == "" {
 		return fmt.Errorf("invalid key version: %w", ErrRequest)
 	}
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
@@ -140,7 +140,7 @@ func (req DecryptRequest) Validate() error {
 	if req.KeyID == "" {
 		return fmt.Errorf("invalid key ID: %w", ErrRequest)
 	}
-	if req.KeyVersion == 0 {
+	if req.KeyVersion == "" {
 		return fmt.Errorf("invalid key version: %w", ErrRequest)
 	}
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
