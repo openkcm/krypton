@@ -6,7 +6,7 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
-type SecretWrapRequest struct {
+type WrapSecretRequest struct {
 	TenantID   string
 	KeyID      string
 	KeyVersion string
@@ -14,11 +14,11 @@ type SecretWrapRequest struct {
 	AAD        []byte
 }
 
-type SecretWrapResponse struct {
+type WrapSecretResponse struct {
 	WrappedSecret *securemem.Data
 }
 
-type SecretUnwrapRequest struct {
+type UnwrapSecretRequest struct {
 	TenantID      string
 	KeyID         string
 	KeyVersion    string
@@ -26,12 +26,12 @@ type SecretUnwrapRequest struct {
 	AAD           []byte
 }
 
-type SecretUnwrapResponse struct {
+type UnwrapSecretResponse struct {
 	Secret *securemem.Data
 }
 
 // SecretWrapper wraps and unwraps secrets within a key hierarchy.
 type SecretWrapper interface {
-	WrapSecret(ctx context.Context, req SecretWrapRequest) (*SecretWrapResponse, error)
-	UnwrapSecret(ctx context.Context, req SecretUnwrapRequest) (*SecretUnwrapResponse, error)
+	WrapSecret(ctx context.Context, req WrapSecretRequest) (*WrapSecretResponse, error)
+	UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (*UnwrapSecretResponse, error)
 }

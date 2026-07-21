@@ -21,13 +21,13 @@ var (
 type Manager struct {
 	store        store.Key
 	versionStore store.KeyVersion
-	processors   map[model.KeyKind]Processor
+	processors   map[model.KeyKind]processor
 }
 
 var _ SecretWrapper = &Manager{}
 
 // WrapSecret resolves the key version and delegates to the matching processor.
-func (km *Manager) WrapSecret(ctx context.Context, req SecretWrapRequest) (*SecretWrapResponse, error) {
+func (km *Manager) WrapSecret(ctx context.Context, req WrapSecretRequest) (*WrapSecretResponse, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func (km *Manager) WrapSecret(ctx context.Context, req SecretWrapRequest) (*Secr
 		return nil, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
 	}
 
-	resp, err := proc.WrapSecret(ctx, WrapSecretRequest{
+	resp, err := proc.wrapSecret(ctx, wrapSecretRequest{
 		KeyVersion: kv,
 		Secret:     req.Secret,
 		AAD:        req.AAD,
@@ -51,13 +51,13 @@ func (km *Manager) WrapSecret(ctx context.Context, req SecretWrapRequest) (*Secr
 		return nil, err
 	}
 
-	return &SecretWrapResponse{
+	return &WrapSecretResponse{
 		WrappedSecret: resp.WrappedSecret,
 	}, nil
 }
 
 // UnwrapSecret resolves the key version and delegates to the matching processor.
-func (km *Manager) UnwrapSecret(ctx context.Context, req SecretUnwrapRequest) (*SecretUnwrapResponse, error) {
+func (km *Manager) UnwrapSecret(ctx context.Context, req UnwrapSecretRequest) (*UnwrapSecretResponse, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (km *Manager) UnwrapSecret(ctx context.Context, req SecretUnwrapRequest) (*
 		return nil, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
 	}
 
-	resp, err := proc.UnwrapSecret(ctx, UnwrapSecretRequest{
+	resp, err := proc.unwrapSecret(ctx, unwrapSecretRequest{
 		KeyVersion:    kv,
 		WrappedSecret: req.WrappedSecret,
 		AAD:           req.AAD,
@@ -81,7 +81,7 @@ func (km *Manager) UnwrapSecret(ctx context.Context, req SecretUnwrapRequest) (*
 		return nil, err
 	}
 
-	return &SecretUnwrapResponse{
+	return &UnwrapSecretResponse{
 		Secret: resp.Secret,
 	}, nil
 }
