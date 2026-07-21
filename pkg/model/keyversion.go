@@ -25,3 +25,19 @@ type KeyVersion struct {
 	CreatedAt        clock.UnixNano            `json:"created_at"`
 	UpdatedAt        clock.UnixNano            `json:"updated_at"`
 }
+
+func NewKeyVersion(tenantID, keyID, version string, parentKeyID, parentKeyVersion *string) KeyVersion {
+	now := clock.Now()
+	return KeyVersion{
+		TenantID:         tenantID,
+		KeyID:            keyID,
+		Version:          version,
+		Revision:         0,
+		ParentKeyID:      parentKeyID,
+		ParentKeyVersion: parentKeyVersion,
+		LifeCycleState:   KeyLifeCycleActive,
+		ProcessingState:  KeyVersionUsable,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+}
