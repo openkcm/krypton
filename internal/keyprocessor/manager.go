@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -17,10 +16,7 @@ var (
 	ErrNoUsableKeyVersion = errors.New("no usable key version found")
 )
 
-// TypeManager identifies the Manager cryptor type.
-const TypeManager cryptor.Type = "manager"
-
-// Manager encrypts and decrypts secrets by resolving the appropriate KeyVersion
+// Manager wraps and unwraps secrets by resolving the appropriate KeyVersion
 // from the store and delegating to the Processor registered for that key's kind.
 type Manager struct {
 	store        store.Key
@@ -28,10 +24,10 @@ type Manager struct {
 	processors   map[model.KeyKind]Processor
 }
 
-var _ cryptor.Cryptor = &Manager{}
+var _ SecretWrapper = &Manager{}
 
-// Encrypt resolves the key version and delegates to the matching processor.
-func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
+// WrapSecret resolves the key version and delegates to the matching processor.
+func (km *Manager) WrapSecret(ctx context.Context, req SecretWrapRequest) (*SecretWrapResponse, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return nil, err
@@ -48,20 +44,20 @@ func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cr
 
 	resp, err := proc.WrapSecret(ctx, WrapSecretRequest{
 		KeyVersion: kv,
-		Secret:     req.Plaintext,
+		Secret:     req.Secret,
 		AAD:        req.AAD,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &cryptor.EncryptResponse{
-		Ciphertext: resp.WrappedSecret,
+	return &SecretWrapResponse{
+		WrappedSecret: resp.WrappedSecret,
 	}, nil
 }
 
-// Decrypt resolves the key version and delegates to the matching processor.
-func (km *Manager) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
+// UnwrapSecret resolves the key version and delegates to the matching processor.
+func (km *Manager) UnwrapSecret(ctx context.Context, req SecretUnwrapRequest) (*SecretUnwrapResponse, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return nil, err
@@ -78,25 +74,16 @@ func (km *Manager) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cr
 
 	resp, err := proc.UnwrapSecret(ctx, UnwrapSecretRequest{
 		KeyVersion:    kv,
-		WrappedSecret: req.Ciphertext,
+		WrappedSecret: req.WrappedSecret,
 		AAD:           req.AAD,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &cryptor.DecryptResponse{
-		Plaintext: resp.Secret,
+	return &SecretUnwrapResponse{
+		Secret: resp.Secret,
 	}, nil
-}
-
-// Info returns the Manager's cryptor metadata.
-func (km *Manager) Info() cryptor.Info {
-	return cryptor.Info{
-		Name:                     "keyprocessor-manager",
-		Type:                     TypeManager,
-		DecryptionSecretRequired: true,
-	}
 }
 
 func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID, version string) (model.KeyVersion, error) {
