@@ -73,133 +73,77 @@ func TestStaticSecret_New(t *testing.T) {
 	}
 }
 
-func TestStaticSecret_Encrypt(t *testing.T) {
+func TestStaticSecret_Seal(t *testing.T) {
 	// given
 	ctx := t.Context()
 
 	subj, err := staticsecret.New("test-static-secret", newSecretKey(t))
 	require.NoError(t, err)
 
-	t.Run("should fail if encrypt request validation fails", func(t *testing.T) {
+	t.Run("should fail if plaintext is nil", func(t *testing.T) {
 		// given
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  nil, // missing plaintext
+		req := cryptor.SealRequest{
+			Plaintext: nil,
 		}
 
 		// when
-		resp, err := subj.Encrypt(ctx, req)
+		resp, err := subj.Seal(ctx, req)
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
-	t.Run("should fail if encrypt request contains a secret", func(t *testing.T) {
+	t.Run("should succeed with valid plaintext", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
-			Secret: &cryptor.Secret{
-				Data:      newSecretKey(t),
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
+		req := cryptor.SealRequest{
+			Plaintext: plainText,
 		}
 
 		// when
-		resp, err := subj.Encrypt(ctx, req)
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("should fail if encrypt request contains empty secret", func(t *testing.T) {
-		// given
-		plainText := newSecureMemData(t, []byte("plaintext"))
-
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
-			Secret:     &cryptor.Secret{},
-		}
-
-		// when
-		resp, err := subj.Encrypt(ctx, req)
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("should not fail if encrypt request is missing secret", func(t *testing.T) {
-		// given
-		plainText := newSecureMemData(t, []byte("plaintext"))
-
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
-			Secret:     nil, // missing secret
-		}
-
-		// when
-		resp, err := subj.Encrypt(ctx, req)
+		resp, err := subj.Seal(ctx, req)
 
 		// then
 		assert.NoError(t, err)
-		assert.NotNil(t, resp)
+		assert.NotNil(t, resp.Ciphertext)
 		t.Cleanup(func() { _ = resp.Ciphertext.Destroy() })
 	})
 
-	t.Run("should fail to encrypt if plaintext data is destroyed", func(t *testing.T) {
+	t.Run("should fail to seal if plaintext data is destroyed", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		req := cryptor.SealRequest{
+			Plaintext: plainText,
 		}
 
-		// destroy plaintext before encryption
+		// destroy plaintext before sealing
 		require.NoError(t, plainText.Destroy())
 
 		// when
-		resp, err := subj.Encrypt(ctx, req)
+		resp, err := subj.Seal(ctx, req)
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
 	t.Run("should generate different ciphertext for same plaintext and key", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		req := cryptor.SealRequest{
+			Plaintext: plainText,
 		}
 
 		// when
-		resp1, err := subj.Encrypt(ctx, req)
+		resp1, err := subj.Seal(ctx, req)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = resp1.Ciphertext.Destroy() })
 
-		resp2, err := subj.Encrypt(ctx, req)
+		resp2, err := subj.Seal(ctx, req)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = resp2.Ciphertext.Destroy() })
 
@@ -207,19 +151,16 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 		assert.NotEqual(t, resp1.Ciphertext.SecureBytes(), resp2.Ciphertext.SecureBytes())
 	})
 
-	t.Run("should not destroy plaintext after encryption", func(t *testing.T) {
+	t.Run("should not destroy plaintext after sealing", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		req := cryptor.SealRequest{
+			Plaintext: plainText,
 		}
 
 		// when
-		resp, err := subj.Encrypt(ctx, req)
+		resp, err := subj.Seal(ctx, req)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = resp.Ciphertext.Destroy() })
 
@@ -228,302 +169,178 @@ func TestStaticSecret_Encrypt(t *testing.T) {
 	})
 }
 
-func TestStaticSecret_Decrypt(t *testing.T) {
+func TestStaticSecret_Unseal(t *testing.T) {
 	// given
 	ctx := t.Context()
 	subj, err := staticsecret.New("test-static-secret", newSecretKey(t))
 	require.NoError(t, err)
 
-	t.Run("should fail if decrypt request validation fails", func(t *testing.T) {
+	t.Run("should fail if ciphertext is nil", func(t *testing.T) {
 		// given
-		req := cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: nil, // missing ciphertext
+		req := cryptor.UnsealRequest{
+			Ciphertext: nil,
 		}
 
 		// when
-		resp, err := subj.Decrypt(ctx, req)
+		resp, err := subj.Unseal(ctx, req)
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
 	})
 
-	t.Run("should fail if decrypt request contains a secret", func(t *testing.T) {
-		// given
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
-
-		req := cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
-			Secret: &cryptor.Secret{
-				Data:      newSecretKey(t),
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
-		}
-
-		// when
-		resp, err := subj.Decrypt(ctx, req)
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("should fail if decrypt request contains empty secret", func(t *testing.T) {
-		// given
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
-
-		req := cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
-			Secret:     &cryptor.Secret{},
-		}
-
-		// when
-		resp, err := subj.Decrypt(ctx, req)
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("should not fail if decrypt request is missing secret", func(t *testing.T) {
-		// given
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  newSecureMemData(t, []byte("ciphertext")),
-		})
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
-
-		req := cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
-			Secret:     nil, // missing secret
-		}
-
-		// when
-		resp, err := subj.Decrypt(ctx, req)
-
-		// then
-		assert.NoError(t, err)
-		assert.NotNil(t, resp)
-		t.Cleanup(func() { _ = resp.Plaintext.Destroy() })
-	})
-
-	t.Run("should fail to decrypt if ciphertext data is destroyed", func(t *testing.T) {
+	t.Run("should fail to unseal if ciphertext data is destroyed", func(t *testing.T) {
 		// given
 		cipherText := newSecureMemData(t, []byte("ciphertext"))
 
-		req := cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
+		req := cryptor.UnsealRequest{
 			Ciphertext: cipherText,
 		}
 
-		// destroy ciphertext before decryption
+		// destroy ciphertext before unsealing
 		require.NoError(t, cipherText.Destroy())
 
 		// when
-		resp, err := subj.Decrypt(ctx, req)
+		resp, err := subj.Unseal(ctx, req)
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
 	})
 }
 
-func TestStaticSecret_EncryptDecrypt(t *testing.T) {
+func TestStaticSecret_SealUnseal(t *testing.T) {
 	// given
 	ctx := t.Context()
 
 	subj, err := staticsecret.New("test-static-secret", newSecretKey(t))
 	require.NoError(t, err)
 
-	t.Run("should encrypt and decrypt plaintext successfully", func(t *testing.T) {
+	t.Run("should seal and unseal plaintext successfully", func(t *testing.T) {
 		// given
 		text := []byte("hello, secure world!")
 		plainText := newSecureMemData(t, text)
 
 		// when
-		// encrypt
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// ciphertext must differ from plaintext
-		assert.NotEqual(t, text, []byte(encResp.Ciphertext.SecureBytes()))
+		assert.NotEqual(t, text, []byte(sealResp.Ciphertext.SecureBytes()))
 
 		// when
-		// decrypt
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+			Ciphertext: sealResp.Ciphertext,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = decResp.Plaintext.Destroy() })
+		t.Cleanup(func() { _ = unsealResp.Plaintext.Destroy() })
 
 		// recovered plaintext must match original
-		assert.Equal(t, text, []byte(decResp.Plaintext.SecureBytes()))
+		assert.Equal(t, text, []byte(unsealResp.Plaintext.SecureBytes()))
 	})
 
-	t.Run("should encrypt and decrypt with AAD successfully", func(t *testing.T) {
+	t.Run("should seal and unseal with AAD successfully", func(t *testing.T) {
 		// given
 		text := []byte("authenticated payload")
 		plainText := newSecureMemData(t, text)
 		aad := []byte("context-binding-data")
 
 		// when
-		// encrypt with AAD
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
-			AAD:        aad,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
+			AAD:       aad,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// when
-		// decrypt with same AAD succeeds
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+			Ciphertext: sealResp.Ciphertext,
 			AAD:        aad,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = decResp.Plaintext.Destroy() })
+		t.Cleanup(func() { _ = unsealResp.Plaintext.Destroy() })
 
-		assert.Equal(t, text, []byte(decResp.Plaintext.SecureBytes()))
+		assert.Equal(t, text, []byte(unsealResp.Plaintext.SecureBytes()))
 	})
 
-	t.Run("should fail to decrypt with wrong AAD", func(t *testing.T) {
+	t.Run("should fail to unseal with wrong AAD", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
-			AAD:        []byte("correct-aad"),
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
+			AAD:       []byte("correct-aad"),
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// when
-		// decrypt with wrong AAD must fail
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+			Ciphertext: sealResp.Ciphertext,
 			AAD:        []byte("wrong-aad"),
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, decResp)
+		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
 	})
 
-	t.Run("should fail to decrypt with wrong key", func(t *testing.T) {
+	t.Run("should fail to unseal with wrong key", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// when
-		// decrypt with different staticsecret must fail
 		subj1, err := staticsecret.New("test-static-secret", newSecretKey(t))
 		require.NoError(t, err)
 
-		decResp, err := subj1.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+		unsealResp, err := subj1.Unseal(ctx, cryptor.UnsealRequest{
+			Ciphertext: sealResp.Ciphertext,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, decResp)
+		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
 	})
 
-	t.Run("should fail to decrypt tampered ciphertext", func(t *testing.T) {
+	t.Run("should fail to unseal tampered ciphertext", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("do not tamper"))
 
 		// when
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// copy ciphertext into writable secure memory and flip a byte
-		ct := encResp.Ciphertext.SecureBytes()
+		ct := sealResp.Ciphertext.SecureBytes()
 		tampered, err := securemem.NewData("tampered", len(ct))
 		require.NoError(t, err)
 
@@ -533,36 +350,30 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		tampered.SecureBytes()[len(ct)-1] ^= 0xFF
 
 		// when
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
 			Ciphertext: tampered,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, decResp)
+		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
 	})
 
-	t.Run("should fail to decrypt if ciphertext is too short to contain nonce and tag", func(t *testing.T) {
+	t.Run("should fail to unseal if ciphertext is too short to contain nonce and tag", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("short cipher"))
 
 		// when
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
 		})
 
 		// then
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// create a truncated ciphertext that is too short to contain nonce and tag
-		ct := encResp.Ciphertext.SecureBytes()
+		ct := sealResp.Ciphertext.SecureBytes()
 		truncated, err := securemem.NewData("truncated", 8) // too short for nonce+tag
 		require.NoError(t, err)
 
@@ -570,58 +381,35 @@ func TestStaticSecret_EncryptDecrypt(t *testing.T) {
 		copy(truncated.SecureBytes(), ct[:8])
 
 		// when
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
 			Ciphertext: truncated,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Nil(t, decResp)
+		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
 	})
 
-	t.Run("should not destroy ciphertext after decryption", func(t *testing.T) {
+	t.Run("should not destroy ciphertext after unsealing", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
 		// when
-		encResp, err := subj.Encrypt(ctx, cryptor.EncryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Plaintext:  plainText,
+		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+			Plaintext: plainText,
 		})
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = encResp.Ciphertext.Destroy() })
+		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
-		decResp, err := subj.Decrypt(ctx, cryptor.DecryptRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+			Ciphertext: sealResp.Ciphertext,
 		})
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = decResp.Plaintext.Destroy() })
+		t.Cleanup(func() { _ = unsealResp.Plaintext.Destroy() })
 
 		// then
-		assert.NotNil(t, encResp.Ciphertext.SecureBytes())
+		assert.NotNil(t, sealResp.Ciphertext.SecureBytes())
 	})
-}
-
-func TestStaticSecret_Info(t *testing.T) {
-	// given
-	subj, err := staticsecret.New("test-static-secret", newSecretKey(t))
-	require.NoError(t, err)
-
-	// when
-	info := subj.Info()
-
-	// then
-	assert.Equal(t, "test-static-secret", info.Name)
-	assert.Equal(t, staticsecret.TypeStaticSecret, info.Type)
-	assert.False(t, info.DecryptionSecretRequired)
 }
 
 // newSecretKey allocate a 32-byte AES key in secure memory

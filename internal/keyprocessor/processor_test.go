@@ -18,16 +18,13 @@ import (
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/pkg/model"
-	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 type parentSetup struct {
 	tenantID  string
 	parentKey model.Key
-	parentKV  model.KeyVersion
-	manager   *keyprocessor.Manager
-	vault     *vaultWrapper // exposed for error injection in tests
+	sealer    *sealerWrapper // exposed for error injection in tests
 }
 
 func setupParent(t *testing.T) *parentSetup {
@@ -35,46 +32,22 @@ func setupParent(t *testing.T) *parentSetup {
 	db := createDatabase(t)
 	tenantID := createTenant(t, db)
 	keyStore := storesql.NewKeyStore(db)
-	kvStore := storesql.NewKeyVersionStore(db)
 
 	parentKey := model.NewKey(tenantID, "parent-"+uuid.NewString(), "K0", nil, "test", nil)
 	require.NoError(t, keyStore.CreateKey(t.Context(), parentKey))
+	activateKey(t, db, parentKey)
 
-	parentKV := model.NewKeyVersion(tenantID, parentKey.ID, "1", nil, nil)
-	_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: parentKV})
-	require.NoError(t, err)
-
-	v := &vaultWrapper{Vault: newTestVault(t)}
-	parentProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, v)
-	_, err = parentProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: parentKV})
-	require.NoError(t, err)
-
-	mgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{parentKey.Kind: *parentProc})
+	rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+	sw := &sealerWrapper{Sealer: rootMgr}
 
 	return &parentSetup{
 		tenantID:  tenantID,
 		parentKey: parentKey,
-		parentKV:  parentKV,
-		manager:   mgr,
-		vault:     v,
+		sealer:    sw,
 	}
 }
 
 func TestCreateSecret(t *testing.T) {
-	t.Run("should not create if wrapper manages its own decryption key", func(t *testing.T) {
-		// given
-		processor := keyprocessor.NewProcessor(nil, newStaticSecretCryptor(t), nil, nil, nil)
-
-		// when
-		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
-	})
-
 	t.Run("should return error if secret generation fails", func(t *testing.T) {
 		// given
 		genErr := errors.New("entropy exhausted")
@@ -83,11 +56,12 @@ func TestCreateSecret(t *testing.T) {
 		gen.generateSecretFn = func(context.Context) (*cryptor.GenerateSecretResponse, error) {
 			return nil, genErr
 		}
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, nil, newTestVault(t))
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, newTestSealer(t), newTestVault(t))
 
+		parentKeyID := uuid.NewString()
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
+			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil),
 		})
 
 		// then
@@ -95,7 +69,7 @@ func TestCreateSecret(t *testing.T) {
 		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
-	t.Run("should return error if sealing fails", func(t *testing.T) {
+	t.Run("should return error if transport sealing fails", func(t *testing.T) {
 		// given
 		sealErr := errors.New("sealing failed")
 
@@ -112,17 +86,18 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		sealer := &cryptorWrapper{Cryptor: newStaticSecretCryptor(t)}
-		sealer.encryptFn = func(_ context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
+		sealer := &sealerWrapper{Sealer: newTestSealer(t)}
+		sealer.sealFn = func(_ context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
 			assert.Equal(t, keyID, req.KeyID)
-			return &cryptor.EncryptResponse{}, sealErr
+			return cryptor.SealResponse{}, sealErr
 		}
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, nil, newTestVault(t))
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, newTestSealer(t), newTestVault(t))
 
+		parentKeyID := uuid.NewString()
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(tenantID, keyID, "1", nil, nil),
+			KeyVersion: model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil),
 		})
 
 		// then
@@ -131,12 +106,12 @@ func TestCreateSecret(t *testing.T) {
 		assert.Nil(t, genSec.SecureBytes())
 	})
 
-	t.Run("should return error if parent wrapping fails", func(t *testing.T) {
+	t.Run("should return error if parent sealing fails", func(t *testing.T) {
 		// given
 		parentErr := errors.New("parent vault down")
 		ps := setupParent(t)
-		ps.vault.exportKeyFn = func(_ context.Context, _ vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			return nil, parentErr
+		ps.sealer.sealFn = func(_ context.Context, _ cryptor.SealRequest) (cryptor.SealResponse, error) {
+			return cryptor.SealResponse{}, parentErr
 		}
 
 		var genSec *securemem.Data
@@ -149,8 +124,8 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -163,12 +138,12 @@ func TestCreateSecret(t *testing.T) {
 		assert.Nil(t, genSec.SecureBytes())
 	})
 
-	t.Run("should return error if parent wrapping fails after sealing", func(t *testing.T) {
+	t.Run("should return error if parent sealing fails after transport sealing", func(t *testing.T) {
 		// given
 		parentErr := errors.New("parent vault down")
 		ps := setupParent(t)
-		ps.vault.exportKeyFn = func(_ context.Context, _ vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			return nil, parentErr
+		ps.sealer.sealFn = func(_ context.Context, _ cryptor.SealRequest) (cryptor.SealResponse, error) {
+			return cryptor.SealResponse{}, parentErr
 		}
 
 		var genSec *securemem.Data
@@ -181,19 +156,19 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		realSealer := newStaticSecretCryptor(t)
+		realSealer := newTestSealer(t)
 		var sealedSec *securemem.Data
-		sealer := &cryptorWrapper{Cryptor: realSealer}
-		sealer.encryptFn = func(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
-			resp, err := realSealer.Encrypt(ctx, req)
+		sealer := &sealerWrapper{Sealer: realSealer}
+		sealer.sealFn = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+			resp, err := realSealer.Seal(ctx, req)
 			if err == nil {
 				sealedSec = resp.Ciphertext
 			}
 			return resp, err
 		}
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -224,14 +199,14 @@ func TestCreateSecret(t *testing.T) {
 		}
 
 		childKeyID := uuid.NewString()
-		childKV := model.NewKeyVersion(ps.tenantID, childKeyID, "1", &ps.parentKey.ID, &ps.parentKV.Version)
+		childKV := model.NewKeyVersion(ps.tenantID, childKeyID, "1", &ps.parentKey.ID, nil)
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		v.importKeyFn = func(_ context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
 			assert.Equal(t, ps.tenantID, req.TenantID)
 			assert.Equal(t, childKeyID, req.KeyID)
 			return nil, importErr
 		}
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.manager, v)
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.sealer, v)
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -248,7 +223,7 @@ func TestCreateSecret(t *testing.T) {
 		// given
 		ps := setupParent(t)
 		orphanKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", nil, nil)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -256,29 +231,15 @@ func TestCreateSecret(t *testing.T) {
 		})
 
 		// then
-		assert.ErrorIs(t, err, keyprocessor.ErrMissingParentKeyVersion)
+		assert.ErrorIs(t, err, keyprocessor.ErrMissingParentKey)
 		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
-	t.Run("should succeed for processor with sealer", func(t *testing.T) {
-		// given
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), nil, newTestVault(t))
-
-		// when
-		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
-	})
-
-	t.Run("should succeed for processor with parent", func(t *testing.T) {
+	t.Run("should succeed", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -290,11 +251,11 @@ func TestCreateSecret(t *testing.T) {
 		assert.Equal(t, keyprocessor.CreateSecretResponse{}, resp)
 	})
 
-	t.Run("should succeed for processor with sealer and parent", func(t *testing.T) {
+	t.Run("should succeed with transport sealer", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -308,28 +269,17 @@ func TestCreateSecret(t *testing.T) {
 }
 
 func TestResolveSecret(t *testing.T) {
-	t.Run("should return nil if wrapper manages its own decryption key", func(t *testing.T) {
-		// given
-		processor := keyprocessor.NewProcessor(nil, newStaticSecretCryptor(t), nil, nil, nil)
-
-		// when
-		sec, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil))
-
-		// then
-		assert.NoError(t, err)
-		assert.Nil(t, sec)
-	})
-
 	t.Run("should return error if key is not found", func(t *testing.T) {
 		// given
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), newTestVault(t))
 
+		parentKeyID := uuid.NewString()
 		// when
-		resp, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil))
+		sec, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil))
 
 		// then
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.Secret{}, sec)
 	})
 
 	t.Run("should return error if vault export fails", func(t *testing.T) {
@@ -338,10 +288,11 @@ func TestResolveSecret(t *testing.T) {
 
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", nil, nil)
+		parentKeyID := uuid.NewString()
+		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
@@ -352,21 +303,21 @@ func TestResolveSecret(t *testing.T) {
 		}
 
 		// when
-		resp, err := processor.ResolveSecret(t.Context(), kv)
+		sec, err := processor.ResolveSecret(t.Context(), kv)
 
 		// then
 		assert.ErrorIs(t, err, exportErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.Secret{}, sec)
 	})
 
-	t.Run("should return error if parent unwrap fails", func(t *testing.T) {
+	t.Run("should return error if parent unsealing fails", func(t *testing.T) {
 		// given
 		parentErr := errors.New("parent unavailable")
 		ps := setupParent(t)
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
 		assert.NoError(t, err)
 
@@ -378,34 +329,35 @@ func TestResolveSecret(t *testing.T) {
 			}
 			return resp, err
 		}
-		ps.vault.exportKeyFn = func(_ context.Context, _ vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			return nil, parentErr
+		ps.sealer.unsealFn = func(_ context.Context, _ cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			return cryptor.UnsealResponse{}, parentErr
 		}
 
 		// when
-		resp, err := processor.ResolveSecret(t.Context(), childKV)
+		sec, err := processor.ResolveSecret(t.Context(), childKV)
 
 		// then
 		assert.ErrorIs(t, err, parentErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.Secret{}, sec)
 		assert.NotNil(t, exportSec)
 		assert.Nil(t, exportSec.SecureBytes())
 	})
 
-	t.Run("should return error if unsealing fails", func(t *testing.T) {
+	t.Run("should return error if transport unsealing fails", func(t *testing.T) {
 		// given
 		unsealErr := errors.New("unsealing failed")
 
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
+		parentKeyID := uuid.NewString()
+		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil)
 
-		realSealer := newStaticSecretCryptor(t)
-		sealer := &cryptorWrapper{Cryptor: realSealer}
-		sealer.decryptFn = func(_ context.Context, _ cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
-			return &cryptor.DecryptResponse{}, unsealErr
+		realSealer := newTestSealer(t)
+		sealer := &sealerWrapper{Sealer: realSealer}
+		sealer.unsealFn = func(_ context.Context, _ cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			return cryptor.UnsealResponse{}, unsealErr
 		}
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), sealer, nil, v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), sealer, newTestSealer(t), v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
@@ -417,422 +369,197 @@ func TestResolveSecret(t *testing.T) {
 			}
 			return resp, err
 		}
-
-		// when
-		resp, err := processor.ResolveSecret(t.Context(), kv)
-
-		// then
-		assert.ErrorIs(t, err, unsealErr)
-		assert.Nil(t, resp)
-		assert.NotNil(t, exportSec)
-		assert.Nil(t, exportSec.SecureBytes())
-	})
-
-	t.Run("should succeed for processor with sealer", func(t *testing.T) {
-		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
-
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), nil, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
-		assert.NoError(t, err)
 
 		// when
 		sec, err := processor.ResolveSecret(t.Context(), kv)
 
 		// then
-		assert.NoError(t, err)
-		assert.NotNil(t, sec)
-		assert.NotNil(t, sec.SecureBytes())
-	})
-
-	t.Run("should succeed for processor with parent", func(t *testing.T) {
-		// given
-		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		// when
-		sec, err := processor.ResolveSecret(t.Context(), childKV)
-
-		// then
-		assert.NoError(t, err)
-		assert.NotNil(t, sec)
-		assert.NotNil(t, sec.SecureBytes())
-	})
-
-	t.Run("should succeed for processor with sealer and parent", func(t *testing.T) {
-		// given
-		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), ps.manager, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		// when
-		sec, err := processor.ResolveSecret(t.Context(), childKV)
-
-		// then
-		assert.NoError(t, err)
-		assert.NotNil(t, sec)
-		assert.NotNil(t, sec.SecureBytes())
-	})
-}
-
-func TestWrapSecret(t *testing.T) {
-	t.Run("should return error if resolve fails", func(t *testing.T) {
-		// given
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
-
-		// when
-		resp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
-			Secret:     newTestData(t, []byte("data")),
-		})
-
-		// then
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
-	})
-
-	t.Run("should return error if encryption fails", func(t *testing.T) {
-		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
-
-		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, v)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
-		assert.NoError(t, err)
-
-		var exportSec *securemem.Data
-		v.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			resp, err := v.Vault.ExportKey(ctx, req)
-			if err == nil {
-				exportSec = resp.KeyMaterial
-			}
-			return resp, err
-		}
-
-		// when — nil plaintext is rejected by aes256gcm
-		resp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     nil,
-		})
-
-		// then
-		assert.Error(t, err)
-		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
-		assert.Nil(t, exportSec.SecureBytes())
-	})
-
-	t.Run("should wrap without resolving if wrapper manages its own decryption key", func(t *testing.T) {
-		// given
-		processor := keyprocessor.NewProcessor(nil, newStaticSecretCryptor(t), nil, nil, nil)
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
-
-		// when
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     newTestData(t, []byte("data")),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    kv,
-			WrappedSecret: wrapResp.WrappedSecret,
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("data"), []byte(unwrapResp.Secret.SecureBytes()))
-	})
-
-	t.Run("should succeed for processor with sealer", func(t *testing.T) {
-		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
-
-		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), nil, v)
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
-		assert.NoError(t, err)
-
-		var exportSec *securemem.Data
-		v.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			resp, err := v.Vault.ExportKey(ctx, req)
-			if err == nil {
-				exportSec = resp.KeyMaterial
-			}
-			return resp, err
-		}
-
-		// when
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    kv,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
+		assert.ErrorIs(t, err, unsealErr)
+		assert.Equal(t, cryptor.Secret{}, sec)
 		assert.NotNil(t, exportSec)
 		assert.Nil(t, exportSec.SecureBytes())
 	})
 
-	t.Run("should succeed for processor with parent", func(t *testing.T) {
+	t.Run("should succeed", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
 		assert.NoError(t, err)
 
 		// when
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    childKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
-		})
+		sec, err := processor.ResolveSecret(t.Context(), childKV)
 
 		// then
 		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
+		assert.NotNil(t, sec.Data)
+		assert.NotEmpty(t, sec.Data.SecureBytes())
+		assert.Equal(t, cryptor.KeyAlgorithmAES256, sec.Algorithm)
 	})
 
-	t.Run("should succeed for processor with sealer and parent", func(t *testing.T) {
+	t.Run("should succeed with transport sealer", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), ps.manager, newTestVault(t))
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
 		assert.NoError(t, err)
 
 		// when
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    childKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
-		})
+		sec, err := processor.ResolveSecret(t.Context(), childKV)
 
 		// then
 		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
+		assert.NotNil(t, sec.Data)
+		assert.NotEmpty(t, sec.Data.SecureBytes())
+		assert.Equal(t, cryptor.KeyAlgorithmAES256, sec.Algorithm)
 	})
 }
 
-func TestUnwrapSecret(t *testing.T) {
-	t.Run("should return error if resolve fails", func(t *testing.T) {
+func TestEncrypt(t *testing.T) {
+	t.Run("should return error if plaintext is nil", func(t *testing.T) {
 		// given
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
 
 		// when
-		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
-			WrappedSecret: newTestData(t, []byte("ciphertext")),
+		resp, err := processor.Encrypt(t.Context(), cryptor.EncryptRequest{
+			Secret:    newTestSecret(t),
+			Plaintext: nil,
 		})
 
 		// then
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
-		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
 	})
 
-	t.Run("should return error if decryption fails with tampered ciphertext", func(t *testing.T) {
+	t.Run("should encrypt and decrypt round trip", func(t *testing.T) {
 		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
+		sec := newTestSecret(t)
 
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
-		assert.NoError(t, err)
-
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     newTestData(t, []byte("data")),
+		// when
+		encResp, err := processor.Encrypt(t.Context(), cryptor.EncryptRequest{
+			Secret:    sec,
+			Plaintext: newTestData(t, []byte("hello")),
 		})
 		assert.NoError(t, err)
 
-		original := wrapResp.WrappedSecret.SecureBytes()
+		decResp, err := processor.Decrypt(t.Context(), cryptor.DecryptRequest{
+			Secret:     sec,
+			Ciphertext: encResp.Ciphertext,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("hello"), []byte(decResp.Plaintext.SecureBytes()))
+	})
+
+	t.Run("should encrypt and decrypt round trip with AAD", func(t *testing.T) {
+		// given
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
+		sec := newTestSecret(t)
+
+		// when
+		encResp, err := processor.Encrypt(t.Context(), cryptor.EncryptRequest{
+			Secret:    sec,
+			Plaintext: newTestData(t, []byte("payload")),
+			AAD:       []byte("aad"),
+		})
+		assert.NoError(t, err)
+
+		decResp, err := processor.Decrypt(t.Context(), cryptor.DecryptRequest{
+			Secret:     sec,
+			Ciphertext: encResp.Ciphertext,
+			AAD:        []byte("aad"),
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("payload"), []byte(decResp.Plaintext.SecureBytes()))
+	})
+}
+
+func TestDecrypt(t *testing.T) {
+	t.Run("should return error with tampered ciphertext", func(t *testing.T) {
+		// given
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
+		sec := newTestSecret(t)
+
+		encResp, err := processor.Encrypt(t.Context(), cryptor.EncryptRequest{
+			Secret:    sec,
+			Plaintext: newTestData(t, []byte("data")),
+		})
+		assert.NoError(t, err)
+
+		original := encResp.Ciphertext.SecureBytes()
 		tampered := make([]byte, len(original))
 		copy(tampered, original)
 		tampered[0] ^= 0xFF
 
 		// when
-		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    kv,
-			WrappedSecret: newTestData(t, tampered),
+		resp, err := processor.Decrypt(t.Context(), cryptor.DecryptRequest{
+			Secret:     sec,
+			Ciphertext: newTestData(t, tampered),
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
+		assert.Nil(t, resp)
 	})
 
-	t.Run("should return error if decryption fails with wrong AAD", func(t *testing.T) {
+	t.Run("should return error with wrong AAD", func(t *testing.T) {
 		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
+		sec := newTestSecret(t)
 
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: kv,
-			AAD:        []byte("create-aad"),
-		})
-		assert.NoError(t, err)
-
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     newTestData(t, []byte("data")),
-			AAD:        []byte("wrap-aad"),
+		encResp, err := processor.Encrypt(t.Context(), cryptor.EncryptRequest{
+			Secret:    sec,
+			Plaintext: newTestData(t, []byte("data")),
+			AAD:       []byte("correct-aad"),
 		})
 		assert.NoError(t, err)
 
 		// when
-		resp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    kv,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("wrong-aad"),
+		resp, err := processor.Decrypt(t.Context(), cryptor.DecryptRequest{
+			Secret:     sec,
+			Ciphertext: encResp.Ciphertext,
+			AAD:        []byte("wrong-aad"),
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, keyprocessor.UnwrapSecretResponse{}, resp)
+		assert.Nil(t, resp)
 	})
 
-	t.Run("should succeed for processor with sealer", func(t *testing.T) {
+	t.Run("should return error if ciphertext is nil", func(t *testing.T) {
 		// given
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil)
-
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), nil, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
-		assert.NoError(t, err)
-
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: kv,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
+		processor := keyprocessor.NewProcessor(nil, newTestCryptor(), nil, nil, nil)
 
 		// when
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    kv,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
+		resp, err := processor.Decrypt(t.Context(), cryptor.DecryptRequest{
+			Secret:     newTestSecret(t),
+			Ciphertext: nil,
 		})
 
 		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
-	})
-
-	t.Run("should succeed for processor with parent", func(t *testing.T) {
-		// given
-		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		// when
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    childKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
-	})
-
-	t.Run("should succeed for processor with sealer and parent", func(t *testing.T) {
-		// given
-		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), ps.manager, newTestVault(t))
-		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		wrapResp, err := processor.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("payload")),
-			AAD:        []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		// when
-		unwrapResp, err := processor.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    childKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-			AAD:           []byte("aad"),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("payload"), []byte(unwrapResp.Secret.SecureBytes()))
+		assert.Error(t, err)
+		assert.Nil(t, resp)
 	})
 }
 
 func TestDeleteSecret(t *testing.T) {
-	t.Run("should not delete if wrapper manages its own decryption key", func(t *testing.T) {
-		// given
-		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(nil, newStaticSecretCryptor(t), nil, nil, v)
-
-		var called bool
-		v.destroyKeyFn = func(context.Context, vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-			called = true
-			return &vault.DestroyKeyResponse{}, nil
-		}
-
-		// when
-		resp, err := processor.DeleteSecret(t.Context(), keyprocessor.DeleteSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", nil, nil),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, keyprocessor.DeleteSecretResponse{}, resp)
-		assert.False(t, called)
-	})
-
 	t.Run("should return error if key destroy fails", func(t *testing.T) {
 		// given
 		destroyErr := errors.New("vault locked")
 
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", nil, nil)
+		parentKeyID := uuid.NewString()
+		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
@@ -854,10 +581,11 @@ func TestDeleteSecret(t *testing.T) {
 		// given
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", nil, nil)
+		parentKeyID := uuid.NewString()
+		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
@@ -873,109 +601,6 @@ func TestDeleteSecret(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		assert.Equal(t, keyprocessor.DeleteSecretResponse{}, resp)
-	})
-}
-
-func TestHierarchy(t *testing.T) {
-	t.Run("should succeed for two-level chain round trip", func(t *testing.T) {
-		// given
-		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		child := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
-		_, err := child.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		// when
-		wrapResp, err := child.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("classified")),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := child.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    childKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("classified"), []byte(unwrapResp.Secret.SecureBytes()))
-	})
-
-	t.Run("should succeed for three-level chain round trip", func(t *testing.T) {
-		// given
-		db := createDatabase(t)
-		tenantID := createTenant(t, db)
-		keyStore := storesql.NewKeyStore(db)
-		kvStore := storesql.NewKeyVersionStore(db)
-
-		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
-		rootKV := model.NewKeyVersion(tenantID, rootKey.ID, "1", nil, nil)
-		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: rootKV})
-		require.NoError(t, err)
-
-		rootProc := keyprocessor.NewProcessor(newTestSecretGen(), newStaticSecretCryptor(t), nil, nil, newTestVault(t))
-		_, err = rootProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: rootKV})
-		assert.NoError(t, err)
-		rootMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{rootKey.Kind: *rootProc})
-
-		midKey := model.NewKey(tenantID, "mid-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), midKey))
-		midKV := model.NewKeyVersion(tenantID, midKey.ID, "1", &rootKey.ID, &rootKV.Version)
-		_, err = kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: midKV})
-		require.NoError(t, err)
-
-		midProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newStaticSecretCryptor(t), rootMgr, newTestVault(t))
-		_, err = midProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: midKV})
-		assert.NoError(t, err)
-		midMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{midKey.Kind: *midProc})
-
-		leafKV := model.NewKeyVersion(tenantID, uuid.NewString(), "1", &midKey.ID, &midKV.Version)
-		leafProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, midMgr, newTestVault(t))
-		_, err = leafProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: leafKV})
-		assert.NoError(t, err)
-
-		// when
-		wrapResp, err := leafProc.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: leafKV,
-			Secret:     newTestData(t, []byte("top secret")),
-		})
-		assert.NoError(t, err)
-
-		unwrapResp, err := leafProc.UnwrapSecret(t.Context(), keyprocessor.UnwrapSecretRequest{
-			KeyVersion:    leafKV,
-			WrappedSecret: wrapResp.WrappedSecret,
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("top secret"), []byte(unwrapResp.Secret.SecureBytes()))
-	})
-
-	t.Run("should return error if parent vault fails during child resolve", func(t *testing.T) {
-		// given
-		parentErr := errors.New("parent compromised")
-		ps := setupParent(t)
-
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, &ps.parentKV.Version)
-		child := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.manager, newTestVault(t))
-		_, err := child.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
-		assert.NoError(t, err)
-
-		ps.vault.exportKeyFn = func(context.Context, vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			return nil, parentErr
-		}
-
-		// when
-		resp, err := child.WrapSecret(t.Context(), keyprocessor.WrapSecretRequest{
-			KeyVersion: childKV,
-			Secret:     newTestData(t, []byte("data")),
-		})
-
-		// then
-		assert.ErrorIs(t, err, parentErr)
-		assert.Equal(t, keyprocessor.WrapSecretResponse{}, resp)
 	})
 }
 
@@ -1029,33 +654,25 @@ func (w *secretGenWrapper) GenerateSecret(ctx context.Context) (*cryptor.Generat
 	return w.SecretGenerator.GenerateSecret(ctx)
 }
 
-type cryptorWrapper struct {
-	cryptor.Cryptor
+type sealerWrapper struct {
+	cryptor.Sealer
 
-	encryptFn func(context.Context, cryptor.EncryptRequest) (*cryptor.EncryptResponse, error)
-	decryptFn func(context.Context, cryptor.DecryptRequest) (*cryptor.DecryptResponse, error)
-	infoFn    func() cryptor.Info
+	sealFn   func(context.Context, cryptor.SealRequest) (cryptor.SealResponse, error)
+	unsealFn func(context.Context, cryptor.UnsealRequest) (cryptor.UnsealResponse, error)
 }
 
-func (w *cryptorWrapper) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
-	if w.encryptFn != nil {
-		return w.encryptFn(ctx, req)
+func (w *sealerWrapper) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+	if w.sealFn != nil {
+		return w.sealFn(ctx, req)
 	}
-	return w.Cryptor.Encrypt(ctx, req)
+	return w.Sealer.Seal(ctx, req)
 }
 
-func (w *cryptorWrapper) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
-	if w.decryptFn != nil {
-		return w.decryptFn(ctx, req)
+func (w *sealerWrapper) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+	if w.unsealFn != nil {
+		return w.unsealFn(ctx, req)
 	}
-	return w.Cryptor.Decrypt(ctx, req)
-}
-
-func (w *cryptorWrapper) Info() cryptor.Info {
-	if w.infoFn != nil {
-		return w.infoFn()
-	}
-	return w.Cryptor.Info()
+	return w.Sealer.Unseal(ctx, req)
 }
 
 func newTestVault(t *testing.T) *sqlitevault.Unsafe {
@@ -1074,16 +691,29 @@ func newTestSecretGen() *cryptor.AES256SecretGenerator {
 	return cryptor.NewAES256SecretGenerator()
 }
 
-func newStaticSecretCryptor(t *testing.T) *staticsecret.StaticSecret {
+func newTestSealer(t *testing.T) *staticsecret.StaticSecret {
 	t.Helper()
 	key, err := securemem.NewData("static-key", 32)
 	assert.NoError(t, err)
 	_, err = rand.Read(key.SecureBytes())
 	assert.NoError(t, err)
 	t.Cleanup(func() { _ = key.Destroy() })
-	c, err := staticsecret.New("test-static", key)
+	s, err := staticsecret.New("test-static", key)
 	assert.NoError(t, err)
-	return c
+	return s
+}
+
+func newTestSecret(t *testing.T) cryptor.Secret {
+	t.Helper()
+	key, err := securemem.NewData("test-key", 32)
+	assert.NoError(t, err)
+	_, err = rand.Read(key.SecureBytes())
+	assert.NoError(t, err)
+	t.Cleanup(func() { _ = key.Destroy() })
+	return cryptor.Secret{
+		Algorithm: cryptor.KeyAlgorithmAES256,
+		Data:      key,
+	}
 }
 
 func newTestData(t *testing.T, content []byte) *securemem.Data {

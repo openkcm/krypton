@@ -15,88 +15,138 @@ var (
 	ErrProcessorNotFound = errors.New("key processor could not be found")
 	// ErrNoUsableKeyVersion is returned when no usable key version can be resolved.
 	ErrNoUsableKeyVersion = errors.New("no usable key version found")
+	// ErrKeyNotActivated is returned when the key is not in an active lifecycle state.
+	ErrKeyNotActivated = errors.New("key is not in activated state")
+	// ErrKeyVersionRequired is returned when the key version is not specified.
+	ErrKeyVersionRequired = errors.New("key version is required")
 )
 
-// TypeManager identifies the Manager cryptor type.
-const TypeManager cryptor.Type = "manager"
-
-// Manager encrypts and decrypts secrets by resolving the appropriate KeyVersion
-// from the store and delegating to the Processor registered for that key's kind.
+// Manager validates the key lifecycle, resolves key versions, and delegates to processors.
 type Manager struct {
 	store        store.Key
 	versionStore store.KeyVersion
-	processors   map[model.KeyKind]Processor
+	processors   map[model.KeyKind]processor
 }
 
-var _ cryptor.Cryptor = &Manager{}
+var _ cryptor.Sealer = &Manager{}
 
-// Encrypt resolves the key version and delegates to the matching processor.
-func (km *Manager) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
-	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
+// Seal validates the key lifecycle, resolves the key version and its secret to encrypt the plaintext.
+func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+	if req.KeyVersion == nil {
+		return cryptor.SealResponse{}, ErrKeyVersionRequired
+	}
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, *req.KeyVersion)
 	if err != nil {
-		return nil, err
+		return cryptor.SealResponse{}, err
 	}
 
 	key, err := km.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
 	if err != nil {
-		return nil, err
+		return cryptor.SealResponse{}, err
+	}
+	if key.LifeCycleState != model.KeyLifeCycleActive {
+		return cryptor.SealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
 	}
 	proc, ok := km.processors[key.Kind]
 	if !ok {
-		return nil, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
+		return cryptor.SealResponse{}, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
 	}
 
-	resp, err := proc.WrapSecret(ctx, WrapSecretRequest{
-		KeyVersion: kv,
-		Secret:     req.Plaintext,
+	sec, err := proc.resolveSecret(ctx, kv)
+	if err != nil {
+		return cryptor.SealResponse{}, err
+	}
+	defer destroySec(sec.Data)
+
+	resp, err := proc.encrypt(ctx, cryptor.EncryptRequest{
+		Secret:    sec,
+		Plaintext: req.Plaintext,
+		AAD:       req.AAD,
+	})
+	if err != nil {
+		return cryptor.SealResponse{}, err
+	}
+
+	return cryptor.SealResponse{
+		Ciphertext: resp.Ciphertext,
+	}, nil
+}
+
+// Unseal validates the key lifecycle, resolves the key version and its secret to decrypt the ciphertext.
+func (km *Manager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+	if req.KeyVersion == nil {
+		return cryptor.UnsealResponse{}, ErrKeyVersionRequired
+	}
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, *req.KeyVersion)
+	if err != nil {
+		return cryptor.UnsealResponse{}, err
+	}
+
+	key, err := km.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
+	if err != nil {
+		return cryptor.UnsealResponse{}, err
+	}
+	if key.LifeCycleState != model.KeyLifeCycleActive {
+		return cryptor.UnsealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+	}
+	proc, ok := km.processors[key.Kind]
+	if !ok {
+		return cryptor.UnsealResponse{}, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
+	}
+
+	sec, err := proc.resolveSecret(ctx, kv)
+	if err != nil {
+		return cryptor.UnsealResponse{}, err
+	}
+	defer destroySec(sec.Data)
+
+	resp, err := proc.decrypt(ctx, cryptor.DecryptRequest{
+		Secret:     sec,
+		Ciphertext: req.Ciphertext,
 		AAD:        req.AAD,
 	})
 	if err != nil {
-		return nil, err
+		return cryptor.UnsealResponse{}, err
 	}
 
-	return &cryptor.EncryptResponse{
-		Ciphertext: resp.WrappedSecret,
+	return cryptor.UnsealResponse{
+		Plaintext: resp.Plaintext,
 	}, nil
 }
 
-// Decrypt resolves the key version and delegates to the matching processor.
-func (km *Manager) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
-	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	key, err := km.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	proc, ok := km.processors[key.Kind]
-	if !ok {
-		return nil, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
-	}
-
-	resp, err := proc.UnwrapSecret(ctx, UnwrapSecretRequest{
-		KeyVersion:    kv,
-		WrappedSecret: req.Ciphertext,
-		AAD:           req.AAD,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &cryptor.DecryptResponse{
-		Plaintext: resp.Secret,
-	}, nil
+// RootManager validates key lifecycle and delegates to a sealer for root keys
+// that manage their own secret.
+type RootManager struct {
+	store  store.Key
+	sealer cryptor.Sealer
 }
 
-// Info returns the Manager's cryptor metadata.
-func (km *Manager) Info() cryptor.Info {
-	return cryptor.Info{
-		Name:                     "keyprocessor-manager",
-		Type:                     TypeManager,
-		DecryptionSecretRequired: true,
+var _ cryptor.Sealer = &RootManager{}
+
+// Seal validates the key lifecycle and seals the plaintext using the underlying sealer.
+func (rm *RootManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
+	if err != nil {
+		return cryptor.SealResponse{}, err
 	}
+	if key.LifeCycleState != model.KeyLifeCycleActive {
+		return cryptor.SealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+	}
+
+	return rm.sealer.Seal(ctx, req)
+}
+
+// Unseal validates the key lifecycle and unseals the ciphertext using the underlying sealer.
+func (rm *RootManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
+	if err != nil {
+		return cryptor.UnsealResponse{}, err
+	}
+	if key.LifeCycleState != model.KeyLifeCycleActive {
+		return cryptor.UnsealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+	}
+
+	return rm.sealer.Unseal(ctx, req)
 }
 
 func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID, version string) (model.KeyVersion, error) {
