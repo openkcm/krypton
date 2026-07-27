@@ -32,10 +32,10 @@ var _ cryptor.Sealer = &Manager{}
 
 // Seal validates the key lifecycle, resolves the key version and its secret to encrypt the plaintext.
 func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
-	if req.KeyVersion == nil {
+	if req.KeyVersion == "" {
 		return cryptor.SealResponse{}, ErrKeyVersionRequired
 	}
-	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, *req.KeyVersion)
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return cryptor.SealResponse{}, err
 	}
@@ -74,10 +74,10 @@ func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.S
 
 // Unseal validates the key lifecycle, resolves the key version and its secret to decrypt the ciphertext.
 func (km *Manager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-	if req.KeyVersion == nil {
+	if req.KeyVersion == "" {
 		return cryptor.UnsealResponse{}, ErrKeyVersionRequired
 	}
-	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, *req.KeyVersion)
+	kv, err := km.resolveUsableKeyVersion(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
 		return cryptor.UnsealResponse{}, err
 	}

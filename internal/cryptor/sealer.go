@@ -10,7 +10,7 @@ import (
 type SealRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion *string
+	KeyVersion string
 	Plaintext  *securemem.Data
 	AAD        []byte
 }
@@ -24,7 +24,7 @@ type SealResponse struct {
 type UnsealRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion *string
+	KeyVersion string
 	Ciphertext *securemem.Data
 	AAD        []byte
 }

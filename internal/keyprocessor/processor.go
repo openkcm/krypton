@@ -195,7 +195,7 @@ func (p *processor) transportSeal(ctx context.Context, kv model.KeyVersion, sec 
 	resp, err := p.transportSealer.Seal(ctx, cryptor.SealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,
-		KeyVersion: &kv.Version,
+		KeyVersion: kv.Version,
 		Plaintext:  sec,
 		AAD:        aad,
 	})
@@ -212,7 +212,7 @@ func (p *processor) transportUnseal(ctx context.Context, kv model.KeyVersion, se
 	resp, err := p.transportSealer.Unseal(ctx, cryptor.UnsealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,
-		KeyVersion: &kv.Version,
+		KeyVersion: kv.Version,
 		Ciphertext: sec,
 		AAD:        aad,
 	})
@@ -226,10 +226,14 @@ func (p *processor) parentSeal(ctx context.Context, kv model.KeyVersion, sec *se
 	if kv.ParentKeyID == nil {
 		return nil, ErrMissingParentKey
 	}
+	var parentVersion string
+	if kv.ParentKeyVersion != nil {
+		parentVersion = *kv.ParentKeyVersion
+	}
 	resp, err := p.parent.Seal(ctx, cryptor.SealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      *kv.ParentKeyID,
-		KeyVersion: kv.ParentKeyVersion,
+		KeyVersion: parentVersion,
 		Plaintext:  sec,
 		AAD:        aad,
 	})
@@ -243,10 +247,14 @@ func (p *processor) parentUnseal(ctx context.Context, kv model.KeyVersion, sec *
 	if kv.ParentKeyID == nil {
 		return nil, ErrMissingParentKey
 	}
+	var parentVersion string
+	if kv.ParentKeyVersion != nil {
+		parentVersion = *kv.ParentKeyVersion
+	}
 	resp, err := p.parent.Unseal(ctx, cryptor.UnsealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      *kv.ParentKeyID,
-		KeyVersion: kv.ParentKeyVersion,
+		KeyVersion: parentVersion,
 		Ciphertext: sec,
 		AAD:        aad,
 	})

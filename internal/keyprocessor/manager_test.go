@@ -17,7 +17,7 @@ import (
 )
 
 func TestManagerSeal(t *testing.T) {
-	t.Run("should return error if key version is nil", func(t *testing.T) {
+	t.Run("should return error if key version is empty", func(t *testing.T) {
 		// given
 		c := keyprocessor.NewManager(nil, nil, nil)
 
@@ -51,7 +51,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -75,7 +75,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -108,7 +108,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -142,7 +142,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -176,7 +176,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -215,7 +215,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("secret payload")),
 			AAD:        []byte("aad"),
 		})
@@ -228,7 +228,7 @@ func TestManagerSeal(t *testing.T) {
 }
 
 func TestManagerUnseal(t *testing.T) {
-	t.Run("should return error if key version is nil", func(t *testing.T) {
+	t.Run("should return error if key version is empty", func(t *testing.T) {
 		// given
 		c := keyprocessor.NewManager(nil, nil, nil)
 
@@ -262,7 +262,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -293,7 +293,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -327,7 +327,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -365,7 +365,7 @@ func TestManagerUnseal(t *testing.T) {
 		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("round trip data")),
 			AAD:        []byte("aad"),
 		})
@@ -375,7 +375,7 @@ func TestManagerUnseal(t *testing.T) {
 		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Ciphertext: sealResp.Ciphertext,
 			AAD:        []byte("aad"),
 		})
@@ -511,7 +511,7 @@ func TestManagerHierarchy(t *testing.T) {
 		sealResp, err := leafMgr.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Plaintext:  newTestData(t, []byte("top secret")),
 		})
 		assert.NoError(t, err)
@@ -519,7 +519,7 @@ func TestManagerHierarchy(t *testing.T) {
 		unsealResp, err := leafMgr.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
-			KeyVersion: new("1"),
+			KeyVersion: "1",
 			Ciphertext: sealResp.Ciphertext,
 		})
 
