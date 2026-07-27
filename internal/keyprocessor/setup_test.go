@@ -99,3 +99,13 @@ func createTenant(t *testing.T, db *sql.DB) string {
 	require.NoError(t, err)
 	return result.Tenant.ID
 }
+
+func activateKey(t *testing.T, db *sql.DB, key model.Key) {
+	t.Helper()
+	keyStore := storesql.NewKeyStore(db)
+	require.NoError(t, keyStore.UpdateKeyLifeCycleState(t.Context(), store.UpdateKeyLifeCycleStateQuery{
+		ID:       key.ID,
+		TenantID: key.TenantID,
+		NewState: model.KeyLifeCycleActive,
+	}))
+}

@@ -29,14 +29,8 @@ type Secret struct {
 
 // EncryptRequest contains parameters for an encryption operation.
 type EncryptRequest struct {
-	// TenantID identifies the tenant owning the key.
-	TenantID string
-	// KeyID is the unique identifier of the key.
-	KeyID string
-	// KeyVersion specifies which version of the key to use.
-	KeyVersion string
-	// Secret holds the key material for encryption. Nil when the Cryptor manages its own secrets.
-	Secret *Secret
+	// Secret holds the key material for encryption.
+	Secret Secret
 	// Plaintext is the data to encrypt.
 	// The Plaintext field should not be nil.
 	Plaintext *securemem.Data
@@ -52,14 +46,8 @@ type EncryptResponse struct {
 
 // DecryptRequest contains parameters for a decryption operation.
 type DecryptRequest struct {
-	// TenantID identifies the tenant owning the key.
-	TenantID string
-	// KeyID is the unique identifier of the key.
-	KeyID string
-	// KeyVersion specifies which version of the key to use.
-	KeyVersion string
-	// Secret holds the key material for decryption. Nil when the Cryptor manages its own secrets.
-	Secret *Secret
+	// Secret holds the key material for decryption.
+	Secret Secret
 	// Ciphertext is the data to decrypt.
 	// The Ciphertext field should not be nil.
 	Ciphertext *securemem.Data
@@ -79,8 +67,6 @@ type Info struct {
 	Name string
 	// Type identifies the cryptor implementation (e.g., "aes256gcm").
 	Type Type
-	// DecryptionSecretRequired is false if cryptor manages its own secret (e.g., HSM).
-	DecryptionSecretRequired bool
 }
 
 // Bundle pairs a Cryptor with an optional SecretGenerator for key material creation.
@@ -118,15 +104,6 @@ var (
 )
 
 func (req EncryptRequest) Validate() error {
-	if req.TenantID == "" {
-		return fmt.Errorf("invalid tenant ID: %w", ErrRequest)
-	}
-	if req.KeyID == "" {
-		return fmt.Errorf("invalid key ID: %w", ErrRequest)
-	}
-	if req.KeyVersion == "" {
-		return fmt.Errorf("invalid key version: %w", ErrRequest)
-	}
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid plaintext: %w", ErrRequest)
 	}
@@ -134,29 +111,18 @@ func (req EncryptRequest) Validate() error {
 }
 
 func (req DecryptRequest) Validate() error {
-	if req.TenantID == "" {
-		return fmt.Errorf("invalid tenant ID: %w", ErrRequest)
-	}
-	if req.KeyID == "" {
-		return fmt.Errorf("invalid key ID: %w", ErrRequest)
-	}
-	if req.KeyVersion == "" {
-		return fmt.Errorf("invalid key version: %w", ErrRequest)
-	}
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
 		return fmt.Errorf("invalid ciphertext: %w", ErrRequest)
 	}
 	return req.Secret.Validate()
 }
 
-func (cs *Secret) Validate() error {
-	if cs != nil {
-		if cs.Algorithm == "" {
-			return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
-		}
-		if cs.Data == nil || len(cs.Data.SecureBytes()) == 0 {
-			return fmt.Errorf("invalid secret data: %w", ErrRequest)
-		}
+func (cs Secret) Validate() error {
+	if cs.Algorithm == "" {
+		return fmt.Errorf("invalid secret algorithm: %w", ErrRequest)
+	}
+	if cs.Data == nil || len(cs.Data.SecureBytes()) == 0 {
+		return fmt.Errorf("invalid secret data: %w", ErrRequest)
 	}
 	return nil
 }

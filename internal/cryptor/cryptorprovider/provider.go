@@ -9,8 +9,6 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
-	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
 
 var ErrCryptorNameEmpty = errors.New("cryptor name is empty")
@@ -82,23 +80,11 @@ func (s *Spec) Validate() error {
 
 // GetBundle constructs a ready-to-use cryptor Bundle from the given Spec.
 func GetBundle(ctx context.Context, spec Spec) (cryptor.Bundle, error) {
-	switch c := spec.Config.(type) {
+	switch spec.Config.(type) {
 	case *aes256gcm.Config:
 		return cryptor.Bundle{
 			Cryptor:         aes256gcm.New(spec.Name),
 			SecretGenerator: cryptor.NewAES256SecretGenerator(),
-		}, nil
-	case *staticsecret.Config:
-		secret, err := getSecret(ctx, c)
-		if err != nil {
-			return cryptor.Bundle{}, err
-		}
-		cryp, err := staticsecret.New(spec.Name, secret.Data)
-		if err != nil {
-			return cryptor.Bundle{}, err
-		}
-		return cryptor.Bundle{
-			Cryptor: cryp,
 		}, nil
 	default:
 		return cryptor.Bundle{}, fmt.Errorf("%w: %T", cryptor.ErrUnknownType, spec.Config)
@@ -110,21 +96,7 @@ func newCryptorConfig(t cryptor.Type) (cryptor.Config, error) {
 	switch t {
 	case aes256gcm.TypeAES256GCM:
 		return &aes256gcm.Config{}, nil
-	case staticsecret.TypeStaticSecret:
-		return &staticsecret.Config{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", cryptor.ErrUnknownType, t)
 	}
-}
-
-// getSecret gets the cryptor secret for a static-secret cryptor via the configured secret source.
-func getSecret(ctx context.Context, cfg *staticsecret.Config) (cryptor.Secret, error) {
-	data, err := secretprovider.GetSecret(ctx, cfg.Secret)
-	if err != nil {
-		return cryptor.Secret{}, err
-	}
-	return cryptor.Secret{
-		Algorithm: cryptor.KeyAlgorithmAES256,
-		Data:      data,
-	}, nil
 }

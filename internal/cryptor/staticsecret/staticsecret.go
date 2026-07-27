@@ -1,4 +1,4 @@
-// Package staticsecret provides a [cryptor.Cryptor] that embeds a fixed AES-256-GCM key,
+// Package staticsecret provides a [cryptor.Sealer] that embeds a fixed AES-256-GCM key,
 // removing the need for callers to supply secrets per-request.
 package staticsecret
 
@@ -27,23 +27,22 @@ func (c *Config) ValidateCryptorConfig() error {
 	return c.Secret.Validate()
 }
 
-// StaticSecret is a [Cryptor] that wraps [AES256GCM] with a pre-configured key,
-// so callers don't need to supply secrets per-request. It rejects requests that
-// include a secret, and injects its own before delegating to the underlying cipher.
+// StaticSecret is a [cryptor.Sealer] that seals [aes256gcm.AES256GCM] with a pre-configured key,
+// so callers don't need to supply secrets per-request.
 //
 // The caller retains ownership of the secret and must not destroy it while
 // StaticSecret is in use.
 type StaticSecret struct {
 	secret    *securemem.Data
 	aes256gcm *aes256gcm.AES256GCM
-	info      cryptor.Info
+	name      string
 }
 
 // ErrInitializationFailed indicates that New could not be constructed
 // due to an unsupported algorithm or invalid key material.
 var ErrInitializationFailed = errors.New("static secret initialization failed")
 
-var _ cryptor.Cryptor = &StaticSecret{}
+var _ cryptor.Sealer = &StaticSecret{}
 
 // New returns a StaticSecret with the given instance name and key material.
 // The secret must be non-nil and exactly 32 bytes (AES-256).
@@ -59,53 +58,52 @@ func New(name string, secret *securemem.Data) (*StaticSecret, error) {
 	return &StaticSecret{
 		secret:    secret,
 		aes256gcm: aes256gcm.New(name),
-		info: cryptor.Info{
-			Name:                     name,
-			Type:                     TypeStaticSecret,
-			DecryptionSecretRequired: false,
-		},
+		name:      name,
 	}, nil
 }
 
-// Decrypt implements [Cryptor]. It returns an error if the request contains a secret.
-func (s *StaticSecret) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
-	err := req.Validate()
+// Seal seals the plaintext using the embedded static key.
+func (s *StaticSecret) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
+		return cryptor.SealResponse{}, fmt.Errorf("invalid plaintext: %w", cryptor.ErrRequest)
+	}
+
+	resp, err := s.aes256gcm.Encrypt(ctx, cryptor.EncryptRequest{
+		Secret: cryptor.Secret{
+			Data:      s.secret,
+			Algorithm: cryptor.KeyAlgorithmAES256,
+		},
+		Plaintext: req.Plaintext,
+		AAD:       req.AAD,
+	})
 	if err != nil {
-		return nil, err
+		return cryptor.SealResponse{}, err
 	}
 
-	if req.Secret != nil {
-		return nil, fmt.Errorf("decryption secret should not be provided in the request: %w", cryptor.ErrRequest)
-	}
-	// replacing the secret in the request with the static secret
-	req.Secret = &cryptor.Secret{
-		Data:      s.secret,
-		Algorithm: cryptor.KeyAlgorithmAES256,
-	}
-
-	return s.aes256gcm.Decrypt(ctx, req)
+	return cryptor.SealResponse{
+		Ciphertext: resp.Ciphertext,
+	}, nil
 }
 
-// Encrypt implements [Cryptor]. It returns an error if the request contains a secret.
-func (s *StaticSecret) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
-	err := req.Validate()
+// Unseal unseals the ciphertext using the embedded static key.
+func (s *StaticSecret) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
+		return cryptor.UnsealResponse{}, fmt.Errorf("invalid ciphertext: %w", cryptor.ErrRequest)
+	}
+
+	resp, err := s.aes256gcm.Decrypt(ctx, cryptor.DecryptRequest{
+		Secret: cryptor.Secret{
+			Data:      s.secret,
+			Algorithm: cryptor.KeyAlgorithmAES256,
+		},
+		Ciphertext: req.Ciphertext,
+		AAD:        req.AAD,
+	})
 	if err != nil {
-		return nil, err
+		return cryptor.UnsealResponse{}, err
 	}
 
-	if req.Secret != nil {
-		return nil, fmt.Errorf("encryption secret should not be provided in the request: %w", cryptor.ErrRequest)
-	}
-	// replacing the secret in the request with the static secret
-	req.Secret = &cryptor.Secret{
-		Data:      s.secret,
-		Algorithm: cryptor.KeyAlgorithmAES256,
-	}
-
-	return s.aes256gcm.Encrypt(ctx, req)
-}
-
-// Info implements [Cryptor].
-func (s *StaticSecret) Info() cryptor.Info {
-	return s.info
+	return cryptor.UnsealResponse{
+		Plaintext: resp.Plaintext,
+	}, nil
 }

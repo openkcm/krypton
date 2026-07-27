@@ -16,7 +16,23 @@ import (
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-func TestManagerEncrypt(t *testing.T) {
+func TestManagerSeal(t *testing.T) {
+	t.Run("should return error if key version is empty", func(t *testing.T) {
+		// given
+		c := keyprocessor.NewManager(nil, nil, nil)
+
+		// when
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:  uuid.NewString(),
+			KeyID:     uuid.NewString(),
+			Plaintext: newTestData(t, []byte("data")),
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionRequired)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
+	})
+
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
 		// given
 		kvStoreErr := errors.New("database unavailable")
@@ -32,7 +48,7 @@ func TestManagerEncrypt(t *testing.T) {
 		c := keyprocessor.NewManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: "1",
@@ -41,7 +57,7 @@ func TestManagerEncrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, kvStoreErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if no usable key version found", func(t *testing.T) {
@@ -56,7 +72,7 @@ func TestManagerEncrypt(t *testing.T) {
 		c := keyprocessor.NewManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: "1",
@@ -65,7 +81,7 @@ func TestManagerEncrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrNoUsableKeyVersion)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
@@ -89,7 +105,7 @@ func TestManagerEncrypt(t *testing.T) {
 		c := keyprocessor.NewManager(ks, kvs, nil)
 
 		// when
-		resp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: "1",
@@ -98,15 +114,16 @@ func TestManagerEncrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, storeErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
-	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
+	t.Run("should return error if key is not active", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:       uuid.NewString(),
-			TenantID: uuid.NewString(),
-			Kind:     "UNKNOWN_KIND",
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "K1",
+			LifeCycleState: model.KeyLifeCycleDeactivated,
 		}
 
 		kvs := &keyVersionStoreWrapper{}
@@ -116,15 +133,47 @@ func TestManagerEncrypt(t *testing.T) {
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
-		ks.getKeyByIDFn = func(_ context.Context, id, tid string) (*model.Key, error) {
-			assert.Equal(t, key.ID, id)
-			assert.Equal(t, key.TenantID, tid)
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return key, nil
+		}
+		c := keyprocessor.NewManager(ks, kvs, nil)
+
+		// when
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:   key.TenantID,
+			KeyID:      key.ID,
+			KeyVersion: "1",
+			Plaintext:  newTestData(t, []byte("data")),
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
+	})
+
+	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "UNKNOWN_KIND",
+			LifeCycleState: model.KeyLifeCycleActive,
+		}
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+			}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
 		c := keyprocessor.NewManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
-		resp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
 			KeyVersion: "1",
@@ -133,7 +182,7 @@ func TestManagerEncrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
 	})
 
 	t.Run("should succeed", func(t *testing.T) {
@@ -143,21 +192,27 @@ func TestManagerEncrypt(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		key := model.NewKey(tenantID, "enc-key-"+uuid.NewString(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), key))
+		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		activateKey(t, db, rootKey)
+		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
 
-		kv := model.NewKeyVersion(tenantID, key.ID, "1", nil, nil)
+		key := model.NewKey(tenantID, "enc-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), key))
+		activateKey(t, db, key)
+
+		kv := model.NewKeyVersion(tenantID, key.ID, "1", &rootKey.ID, nil)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
-		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
+		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, rootMgr, newTestVault(t))
 		_, err = proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
 		c := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
 		// when
-		resp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: "1",
@@ -167,13 +222,28 @@ func TestManagerEncrypt(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.NotNil(t, resp)
 		assert.NotNil(t, resp.Ciphertext)
 		assert.NotEmpty(t, resp.Ciphertext.SecureBytes())
 	})
 }
 
-func TestManagerDecrypt(t *testing.T) {
+func TestManagerUnseal(t *testing.T) {
+	t.Run("should return error if key version is empty", func(t *testing.T) {
+		// given
+		c := keyprocessor.NewManager(nil, nil, nil)
+
+		// when
+		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+			TenantID:   uuid.NewString(),
+			KeyID:      uuid.NewString(),
+			Ciphertext: newTestData(t, []byte("data")),
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionRequired)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+	})
+
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
 		// given
 		kvStoreErr := errors.New("database unavailable")
@@ -189,7 +259,7 @@ func TestManagerDecrypt(t *testing.T) {
 		c := keyprocessor.NewManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Decrypt(t.Context(), cryptor.DecryptRequest{
+		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: "1",
@@ -198,7 +268,7 @@ func TestManagerDecrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, kvStoreErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
@@ -214,15 +284,13 @@ func TestManagerDecrypt(t *testing.T) {
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
-		ks.getKeyByIDFn = func(_ context.Context, id, tid string) (*model.Key, error) {
-			assert.Equal(t, keyID, id)
-			assert.Equal(t, tenantID, tid)
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return nil, storeErr
 		}
 		c := keyprocessor.NewManager(ks, kvs, nil)
 
 		// when
-		resp, err := c.Decrypt(t.Context(), cryptor.DecryptRequest{
+		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: "1",
@@ -231,15 +299,16 @@ func TestManagerDecrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, storeErr)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:       uuid.NewString(),
-			TenantID: uuid.NewString(),
-			Kind:     "UNKNOWN_KIND",
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "UNKNOWN_KIND",
+			LifeCycleState: model.KeyLifeCycleActive,
 		}
 
 		kvs := &keyVersionStoreWrapper{}
@@ -249,15 +318,13 @@ func TestManagerDecrypt(t *testing.T) {
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
-		ks.getKeyByIDFn = func(_ context.Context, id, tid string) (*model.Key, error) {
-			assert.Equal(t, key.ID, id)
-			assert.Equal(t, key.TenantID, tid)
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
 		c := keyprocessor.NewManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
-		resp, err := c.Decrypt(t.Context(), cryptor.DecryptRequest{
+		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
 			KeyVersion: "1",
@@ -266,7 +333,7 @@ func TestManagerDecrypt(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
-		assert.Nil(t, resp)
+		assert.Equal(t, cryptor.UnsealResponse{}, resp)
 	})
 
 	t.Run("should succeed with round trip", func(t *testing.T) {
@@ -276,20 +343,26 @@ func TestManagerDecrypt(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		key := model.NewKey(tenantID, "dec-key-"+uuid.NewString(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), key))
+		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		activateKey(t, db, rootKey)
+		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
 
-		kv := model.NewKeyVersion(tenantID, key.ID, "1", nil, nil)
+		key := model.NewKey(tenantID, "dec-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), key))
+		activateKey(t, db, key)
+
+		kv := model.NewKeyVersion(tenantID, key.ID, "1", &rootKey.ID, nil)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
-		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, nil, newTestVault(t))
+		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, rootMgr, newTestVault(t))
 		_, err = proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
 		c := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
-		encResp, err := c.Encrypt(t.Context(), cryptor.EncryptRequest{
+		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: "1",
@@ -299,35 +372,160 @@ func TestManagerDecrypt(t *testing.T) {
 		assert.NoError(t, err)
 
 		// when
-		decResp, err := c.Decrypt(t.Context(), cryptor.DecryptRequest{
+		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: "1",
-			Ciphertext: encResp.Ciphertext,
+			Ciphertext: sealResp.Ciphertext,
 			AAD:        []byte("aad"),
 		})
 
 		// then
 		assert.NoError(t, err)
-		assert.NotNil(t, decResp)
-		assert.Equal(t, []byte("round trip data"), []byte(decResp.Plaintext.SecureBytes()))
+		assert.Equal(t, []byte("round trip data"), []byte(unsealResp.Plaintext.SecureBytes()))
 	})
 }
 
-func TestManagerInfo(t *testing.T) {
-	t.Run("should return manager info with decryption secret required", func(t *testing.T) {
+func TestRootManager(t *testing.T) {
+	t.Run("should return error if store lookup fails", func(t *testing.T) {
 		// given
-		c := keyprocessor.NewManager(nil, nil, nil)
+		storeErr := errors.New("store unavailable")
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return nil, storeErr
+		}
+		c := keyprocessor.NewRootManager(ks, newTestSealer(t))
 
 		// when
-		info := c.Info()
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:  uuid.NewString(),
+			KeyID:     uuid.NewString(),
+			Plaintext: newTestData(t, []byte("data")),
+		})
 
 		// then
-		assert.Equal(t, cryptor.Info{
-			Name:                     "keyprocessor-manager",
-			Type:                     keyprocessor.TypeManager,
-			DecryptionSecretRequired: true,
-		}, info)
+		assert.ErrorIs(t, err, storeErr)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
+	})
+
+	t.Run("should return error if key is not active", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			LifeCycleState: model.KeyLifeCycleDeactivated,
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return key, nil
+		}
+		c := keyprocessor.NewRootManager(ks, newTestSealer(t))
+
+		// when
+		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:  key.TenantID,
+			KeyID:     key.ID,
+			Plaintext: newTestData(t, []byte("data")),
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
+		assert.Equal(t, cryptor.SealResponse{}, resp)
+	})
+
+	t.Run("should seal and unseal successfully", func(t *testing.T) {
+		// given
+		db := createDatabase(t)
+		tenantID := createTenant(t, db)
+		keyStore := storesql.NewKeyStore(db)
+
+		key := model.NewKey(tenantID, "root-key-"+uuid.NewString(), "K0", nil, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), key))
+		activateKey(t, db, key)
+
+		c := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+
+		// when
+		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:  tenantID,
+			KeyID:     key.ID,
+			Plaintext: newTestData(t, []byte("root secret")),
+			AAD:       []byte("aad"),
+		})
+		assert.NoError(t, err)
+
+		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+			TenantID:   tenantID,
+			KeyID:      key.ID,
+			Ciphertext: sealResp.Ciphertext,
+			AAD:        []byte("aad"),
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("root secret"), []byte(unsealResp.Plaintext.SecureBytes()))
+	})
+}
+
+func TestManagerHierarchy(t *testing.T) {
+	t.Run("should succeed for three-level chain round trip", func(t *testing.T) {
+		// given
+		db := createDatabase(t)
+		tenantID := createTenant(t, db)
+		keyStore := storesql.NewKeyStore(db)
+		kvStore := storesql.NewKeyVersionStore(db)
+
+		// root level
+		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		activateKey(t, db, rootKey)
+		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+
+		// mid level
+		midKey := model.NewKey(tenantID, "mid-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), midKey))
+		activateKey(t, db, midKey)
+		midKV := model.NewKeyVersion(tenantID, midKey.ID, "1", &rootKey.ID, nil)
+		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: midKV})
+		require.NoError(t, err)
+
+		midProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), rootMgr, newTestVault(t))
+		_, err = midProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: midKV})
+		assert.NoError(t, err)
+		midMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K1": *midProc})
+
+		// leaf level
+		leafKey := model.NewKey(tenantID, "leaf-"+uuid.NewString(), "K2", &midKey.ID, "test", nil)
+		require.NoError(t, keyStore.CreateKey(t.Context(), leafKey))
+		activateKey(t, db, leafKey)
+		leafKV := model.NewKeyVersion(tenantID, leafKey.ID, "1", &midKey.ID, &midKV.Version)
+		_, err = kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: leafKV})
+		require.NoError(t, err)
+
+		leafProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, midMgr, newTestVault(t))
+		_, err = leafProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: leafKV})
+		assert.NoError(t, err)
+		leafMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K2": *leafProc})
+
+		// when
+		sealResp, err := leafMgr.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:   tenantID,
+			KeyID:      leafKey.ID,
+			KeyVersion: "1",
+			Plaintext:  newTestData(t, []byte("top secret")),
+		})
+		assert.NoError(t, err)
+
+		unsealResp, err := leafMgr.Unseal(t.Context(), cryptor.UnsealRequest{
+			TenantID:   tenantID,
+			KeyID:      leafKey.ID,
+			KeyVersion: "1",
+			Ciphertext: sealResp.Ciphertext,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("top secret"), []byte(unsealResp.Plaintext.SecureBytes()))
 	})
 }
 

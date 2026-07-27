@@ -53,9 +53,8 @@ var ErrAllocatedDataNotFound = errors.New("allocated data not found in vault")
 func New(name string) *AES256GCM {
 	return &AES256GCM{
 		info: cryptor.Info{
-			Name:                     name,
-			Type:                     TypeAES256GCM,
-			DecryptionSecretRequired: true,
+			Name: name,
+			Type: TypeAES256GCM,
 		},
 	}
 }
@@ -69,10 +68,6 @@ func (a *AES256GCM) Info() cryptor.Info {
 func (a *AES256GCM) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*cryptor.EncryptResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
-	}
-
-	if req.Secret == nil {
-		return nil, fmt.Errorf("missing encryption secret: %w", cryptor.ErrRequest)
 	}
 
 	if req.Secret.Algorithm != cryptor.KeyAlgorithmAES256 {
@@ -143,10 +138,6 @@ func (a *AES256GCM) Encrypt(ctx context.Context, req cryptor.EncryptRequest) (*c
 func (a *AES256GCM) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*cryptor.DecryptResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
-	}
-
-	if req.Secret == nil {
-		return nil, fmt.Errorf("missing decryption secret: %w", cryptor.ErrRequest)
 	}
 
 	if req.Secret.Algorithm != cryptor.KeyAlgorithmAES256 {

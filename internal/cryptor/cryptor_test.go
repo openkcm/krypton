@@ -31,23 +31,10 @@ func TestDecryptRequestValidate(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "valid request without secret",
-			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Ciphertext: validData,
-			},
-			wantErr: nil,
-		},
-		{
 			name: "valid request with secret",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: validData,
-				Secret: &cryptor.Secret{
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      validData,
 				},
@@ -55,58 +42,13 @@ func TestDecryptRequestValidate(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "valid request with non empty key version",
-			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "-1",
-				Ciphertext: validData,
-			},
-			wantErr: nil,
-		},
-		{
-			name: "missing tenant ID",
-			req: cryptor.DecryptRequest{
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Ciphertext: validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "missing key ID",
-			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyVersion: "1",
-				Ciphertext: validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "invalid key version",
-			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "",
-				Ciphertext: validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "missing ciphertext",
-			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-			},
+			name:    "missing ciphertext",
+			req:     cryptor.DecryptRequest{},
 			wantErr: cryptor.ErrRequest,
 		},
 		{
 			name: "destroyed ciphertext",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: destroyedData,
 			},
 			wantErr: cryptor.ErrRequest,
@@ -114,9 +56,6 @@ func TestDecryptRequestValidate(t *testing.T) {
 		{
 			name: "empty ciphertext data",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: &securemem.Data{},
 			},
 			wantErr: cryptor.ErrRequest,
@@ -124,11 +63,8 @@ func TestDecryptRequestValidate(t *testing.T) {
 		{
 			name: "empty algorithm in secret",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: validData,
-				Secret: &cryptor.Secret{
+				Secret: cryptor.Secret{
 					Data: validData,
 				},
 			},
@@ -137,11 +73,8 @@ func TestDecryptRequestValidate(t *testing.T) {
 		{
 			name: "empty data in secret",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: validData,
-				Secret: &cryptor.Secret{
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      &securemem.Data{},
 				},
@@ -151,11 +84,8 @@ func TestDecryptRequestValidate(t *testing.T) {
 		{
 			name: "destroyed data in secret",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: validData,
-				Secret: &cryptor.Secret{
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      destroyedData,
 				},
@@ -165,11 +95,8 @@ func TestDecryptRequestValidate(t *testing.T) {
 		{
 			name: "nil data in secret",
 			req: cryptor.DecryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
 				Ciphertext: validData,
-				Secret: &cryptor.Secret{
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      nil,
 				},
@@ -210,23 +137,10 @@ func TestEncryptRequestValidate(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "valid request without secret",
-			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-			},
-			wantErr: nil,
-		},
-		{
 			name: "valid request with secret",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-				Secret: &cryptor.Secret{
+				Plaintext: validData,
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      validData,
 				},
@@ -234,80 +148,29 @@ func TestEncryptRequestValidate(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "valid request with non empty key version",
-			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "-1",
-				Plaintext:  validData,
-			},
-			wantErr: nil,
-		},
-		{
-			name: "missing tenant ID",
-			req: cryptor.EncryptRequest{
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "missing key ID",
-			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "invalid key version",
-			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "",
-				Plaintext:  validData,
-			},
-			wantErr: cryptor.ErrRequest,
-		},
-		{
-			name: "missing plaintext",
-			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-			},
+			name:    "missing plaintext",
+			req:     cryptor.EncryptRequest{},
 			wantErr: cryptor.ErrRequest,
 		},
 		{
 			name: "destroyed plaintext",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  destroyedData,
+				Plaintext: destroyedData,
 			},
 			wantErr: cryptor.ErrRequest,
 		},
 		{
 			name: "empty ciphertext data",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  &securemem.Data{},
+				Plaintext: &securemem.Data{},
 			},
 			wantErr: cryptor.ErrRequest,
 		},
 		{
 			name: "empty algorithm in secret",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-				Secret: &cryptor.Secret{
+				Plaintext: validData,
+				Secret: cryptor.Secret{
 					Data: validData,
 				},
 			},
@@ -316,11 +179,8 @@ func TestEncryptRequestValidate(t *testing.T) {
 		{
 			name: "empty data in secret",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-				Secret: &cryptor.Secret{
+				Plaintext: validData,
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      &securemem.Data{},
 				},
@@ -330,11 +190,8 @@ func TestEncryptRequestValidate(t *testing.T) {
 		{
 			name: "destroyed data in secret",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-				Secret: &cryptor.Secret{
+				Plaintext: validData,
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      destroyedData,
 				},
@@ -344,11 +201,8 @@ func TestEncryptRequestValidate(t *testing.T) {
 		{
 			name: "nil data in secret",
 			req: cryptor.EncryptRequest{
-				TenantID:   "tenant1",
-				KeyID:      "key1",
-				KeyVersion: "1",
-				Plaintext:  validData,
-				Secret: &cryptor.Secret{
+				Plaintext: validData,
+				Secret: cryptor.Secret{
 					Algorithm: cryptor.KeyAlgorithmAES256,
 					Data:      nil,
 				},
