@@ -17,12 +17,18 @@ var (
 	ErrRootSegmentStartNotFirst        = errors.New("root segment must start at hierarchy's first key")
 	ErrRootSegmentEndIsTek             = errors.New("root segment end kind must not have role tek")
 	ErrRootBindingHasParentKeyProvider = errors.New("root key binding must not have a parent key provider")
+	ErrRootBindingMissingSealer        = errors.New("root key binding must have a sealer")
+	ErrRootBindingHasCryptor           = errors.New("root key binding must not have a cryptor")
 
 	ErrAgentSegmentStartNotTek                   = errors.New("agent segment must start with a tek role key")
 	ErrAgentSegmentEndIsTek                      = errors.New("agent segment end kind must not have role tek unless single-key segment")
 	ErrAgentSegmentEndIsRoot                     = errors.New("agent segment end kind must not have role root")
 	ErrAgentSegmentContainsRoot                  = errors.New("agent segment must not contain the root role key")
 	ErrAgentSegmentStartMissingParentKeyProvider = errors.New("agent segment tek start key must have a parent key provider")
+
+	ErrTekBindingMissingSealer      = errors.New("tek key binding must have a sealer")
+	ErrTekBindingMissingCryptor     = errors.New("tek key binding must have a cryptor")
+	ErrNonRootBindingMissingCryptor = errors.New("non-root key binding must have a cryptor")
 
 	ErrTopologyDuplicateSegmentName           = errors.New("duplicate topology segment name")
 	ErrParentKeyProviderNotResolvable         = errors.New("parent key provider agent name does not resolve to root or any topology segment")
@@ -80,8 +86,29 @@ func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[stri
 	}
 
 	rootBinding, exists := bindings[seg.StartKind]
-	if exists && rootBinding.ParentKeyProvider != nil {
+	if !exists {
+		return fmt.Errorf("%w: %q", ErrSegmentBindingsMissing, seg.StartKind)
+	}
+	if rootBinding.ParentKeyProvider != nil {
 		return ErrRootBindingHasParentKeyProvider
+	}
+	if rootBinding.SealerSpec == nil {
+		return ErrRootBindingMissingSealer
+	}
+	if rootBinding.CryptorSpec != nil {
+		return ErrRootBindingHasCryptor
+	}
+
+	// Non-root keys in root segment must have a cryptor
+	kindsInRange := h.KeySpecs[startIdx : h.IndexOf(model.KeyKind(seg.EndKind))+1]
+	for _, ks := range kindsInRange {
+		if ks.Role == KeyRoleRoot {
+			continue
+		}
+		binding := bindings[string(ks.Kind)]
+		if binding.CryptorSpec == nil {
+			return fmt.Errorf("%w: %q", ErrNonRootBindingMissingCryptor, ks.Kind)
+		}
 	}
 
 	return nil
@@ -117,8 +144,28 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 	}
 
 	startBinding, exists := bindings[seg.StartKind]
-	if !exists || startBinding.ParentKeyProvider == nil {
+	if !exists {
+		return fmt.Errorf("%w: %q", ErrSegmentBindingsMissing, seg.StartKind)
+	}
+	if startBinding.ParentKeyProvider == nil {
 		return ErrAgentSegmentStartMissingParentKeyProvider
+	}
+	if startBinding.SealerSpec == nil {
+		return ErrTekBindingMissingSealer
+	}
+	if startBinding.CryptorSpec == nil {
+		return ErrTekBindingMissingCryptor
+	}
+
+	// Non-TEK keys in agent segment must have a cryptor
+	for _, ks := range kindsInRange {
+		if ks.Role == KeyRoleTek {
+			continue
+		}
+		binding := bindings[string(ks.Kind)]
+		if binding.CryptorSpec == nil {
+			return fmt.Errorf("%w: %q", ErrNonRootBindingMissingCryptor, ks.Kind)
+		}
 	}
 
 	return nil

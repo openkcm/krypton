@@ -8,6 +8,10 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
@@ -31,11 +35,24 @@ func validVault() *vaultprovider.Spec {
 	return &vaultprovider.Spec{Name: "v", Type: sqlitevault.TypeUnsafeMemory}
 }
 
-func validCryptor() cryptorprovider.Spec {
-	return cryptorprovider.Spec{
+func validCryptor() *cryptorprovider.Spec {
+	return &cryptorprovider.Spec{
 		Name:   "test-crypto",
 		Type:   aes256gcm.TypeAES256GCM,
 		Config: &aes256gcm.Config{},
+	}
+}
+
+func validSealer() *sealerprovider.Spec {
+	return &sealerprovider.Spec{
+		Name: "test-sealer",
+		Type: staticsecret.TypeStaticSecret,
+		Config: &staticsecret.Config{
+			Secret: secretprovider.Spec{
+				Type:   envvar.Type,
+				Config: &envvar.Config{Name: "TEST_KEY"},
+			},
+		},
 	}
 }
 
@@ -141,7 +158,7 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "valid root segment K0-K1",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 			},
 			wantErr: nil,
@@ -150,9 +167,9 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "valid root segment covers everything (0-agent deploy)",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K4"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
@@ -163,7 +180,7 @@ func TestValidateRootSegment(t *testing.T) {
 			seg:  spec.HierarchySegment{StartKind: "K1", EndKind: "K2"},
 			bindings: map[string]spec.KeyBinding{
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrRootSegmentStartNotFirst,
 		},
@@ -171,9 +188,9 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "root end kind is tek",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K2"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrRootSegmentEndIsTek,
 		},
@@ -181,18 +198,36 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "root key binding has parent key provider",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "someone"}},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "someone"}},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrRootBindingHasParentKeyProvider,
 		},
 		{
-			name: "root end is dek valid for 0-agent deployment",
-			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K4"},
+			name: "root key binding missing sealer",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
 				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrRootBindingMissingSealer,
+		},
+		{
+			name: "root key binding has cryptor",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
+			bindings: map[string]spec.KeyBinding{
+				"K0": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrRootBindingHasCryptor,
+		},
+		{
+			name: "root end is dek valid for 0-agent deployment",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K4"},
+			bindings: map[string]spec.KeyBinding{
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
+				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
@@ -202,7 +237,7 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "non-root key in root segment has parent key provider referencing root is valid",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 			},
 			wantErr: nil,
@@ -211,10 +246,19 @@ func TestValidateRootSegment(t *testing.T) {
 			name: "root segment with missing binding fails generic check",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				// K1 missing
 			},
 			wantErr: spec.ErrSegmentBindingsMissing,
+		},
+		{
+			name: "non-root key in root segment missing cryptor",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
+			bindings: map[string]spec.KeyBinding{
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
+				"K1": {SealerSpec: validSealer(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrNonRootBindingMissingCryptor,
 		},
 	}
 
@@ -244,7 +288,7 @@ func TestValidateAgentSegment(t *testing.T) {
 			name: "valid agent segment K2-K4 (tek to dek)",
 			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 			bindings: map[string]spec.KeyBinding{
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
@@ -254,7 +298,7 @@ func TestValidateAgentSegment(t *testing.T) {
 			name: "valid agent segment K2-K3 (tek to kek)",
 			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
 			bindings: map[string]spec.KeyBinding{
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: nil,
@@ -263,7 +307,7 @@ func TestValidateAgentSegment(t *testing.T) {
 			name: "valid single-key agent segment (tek only)",
 			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K2"},
 			bindings: map[string]spec.KeyBinding{
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 			},
 			wantErr: nil,
 		},
@@ -272,7 +316,7 @@ func TestValidateAgentSegment(t *testing.T) {
 			seg:  spec.HierarchySegment{StartKind: "K1", EndKind: "K3"},
 			bindings: map[string]spec.KeyBinding{
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrAgentSegmentStartNotTek,
@@ -289,7 +333,7 @@ func TestValidateAgentSegment(t *testing.T) {
 			name: "agent segment contains root key",
 			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
 			bindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			// Root key is not tek, so this fails on start-not-tek first
@@ -299,17 +343,47 @@ func TestValidateAgentSegment(t *testing.T) {
 			name: "agent start binding missing parent key provider",
 			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 			bindings: map[string]spec.KeyBinding{
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()}, // no ParentKeyProvider
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()}, // no ParentKeyProvider
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrAgentSegmentStartMissingParentKeyProvider,
 		},
 		{
-			name: "agent segment with missing binding fails generic check",
+			name: "tek binding missing sealer",
 			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 			bindings: map[string]spec.KeyBinding{
 				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrTekBindingMissingSealer,
+		},
+		{
+			name: "tek binding missing cryptor",
+			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
+			bindings: map[string]spec.KeyBinding{
+				"K2": {SealerSpec: validSealer(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrTekBindingMissingCryptor,
+		},
+		{
+			name: "non-tek key in agent segment missing cryptor",
+			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
+			bindings: map[string]spec.KeyBinding{
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K3": {SealerSpec: validSealer(), VaultSpec: validVault()},
+				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+			},
+			wantErr: spec.ErrNonRootBindingMissingCryptor,
+		},
+		{
+			name: "agent segment with missing binding fails generic check",
+			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
+			bindings: map[string]spec.KeyBinding{
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				// K3 missing
 			},
@@ -335,7 +409,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 
 	rootSeg := spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 	rootBindings := map[string]spec.KeyBinding{
-		"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+		"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 		"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 	}
 
@@ -344,7 +418,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 			Name:    name,
 			Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 			KeyBindings: map[string]spec.KeyBinding{
-				"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
@@ -404,7 +478,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Name:    "agent-aws",
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "nonexistent"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "nonexistent"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 							"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
@@ -423,7 +497,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Name:    "agent-aws",
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 							"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
@@ -442,7 +516,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Name:    "agent-mid",
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
 						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
 					},
@@ -450,7 +524,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Name:    "agent-leaf",
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 							"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
@@ -470,7 +544,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}, // K1 is kek, not tek
 						KeyBindings: map[string]spec.KeyBinding{
 							"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault()},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
 					},
@@ -489,7 +563,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
 						KeyBindings: map[string]spec.KeyBinding{
 							// K2's parent is K1, which is in root segment K0-K1 — referencing agent-leaf which manages K2-K4
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "agent-leaf"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "agent-leaf"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
 					},
@@ -497,7 +571,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 						Name:    "agent-leaf",
 						Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K4"},
 						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+							"K2": {SealerSpec: validSealer(), CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 							"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 							"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 						},
@@ -515,7 +589,7 @@ func TestValidateTopologyAgainstHierarchy(t *testing.T) {
 			},
 			rootSeg: rootSeg,
 			rootBindings: map[string]spec.KeyBinding{
-				"K0": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
+				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "nonexistent"}},
 			},
 			wantErr: spec.ErrParentKeyProviderNotResolvable,

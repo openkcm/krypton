@@ -89,12 +89,14 @@ selector_labels:
   environment: production
 key_bindings:
   K0:
-    crypto:
-      name: root-crypto
-      type: aes256gcm
-    vault:
-      name: root-hsm-vault
-      type: unsafe-sqlite-memory
+    sealer:
+      name: root-sealer
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto
@@ -133,6 +135,14 @@ topology:
         end_kind: K3
       key_bindings:
         K2:
+          sealer:
+            name: agent-sealer
+            type: aes256gcm-staticsecret
+            config:
+              secret:
+                type: envvar
+                config:
+                  name: KRYPTON_TEK_KEY
           crypto:
             name: agent-crypto
             type: aes256gcm
