@@ -24,12 +24,8 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Namespace for all resources to be installed into
-If not defined in values file then the helm release namespace is used
-By default this is not set so the helm release namespace will be used
-
-This gets around an problem within helm discussed here
-https://github.com/helm/helm/issues/5358
+Namespace for all resources to be installed into.
+If not defined in values file then the helm release namespace is used.
 */}}
 {{- define "krypton.namespace" -}}
     {{ .Values.namespace | default .Release.Namespace }}
@@ -55,55 +51,22 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Enkrypton Selector labels
-*/}}
-{{- define "krypton.core.labels" -}}
-{{ include "krypton.labels" . }}
-{{ include "krypton.name" . }}.openkcm.io/component: krypton
-{{- end }}
-
-{{/*
-Tenant Manager Selector labels
-*/}}
-{{- define "krypton.tenant-manager.labels" -}}
-{{ include "krypton.labels" . }}
-{{ include "krypton.name" . }}.openkcm.io/component: tenant-manager
-{{- end }}
-
-
-{{/*
-Common Selector labels
+Selector labels
 */}}
 {{- define "krypton.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "krypton.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/component: {{ .Chart.Name }}
+openkcm.io/node: root
 {{- end }}
 
 {{/*
-Enkrypton Selector labels
-*/}}
-{{- define "krypton.core.selectorLabels" -}}
-{{ include "krypton.selectorLabels" . }}
-{{ include "krypton.name" . }}.openkcm.io/component: krypton
-{{- end }}
-
-{{/*
-Tenant Manager Selector labels
-*/}}
-{{- define "krypton.tenant-manager.selectorLabels" -}}
-{{ include "krypton.selectorLabels" . }}
-{{ include "krypton.name" . }}.openkcm.io/component: tenant-manager
-{{- end }}
-
-{{/*
-Create the name of the service account to use
+Create the name of the service account to use.
 */}}
 {{- define "krypton.serviceAccountName" -}}
-{{- if .Values.common.serviceAccount.create }}
-{{- default (include "krypton.fullname" .) .Values.common.serviceAccount.name }}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "krypton.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.common.serviceAccount.name }}
+{{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
