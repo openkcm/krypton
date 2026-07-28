@@ -258,7 +258,7 @@ func TestValidateRootSegment(t *testing.T) {
 				"K0": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K1": {SealerSpec: validSealer(), VaultSpec: validVault()},
 			},
-			wantErr: spec.ErrNonRootBindingMissingCryptor,
+			wantErr: spec.ErrBindingMissingCryptor,
 		},
 	}
 
@@ -367,7 +367,7 @@ func TestValidateAgentSegment(t *testing.T) {
 				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
-			wantErr: spec.ErrTekBindingMissingCryptor,
+			wantErr: spec.ErrBindingMissingCryptor,
 		},
 		{
 			name: "non-tek key in agent segment missing cryptor",
@@ -377,7 +377,7 @@ func TestValidateAgentSegment(t *testing.T) {
 				"K3": {SealerSpec: validSealer(), VaultSpec: validVault()},
 				"K4": {CryptorSpec: validCryptor(), VaultSpec: validVault()},
 			},
-			wantErr: spec.ErrNonRootBindingMissingCryptor,
+			wantErr: spec.ErrBindingMissingCryptor,
 		},
 		{
 			name: "agent segment with missing binding fails generic check",
