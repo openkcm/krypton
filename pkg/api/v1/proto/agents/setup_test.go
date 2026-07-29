@@ -134,8 +134,8 @@ func createDatabase(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-func validCryptorSpec() cryptorprovider.Spec {
-	return cryptorprovider.Spec{
+func validCryptorSpec() *cryptorprovider.Spec {
+	return &cryptorprovider.Spec{
 		Name:   "test-crypto",
 		Type:   aes256gcm.TypeAES256GCM,
 		Config: &aes256gcm.Config{},

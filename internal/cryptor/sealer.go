@@ -39,3 +39,8 @@ type Sealer interface {
 	Seal(context.Context, SealRequest) (SealResponse, error)
 	Unseal(context.Context, UnsealRequest) (UnsealResponse, error)
 }
+
+// SealerConfig is implemented by sealer-specific configuration structs to support validation.
+type SealerConfig interface {
+	ValidateSealerConfig() error
+}

@@ -21,9 +21,9 @@ type Config struct {
 	Secret secretprovider.Spec `yaml:"secret"`
 }
 
-var _ cryptor.Config = (*Config)(nil)
+var _ cryptor.SealerConfig = (*Config)(nil)
 
-func (c *Config) ValidateCryptorConfig() error {
+func (c *Config) ValidateSealerConfig() error {
 	return c.Secret.Validate()
 }
 

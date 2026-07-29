@@ -7,16 +7,33 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
 
-func validCryptorSpec() cryptorprovider.Spec {
-	return cryptorprovider.Spec{
+func validCryptorSpec() *cryptorprovider.Spec {
+	return &cryptorprovider.Spec{
 		Name:   "test-crypto",
 		Type:   aes256gcm.TypeAES256GCM,
 		Config: &aes256gcm.Config{},
+	}
+}
+
+func validSealerSpec() *sealerprovider.Spec {
+	return &sealerprovider.Spec{
+		Name: "test-sealer",
+		Type: staticsecret.TypeStaticSecret,
+		Config: &staticsecret.Config{
+			Secret: secretprovider.Spec{
+				Type:   envvar.Type,
+				Config: &envvar.Config{Name: "TEST_KEY"},
+			},
+		},
 	}
 }
 
@@ -87,7 +104,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "valid binding with all fields",
+			name: "valid binding with cryptor and all fields",
 			binding: KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
@@ -96,6 +113,25 @@ func TestValidateKeyBinding(t *testing.T) {
 				},
 				ParentKeyProvider: &ParentKeyProviderRef{
 					AgentName: "root",
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid binding with sealer only",
+			binding: KeyBinding{
+				SealerSpec: validSealerSpec(),
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid binding with both sealer and cryptor",
+			binding: KeyBinding{
+				SealerSpec:  validSealerSpec(),
+				CryptorSpec: validCryptorSpec(),
+				VaultSpec: &vaultprovider.Spec{
+					Name: "my-vault",
+					Type: sqlitevault.TypeUnsafeMemory,
 				},
 			},
 			wantErr: nil,
@@ -119,9 +155,19 @@ func TestValidateKeyBinding(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name: "missing both sealer and cryptor",
+			binding: KeyBinding{
+				VaultSpec: &vaultprovider.Spec{
+					Name: "my-vault",
+					Type: sqlitevault.TypeUnsafeMemory,
+				},
+			},
+			wantErr: ErrBindingMissingSealerOrCryptor,
+		},
+		{
 			name: "empty cryptor spec name",
 			binding: KeyBinding{
-				CryptorSpec: cryptorprovider.Spec{
+				CryptorSpec: &cryptorprovider.Spec{
 					Name:   "",
 					Type:   aes256gcm.TypeAES256GCM,
 					Config: &aes256gcm.Config{},
@@ -132,6 +178,22 @@ func TestValidateKeyBinding(t *testing.T) {
 				},
 			},
 			wantErr: cryptorprovider.ErrCryptorNameEmpty,
+		},
+		{
+			name: "empty sealer spec name",
+			binding: KeyBinding{
+				SealerSpec: &sealerprovider.Spec{
+					Name: "",
+					Type: staticsecret.TypeStaticSecret,
+					Config: &staticsecret.Config{
+						Secret: secretprovider.Spec{
+							Type:   envvar.Type,
+							Config: &envvar.Config{Name: "TEST_KEY"},
+						},
+					},
+				},
+			},
+			wantErr: sealerprovider.ErrSealerNameEmpty,
 		},
 		{
 			name: "empty vault name",
@@ -189,7 +251,7 @@ func TestValidateTopologySegment(t *testing.T) {
 			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
 				Name: "vault-k2",
-				Type: "aws-kms",
+				Type: sqlitevault.TypeUnsafeMemory,
 			},
 		},
 	}
@@ -304,7 +366,7 @@ func TestValidateTopology(t *testing.T) {
 			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
 				Name: "vault-k2",
-				Type: "aws-kms",
+				Type: sqlitevault.TypeUnsafeMemory,
 			},
 		},
 	}
