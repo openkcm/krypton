@@ -165,6 +165,23 @@ func TestListKeyVersions(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	// seed: version "2" with revisions 0, 1 (usable), created strictly after version "1"
+	later := now + 1
+	for _, revision := range []int{0, 1} {
+		kv := model.KeyVersion{
+			TenantID:        tenant.ID,
+			KeyID:           key.ID,
+			Version:         "2",
+			Revision:        revision,
+			LifeCycleState:  model.KeyLifeCycleActive,
+			ProcessingState: model.KeyVersionUsable,
+			CreatedAt:       later,
+			UpdatedAt:       later,
+		}
+		_, err := kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: kv})
+		require.NoError(t, err)
+	}
+
 	t.Run("should list all revisions for a key version", func(t *testing.T) {
 		// when
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
@@ -195,10 +212,10 @@ func TestListKeyVersions(t *testing.T) {
 	t.Run("should order by revision descending", func(t *testing.T) {
 		// when
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:              tenant.ID,
-			KeyID:                 key.ID,
-			Version:               "1",
-			IsOrderByRevisionDesc: true,
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			Version:  "1",
+			OrderBy:  []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
 		})
 
 		// then
@@ -212,11 +229,11 @@ func TestListKeyVersions(t *testing.T) {
 	t.Run("should limit results", func(t *testing.T) {
 		// when
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:              tenant.ID,
-			KeyID:                 key.ID,
-			Version:               "1",
-			IsOrderByRevisionDesc: true,
-			Limit:                 1,
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			Version:  "1",
+			OrderBy:  []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
+			Limit:    1,
 		})
 
 		// then
@@ -231,12 +248,12 @@ func TestListKeyVersions(t *testing.T) {
 
 		// when
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:              tenant.ID,
-			KeyID:                 key.ID,
-			Version:               "1",
-			ProcessingState:       model.KeyVersionUsable,
-			IsOrderByRevisionDesc: true,
-			Limit:                 1,
+			TenantID:        tenant.ID,
+			KeyID:           key.ID,
+			Version:         "1",
+			ProcessingState: model.KeyVersionUsable,
+			OrderBy:         []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
+			Limit:           1,
 		})
 
 		// then
@@ -244,6 +261,66 @@ func TestListKeyVersions(t *testing.T) {
 		require.Len(t, result.KeyVersions, 1)
 		assert.Equal(t, expRevision, result.KeyVersions[0].Revision)
 		assert.Equal(t, model.KeyVersionUsable, result.KeyVersions[0].ProcessingState)
+	})
+
+	t.Run("should order newest created versions first", func(t *testing.T) {
+		// when
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			OrderBy:  []store.KeyVersionOrder{store.KeyVersionOrderCreatedAtDesc},
+		})
+
+		// then
+		assert.NoError(t, err)
+		require.Len(t, result.KeyVersions, 5)
+		for _, kv := range result.KeyVersions[:2] {
+			assert.Equal(t, "2", kv.Version)
+			assert.Equal(t, later, kv.CreatedAt)
+		}
+		for _, kv := range result.KeyVersions[2:] {
+			assert.Equal(t, "1", kv.Version)
+			assert.Equal(t, now, kv.CreatedAt)
+		}
+	})
+
+	t.Run("should resolve latest usable version when no version filter is set", func(t *testing.T) {
+		// when
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:        tenant.ID,
+			KeyID:           key.ID,
+			ProcessingState: model.KeyVersionUsable,
+			OrderBy: []store.KeyVersionOrder{
+				store.KeyVersionOrderCreatedAtDesc,
+				store.KeyVersionOrderRevisionDesc,
+			},
+			Limit: 1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		require.Len(t, result.KeyVersions, 1)
+		assert.Equal(t, "2", result.KeyVersions[0].Version)
+		assert.Equal(t, 1, result.KeyVersions[0].Revision)
+		assert.Equal(t, model.KeyVersionUsable, result.KeyVersions[0].ProcessingState)
+	})
+
+	t.Run("should resolve highest usable revision of old version when newer version exists", func(t *testing.T) {
+		// when
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:        tenant.ID,
+			KeyID:           key.ID,
+			Version:         "1",
+			ProcessingState: model.KeyVersionUsable,
+			OrderBy:         []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
+			Limit:           1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		require.Len(t, result.KeyVersions, 1)
+		assert.Equal(t, "1", result.KeyVersions[0].Version)
+		assert.Equal(t, 1, result.KeyVersions[0].Revision)
 	})
 
 	t.Run("should return empty slice when no matches", func(t *testing.T) {

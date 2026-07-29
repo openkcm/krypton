@@ -103,11 +103,14 @@ func (m *Data) SecureBytes() SecureBytes {
 	return m.data
 }
 
-// Destroy securely wipes the memory region, unlocks it, and unmaps it from the
-// process address space. If the vault is currently read-only, it is first
-// switched back to read-write before zeroing. Subsequent calls to Destroy are
-// safe and return nil. After Destroy returns, Data will return nil.
+// Destroy securely wipes, unlocks, and unmaps the memory region; afterwards
+// SecureBytes returns nil. Safe on a nil receiver and after a prior Destroy.
+// Failures are logged.
 func (m *Data) Destroy() error {
+	if m == nil {
+		return nil
+	}
+
 	m.mux.Lock()
 	defer m.mux.Unlock()
 

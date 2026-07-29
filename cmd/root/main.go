@@ -24,12 +24,15 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 	"github.com/openkcm/krypton/pkg/validator"
@@ -127,12 +130,21 @@ func main() {
 	go wrkr.Start(context.Background())
 
 	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
-	// KeyManager is an in-memory fake until the real store-backed adapter lands.
 	var kmipSrv *kmip.Server
 	if cfg.KMIP != nil {
-		km, err := kmip.NewMemKeyManager()
-		handleErr(err, "failed to create kmip key manager")
-		kmipSrv, err = kmip.NewServer(*cfg.KMIP, km)
+		keyVersionStore := storesql.NewKeyVersionStore(db)
+		bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
+		for kind, binding := range cfg.KeyBindings {
+			bindings[model.KeyKind(kind)] = binding
+		}
+		kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
+			KeyStore:        keyStore,
+			KeyVersionStore: keyVersionStore,
+			Bindings:        bindings,
+			Hierarchy:       cfg.Hierarchy,
+		})
+		handleErr(err, "failed to create key processor manager")
+		kmipSrv, err = kmip.NewServer(*cfg.KMIP, kpMgr)
 		handleErr(err, "failed to create kmip server")
 		go func() {
 			log.Printf("KMIP server listening on %s", kmipSrv.Addr())

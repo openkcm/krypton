@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/kmip"
-	"github.com/openkcm/krypton/pkg/model"
 )
 
 func TestServerIntegration(t *testing.T) {
@@ -31,20 +30,8 @@ func TestServerIntegration(t *testing.T) {
 		material[i] = byte(i + 1)
 	}
 
-	km, err := kmip.NewMemKeyManager(kmip.SeedDEK{
-		TenantID:   tenantA,
-		KeyID:      keyID,
-		Material:   material,
-		Algorithm:  kmip.AlgorithmAES,
-		LengthBits: 256,
-		State:      model.KeyLifeCycleActive,
-	})
-	require.NoError(t, err, "NewMemKeyManager")
-	t.Cleanup(func() {
-		if c, ok := km.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
-	})
+	env := newTestEnv(t, tenantA, keyID)
+	env.seedSecret(t, material)
 
 	cfg := kmip.Config{
 		BindAddr: "127.0.0.1",
@@ -55,7 +42,7 @@ func TestServerIntegration(t *testing.T) {
 			ClientCA:   pki.caCertFile,
 		},
 	}
-	srv, err := kmip.NewServer(cfg, km)
+	srv, err := kmip.NewServer(cfg, env.mgr)
 	require.NoError(t, err, "NewServer")
 
 	serveErr := make(chan error, 1)
@@ -70,7 +57,7 @@ func TestServerIntegration(t *testing.T) {
 	addr := srv.Addr().String()
 	waitTLSReady(t, addr)
 
-	uid := tenantA + ":" + keyID
+	uid := tenantA + ":" + keyID + ":1"
 
 	t.Run("get with correct tenant", func(t *testing.T) {
 		c := dialAs(t, addr, pki, tenantA)
@@ -86,17 +73,16 @@ func TestServerIntegration(t *testing.T) {
 		assert.Equal(t, material, mat)
 	})
 
-	t.Run("get attributes with correct tenant", func(t *testing.T) {
+	t.Run("get attributes is not supported", func(t *testing.T) {
 		c := dialAs(t, addr, pki, tenantA)
 		defer c.Close()
 
-		resp, err := c.GetAttributes(uid).ExecContext(context.Background())
-		require.NoError(t, err, "GetAttributes")
-		got := indexAttrs(resp.Attribute)
-		assert.Equal(t, ovhkmip.StateActive, got[ovhkmip.AttributeNameState])
-		assert.Equal(t, ovhkmip.CryptographicAlgorithmAES, got[ovhkmip.AttributeNameCryptographicAlgorithm])
-		assert.Equal(t, int32(256), got[ovhkmip.AttributeNameCryptographicLength])
-		assert.Equal(t, ovhkmip.ObjectTypeSymmetricKey, got[ovhkmip.AttributeNameObjectType])
+		batch, err := c.Batch(context.Background(), &payloads.GetAttributesRequestPayload{UniqueIdentifier: uid})
+		require.NoError(t, err, "Batch")
+		require.Len(t, batch, 1)
+		bi := batch[0]
+		assert.NotEqual(t, ovhkmip.ResultStatusSuccess, bi.ResultStatus)
+		assert.Equal(t, ovhkmip.ResultReasonOperationNotSupported, bi.ResultReason)
 	})
 
 	t.Run("cross-tenant get rejected", func(t *testing.T) {

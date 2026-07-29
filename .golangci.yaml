@@ -50,6 +50,9 @@ linters:
     errcheck:
       exclude-functions:
         - (github.com/jackc/pgx/v5.Tx).Rollback
+        # Destroy logs its own failures and is safe to call on nil /
+        # already-destroyed data, so deferred calls need no error handling.
+        - (*github.com/openkcm/krypton/internal/securemem.Data).Destroy
     paralleltest:
       ignore-missing: true
       ignore-missing-subtests: true

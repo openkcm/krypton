@@ -3,7 +3,6 @@ package keyprocessor
 import (
 	"context"
 	"errors"
-	"log/slog"
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
@@ -89,19 +88,19 @@ func (p *processor) createSecret(ctx context.Context, req createSecretRequest) (
 		if err != nil {
 			return err
 		}
-		defer destroySec(resp.Secret)
+		defer resp.Secret.Destroy()
 
 		transSealed, err := p.transportSeal(ctx, req.KeyVersion, resp.Secret, req.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(transSealed)
+		defer transSealed.Destroy()
 
 		parentSealed, err := p.parentSeal(ctx, req.KeyVersion, transSealed, req.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(parentSealed)
+		defer parentSealed.Destroy()
 
 		_, err = p.vault.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    req.KeyVersion.TenantID,
@@ -190,24 +189,24 @@ func (p *processor) resolveSecret(ctx context.Context, kv model.KeyVersion) (cry
 		if err != nil {
 			return err
 		}
-		defer destroySec(exported.KeyMaterial)
+		defer exported.KeyMaterial.Destroy()
 
 		parentUnsealed, err := p.parentUnseal(ctx, kv, exported.KeyMaterial, exported.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(parentUnsealed)
+		defer parentUnsealed.Destroy()
 
 		transUnsealed, err := p.transportUnseal(ctx, kv, parentUnsealed, exported.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(transUnsealed)
+		defer transUnsealed.Destroy()
 
 		// copy so that defers can unconditionally destroy all intermediates.
 		sec, err := copySec(transUnsealed)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		return sreq.PersistentVault().Import(persistSecName, sec)
@@ -300,15 +299,6 @@ func (p *processor) parentUnseal(ctx context.Context, kv model.KeyVersion, sec *
 		return nil, err
 	}
 	return resp.Plaintext, nil
-}
-
-func destroySec(sec *securemem.Data) {
-	if sec == nil {
-		return
-	}
-	if err := sec.Destroy(); err != nil {
-		slog.Error("failed to destroy secret", "name", sec.Name(), "error", err)
-	}
 }
 
 func getPersistedSec(resp *securemem.HandlerResponse) (*securemem.Data, error) {
