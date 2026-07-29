@@ -81,9 +81,10 @@ extraPorts:
     protocol: TCP
     containerPort: 8080
 
-# Application config — rendered directly into the ConfigMap.
 config:
   isImmutable: false
+  
+  # krypton root demo config
   name: root
   role: root
   segment:
@@ -93,8 +94,8 @@ config:
     environment: local
   key_bindings:
     K0:
-      crypto:
-        name: root-key-crypto
+      sealer:
+        name: root-key-sealer
         type: aes256gcm-staticsecret
         config:
           secret:
