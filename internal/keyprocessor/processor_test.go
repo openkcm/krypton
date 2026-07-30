@@ -37,7 +37,7 @@ func setupParent(t *testing.T) *parentSetup {
 	require.NoError(t, keyStore.CreateKey(t.Context(), parentKey))
 	activateKey(t, db, parentKey)
 
-	rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+	rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 	sw := &sealerWrapper{Sealer: rootMgr}
 
 	return &parentSetup{

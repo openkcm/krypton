@@ -2,6 +2,8 @@ package keyprocessor_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"testing"
 
@@ -10,7 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -19,7 +30,7 @@ import (
 func TestManagerSeal(t *testing.T) {
 	t.Run("should return error if key version is empty", func(t *testing.T) {
 		// given
-		c := keyprocessor.NewManager(nil, nil, nil)
+		c := keyprocessor.NewTestManager(nil, nil, nil)
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -45,7 +56,7 @@ func TestManagerSeal(t *testing.T) {
 			assert.Equal(t, tenantID, q.TenantID)
 			return store.ListKeyVersionsResult{}, kvStoreErr
 		}
-		c := keyprocessor.NewManager(nil, kvs, nil)
+		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -69,7 +80,7 @@ func TestManagerSeal(t *testing.T) {
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{KeyVersions: []model.KeyVersion{}}, nil
 		}
-		c := keyprocessor.NewManager(nil, kvs, nil)
+		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -102,7 +113,7 @@ func TestManagerSeal(t *testing.T) {
 			assert.Equal(t, tenantID, tid)
 			return nil, storeErr
 		}
-		c := keyprocessor.NewManager(ks, kvs, nil)
+		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -136,7 +147,7 @@ func TestManagerSeal(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
-		c := keyprocessor.NewManager(ks, kvs, nil)
+		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -170,7 +181,7 @@ func TestManagerSeal(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
-		c := keyprocessor.NewManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
+		c := keyprocessor.NewTestManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -195,7 +206,7 @@ func TestManagerSeal(t *testing.T) {
 		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		key := model.NewKey(tenantID, "enc-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
@@ -209,7 +220,7 @@ func TestManagerSeal(t *testing.T) {
 		_, err = proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
-		c := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
+		c := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -230,7 +241,7 @@ func TestManagerSeal(t *testing.T) {
 func TestManagerUnseal(t *testing.T) {
 	t.Run("should return error if key version is empty", func(t *testing.T) {
 		// given
-		c := keyprocessor.NewManager(nil, nil, nil)
+		c := keyprocessor.NewTestManager(nil, nil, nil)
 
 		// when
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
@@ -256,7 +267,7 @@ func TestManagerUnseal(t *testing.T) {
 			assert.Equal(t, tenantID, q.TenantID)
 			return store.ListKeyVersionsResult{}, kvStoreErr
 		}
-		c := keyprocessor.NewManager(nil, kvs, nil)
+		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
@@ -287,7 +298,7 @@ func TestManagerUnseal(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return nil, storeErr
 		}
-		c := keyprocessor.NewManager(ks, kvs, nil)
+		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
@@ -321,7 +332,7 @@ func TestManagerUnseal(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
-		c := keyprocessor.NewManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
+		c := keyprocessor.NewTestManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
@@ -346,7 +357,7 @@ func TestManagerUnseal(t *testing.T) {
 		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		key := model.NewKey(tenantID, "dec-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
@@ -360,7 +371,7 @@ func TestManagerUnseal(t *testing.T) {
 		_, err = proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
-		c := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
+		c := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
 		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
@@ -394,7 +405,7 @@ func TestRootManager(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return nil, storeErr
 		}
-		c := keyprocessor.NewRootManager(ks, newTestSealer(t))
+		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -419,7 +430,7 @@ func TestRootManager(t *testing.T) {
 		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
 			return key, nil
 		}
-		c := keyprocessor.NewRootManager(ks, newTestSealer(t))
+		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -443,7 +454,7 @@ func TestRootManager(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
-		c := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+		c := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		// when
 		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
@@ -479,7 +490,7 @@ func TestManagerHierarchy(t *testing.T) {
 		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewRootManager(keyStore, newTestSealer(t))
+		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		// mid level
 		midKey := model.NewKey(tenantID, "mid-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
@@ -492,7 +503,7 @@ func TestManagerHierarchy(t *testing.T) {
 		midProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), rootMgr, newTestVault(t))
 		_, err = midProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: midKV})
 		assert.NoError(t, err)
-		midMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K1": *midProc})
+		midMgr := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K1": *midProc})
 
 		// leaf level
 		leafKey := model.NewKey(tenantID, "leaf-"+uuid.NewString(), "K2", &midKey.ID, "test", nil)
@@ -505,7 +516,7 @@ func TestManagerHierarchy(t *testing.T) {
 		leafProc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, midMgr, newTestVault(t))
 		_, err = leafProc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: leafKV})
 		assert.NoError(t, err)
-		leafMgr := keyprocessor.NewManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K2": *leafProc})
+		leafMgr := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K2": *leafProc})
 
 		// when
 		sealResp, err := leafMgr.Seal(t.Context(), cryptor.SealRequest{
@@ -526,6 +537,366 @@ func TestManagerHierarchy(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		assert.Equal(t, []byte("top secret"), []byte(unsealResp.Plaintext.SecureBytes()))
+	})
+}
+
+func TestNewManager(t *testing.T) {
+	t.Run("should return error when hierarchy has no root key", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K1", Role: spec.KeyRoleKek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K1": {},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "no root key spec found in hierarchy")
+	})
+
+	t.Run("should return error when root binding is missing from bindings map", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K1": {},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "no binding found for root key kind K0")
+	})
+
+	t.Run("should return error when root binding has nil sealer spec", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: nil},
+				"K1": {},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, keyprocessor.ErrRootMissingSealerSpec)
+	})
+
+	t.Run("should return error when root sealer provider fails", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: &sealerprovider.Spec{Name: "bad", Config: nil}},
+				"K1": {},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+	})
+
+	t.Run("should return error when non-root binding is missing from bindings map", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "no binding found for key kind K1")
+	})
+
+	t.Run("should return error when non-root cryptor provider fails", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {CryptorSpec: &cryptorprovider.Spec{Name: "bad", Config: nil}},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "building processor for key kind K1")
+		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+	})
+
+	t.Run("should return error when non-root vault provider fails", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   &vaultprovider.Spec{Name: "bad", Type: "unknown-type"},
+				},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "building processor for key kind K1")
+	})
+
+	t.Run("should return error when non-root transport sealer provider fails", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   newTestVaultSpec(),
+					SealerSpec:  &sealerprovider.Spec{Name: "bad", Config: nil},
+				},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorContains(t, err, "building processor for key kind K1")
+		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+	})
+
+	t.Run("should return error when key store is nil", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        nil,
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyStoreMissing)
+	})
+
+	t.Run("should return error when key version store is nil", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: nil,
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionStoreMissing)
+	})
+
+	t.Run("should construct manager for two-level hierarchy", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   newTestVaultSpec(),
+				},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, mgr)
+	})
+
+	t.Run("should construct manager for three-level hierarchy", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleKek},
+					{Kind: "K2", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   newTestVaultSpec(),
+				},
+				"K2": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   newTestVaultSpec(),
+				},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, mgr)
+	})
+
+	t.Run("should construct manager with transport sealer", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {
+					CryptorSpec: newTestCryptorSpec(),
+					VaultSpec:   newTestVaultSpec(),
+					SealerSpec:  newTestSealerSpec(t),
+				},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.NoError(t, err)
+		assert.NotNil(t, mgr)
 	})
 }
 
@@ -553,4 +924,40 @@ func (w *keyVersionStoreWrapper) ListKeyVersions(ctx context.Context, q store.Li
 		return w.listKeyVersionsFn(ctx, q)
 	}
 	return w.KeyVersion.ListKeyVersions(ctx, q)
+}
+
+func newTestSealerSpec(t *testing.T) *sealerprovider.Spec {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+
+	envName := "TEST_SEALER_KEY_" + uuid.NewString()[:8]
+	t.Setenv(envName, base64.StdEncoding.EncodeToString(key))
+
+	return &sealerprovider.Spec{
+		Name: "test-sealer",
+		Type: staticsecret.TypeStaticSecret,
+		Config: &staticsecret.Config{
+			Secret: secretprovider.Spec{
+				Type:   envvar.Type,
+				Config: &envvar.Config{Name: envName},
+			},
+		},
+	}
+}
+
+func newTestCryptorSpec() *cryptorprovider.Spec {
+	return &cryptorprovider.Spec{
+		Name:   "test-cryptor",
+		Type:   aes256gcm.TypeAES256GCM,
+		Config: &aes256gcm.Config{},
+	}
+}
+
+func newTestVaultSpec() *vaultprovider.Spec {
+	return &vaultprovider.Spec{
+		Name: "test-vault",
+		Type: sqlitevault.TypeUnsafeMemory,
+	}
 }

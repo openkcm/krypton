@@ -6,8 +6,12 @@ import (
 	"log/slog"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -29,6 +33,40 @@ type processor struct {
 	transportSealer cryptor.Sealer
 	parent          cryptor.Sealer
 	vault           vault.Vault
+}
+
+// newProcessor builds a processor from a key binding and its parent sealer.
+// It resolves the optional cryptor bundle, vault, and transport sealer from
+// the binding's provider specs.
+func newProcessor(ctx context.Context, binding spec.KeyBinding, parent cryptor.Sealer) (*processor, error) {
+	p := &processor{parent: parent}
+
+	if binding.CryptorSpec != nil {
+		bundle, err := cryptorprovider.GetBundle(ctx, *binding.CryptorSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.cryptor = bundle.Cryptor
+		p.generator = bundle.SecretGenerator
+	}
+
+	if binding.VaultSpec != nil {
+		v, err := vaultprovider.GetVault(ctx, *binding.VaultSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.vault = v
+	}
+
+	if binding.SealerSpec != nil {
+		sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.transportSealer = sealer
+	}
+
+	return p, nil
 }
 
 type createSecretRequest struct {
