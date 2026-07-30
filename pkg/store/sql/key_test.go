@@ -876,6 +876,169 @@ func TestListKeys(t *testing.T) {
 	})
 }
 
+func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
+	// given
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	tenantStore := storesql.NewTenantStore(db)
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	keyStore := storesql.NewKeyStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should update key life cycle and processing state", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:         key.ID,
+			TenantID:   tenant.ID,
+			ToState:    model.KeyLifeCycleCompromised,
+			ToStatus:   model.KeyProcessingCompleted,
+			FromState:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation, model.KeyLifeCycleActive},
+			FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingInProgress},
+		})
+
+		// then
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleCompromised, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
+	})
+
+	t.Run("should update when from state guard is not specified", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:         key.ID,
+			TenantID:   tenant.ID,
+			ToState:    model.KeyLifeCycleCompromised,
+			ToStatus:   model.KeyProcessingCompleted,
+			FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending},
+		})
+
+		// then
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleCompromised, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
+	})
+
+	t.Run("should update when from status guard is not specified", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:        key.ID,
+			TenantID:  tenant.ID,
+			ToState:   model.KeyLifeCycleCompromised,
+			ToStatus:  model.KeyProcessingCompleted,
+			FromState: []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+		})
+
+		// then
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleCompromised, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
+	})
+
+	t.Run("should update when no guards are specified", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:       key.ID,
+			TenantID: tenant.ID,
+			ToState:  model.KeyLifeCycleCompromised,
+			ToStatus: model.KeyProcessingCompleted,
+		})
+
+		// then
+		require.NoError(t, err)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleCompromised, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
+	})
+
+	t.Run("should not update when from status guard does not match", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:         key.ID,
+			TenantID:   tenant.ID,
+			ToState:    model.KeyLifeCycleCompromised,
+			ToStatus:   model.KeyProcessingCompleted,
+			FromState:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+			FromStatus: []model.KeyProcessingStatus{model.KeyProcessingFailed},
+		})
+
+		// then
+		require.Error(t, err)
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, got.KeyProcessingState.Status)
+	})
+
+	t.Run("should not update when from state guard does not match", func(t *testing.T) {
+		// given
+		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
+
+		// when
+		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+			ID:         key.ID,
+			TenantID:   tenant.ID,
+			ToState:    model.KeyLifeCycleCompromised,
+			ToStatus:   model.KeyProcessingCompleted,
+			FromState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending},
+		})
+
+		// then
+		require.Error(t, err)
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+
+		got, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, got.KeyProcessingState.Status)
+	})
+}
+
 // createKeyHierarchy creates a tenant and inserts 10 keys forming the tree documented on [keyHierarchy].
 // Keys are created with varying lifecycle states (active, suspended, pre-activation), managing agents
 // (root, agent-aws, agent-azure, agent-gcp, agent-onprem, agent-onprem-2), and labels (cloud, environment)
