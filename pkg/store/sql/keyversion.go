@@ -16,6 +16,11 @@ type KeyVersionStore struct {
 
 var _ store.KeyVersion = &KeyVersionStore{}
 
+var keyVersionOrderSQL = map[store.KeyVersionOrder]string{
+	store.KeyVersionOrderCreatedAtDesc: "created_at DESC",
+	store.KeyVersionOrderRevisionDesc:  "revision DESC",
+}
+
 func NewKeyVersionStore(db *sql.DB) *KeyVersionStore {
 	return &KeyVersionStore{db: db}
 }
@@ -67,8 +72,16 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 		fmt.Fprintf(&q, "AND processing_state = %s ", nextParam(query.ProcessingState))
 	}
 
-	if query.IsOrderByRevisionDesc {
-		q.WriteString("ORDER BY revision DESC ")
+	if len(query.OrderBy) > 0 {
+		orderCols := make([]string, 0, len(query.OrderBy))
+		for _, o := range query.OrderBy {
+			col, ok := keyVersionOrderSQL[o]
+			if !ok {
+				return store.ListKeyVersionsResult{}, fmt.Errorf("unsupported key version order: %d", o)
+			}
+			orderCols = append(orderCols, col)
+		}
+		fmt.Fprintf(&q, "ORDER BY %s ", strings.Join(orderCols, ", "))
 	}
 
 	if query.Limit > 0 {

@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sync/atomic"
 
 	"github.com/ovh/kmip-go/kmipserver"
 
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
@@ -18,12 +20,10 @@ type Server struct {
 	listener net.Listener
 }
 
-// NewServer validates the config, opens an mTLS listener, and wires the
-// KMIP handler onto a kmipserver.Server. It attaches a fresh securemem.MemVault
-// to each connection via ConnectHook and destroys it via TerminateHook so
-// key material held for response payloads is zeroed and unmapped after the
-// connection ends.
-func NewServer(cfg Config, km KeyManager) (*Server, error) {
+// NewServer opens an mTLS listener and serves KMIP backed by the manager.
+// Each connection gets a fresh securemem.MemVault (ConnectHook) that the
+// TerminateHook destroys, so served key material is zeroed on disconnect.
+func NewServer(cfg Config, mgr *keyprocessor.Manager) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kmip: invalid config: %w", err)
 	}
@@ -37,7 +37,7 @@ func NewServer(cfg Config, km KeyManager) (*Server, error) {
 		return nil, fmt.Errorf("kmip: listen %s: %w", cfg.listenAddress(), err)
 	}
 
-	inner := kmipserver.NewServer(ln, newHandler(km)).
+	inner := kmipserver.NewServer(ln, newHandler(mgr)).
 		WithConnectHook(func(ctx context.Context) (context.Context, error) {
 			return withMemVault(ctx, securemem.NewMemVault()), nil
 		}).
@@ -60,3 +60,30 @@ func (s *Server) Serve() error { return s.inner.Serve() }
 // Shutdown closes the listener and waits for in-flight requests to
 // complete (bounded by kmipserver's internal 3-second grace period).
 func (s *Server) Shutdown() error { return s.inner.Shutdown() }
+
+// memVaultKey is the context key for the per-connection securemem.MemVault.
+type memVaultKey struct{}
+
+func withMemVault(ctx context.Context, v *securemem.MemVault) context.Context {
+	return context.WithValue(ctx, memVaultKey{}, v)
+}
+
+// memVaultFromCtx returns the per-connection vault, or nil; handlers must
+// fail closed on nil rather than fall back to unlocked memory.
+func memVaultFromCtx(ctx context.Context) *securemem.MemVault {
+	v, _ := ctx.Value(memVaultKey{}).(*securemem.MemVault)
+	return v
+}
+
+// vaultSeq disambiguates vault entry names, since MemVault.Import rejects
+// duplicates (e.g. repeated Get of the same key).
+var vaultSeq atomic.Uint64
+
+// vaultName builds a unique, non-secret vault entry name for the identifier.
+func vaultName(uid string) string {
+	return vaultEntryName(uid, vaultSeq.Add(1))
+}
+
+func vaultEntryName(uid string, seq uint64) string {
+	return fmt.Sprintf("%s#%d", uid, seq)
+}

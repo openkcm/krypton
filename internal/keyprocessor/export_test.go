@@ -11,6 +11,7 @@ import (
 
 type (
 	Processor            = processor
+	RootManager          = rootManager
 	CreateSecretRequest  = createSecretRequest
 	CreateSecretResponse = createSecretResponse
 	DeleteSecretRequest  = deleteSecretRequest
@@ -47,10 +48,10 @@ func NewProcessor(generator cryptor.SecretGenerator, cryptor cryptor.Cryptor, tr
 	}
 }
 
-func NewManager(s store.Key, kvs store.KeyVersion, processors map[model.KeyKind]processor) *Manager {
+func NewTestManager(s store.Key, kvs store.KeyVersion, processors map[model.KeyKind]processor) *Manager {
 	return &Manager{store: s, versionStore: kvs, processors: processors}
 }
 
-func NewRootManager(s store.Key, sealer cryptor.Sealer) *RootManager {
-	return &RootManager{store: s, sealer: sealer}
+func NewTestRootManager(s store.Key, sealer cryptor.Sealer) *rootManager {
+	return &rootManager{store: s, sealer: sealer}
 }

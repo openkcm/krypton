@@ -22,13 +22,24 @@ type CreateKeyVersionResult struct {
 	KeyVersion model.KeyVersion
 }
 
+// KeyVersionOrder is a sort key for listing key versions. The zero value is
+// invalid so accidental zero values fail instead of silently ordering.
+type KeyVersionOrder int
+
+const (
+	KeyVersionOrderUnspecified KeyVersionOrder = iota
+	KeyVersionOrderCreatedAtDesc
+	KeyVersionOrderRevisionDesc
+)
+
 type ListKeyVersionsQuery struct {
-	TenantID              string
-	KeyID                 string
-	Version               string
-	ProcessingState       model.KeyVersionProcessingState
-	IsOrderByRevisionDesc bool
-	Limit                 int
+	TenantID        string
+	KeyID           string
+	Version         string
+	ProcessingState model.KeyVersionProcessingState
+	// OrderBy applies the sort keys in the given order.
+	OrderBy []KeyVersionOrder
+	Limit   int
 }
 
 type ListKeyVersionsResult struct {

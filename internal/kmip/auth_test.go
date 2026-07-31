@@ -24,49 +24,67 @@ func certWithCN(cn string) *x509.Certificate {
 	return &x509.Certificate{Subject: pkix.Name{CommonName: cn}}
 }
 
-func TestClientTenantFromCtx(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
+func TestAuthorize(t *testing.T) {
+	t.Run("parses tenant, key, and version from the identifier", func(t *testing.T) {
+		tests := []struct {
+			in          string
+			wantTenant  string
+			wantKey     string
+			wantVersion string
+		}{
+			{"tenant-a:dek-1:1", "tenant-a", "dek-1", "1"},
+			{"acme-corp:dek-mongodb-001:42", "acme-corp", "dek-mongodb-001", "42"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.in, func(t *testing.T) {
+				withPeerCerts(t, []*x509.Certificate{certWithCN(tt.wantTenant)})
+				got, err := kmip.Authorize(context.Background(), tt.in)
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantTenant, got.TenantID)
+				assert.Equal(t, tt.wantKey, got.KeyID)
+				assert.Equal(t, tt.wantVersion, got.Version)
+			})
+		}
+	})
+
+	t.Run("rejects malformed identifiers", func(t *testing.T) {
 		withPeerCerts(t, []*x509.Certificate{certWithCN("tenant-a")})
-		got, err := kmip.ClientTenantFromCtx(context.Background())
-		require.NoError(t, err)
-		assert.Equal(t, "tenant-a", got)
+		for _, in := range []string{
+			"invalid-no-colon",
+			"tenant-a:missing-version",
+			"tenant:key:with:colons",
+			":key:1",
+			"tenant::1",
+			"tenant:key:",
+			"",
+			"::",
+		} {
+			t.Run(in, func(t *testing.T) {
+				_, err := kmip.Authorize(context.Background(), in)
+				assert.ErrorIs(t, err, kmip.ErrInvalidKeyIdentifier)
+			})
+		}
 	})
 
-	t.Run("no cert", func(t *testing.T) {
-		withPeerCerts(t, nil)
-		_, err := kmip.ClientTenantFromCtx(context.Background())
-		assert.ErrorIs(t, err, kmip.ErrNoClientCert)
-	})
-
-	t.Run("empty CN", func(t *testing.T) {
-		withPeerCerts(t, []*x509.Certificate{certWithCN("")})
-		_, err := kmip.ClientTenantFromCtx(context.Background())
-		assert.ErrorIs(t, err, kmip.ErrNoClientCert)
-	})
-
-	t.Run("uses first cert", func(t *testing.T) {
+	t.Run("matching CN is authorized, first cert wins", func(t *testing.T) {
 		withPeerCerts(t, []*x509.Certificate{certWithCN("tenant-a"), certWithCN("tenant-b")})
-		got, err := kmip.ClientTenantFromCtx(context.Background())
+		got, err := kmip.Authorize(context.Background(), "tenant-a:dek-1:1")
 		require.NoError(t, err)
-		assert.Equal(t, "tenant-a", got)
-	})
-}
+		assert.Equal(t, "tenant-a", got.TenantID)
 
-func TestAuthorizeTenant(t *testing.T) {
-	t.Run("match", func(t *testing.T) {
-		withPeerCerts(t, []*x509.Certificate{certWithCN("tenant-a")})
-		assert.NoError(t, kmip.AuthorizeTenant(context.Background(), "tenant-a"))
-	})
-
-	t.Run("mismatch", func(t *testing.T) {
-		withPeerCerts(t, []*x509.Certificate{certWithCN("tenant-a")})
-		err := kmip.AuthorizeTenant(context.Background(), "tenant-b")
+		_, err = kmip.Authorize(context.Background(), "tenant-b:dek-1:1")
 		assert.ErrorIs(t, err, kmip.ErrTenantMismatch)
 	})
 
-	t.Run("no cert", func(t *testing.T) {
+	t.Run("no cert -> ErrNoClientCert", func(t *testing.T) {
 		withPeerCerts(t, nil)
-		err := kmip.AuthorizeTenant(context.Background(), "tenant-a")
+		_, err := kmip.Authorize(context.Background(), "tenant-a:dek-1:1")
+		assert.ErrorIs(t, err, kmip.ErrNoClientCert)
+	})
+
+	t.Run("empty CN -> ErrNoClientCert", func(t *testing.T) {
+		withPeerCerts(t, []*x509.Certificate{certWithCN("")})
+		_, err := kmip.Authorize(context.Background(), "tenant-a:dek-1:1")
 		assert.ErrorIs(t, err, kmip.ErrNoClientCert)
 	})
 }

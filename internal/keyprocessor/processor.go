@@ -3,11 +3,14 @@ package keyprocessor
 import (
 	"context"
 	"errors"
-	"log/slog"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -31,6 +34,40 @@ type processor struct {
 	vault           vault.Vault
 }
 
+// newProcessor builds a processor from a key binding and its parent sealer.
+// It resolves the optional cryptor bundle, vault, and transport sealer from
+// the binding's provider specs.
+func newProcessor(ctx context.Context, binding spec.KeyBinding, parent cryptor.Sealer) (*processor, error) {
+	p := &processor{parent: parent}
+
+	if binding.CryptorSpec != nil {
+		bundle, err := cryptorprovider.GetBundle(ctx, *binding.CryptorSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.cryptor = bundle.Cryptor
+		p.generator = bundle.SecretGenerator
+	}
+
+	if binding.VaultSpec != nil {
+		v, err := vaultprovider.GetVault(ctx, *binding.VaultSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.vault = v
+	}
+
+	if binding.SealerSpec != nil {
+		sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
+		if err != nil {
+			return nil, err
+		}
+		p.transportSealer = sealer
+	}
+
+	return p, nil
+}
+
 type createSecretRequest struct {
 	KeyVersion model.KeyVersion
 	AAD        []byte
@@ -51,19 +88,19 @@ func (p *processor) createSecret(ctx context.Context, req createSecretRequest) (
 		if err != nil {
 			return err
 		}
-		defer destroySec(resp.Secret)
+		defer resp.Secret.Destroy()
 
 		transSealed, err := p.transportSeal(ctx, req.KeyVersion, resp.Secret, req.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(transSealed)
+		defer transSealed.Destroy()
 
 		parentSealed, err := p.parentSeal(ctx, req.KeyVersion, transSealed, req.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(parentSealed)
+		defer parentSealed.Destroy()
 
 		_, err = p.vault.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    req.KeyVersion.TenantID,
@@ -152,24 +189,24 @@ func (p *processor) resolveSecret(ctx context.Context, kv model.KeyVersion) (cry
 		if err != nil {
 			return err
 		}
-		defer destroySec(exported.KeyMaterial)
+		defer exported.KeyMaterial.Destroy()
 
 		parentUnsealed, err := p.parentUnseal(ctx, kv, exported.KeyMaterial, exported.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(parentUnsealed)
+		defer parentUnsealed.Destroy()
 
 		transUnsealed, err := p.transportUnseal(ctx, kv, parentUnsealed, exported.AAD)
 		if err != nil {
 			return err
 		}
-		defer destroySec(transUnsealed)
+		defer transUnsealed.Destroy()
 
 		// copy so that defers can unconditionally destroy all intermediates.
 		sec, err := copySec(transUnsealed)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		return sreq.PersistentVault().Import(persistSecName, sec)
@@ -262,15 +299,6 @@ func (p *processor) parentUnseal(ctx context.Context, kv model.KeyVersion, sec *
 		return nil, err
 	}
 	return resp.Plaintext, nil
-}
-
-func destroySec(sec *securemem.Data) {
-	if sec == nil {
-		return
-	}
-	if err := sec.Destroy(); err != nil {
-		slog.Error("failed to destroy secret", "name", sec.Name(), "error", err)
-	}
 }
 
 func getPersistedSec(resp *securemem.HandlerResponse) (*securemem.Data, error) {
