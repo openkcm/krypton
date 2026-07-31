@@ -243,7 +243,7 @@ func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (st
 	}
 
 	if query.Name != "" {
-		fmt.Fprintf(&q, "AND name ILIKE %s ", nextParam("%"+query.Name+"%"))
+		fmt.Fprintf(&q, `AND name ILIKE %s ESCAPE '\' `, nextParam("%"+escapeLikePattern(query.Name)+"%"))
 	}
 
 	if query.ManagedBy != "" {
@@ -317,6 +317,14 @@ func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (st
 	}
 
 	return store.ListKeysResult{Keys: keys, Cursor: cursor}, nil
+}
+
+// escapeLikePattern escapes LIKE/ILIKE metacharacters so user input is matched literally.
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 func (ks *KeyStore) UpdateKeyLifeCycleState(ctx context.Context, query store.UpdateKeyLifeCycleStateQuery) error {
