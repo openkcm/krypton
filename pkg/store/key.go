@@ -21,6 +21,7 @@ type Key interface {
 	ListKeys(ctx context.Context, query ListKeysQuery) (ListKeysResult, error)
 	UpdateKeyLifeCycleState(ctx context.Context, query UpdateKeyLifeCycleStateQuery) error
 	UpdateKeyProcessingState(ctx context.Context, query UpdateKeyProcessingStateQuery) error
+	UpdateKeyLifeCycleAndProcessingState(ctx context.Context, query UpdateKeyLifeCycleAndProcessingStateQuery) error
 }
 
 type GetKeyByNameQuery struct {
@@ -74,4 +75,13 @@ type UpdateKeyProcessingStateQuery struct {
 	TenantID  string
 	NewStatus model.KeyProcessingStatus
 	NewJobID  string
+}
+
+type UpdateKeyLifeCycleAndProcessingStateQuery struct {
+	ID         string
+	TenantID   string
+	ToState    model.KeyLifeCycleState
+	ToStatus   model.KeyProcessingStatus
+	FromState  []model.KeyLifeCycleState
+	FromStatus []model.KeyProcessingStatus
 }

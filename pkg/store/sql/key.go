@@ -361,6 +361,41 @@ func (ks *KeyStore) UpdateKeyProcessingState(ctx context.Context, query store.Up
 	return nil
 }
 
+func (ks *KeyStore) UpdateKeyLifeCycleAndProcessingState(ctx context.Context, q store.UpdateKeyLifeCycleAndProcessingStateQuery) error {
+	var sb strings.Builder
+	sb.WriteString("UPDATE keys SET life_cycle_state = $1, processing_status = $2, updated_at = $3 WHERE id = $4 AND tenant_id = $5")
+
+	args := []any{q.ToState, q.ToStatus, clock.Now(), q.ID, q.TenantID}
+	argIdx := 6
+
+	if len(q.FromState) > 0 {
+		fmt.Fprintf(&sb, " AND life_cycle_state = ANY($%d)", argIdx)
+		args = append(args, q.FromState)
+		argIdx++
+	}
+
+	if len(q.FromStatus) > 0 {
+		fmt.Fprintf(&sb, " AND processing_status = ANY($%d)", argIdx)
+		args = append(args, q.FromStatus)
+	}
+
+	result, err := ks.db.ExecContext(ctx, sb.String(), args...)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return store.ErrKeyNotFound
+	}
+
+	return nil
+}
+
 func nullableJobID(jobID string) any {
 	if jobID == "" {
 		return nil
