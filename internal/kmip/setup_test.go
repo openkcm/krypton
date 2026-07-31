@@ -105,13 +105,13 @@ func newTestEnv(t *testing.T, tenantID, keyID string) *testEnv {
 		}
 	}}
 	env.kvs = &keyVersionStoreStub{listKeyVersionsFn: func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
-		if q.TenantID != tenantID || q.KeyID != dekKey.ID || (q.Version != "" && q.Version != "1") {
+		if q.TenantID != tenantID || q.KeyID != dekKey.ID || (q.Version != 0 && q.Version != 1) {
 			return store.ListKeyVersionsResult{}, nil
 		}
 		return store.ListKeyVersionsResult{KeyVersions: []model.KeyVersion{{
 			TenantID:        tenantID,
 			KeyID:           dekKey.ID,
-			Version:         "1",
+			Version:         1,
 			Revision:        0,
 			ParentKeyID:     &rootKey.ID,
 			LifeCycleState:  model.KeyLifeCycleActive,
@@ -185,7 +185,7 @@ func (env *testEnv) seedSecret(t *testing.T, material []byte) {
 	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
 		TenantID:    env.tenantID,
 		KeyID:       env.keyID,
-		KeyVersion:  "1",
+		KeyVersion:  1,
 		KeyRevision: 0,
 		KeyMaterial: sealed.Ciphertext,
 	})

@@ -20,7 +20,7 @@ const initDB = `
 CREATE TABLE IF NOT EXISTS keys (
 	tenant_id TEXT NOT NULL CHECK(tenant_id != ''),
 	key_id TEXT NOT NULL CHECK(key_id != ''),
-	key_version TEXT NOT NULL,
+	key_version INTEGER NOT NULL DEFAULT 0,
 	key_revision INTEGER NOT NULL DEFAULT 0,
 	key_material BLOB NOT NULL,
 	aad BLOB,

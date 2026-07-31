@@ -48,7 +48,7 @@ type PrepareTenantResponse struct {
 type ImportKeyRequest struct {
 	TenantID    string
 	KeyID       string
-	KeyVersion  string
+	KeyVersion  int
 	KeyRevision int
 	KeyMaterial *securemem.Data
 	AAD         []byte
@@ -63,7 +63,7 @@ type ImportKeyResponse struct {
 type ExportKeyRequest struct {
 	TenantID    string
 	KeyID       string
-	KeyVersion  string
+	KeyVersion  int
 	KeyRevision int
 }
 
@@ -77,7 +77,7 @@ type ExportKeyResponse struct {
 type DestroyKeyRequest struct {
 	TenantID    string
 	KeyID       string
-	KeyVersion  string
+	KeyVersion  int
 	KeyRevision int
 }
 

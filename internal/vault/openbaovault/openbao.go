@@ -246,8 +246,8 @@ func kvMountPath(tenantID string) string {
 	return fmt.Sprintf("%s/%s", tenantID, kvSecretName)
 }
 
-func kvPath(keyID, keyVersion string, keyRevision int) string {
-	return fmt.Sprintf("%s/%s/%d", keyID, keyVersion, keyRevision)
+func kvPath(keyID string, keyVersion, keyRevision int) string {
+	return fmt.Sprintf("%s/%d/%d", keyID, keyVersion, keyRevision)
 }
 
 func kvSecretPath(tenantID string) string {

@@ -17,6 +17,7 @@ type KeyVersionStore struct {
 var _ store.KeyVersion = &KeyVersionStore{}
 
 var keyVersionOrderSQL = map[store.KeyVersionOrder]string{
+	store.KeyVersionOrderVersionDesc:   "version DESC",
 	store.KeyVersionOrderCreatedAtDesc: "created_at DESC",
 	store.KeyVersionOrderRevisionDesc:  "revision DESC",
 }
@@ -65,11 +66,14 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 	if query.KeyID != "" {
 		fmt.Fprintf(&q, "AND key_id = %s ", nextParam(query.KeyID))
 	}
-	if query.Version != "" {
+	if query.Version != 0 {
 		fmt.Fprintf(&q, "AND version = %s ", nextParam(query.Version))
 	}
 	if query.ProcessingState != "" {
 		fmt.Fprintf(&q, "AND processing_state = %s ", nextParam(query.ProcessingState))
+	}
+	if query.LifeCycleState != "" {
+		fmt.Fprintf(&q, "AND life_cycle_state = %s ", nextParam(query.LifeCycleState))
 	}
 
 	if len(query.OrderBy) > 0 {

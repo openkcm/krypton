@@ -52,10 +52,10 @@ const createKeyVersionsTable = `
 CREATE TABLE IF NOT EXISTS key_versions (
 	tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 	key_id UUID NOT NULL,
-	version TEXT NOT NULL,
+	version INT NOT NULL,
 	revision INT NOT NULL,
 	parent_key_id UUID NULL,
-	parent_key_version TEXT NULL,
+	parent_key_version INT NULL,
 	life_cycle_state TEXT NOT NULL,
 	processing_state TEXT NOT NULL,
 	created_at BIGINT NOT NULL,

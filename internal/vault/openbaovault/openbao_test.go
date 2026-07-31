@@ -211,7 +211,7 @@ func TestImportKey(t *testing.T) {
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -235,7 +235,7 @@ func TestImportKey(t *testing.T) {
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 		})
 
@@ -250,7 +250,7 @@ func TestImportKey(t *testing.T) {
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:   uuid.NewString(),
 			KeyID:      uuid.NewString(),
-			KeyVersion: "1",
+			KeyVersion: 1,
 			AAD:        []byte{4, 3, 2, 1},
 		})
 
@@ -274,7 +274,7 @@ func TestImportKey(t *testing.T) {
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -286,7 +286,7 @@ func TestImportKey(t *testing.T) {
 		resp, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -305,7 +305,7 @@ func TestImportKey(t *testing.T) {
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -354,7 +354,7 @@ func TestExportKey(t *testing.T) {
 		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -365,7 +365,7 @@ func TestExportKey(t *testing.T) {
 		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -389,7 +389,7 @@ func TestExportKey(t *testing.T) {
 		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 		})
 		require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestExportKey(t *testing.T) {
 		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -418,7 +418,7 @@ func TestExportKey(t *testing.T) {
 		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -441,7 +441,7 @@ func TestExportKey(t *testing.T) {
 		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -489,7 +489,7 @@ func TestDestroyKey(t *testing.T) {
 		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       keyID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: secretData,
 			AAD:         []byte{4, 3, 2, 1},
 		})
@@ -500,7 +500,7 @@ func TestDestroyKey(t *testing.T) {
 		eResp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, eResp)
@@ -510,7 +510,7 @@ func TestDestroyKey(t *testing.T) {
 		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -521,7 +521,7 @@ func TestDestroyKey(t *testing.T) {
 		eResp, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
@@ -537,7 +537,7 @@ func TestDestroyKey(t *testing.T) {
 		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -559,7 +559,7 @@ func TestDestroyKey(t *testing.T) {
 		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -628,7 +628,7 @@ func TestDestroyTenant(t *testing.T) {
 		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID,
 			KeyID:       kID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: km,
 			AAD:         []byte{},
 		})
@@ -648,7 +648,7 @@ func TestDestroyTenant(t *testing.T) {
 		_, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID,
 			KeyID:      kID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
@@ -715,7 +715,7 @@ func TestDestroyTenant(t *testing.T) {
 		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID1,
 			KeyID:       kID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: km,
 			AAD:         []byte{},
 		})
@@ -730,7 +730,7 @@ func TestDestroyTenant(t *testing.T) {
 		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
 			TenantID:    tenantID2,
 			KeyID:       kID,
-			KeyVersion:  "1",
+			KeyVersion:  1,
 			KeyMaterial: km,
 			AAD:         []byte{},
 		})
@@ -749,7 +749,7 @@ func TestDestroyTenant(t *testing.T) {
 		eRep, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID1,
 			KeyID:      kID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
@@ -759,7 +759,7 @@ func TestDestroyTenant(t *testing.T) {
 		eRep, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
 			TenantID:   tenantID2,
 			KeyID:      kID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, eRep)

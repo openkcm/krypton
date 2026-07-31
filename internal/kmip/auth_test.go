@@ -30,10 +30,10 @@ func TestAuthorize(t *testing.T) {
 			in          string
 			wantTenant  string
 			wantKey     string
-			wantVersion string
+			wantVersion int
 		}{
-			{"tenant-a:dek-1:1", "tenant-a", "dek-1", "1"},
-			{"acme-corp:dek-mongodb-001:42", "acme-corp", "dek-mongodb-001", "42"},
+			{"tenant-a:dek-1:1", "tenant-a", "dek-1", 1},
+			{"acme-corp:dek-mongodb-001:42", "acme-corp", "dek-mongodb-001", 42},
 		}
 		for _, tt := range tests {
 			t.Run(tt.in, func(t *testing.T) {
@@ -58,6 +58,7 @@ func TestAuthorize(t *testing.T) {
 			"tenant:key:",
 			"",
 			"::",
+			"tenant-a:dek-1:not-valid-int",
 		} {
 			t.Run(in, func(t *testing.T) {
 				_, err := kmip.Authorize(context.Background(), in)

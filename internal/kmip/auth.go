@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/ovh/kmip-go"
@@ -34,7 +35,7 @@ var peerCertsFn = func(ctx context.Context) []*x509.Certificate {
 type keyIdentifier struct {
 	TenantID string
 	KeyID    string
-	Version  string
+	Version  int
 }
 
 // keyIdentifierKey is the context key for the authorized keyIdentifier.
@@ -66,7 +67,11 @@ func (a *authorizer) authorizeIdentifier(ctx context.Context, uniqueIdentifier s
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		return keyIdentifier{}, ErrInvalidKeyIdentifier
 	}
-	id := keyIdentifier{TenantID: parts[0], KeyID: parts[1], Version: parts[2]}
+	version, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return keyIdentifier{}, ErrInvalidKeyIdentifier
+	}
+	id := keyIdentifier{TenantID: parts[0], KeyID: parts[1], Version: version}
 
 	certs := peerCertsFn(ctx)
 	if len(certs) == 0 || certs[0] == nil || certs[0].Subject.CommonName == "" {

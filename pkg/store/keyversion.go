@@ -28,6 +28,7 @@ type KeyVersionOrder int
 
 const (
 	KeyVersionOrderUnspecified KeyVersionOrder = iota
+	KeyVersionOrderVersionDesc
 	KeyVersionOrderCreatedAtDesc
 	KeyVersionOrderRevisionDesc
 )
@@ -35,7 +36,8 @@ const (
 type ListKeyVersionsQuery struct {
 	TenantID        string
 	KeyID           string
-	Version         string
+	Version         int
+	LifeCycleState  model.KeyLifeCycleState
 	ProcessingState model.KeyVersionProcessingState
 	// OrderBy applies the sort keys in the given order.
 	OrderBy []KeyVersionOrder

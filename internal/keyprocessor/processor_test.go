@@ -61,7 +61,7 @@ func TestCreateSecret(t *testing.T) {
 		parentKeyID := uuid.NewString()
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil),
+			KeyVersion: model.NewKeyVersion(uuid.NewString(), uuid.NewString(), 1, &parentKeyID, nil),
 		})
 
 		// then
@@ -97,7 +97,7 @@ func TestCreateSecret(t *testing.T) {
 		parentKeyID := uuid.NewString()
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
-			KeyVersion: model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil),
+			KeyVersion: model.NewKeyVersion(tenantID, keyID, 1, &parentKeyID, nil),
 		})
 
 		// then
@@ -124,7 +124,7 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
@@ -167,7 +167,7 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, ps.sealer, newTestVault(t))
 
 		// when
@@ -199,7 +199,7 @@ func TestCreateSecret(t *testing.T) {
 		}
 
 		childKeyID := uuid.NewString()
-		childKV := model.NewKeyVersion(ps.tenantID, childKeyID, "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, childKeyID, 1, &ps.parentKey.ID, nil)
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		v.importKeyFn = func(_ context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
 			assert.Equal(t, ps.tenantID, req.TenantID)
@@ -222,7 +222,7 @@ func TestCreateSecret(t *testing.T) {
 	t.Run("should return error if parent set but key version has no parent key version", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		orphanKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", nil, nil)
+		orphanKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, nil, nil)
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
@@ -238,7 +238,7 @@ func TestCreateSecret(t *testing.T) {
 	t.Run("should succeed", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 
 		// when
@@ -254,7 +254,7 @@ func TestCreateSecret(t *testing.T) {
 	t.Run("should succeed with transport sealer", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 
 		// when
@@ -275,7 +275,7 @@ func TestResolveSecret(t *testing.T) {
 
 		parentKeyID := uuid.NewString()
 		// when
-		sec, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil))
+		sec, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.NewString(), uuid.NewString(), 1, &parentKeyID, nil))
 
 		// then
 		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
@@ -289,7 +289,7 @@ func TestResolveSecret(t *testing.T) {
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 		parentKeyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
+		kv := model.NewKeyVersion(tenantID, keyID, 1, &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
@@ -315,7 +315,7 @@ func TestResolveSecret(t *testing.T) {
 		parentErr := errors.New("parent unavailable")
 		ps := setupParent(t)
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
@@ -348,7 +348,7 @@ func TestResolveSecret(t *testing.T) {
 		unsealErr := errors.New("unsealing failed")
 
 		parentKeyID := uuid.NewString()
-		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), "1", &parentKeyID, nil)
+		kv := model.NewKeyVersion(uuid.NewString(), uuid.NewString(), 1, &parentKeyID, nil)
 
 		realSealer := newTestSealer(t)
 		sealer := &sealerWrapper{Sealer: realSealer}
@@ -383,7 +383,7 @@ func TestResolveSecret(t *testing.T) {
 	t.Run("should succeed", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, ps.sealer, newTestVault(t))
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
 		assert.NoError(t, err)
@@ -401,7 +401,7 @@ func TestResolveSecret(t *testing.T) {
 	t.Run("should succeed with transport sealer", func(t *testing.T) {
 		// given
 		ps := setupParent(t)
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), "1", &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: childKV})
 		assert.NoError(t, err)
@@ -556,7 +556,7 @@ func TestDeleteSecret(t *testing.T) {
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 		parentKeyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
+		kv := model.NewKeyVersion(tenantID, keyID, 1, &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
@@ -582,7 +582,7 @@ func TestDeleteSecret(t *testing.T) {
 		tenantID := uuid.NewString()
 		keyID := uuid.NewString()
 		parentKeyID := uuid.NewString()
-		kv := model.NewKeyVersion(tenantID, keyID, "1", &parentKeyID, nil)
+		kv := model.NewKeyVersion(tenantID, keyID, 1, &parentKeyID, nil)
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
