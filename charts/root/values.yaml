@@ -1,0 +1,138 @@
+# Default values for krypton-root.
+nameOverride: ""
+fullnameOverride: ""
+namespace: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+image:
+  registry: ghcr.io/openkcm
+  repository: images/krypton-root
+  tag: latest
+  # digest: sha256:...
+  command: ["/bin/krypton-root"]
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: "registry-access"
+
+pod:
+  annotations: {}
+  labels: {}
+  securityContext: {}
+  disruptionBudget:
+    enabled: false
+    # minAvailable: 1
+    # maxUnavailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+service:
+  labels: {}
+  annotations: {}
+  type: ClusterIP
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+# resources:
+#   limits:
+#     cpu: 100m
+#     memory: 128Mi
+#   requests:
+#     cpu: 100m
+#     memory: 128Mi
+
+# livenessProbe:
+#   httpGet:
+#     path: /healthz
+#     port: 8080
+# readinessProbe:
+#   httpGet:
+#     path: /healthz
+#     port: 8080
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+extraContainers: []
+# Required environment variables (provide via extraEnvs):
+# - name: DATABASE_URL
+#   value: "postgres://user:pass@host:5432/dbname?sslmode=disable"
+# - name: KRYPTON_ROOT_KEY
+#   value: "<base64-encoded 32-byte AES-256 key>"
+extraEnvs: []
+extraEnvsFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+extraPorts:
+  - name: grpc
+    protocol: TCP
+    containerPort: 8080
+
+config:
+  isImmutable: false
+  
+  # krypton root demo config
+  name: root
+  role: root
+  segment:
+    start_kind: K0
+    end_kind: K2
+  selector_labels:
+    environment: local
+  key_bindings:
+    K0:
+      sealer:
+        name: root-key-sealer
+        type: aes256gcm-staticsecret
+        config:
+          secret:
+            type: envvar
+            config:
+              name: KRYPTON_ROOT_KEY
+    K1:
+      crypto:
+        name: kek-crypto
+        type: aes256gcm
+      vault:
+        name: kek-vault
+        type: unsafe-sqlite-memory
+    K2:
+      crypto:
+        name: dek-crypto
+        type: aes256gcm
+      vault:
+        name: dek-vault
+        type: unsafe-sqlite-memory
+  hierarchy:
+    name: demo-hierarchy
+    key_specs:
+      - kind: K0
+        role: root
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
+      - kind: K1
+        role: kek
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
+      - kind: K2
+        role: dek
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
+  topology: {}
+  reconciler: {}

@@ -1,0 +1,25 @@
+{{- if .Values.pod.disruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "krypton.fullname" . }}
+  namespace: {{ include "krypton.namespace" . }}
+  labels:
+    {{- include "krypton.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "krypton.selectorLabels" . | nindent 6 }}
+  {{- if not (or (hasKey .Values.pod.disruptionBudget "minAvailable") (hasKey .Values.pod.disruptionBudget "maxUnavailable")) }}
+  minAvailable: 1
+  {{- end }}
+  {{- if (and (hasKey .Values.pod.disruptionBudget "minAvailable") (hasKey .Values.pod.disruptionBudget "maxUnavailable")) }}
+  {{- fail "You can only set one of minAvailable or maxUnavailable in the PodDisruptionBudget" }}
+  {{- end }}
+  {{- if hasKey .Values.pod.disruptionBudget "minAvailable" }}
+  minAvailable: {{ .Values.pod.disruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if hasKey .Values.pod.disruptionBudget "maxUnavailable" }}
+  maxUnavailable: {{ .Values.pod.disruptionBudget.maxUnavailable }}
+  {{- end }}
+{{- end }}

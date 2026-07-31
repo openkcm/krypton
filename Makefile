@@ -89,3 +89,50 @@ go-format:
 	goimports -w .
 	gofmt -s -w .
 
+.PHONY: helm-lint
+helm-lint:
+	helm lint ./charts/root
+
+.PHONY: helm-template
+helm-template:
+	helm template krypton-root ./charts/root
+
+ROOT_HELM_RELEASE := krypton-root
+ROOT_IMAGE := krypton-root:local
+KRYPTON_ROOT_KEY := $(shell openssl rand -base64 32)
+ROOT_DATABASE_URL := postgres://krypton:krypton@krypton-root-postgres:5432/krypton?sslmode=disable
+
+.PHONY: root-build
+root-build:
+	docker build -f cmd/root/Dockerfile -t $(ROOT_IMAGE) .
+
+.PHONY: root-deploy
+root-deploy: root-build deploy-postgres
+	$(IMAGE_LOAD)
+	helm upgrade --install $(ROOT_HELM_RELEASE) ./charts/root \
+		--set image.registry="" \
+		--set image.repository=krypton-root \
+		--set image.tag=local \
+		--set image.pullPolicy=IfNotPresent \
+		--set-json 'image.pullSecrets=[]' \
+		--set-json 'extraEnvs=[{"name":"KRYPTON_ROOT_KEY","value":"$(KRYPTON_ROOT_KEY)"},{"name":"DATABASE_URL","value":"$(ROOT_DATABASE_URL)"}]'
+
+.PHONY: root-undeploy
+root-undeploy:
+	helm uninstall $(ROOT_HELM_RELEASE)
+
+CLUSTER := krypton
+# IMAGE_LOAD ?= kind load docker-image $(ROOT_IMAGE)
+# IMAGE_LOAD ?= minikube image load $(ROOT_IMAGE)
+# IMAGE_LOAD ?= true  # Docker Desktop (no-op, shared daemon)
+IMAGE_LOAD ?= k3d image import $(ROOT_IMAGE) --cluster $(CLUSTER)
+
+.PHONY: k3d-cluster
+k3d-cluster:
+	@k3d cluster list $(CLUSTER) >/dev/null 2>&1 || \
+		k3d cluster create $(CLUSTER)
+
+.PHONY: deploy-postgres
+deploy-postgres:
+	kubectl apply -f hack/postgres.yaml
+
