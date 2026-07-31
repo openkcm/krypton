@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
@@ -29,6 +30,11 @@ type ValidationError struct {
 type ActivateInput struct {
 	TenantID string
 	KeyID    string
+}
+
+func isValidUUID(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
 }
 
 // NewValidationError constructs a ValidationError. Useful for tests that

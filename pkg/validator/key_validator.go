@@ -66,7 +66,7 @@ func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceIn
 	}
 
 	switch {
-	case input.TenantID == "":
+	case !isValidUUID(input.TenantID):
 		ve.err = ErrEmptyTenantID
 		return ve
 	case input.KeyKind == "":
@@ -122,10 +122,10 @@ func (v *keyValidator) ValidateKeyActivate(ctx context.Context, input ActivateIn
 	}
 
 	switch {
-	case input.TenantID == "":
+	case !isValidUUID(input.TenantID):
 		ve.err = ErrEmptyTenantID
 		return ve
-	case input.KeyID == "":
+	case !isValidUUID(input.KeyID):
 		ve.err = ErrInvalidKeyID
 		return ve
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/validator"
 )
+
+var validUUID = uuid.NewString()
+var invalidUUID = "invalid-uuid"
 
 type stubTenantStore struct {
 	store.Tenant
@@ -63,7 +67,7 @@ var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 func tenantFound() store.Tenant {
 	return &stubTenantStore{
 		getTenant: func(_ context.Context, _ store.GetTenantQuery) (store.GetTenantResult, error) {
-			return store.GetTenantResult{Tenant: model.Tenant{ID: "tenant-1"}}, nil
+			return store.GetTenantResult{Tenant: model.Tenant{ID: validUUID}}, nil
 		},
 	}
 }
@@ -89,19 +93,19 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 
 	activeRootParent := &model.Key{
 		ID:             "parent-id",
-		TenantID:       "tenant-1",
+		TenantID:       validUUID,
 		Kind:           "K0",
 		LifeCycleState: model.KeyLifeCycleActive,
 	}
 	suspendedRootParent := &model.Key{
 		ID:             "parent-id",
-		TenantID:       "tenant-1",
+		TenantID:       validUUID,
 		Kind:           "K0",
 		LifeCycleState: model.KeyLifeCycleSuspended,
 	}
 	activeUnknownKindParent := &model.Key{
 		ID:             "parent-id",
-		TenantID:       "tenant-1",
+		TenantID:       validUUID,
 		Kind:           "UNKNOWN",
 		LifeCycleState: model.KeyLifeCycleActive,
 	}
@@ -124,7 +128,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "empty keyKind",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrEmptyKeyKind,
@@ -132,7 +136,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "empty name",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrEmptyName,
@@ -140,7 +144,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "tenant not found",
-			input:    validator.AnnounceInput{TenantID: "missing", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantReturning(store.ErrTenantNotFound),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrInvalidTenantID,
@@ -148,7 +152,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "tenant store internal error",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantReturning(storeErr),
 			keys:     &stubKeyStore{},
 			wantErr:  storeErr,
@@ -156,7 +160,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "key kind not in hierarchy",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "UNKNOWN", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "UNKNOWN", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrInvalidKeyKind,
@@ -164,7 +168,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "target not in topology",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "missing-agent", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "missing-agent", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrTargetNotInTopolgy,
@@ -172,7 +176,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "target does not manage key kind",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K0", Name: "k0", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrTargetDoesNotManageKeyKind,
@@ -180,7 +184,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "non-root key with empty parentID",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: ""},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: ""},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrNonRootKey,
@@ -188,7 +192,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "root key with parentID is rejected",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "", ParentID: "some-parent"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K0", Name: "k0", TargetName: "", ParentID: "some-parent"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrRootKeyParent,
@@ -196,7 +200,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "parent key not found",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "missing-parent"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "missing-parent"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(nil, store.ErrKeyNotFound),
 			wantErr:  validator.ErrInvalidParentKey,
@@ -204,7 +208,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "parent key store internal error",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(nil, storeErr),
 			wantErr:  storeErr,
@@ -212,7 +216,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "parent key not active",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(suspendedRootParent, nil),
 			wantErr:  validator.ErrParentInvalidState,
@@ -220,7 +224,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "parent key skips a hierarchy layer",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K2", Name: "k2", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K2", Name: "k2", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(activeRootParent, nil),
 			wantErr:  validator.ErrParentKeyAdjecency,
@@ -228,7 +232,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:     "parent key kind unknown to hierarchy",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(activeUnknownKindParent, nil),
 			wantErr:  validator.ErrParentKeyAdjecency,
@@ -236,21 +240,21 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 		},
 		{
 			name:    "valid non-root key with active adjacent parent",
-			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
+			input:   validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants: tenantFound(),
 			keys:    keyStoreReturning(activeRootParent, nil),
 			wantErr: nil,
 		},
 		{
 			name:    "valid root key with empty parentID",
-			input:   validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K0", Name: "k0", TargetName: "", ParentID: ""},
+			input:   validator.AnnounceInput{TenantID: validUUID, KeyKind: "K0", Name: "k0", TargetName: "", ParentID: ""},
 			tenants: tenantFound(),
 			keys:    &stubKeyStore{},
 			wantErr: nil,
 		},
 		{
 			name:     "empty target does not manage non-root kind",
-			input:    validator.AnnounceInput{TenantID: "tenant-1", KeyKind: "K1", Name: "k1", TargetName: "", ParentID: "parent-id"},
+			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
 			wantErr:  validator.ErrTargetDoesNotManageKeyKind,
@@ -287,14 +291,14 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 			wantCode codes.Code
 		}{
 			{
-				name:     "empty tenantID",
-				input:    validator.ActivateInput{TenantID: "", KeyID: "key-id"},
+				name:     "invalid tenantID",
+				input:    validator.ActivateInput{TenantID: invalidUUID, KeyID: validUUID},
 				wantErr:  validator.ErrEmptyTenantID,
 				wantCode: codes.InvalidArgument,
 			},
 			{
-				name:     "empty keyID",
-				input:    validator.ActivateInput{TenantID: "tenantID", KeyID: ""},
+				name:     "invalid keyID",
+				input:    validator.ActivateInput{TenantID: validUUID, KeyID: invalidUUID},
 				wantErr:  validator.ErrInvalidKeyID,
 				wantCode: codes.InvalidArgument,
 			},
@@ -319,7 +323,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(store.ErrTenantNotFound), &stubKeyStore{})
 
 		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
 
 		// then
 		assert.NotNil(t, ve)
@@ -332,7 +336,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(assert.AnError), &stubKeyStore{})
 
 		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
 
 		// then
 		assert.NotNil(t, ve)
@@ -350,7 +354,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
 
 		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
 
 		// then
 		assert.NotNil(t, ve)
@@ -437,7 +441,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 
 				v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
 				// when
-				ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+				ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
 
 				// then
 				if tt.wantErr == nil {
