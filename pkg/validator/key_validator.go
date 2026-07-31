@@ -149,7 +149,7 @@ func (v *keyValidator) ValidateKeyActivate(ctx context.Context, input ActivateIn
 	}
 
 	totalKs := len(parents.Keys)
-	if totalKs < 2 {
+	if totalKs <= 0 {
 		ve.code, ve.err = FailedCondition, ErrFailedToGetParentKeys
 		return ve
 	}

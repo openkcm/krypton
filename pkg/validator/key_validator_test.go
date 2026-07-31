@@ -344,7 +344,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 		assert.Equal(t, codes.Internal, ve.ToProtoErrCode())
 	})
 
-	t.Run("should return error if getparents returns an error", func(t *testing.T) {
+	t.Run("should return error if GetParentKeys returns an error", func(t *testing.T) {
 		// given
 		stubKeys := &stubKeyStore{
 			getParentKeys: func(_ context.Context, _ store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
@@ -394,7 +394,7 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 				wantCode: codes.FailedPrecondition,
 			},
 			{
-				name: "shoud return error if key to activate is not in completed state",
+				name: "should return error if key to activate is not in completed state",
 				parentKeys: []model.Key{
 					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
 					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress}, ParentID: new("parent-id")},
@@ -421,12 +421,35 @@ func TestValidator_ValidateKeyActivate(t *testing.T) {
 				wantCode: codes.FailedPrecondition,
 			},
 			{
+				name: "should return error if key to activate is a root key and processing state is not completed",
+				parentKeys: []model.Key{
+					{Kind: "K0", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress}},
+				},
+				wantErr:  validator.ErrKeyTransientState,
+				wantCode: codes.FailedPrecondition,
+			},
+			{
 				name: "should return nil if all parent keys are active and adjacent",
 				parentKeys: []model.Key{
 					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
 					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}, ParentID: new("parent-id")},
 				},
 				wantErr: nil,
+			},
+			{
+				name: "should return nil if key to activate is a root key",
+				parentKeys: []model.Key{
+					{Kind: "K0", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+				},
+				wantErr: nil,
+			},
+			{
+				name: "should return error if key to activate is only one and is not a root",
+				parentKeys: []model.Key{
+					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+				},
+				wantErr:  validator.ErrParentKeyNotInOrder,
+				wantCode: codes.FailedPrecondition,
 			},
 		}
 
