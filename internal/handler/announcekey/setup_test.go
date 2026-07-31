@@ -122,6 +122,10 @@ func (s *stubValidator) ValidateAnnounceKey(_ context.Context, _ validator.Annou
 	return s.err
 }
 
+func (s *stubValidator) ValidateActivateKey(_ context.Context, _ validator.ActivateInput) *validator.ValidationError {
+	return s.err
+}
+
 // passingValidator returns a stubValidator that accepts every input.
 func passingValidator() *stubValidator {
 	return &stubValidator{}

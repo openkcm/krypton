@@ -10,6 +10,7 @@ import (
 
 type KeyValidator interface {
 	ValidateAnnounceKey(context.Context, AnnounceInput) *ValidationError
+	ValidateActivateKey(context.Context, ActivateInput) *ValidationError
 }
 
 type ErrorKind int
@@ -23,6 +24,11 @@ const (
 type ValidationError struct {
 	code ErrorKind
 	err  error
+}
+
+type ActivateInput struct {
+	TenantID string
+	KeyID    string
 }
 
 // NewValidationError constructs a ValidationError. Useful for tests that
@@ -57,4 +63,8 @@ func (ve *ValidationError) Error() string {
 	}
 
 	return ve.err.Error()
+}
+
+func (ve *ValidationError) Unwrap() error {
+	return ve.err
 }

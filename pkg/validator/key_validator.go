@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -20,6 +21,7 @@ type keyValidator struct {
 var (
 	ErrEmptyTenantID              = errors.New("tenantId cannot be empty")
 	ErrEmptyKeyKind               = errors.New("key kind canot be empty")
+	ErrInvalidKeyID               = errors.New("keyId is invalid")
 	ErrEmptyName                  = errors.New("name canot be empty")
 	ErrInvalidTenantID            = errors.New("tenantId is invalid")
 	ErrInvalidKeyKind             = errors.New("key kind is invalid")
@@ -30,6 +32,14 @@ var (
 	ErrRootKeyParent              = errors.New("root key cannot have a parent")
 	ErrParentInvalidState         = errors.New("parent key is not in a valid state")
 	ErrParentKeyAdjecency         = errors.New("key is not adjecent to parent key")
+
+	ErrFailedToGetTenant       = errors.New("failed to get tenant")
+	ErrFailedToGetParentKeys   = errors.New("failed to get parent keys")
+	ErrNoParentKeysToActivate  = errors.New("no parent keys to activate, key must have at least one parent key")
+	ErrParentKeyNotInOrder     = errors.New("parent key is not in the correct order")
+	ErrParentKeyTransientState = errors.New("parent key is in a transient state, please wait for the parent key to be completed")
+	ErrKeyTransientState       = errors.New("key is in a transient state, please wait for the key to be completed")
+	ErrNoParentKeyRelation     = errors.New("key has no parent key relation")
 )
 
 func NewValidator(rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
@@ -102,6 +112,71 @@ func (v *keyValidator) ValidateAnnounceKey(ctx context.Context, input AnnounceIn
 		return ve
 	}
 
+	return nil
+}
+
+// ValidateActivateKey implements [KeyValidator].
+func (v *keyValidator) ValidateActivateKey(ctx context.Context, input ActivateInput) *ValidationError {
+	ve := &ValidationError{
+		code: Invalid,
+	}
+
+	switch {
+	case input.TenantID == "":
+		ve.err = ErrEmptyTenantID
+		return ve
+	case input.KeyID == "":
+		ve.err = ErrInvalidKeyID
+		return ve
+	}
+
+	if _, err := v.tenants.GetTenant(ctx, store.GetTenantQuery{ID: input.TenantID}); err != nil {
+		if errors.Is(err, store.ErrTenantNotFound) {
+			ve.code, ve.err = FailedCondition, ErrInvalidTenantID
+			return ve
+		}
+		ve.code, ve.err = Internal, ErrFailedToGetTenant
+		return ve
+	}
+
+	parents, err := v.keys.GetParentKeys(ctx, store.GetParentKeysQuery{
+		KeyID:    input.KeyID,
+		TenantID: input.TenantID,
+	})
+	if err != nil {
+		ve.code, ve.err = Internal, ErrFailedToGetParentKeys
+		return ve
+	}
+
+	totalKs := len(parents.Keys)
+	if totalKs < 2 {
+		ve.code, ve.err = FailedCondition, ErrFailedToGetParentKeys
+		return ve
+	}
+
+	for index, parent := range parents.Keys {
+		if v.hierarchy.IndexOf(parent.Kind) != index {
+			ve.code, ve.err = FailedCondition, ErrParentKeyNotInOrder
+			return ve
+		}
+		isTargetKey := index+1 == totalKs
+		if !isTargetKey {
+			if parent.LifeCycleState != model.KeyLifeCycleActive || parent.KeyProcessingState.Status != model.KeyProcessingCompleted {
+				ve.code, ve.err = FailedCondition, ErrParentKeyTransientState
+				return ve
+			}
+			continue
+		}
+		// Target key: must be done processing and allow transition to active.
+		if parent.KeyProcessingState.Status != model.KeyProcessingCompleted {
+			ve.code, ve.err = FailedCondition, ErrKeyTransientState
+			return ve
+		}
+		if err := keylifecycle.ValidateTransition(parent.LifeCycleState, model.KeyLifeCycleActive); err != nil {
+			ve.code, ve.err = FailedCondition, err
+			return ve
+		}
+	}
 	return nil
 }
 
