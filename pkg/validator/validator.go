@@ -9,8 +9,8 @@ import (
 )
 
 type KeyValidator interface {
-	ValidateAnnounceKey(context.Context, AnnounceInput) *ValidationError
-	ValidateActivateKey(context.Context, ActivateInput) *ValidationError
+	ValidateKeyAnnounce(context.Context, AnnounceInput) *ValidationError
+	ValidateKeyActivate(context.Context, ActivateInput) *ValidationError
 }
 
 type ErrorKind int

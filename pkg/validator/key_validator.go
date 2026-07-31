@@ -60,7 +60,7 @@ type AnnounceInput struct {
 	TargetName string
 }
 
-func (v *keyValidator) ValidateAnnounceKey(ctx context.Context, input AnnounceInput) *ValidationError {
+func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceInput) *ValidationError {
 	ve := &ValidationError{
 		code: Invalid,
 	}
@@ -115,8 +115,8 @@ func (v *keyValidator) ValidateAnnounceKey(ctx context.Context, input AnnounceIn
 	return nil
 }
 
-// ValidateActivateKey implements [KeyValidator].
-func (v *keyValidator) ValidateActivateKey(ctx context.Context, input ActivateInput) *ValidationError {
+// ValidateKeyActivate implements [KeyValidator].
+func (v *keyValidator) ValidateKeyActivate(ctx context.Context, input ActivateInput) *ValidationError {
 	ve := &ValidationError{
 		code: Invalid,
 	}

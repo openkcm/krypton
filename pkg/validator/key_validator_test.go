@@ -84,7 +84,7 @@ func keyStoreReturning(key *model.Key, err error) store.Key {
 	}
 }
 
-func TestValidator_ValidateAnnounceKey(t *testing.T) {
+func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 	storeErr := errors.New("boom")
 
 	activeRootParent := &model.Key{
@@ -262,7 +262,7 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tc.tenants, tc.keys)
 
-			ve := v.ValidateAnnounceKey(t.Context(), tc.input)
+			ve := v.ValidateKeyAnnounce(t.Context(), tc.input)
 
 			if tc.wantErr == nil {
 				assert.Nil(t, ve)
@@ -277,7 +277,7 @@ func TestValidator_ValidateAnnounceKey(t *testing.T) {
 	}
 }
 
-func TestValidator_ValidateActivateKey(t *testing.T) {
+func TestValidator_ValidateKeyActivate(t *testing.T) {
 	t.Run("validate input", func(t *testing.T) {
 		// given
 		tts := []struct {
@@ -305,7 +305,7 @@ func TestValidator_ValidateActivateKey(t *testing.T) {
 				v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), &stubTenantStore{}, &stubKeyStore{})
 
 				// when
-				ve := v.ValidateActivateKey(t.Context(), tt.input)
+				ve := v.ValidateKeyActivate(t.Context(), tt.input)
 
 				// then
 				assert.NotNil(t, ve)
@@ -319,7 +319,7 @@ func TestValidator_ValidateActivateKey(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(store.ErrTenantNotFound), &stubKeyStore{})
 
 		// when
-		ve := v.ValidateActivateKey(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
 
 		// then
 		assert.NotNil(t, ve)
@@ -332,7 +332,7 @@ func TestValidator_ValidateActivateKey(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(assert.AnError), &stubKeyStore{})
 
 		// when
-		ve := v.ValidateActivateKey(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
 
 		// then
 		assert.NotNil(t, ve)
@@ -350,7 +350,7 @@ func TestValidator_ValidateActivateKey(t *testing.T) {
 		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
 
 		// when
-		ve := v.ValidateActivateKey(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
 
 		// then
 		assert.NotNil(t, ve)
@@ -437,7 +437,7 @@ func TestValidator_ValidateActivateKey(t *testing.T) {
 
 				v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
 				// when
-				ve := v.ValidateActivateKey(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
+				ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: "tenant-1", KeyID: "key-id"})
 
 				// then
 				if tt.wantErr == nil {

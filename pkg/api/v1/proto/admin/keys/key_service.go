@@ -47,7 +47,7 @@ func NewKeyService(rootName string, keyStore store.Key, validator validator.KeyV
 // If the announce operation is for the root we just create it and return it otherwise it creates a job and a new key.
 // If there's a key with the same name we return that key or if the key is in a failed or pending state we retry the job.
 func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
-	vErr := s.validator.ValidateAnnounceKey(ctx, validator.AnnounceInput{
+	vErr := s.validator.ValidateKeyAnnounce(ctx, validator.AnnounceInput{
 		TenantID:   req.GetTenantId(),
 		KeyKind:    req.GetKind(),
 		Name:       req.GetName(),
