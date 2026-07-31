@@ -16,17 +16,17 @@ const (
 type KeyVersion struct {
 	TenantID         string                    `json:"tenant_id"`
 	KeyID            string                    `json:"key_id"`
-	Version          string                    `json:"version"`
+	Version          int                       `json:"version"`
 	Revision         int                       `json:"revision"`
 	ParentKeyID      *string                   `json:"parent_key_id,omitempty"`
-	ParentKeyVersion *string                   `json:"parent_key_version,omitempty"`
+	ParentKeyVersion *int                      `json:"parent_key_version,omitempty"`
 	LifeCycleState   KeyLifeCycleState         `json:"life_cycle_state"`
 	ProcessingState  KeyVersionProcessingState `json:"processing_state"`
 	CreatedAt        clock.UnixNano            `json:"created_at"`
 	UpdatedAt        clock.UnixNano            `json:"updated_at"`
 }
 
-func NewKeyVersion(tenantID, keyID, version string, parentKeyID, parentKeyVersion *string) KeyVersion {
+func NewKeyVersion(tenantID, keyID string, version int, parentKeyID *string, parentKeyVersion *int) KeyVersion {
 	now := clock.Now()
 	return KeyVersion{
 		TenantID:         tenantID,

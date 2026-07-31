@@ -138,7 +138,7 @@ func buildProcessors(ctx context.Context, hierarchy spec.KeyHierarchy, bindings 
 type ExportSecretRequest struct {
 	TenantID   string
 	KeyID      string
-	KeyVersion string
+	KeyVersion int
 }
 
 // ExportSecret returns the plaintext key material for an active key's usable
@@ -150,7 +150,7 @@ func (km *Manager) ExportSecret(ctx context.Context, req ExportSecretRequest) (c
 
 // resolveProcessorAndSecret resolves a usable key version, checks the key
 // lifecycle, and unseals its secret via the processor for the key's kind.
-func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyID, version string) (processor, cryptor.Secret, error) {
+func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyID string, version int) (processor, cryptor.Secret, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, tenantID, keyID, version)
 	if err != nil {
 		return processor{}, cryptor.Secret{}, err
@@ -177,7 +177,7 @@ func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyI
 
 // Seal validates the key lifecycle, resolves the key version and its secret to encrypt the plaintext.
 func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
-	if req.KeyVersion == "" {
+	if req.KeyVersion == 0 {
 		return cryptor.SealResponse{}, ErrKeyVersionRequired
 	}
 	proc, sec, err := km.resolveProcessorAndSecret(ctx, req.TenantID, req.KeyID, req.KeyVersion)
@@ -202,7 +202,7 @@ func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.S
 
 // Unseal validates the key lifecycle, resolves the key version and its secret to decrypt the ciphertext.
 func (km *Manager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-	if req.KeyVersion == "" {
+	if req.KeyVersion == 0 {
 		return cryptor.UnsealResponse{}, ErrKeyVersionRequired
 	}
 	proc, sec, err := km.resolveProcessorAndSecret(ctx, req.TenantID, req.KeyID, req.KeyVersion)
@@ -259,9 +259,9 @@ func (rm *rootManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (c
 // resolveUsableKeyVersion returns the highest usable revision of version, or
 // the most recently created usable version when version is empty. Rotation
 // work must replace the latter with an explicit current-version marker.
-func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID, version string) (model.KeyVersion, error) {
+func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID string, version int) (model.KeyVersion, error) {
 	orderBy := []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc}
-	if version == "" {
+	if version == 0 {
 		orderBy = []store.KeyVersionOrder{
 			store.KeyVersionOrderCreatedAtDesc,
 			store.KeyVersionOrderRevisionDesc,
@@ -279,7 +279,7 @@ func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID,
 		return model.KeyVersion{}, err
 	}
 	if len(result.KeyVersions) == 0 {
-		return model.KeyVersion{}, fmt.Errorf("%w: key %s version %s", ErrNoUsableKeyVersion, keyID, version)
+		return model.KeyVersion{}, fmt.Errorf("%w: key %s version %d", ErrNoUsableKeyVersion, keyID, version)
 	}
 	return result.KeyVersions[0], nil
 }

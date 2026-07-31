@@ -37,7 +37,7 @@ func TestCreateKeyVersion(t *testing.T) {
 		kv := model.KeyVersion{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         1,
 			Revision:        0,
 			LifeCycleState:  model.KeyLifeCycleActive,
 			ProcessingState: model.KeyVersionUsable,
@@ -56,12 +56,12 @@ func TestCreateKeyVersion(t *testing.T) {
 	t.Run("should create key version with parent references", func(t *testing.T) {
 		// given
 		parentKeyID := uuid.NewString()
-		parentKeyVersion := "2"
+		parentKeyVersion := 2
 		now := clock.Now()
 		kv := model.KeyVersion{
 			TenantID:         tenant.ID,
 			KeyID:            key.ID,
-			Version:          "2",
+			Version:          2,
 			Revision:         0,
 			ParentKeyID:      &parentKeyID,
 			ParentKeyVersion: &parentKeyVersion,
@@ -86,7 +86,7 @@ func TestCreateKeyVersion(t *testing.T) {
 		kv := model.KeyVersion{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "3",
+			Version:         3,
 			Revision:        0,
 			LifeCycleState:  model.KeyLifeCycleActive,
 			ProcessingState: model.KeyVersionUsable,
@@ -109,7 +109,7 @@ func TestCreateKeyVersion(t *testing.T) {
 		kv := model.KeyVersion{
 			TenantID:        uuid.NewString(),
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         1,
 			Revision:        0,
 			LifeCycleState:  model.KeyLifeCycleActive,
 			ProcessingState: model.KeyVersionUsable,
@@ -141,42 +141,28 @@ func TestListKeyVersions(t *testing.T) {
 	require.NoError(t, keyStore.CreateKey(ctx, key))
 
 	// seed: version "1" with revisions 0, 1 (usable), 2 (re-wrapping)
-	now := clock.Now()
 	seeds := []struct {
+		version         int
 		revision        int
 		processingState model.KeyVersionProcessingState
+		lifeCycleState  model.KeyLifeCycleState
 	}{
-		{0, model.KeyVersionUsable},
-		{1, model.KeyVersionUsable},
-		{2, model.KeyVersionReWrapping},
+		{1, 1, model.KeyVersionUsable, model.KeyLifeCycleCompromised},
+		{1, 2, model.KeyVersionUsable, model.KeyLifeCyclePreActivation},
+		{2, 1, model.KeyVersionReWrapping, model.KeyLifeCycleActive},
+		{2, 3, model.KeyVersionReWrapping, model.KeyLifeCycleActive},
 	}
-	for _, s := range seeds {
+	for i, s := range seeds {
+		now := clock.Now() + clock.UnixNano(i) // ensure unique timestamps
 		kv := model.KeyVersion{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         s.version,
 			Revision:        s.revision,
-			LifeCycleState:  model.KeyLifeCycleActive,
+			LifeCycleState:  s.lifeCycleState,
 			ProcessingState: s.processingState,
 			CreatedAt:       now,
 			UpdatedAt:       now,
-		}
-		_, err := kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: kv})
-		require.NoError(t, err)
-	}
-
-	// seed: version "2" with revisions 0, 1 (usable), created strictly after version "1"
-	later := now + 1
-	for _, revision := range []int{0, 1} {
-		kv := model.KeyVersion{
-			TenantID:        tenant.ID,
-			KeyID:           key.ID,
-			Version:         "2",
-			Revision:        revision,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionUsable,
-			CreatedAt:       later,
-			UpdatedAt:       later,
 		}
 		_, err := kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
@@ -187,12 +173,12 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID: tenant.ID,
 			KeyID:    key.ID,
-			Version:  "1",
+			Version:  1,
 		})
 
 		// then
 		assert.NoError(t, err)
-		assert.Len(t, result.KeyVersions, 3)
+		assert.Len(t, result.KeyVersions, 2)
 	})
 
 	t.Run("should filter by processing state", func(t *testing.T) {
@@ -200,7 +186,7 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         1,
 			ProcessingState: model.KeyVersionUsable,
 		})
 
@@ -214,16 +200,15 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID: tenant.ID,
 			KeyID:    key.ID,
-			Version:  "1",
+			Version:  1,
 			OrderBy:  []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
 		})
 
 		// then
 		assert.NoError(t, err)
-		require.Len(t, result.KeyVersions, 3)
+		require.Len(t, result.KeyVersions, 2)
 		assert.Equal(t, 2, result.KeyVersions[0].Revision)
 		assert.Equal(t, 1, result.KeyVersions[1].Revision)
-		assert.Equal(t, 0, result.KeyVersions[2].Revision)
 	})
 
 	t.Run("should limit results", func(t *testing.T) {
@@ -231,7 +216,7 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID: tenant.ID,
 			KeyID:    key.ID,
-			Version:  "1",
+			Version:  1,
 			OrderBy:  []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
 			Limit:    1,
 		})
@@ -244,13 +229,13 @@ func TestListKeyVersions(t *testing.T) {
 
 	t.Run("should resolve highest usable revision", func(t *testing.T) {
 		// given
-		expRevision := 1
+		expRevision := 2
 
 		// when
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         1,
 			ProcessingState: model.KeyVersionUsable,
 			OrderBy:         []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
 			Limit:           1,
@@ -273,14 +258,22 @@ func TestListKeyVersions(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		require.Len(t, result.KeyVersions, 5)
+		require.Len(t, result.KeyVersions, 4)
+
+		time := clock.UnixNano(0)
 		for _, kv := range result.KeyVersions[:2] {
-			assert.Equal(t, "2", kv.Version)
-			assert.Equal(t, later, kv.CreatedAt)
+			assert.Equal(t, 2, kv.Version)
+			if time != 0 {
+				assert.Greater(t, time, kv.CreatedAt)
+			}
+			time = kv.CreatedAt
 		}
 		for _, kv := range result.KeyVersions[2:] {
-			assert.Equal(t, "1", kv.Version)
-			assert.Equal(t, now, kv.CreatedAt)
+			assert.Equal(t, 1, kv.Version)
+			if time != 0 {
+				assert.Greater(t, time, kv.CreatedAt)
+			}
+			time = kv.CreatedAt
 		}
 	})
 
@@ -300,8 +293,8 @@ func TestListKeyVersions(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		require.Len(t, result.KeyVersions, 1)
-		assert.Equal(t, "2", result.KeyVersions[0].Version)
-		assert.Equal(t, 1, result.KeyVersions[0].Revision)
+		assert.Equal(t, 1, result.KeyVersions[0].Version)
+		assert.Equal(t, 2, result.KeyVersions[0].Revision)
 		assert.Equal(t, model.KeyVersionUsable, result.KeyVersions[0].ProcessingState)
 	})
 
@@ -310,7 +303,7 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID:        tenant.ID,
 			KeyID:           key.ID,
-			Version:         "1",
+			Version:         1,
 			ProcessingState: model.KeyVersionUsable,
 			OrderBy:         []store.KeyVersionOrder{store.KeyVersionOrderRevisionDesc},
 			Limit:           1,
@@ -319,8 +312,40 @@ func TestListKeyVersions(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		require.Len(t, result.KeyVersions, 1)
-		assert.Equal(t, "1", result.KeyVersions[0].Version)
-		assert.Equal(t, 1, result.KeyVersions[0].Revision)
+		assert.Equal(t, 1, result.KeyVersions[0].Version)
+		assert.Equal(t, 2, result.KeyVersions[0].Revision)
+	})
+
+	t.Run("should return keyversion based on the lifecycle state filter", func(t *testing.T) {
+		// when
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:       tenant.ID,
+			KeyID:          key.ID,
+			LifeCycleState: model.KeyLifeCycleCompromised,
+		})
+
+		// then
+		assert.NoError(t, err)
+		require.Len(t, result.KeyVersions, 1)
+		assert.Equal(t, model.KeyLifeCycleCompromised, result.KeyVersions[0].LifeCycleState)
+	})
+
+	t.Run("should get the latest keyversion based on the lifecycle state filter", func(t *testing.T) {
+		// when
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:       tenant.ID,
+			KeyID:          key.ID,
+			LifeCycleState: model.KeyLifeCycleActive,
+			OrderBy:        []store.KeyVersionOrder{store.KeyVersionOrderVersionDesc, store.KeyVersionOrderRevisionDesc},
+			Limit:          1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		require.Len(t, result.KeyVersions, 1)
+		assert.Equal(t, model.KeyLifeCycleActive, result.KeyVersions[0].LifeCycleState)
+		assert.Equal(t, 2, result.KeyVersions[0].Version)
+		assert.Equal(t, 3, result.KeyVersions[0].Revision)
 	})
 
 	t.Run("should return empty slice when no matches", func(t *testing.T) {
@@ -328,7 +353,7 @@ func TestListKeyVersions(t *testing.T) {
 		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 			TenantID: tenant.ID,
 			KeyID:    key.ID,
-			Version:  "99",
+			Version:  99,
 		})
 
 		// then

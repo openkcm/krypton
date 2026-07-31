@@ -263,7 +263,7 @@ func (p *processor) parentSeal(ctx context.Context, kv model.KeyVersion, sec *se
 	if kv.ParentKeyID == nil {
 		return nil, ErrMissingParentKey
 	}
-	var parentVersion string
+	var parentVersion int
 	if kv.ParentKeyVersion != nil {
 		parentVersion = *kv.ParentKeyVersion
 	}
@@ -284,7 +284,7 @@ func (p *processor) parentUnseal(ctx context.Context, kv model.KeyVersion, sec *
 	if kv.ParentKeyID == nil {
 		return nil, ErrMissingParentKey
 	}
-	var parentVersion string
+	var parentVersion int
 	if kv.ParentKeyVersion != nil {
 		parentVersion = *kv.ParentKeyVersion
 	}

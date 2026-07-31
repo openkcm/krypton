@@ -62,7 +62,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -86,7 +86,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -104,7 +104,7 @@ func TestManagerSeal(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -119,7 +119,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -140,7 +140,7 @@ func TestManagerSeal(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -153,7 +153,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -174,7 +174,7 @@ func TestManagerSeal(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -187,7 +187,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
 
@@ -212,7 +212,7 @@ func TestManagerSeal(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
-		kv := model.NewKeyVersion(tenantID, key.ID, "1", &rootKey.ID, nil)
+		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, nil)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestManagerSeal(t *testing.T) {
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("secret payload")),
 			AAD:        []byte("aad"),
 		})
@@ -273,7 +273,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -291,7 +291,7 @@ func TestManagerUnseal(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -304,7 +304,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -325,7 +325,7 @@ func TestManagerUnseal(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -338,7 +338,7 @@ func TestManagerUnseal(t *testing.T) {
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -363,7 +363,7 @@ func TestManagerUnseal(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
-		kv := model.NewKeyVersion(tenantID, key.ID, "1", &rootKey.ID, nil)
+		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, nil)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
@@ -376,7 +376,7 @@ func TestManagerUnseal(t *testing.T) {
 		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("round trip data")),
 			AAD:        []byte("aad"),
 		})
@@ -386,7 +386,7 @@ func TestManagerUnseal(t *testing.T) {
 		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Ciphertext: sealResp.Ciphertext,
 			AAD:        []byte("aad"),
 		})
@@ -496,7 +496,7 @@ func TestManagerHierarchy(t *testing.T) {
 		midKey := model.NewKey(tenantID, "mid-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), midKey))
 		activateKey(t, db, midKey)
-		midKV := model.NewKeyVersion(tenantID, midKey.ID, "1", &rootKey.ID, nil)
+		midKV := model.NewKeyVersion(tenantID, midKey.ID, 1, &rootKey.ID, nil)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: midKV})
 		require.NoError(t, err)
 
@@ -509,7 +509,7 @@ func TestManagerHierarchy(t *testing.T) {
 		leafKey := model.NewKey(tenantID, "leaf-"+uuid.NewString(), "K2", &midKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), leafKey))
 		activateKey(t, db, leafKey)
-		leafKV := model.NewKeyVersion(tenantID, leafKey.ID, "1", &midKey.ID, &midKV.Version)
+		leafKV := model.NewKeyVersion(tenantID, leafKey.ID, 1, &midKey.ID, &midKV.Version)
 		_, err = kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: leafKV})
 		require.NoError(t, err)
 
@@ -522,7 +522,7 @@ func TestManagerHierarchy(t *testing.T) {
 		sealResp, err := leafMgr.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("top secret")),
 		})
 		assert.NoError(t, err)
@@ -530,7 +530,7 @@ func TestManagerHierarchy(t *testing.T) {
 		unsealResp, err := leafMgr.Unseal(t.Context(), cryptor.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Ciphertext: sealResp.Ciphertext,
 		})
 
@@ -981,7 +981,7 @@ func TestManagerExportSecret(t *testing.T) {
 		sec, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -992,10 +992,10 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should return error if no usable key version found", func(t *testing.T) {
 		tests := []struct {
 			name       string
-			keyVersion string
+			keyVersion int
 		}{
-			{name: "explicit version", keyVersion: "1"},
-			{name: "empty version", keyVersion: ""},
+			{name: "explicit version", keyVersion: 1},
+			{name: "empty version", keyVersion: 0},
 		}
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
@@ -1023,11 +1023,11 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should resolve key version with expected query", func(t *testing.T) {
 		tests := []struct {
 			name                   string
-			keyVersion             string
+			keyVersion             int
 			wantOrderByCreatedDesc bool
 		}{
-			{name: "empty version orders by created_at desc", keyVersion: "", wantOrderByCreatedDesc: true},
-			{name: "explicit version does not order by created_at", keyVersion: "1", wantOrderByCreatedDesc: false},
+			{name: "empty version orders by created_at desc", keyVersion: 0, wantOrderByCreatedDesc: true},
+			{name: "explicit version does not order by created_at", keyVersion: 1, wantOrderByCreatedDesc: false},
 		}
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
@@ -1073,7 +1073,7 @@ func TestManagerExportSecret(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -1088,7 +1088,7 @@ func TestManagerExportSecret(t *testing.T) {
 		sec, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -1108,7 +1108,7 @@ func TestManagerExportSecret(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -1121,7 +1121,7 @@ func TestManagerExportSecret(t *testing.T) {
 		sec, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -1141,7 +1141,7 @@ func TestManagerExportSecret(t *testing.T) {
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
 			return store.ListKeyVersionsResult{
-				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: "1", ProcessingState: model.KeyVersionUsable}},
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
 			}, nil
 		}
 		ks := &keyStoreWrapper{}
@@ -1154,7 +1154,7 @@ func TestManagerExportSecret(t *testing.T) {
 		sec, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -1165,14 +1165,14 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should succeed with explicit version", func(t *testing.T) {
 		// given
 		es := setupExportStack(t)
-		kv := model.NewKeyVersion(es.tenantID, es.key.ID, "1", &es.rootKey.ID, nil)
+		kv := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
 		es.addKeyVersionWithSecret(t, kv)
 
 		// when
 		sec, err := es.mgr.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 			TenantID:   es.tenantID,
 			KeyID:      es.key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 		})
 
 		// then
@@ -1185,7 +1185,7 @@ func TestManagerExportSecret(t *testing.T) {
 		sealResp, err := es.mgr.Seal(t.Context(), cryptor.SealRequest{
 			TenantID:   es.tenantID,
 			KeyID:      es.key.ID,
-			KeyVersion: "1",
+			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("sealed with manager")),
 			AAD:        []byte("aad"),
 		})
@@ -1208,30 +1208,30 @@ func TestManagerExportSecret(t *testing.T) {
 		// given
 		es := setupExportStack(t)
 
-		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, "1", &es.rootKey.ID, nil)
+		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
 		es.addKeyVersionWithSecret(t, kv1)
 
-		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, "2", &es.rootKey.ID, nil)
+		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, nil)
 		kv2.CreatedAt = kv1.CreatedAt + 1 // strictly later than version "1"
 		kv2.UpdatedAt = kv2.CreatedAt
 		es.addKeyVersionWithSecret(t, kv2)
 
 		// when
-		latest := es.exportSecretBytes(t, "")
+		latest := es.exportSecretBytes(t, 0)
 
 		// then
-		assert.Equal(t, es.exportSecretBytes(t, "2"), latest)
-		assert.NotEqual(t, es.exportSecretBytes(t, "1"), latest)
+		assert.Equal(t, es.exportSecretBytes(t, 2), latest)
+		assert.NotEqual(t, es.exportSecretBytes(t, 1), latest)
 	})
 
 	t.Run("should skip non-usable versions when resolving latest", func(t *testing.T) {
 		// given
 		es := setupExportStack(t)
 
-		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, "1", &es.rootKey.ID, nil)
+		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
 		es.addKeyVersionWithSecret(t, kv1)
 
-		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, "2", &es.rootKey.ID, nil)
+		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, nil)
 		kv2.CreatedAt = kv1.CreatedAt + 1 // strictly later than version "1"
 		kv2.UpdatedAt = kv2.CreatedAt
 		es.addKeyVersionWithSecret(t, kv2)
@@ -1240,7 +1240,7 @@ func TestManagerExportSecret(t *testing.T) {
 		kv3 := model.KeyVersion{
 			TenantID:        es.tenantID,
 			KeyID:           es.key.ID,
-			Version:         "3",
+			Version:         3,
 			Revision:        0,
 			ParentKeyID:     &es.rootKey.ID,
 			LifeCycleState:  model.KeyLifeCycleActive,
@@ -1251,10 +1251,10 @@ func TestManagerExportSecret(t *testing.T) {
 		es.addKeyVersionWithSecret(t, kv3)
 
 		// when
-		latest := es.exportSecretBytes(t, "")
+		latest := es.exportSecretBytes(t, 0)
 
 		// then
-		assert.Equal(t, es.exportSecretBytes(t, "2"), latest)
+		assert.Equal(t, es.exportSecretBytes(t, 2), latest)
 	})
 }
 
@@ -1304,7 +1304,7 @@ func (es *exportSetup) addKeyVersionWithSecret(t *testing.T, kv model.KeyVersion
 	require.NoError(t, err)
 }
 
-func (es *exportSetup) exportSecretBytes(t *testing.T, version string) []byte {
+func (es *exportSetup) exportSecretBytes(t *testing.T, version int) []byte {
 	t.Helper()
 	sec, err := es.mgr.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
 		TenantID:   es.tenantID,
