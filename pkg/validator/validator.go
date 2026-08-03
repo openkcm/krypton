@@ -3,13 +3,15 @@ package validator
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 )
 
 type KeyValidator interface {
-	ValidateAnnounceKey(context.Context, AnnounceInput) *ValidationError
+	ValidateKeyAnnounce(context.Context, AnnounceInput) *ValidationError
+	ValidateKeyActivate(context.Context, ActivateInput) *ValidationError
 }
 
 type ErrorKind int
@@ -23,6 +25,16 @@ const (
 type ValidationError struct {
 	code ErrorKind
 	err  error
+}
+
+type ActivateInput struct {
+	TenantID string
+	KeyID    string
+}
+
+func isValidUUID(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
 }
 
 // NewValidationError constructs a ValidationError. Useful for tests that
@@ -57,4 +69,8 @@ func (ve *ValidationError) Error() string {
 	}
 
 	return ve.err.Error()
+}
+
+func (ve *ValidationError) Unwrap() error {
+	return ve.err
 }

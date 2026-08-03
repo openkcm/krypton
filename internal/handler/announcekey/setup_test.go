@@ -112,13 +112,17 @@ func (s *stubProcessingStateUpdater) UpdateKeyProcessingState(_ context.Context,
 }
 
 // stubValidator implements validator.KeyValidator for tests.
-// If err is nil, ValidateAnnounceKey returns nil (valid). Otherwise it
+// If err is nil, ValidateKeyAnnounce returns nil (valid). Otherwise it
 // returns the configured ValidationError.
 type stubValidator struct {
 	err *validator.ValidationError
 }
 
-func (s *stubValidator) ValidateAnnounceKey(_ context.Context, _ validator.AnnounceInput) *validator.ValidationError {
+func (s *stubValidator) ValidateKeyAnnounce(_ context.Context, _ validator.AnnounceInput) *validator.ValidationError {
+	return s.err
+}
+
+func (s *stubValidator) ValidateKeyActivate(_ context.Context, _ validator.ActivateInput) *validator.ValidationError {
 	return s.err
 }
 

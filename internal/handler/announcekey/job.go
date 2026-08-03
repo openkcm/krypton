@@ -54,7 +54,7 @@ func (h *JobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.J
 		return orbital.CancelJobConfirmer(fmt.Sprintf("key not in pre-activation: %s", key.LifeCycleState)), nil
 	}
 
-	if vErr := h.keyValidator.ValidateAnnounceKey(ctx, validator.AnnounceInput{
+	if vErr := h.keyValidator.ValidateKeyAnnounce(ctx, validator.AnnounceInput{
 		TenantID:   data.TenantID,
 		KeyKind:    data.Kind,
 		Name:       data.Name,
