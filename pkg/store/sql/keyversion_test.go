@@ -361,3 +361,267 @@ func TestListKeyVersions(t *testing.T) {
 		assert.Empty(t, result.KeyVersions)
 	})
 }
+
+func TestUpdateKeyVersionStates(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	require.NoError(t, storesql.Migrate(ctx, db))
+	kvStore := storesql.NewKeyVersionStore(db)
+	keyStore := storesql.NewKeyStore(db)
+	tenantStore := storesql.NewTenantStore(db)
+
+	tenant := createTenant(t, tenantStore)
+
+	t.Run("should update processing state", func(t *testing.T) {
+		//given
+		// seed: version "1" with revision 1 (usable)
+		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.NewString(), "K1", nil, "key-1", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)})
+		require.NoError(t, err)
+
+		// when
+		err := kvStore.UpdateKeyVersionStates(ctx, store.UpdateKeyVersionStatesQuery{
+			TenantID:            tenant.ID,
+			KeyID:               key.ID,
+			Version:             1,
+			Revision:            1,
+			FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+			ToProcessingState:   model.KeyVersionReWrapping,
+			FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			ToLifeCycleState:    model.KeyLifeCycleCompromised,
+		})
+
+		// then
+		assert.NoError(t, err)
+
+		result, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			Version:  1,
+		})
+		require.NoError(t, err)
+		require.Len(t, result.KeyVersions, 1)
+		assert.Equal(t, model.KeyVersionReWrapping, result.KeyVersions[0].ProcessingState)
+		assert.Equal(t, model.KeyLifeCycleCompromised, result.KeyVersions[0].LifeCycleState)
+	})
+
+	t.Run("should return error if", func(t *testing.T) {
+		//given
+		// seed: version "1" with revision 1 (usable)
+		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.NewString(), "K1", nil, "key-2", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)})
+		require.NoError(t, err)
+
+		tts := []struct {
+			name  string
+			query store.UpdateKeyVersionStatesQuery
+		}{
+			{
+				name: "from processing state does not match",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            tenant.ID,
+					KeyID:               key.ID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionActivating},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "from lifecycle state does not match",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            tenant.ID,
+					KeyID:               key.ID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "key version does not exist",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            tenant.ID,
+					KeyID:               key.ID,
+					Version:             99,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "key version does not exist with given revision",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            tenant.ID,
+					KeyID:               key.ID,
+					Version:             1,
+					Revision:            99,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "key version does not exist with given tenant",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            uuid.NewString(),
+					KeyID:               key.ID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "key version does not exist with given key",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            tenant.ID,
+					KeyID:               uuid.NewString(),
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				err := kvStore.UpdateKeyVersionStates(ctx, tt.query)
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, store.ErrKeyVersionNotFound)
+			})
+		}
+	})
+
+	t.Run("should return error if query input is invalid", func(t *testing.T) {
+		validUUID := uuid.NewString()
+		tts := []struct {
+			name  string
+			query store.UpdateKeyVersionStatesQuery
+		}{
+			{
+				name: "missing tenantID",
+				query: store.UpdateKeyVersionStatesQuery{
+					KeyID:               validUUID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing keyID",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing version",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					KeyID:               validUUID,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing revision",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					KeyID:               validUUID,
+					Version:             1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing from processing state",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:           validUUID,
+					KeyID:              validUUID,
+					Version:            1,
+					Revision:           1,
+					ToProcessingState:  model.KeyVersionReWrapping,
+					FromLifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:   model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing to processing state",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					KeyID:               validUUID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing from lifecycle state",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					KeyID:               validUUID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					ToLifeCycleState:    model.KeyLifeCycleCompromised,
+				},
+			},
+			{
+				name: "missing to lifecycle state",
+				query: store.UpdateKeyVersionStatesQuery{
+					TenantID:            validUUID,
+					KeyID:               validUUID,
+					Version:             1,
+					Revision:            1,
+					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
+					ToProcessingState:   model.KeyVersionReWrapping,
+					FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+				},
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				err := kvStore.UpdateKeyVersionStates(ctx, tt.query)
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, store.ErrKeyVersionQueryInvalid)
+			})
+		}
+	})
+}

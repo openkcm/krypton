@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -123,4 +124,49 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 	}
 
 	return store.ListKeyVersionsResult{KeyVersions: keyVersions}, nil
+}
+
+func (s *KeyVersionStore) UpdateKeyVersionStates(ctx context.Context, query store.UpdateKeyVersionStatesQuery) error {
+	if query.TenantID == "" || query.KeyID == "" || query.Version == 0 ||
+		query.Revision == 0 || len(query.FromProcessingState) == 0 || query.ToProcessingState == "" ||
+		len(query.FromLifeCycleState) == 0 || query.ToLifeCycleState == "" {
+		return fmt.Errorf("missing required fields: %w", store.ErrKeyVersionQueryInvalid)
+	}
+
+	now := clock.Now()
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE key_versions
+		SET processing_state = $1,
+		life_cycle_state = $2,
+		updated_at = $3
+		WHERE tenant_id = $4
+		AND key_id = $5
+		AND version = $6
+		AND revision = $7
+		AND processing_state = ANY($8)
+		AND life_cycle_state = ANY($9)`,
+		query.ToProcessingState,
+		query.ToLifeCycleState,
+		now,
+		query.TenantID,
+		query.KeyID,
+		query.Version,
+		query.Revision,
+		query.FromProcessingState,
+		query.FromLifeCycleState,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return store.ErrKeyVersionNotFound
+	}
+	return nil
 }

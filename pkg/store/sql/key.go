@@ -369,7 +369,7 @@ func (ks *KeyStore) UpdateKeyProcessingState(ctx context.Context, query store.Up
 	return nil
 }
 
-func (ks *KeyStore) UpdateKeyLifeCycleAndProcessingState(ctx context.Context, q store.UpdateKeyLifeCycleAndProcessingStateQuery) error {
+func (ks *KeyStore) UpdateKeyStates(ctx context.Context, q store.UpdateKeyStatesQuery) error {
 	var sb strings.Builder
 	sb.WriteString("UPDATE keys SET life_cycle_state = $1, processing_status = $2, updated_at = $3 WHERE id = $4 AND tenant_id = $5")
 
