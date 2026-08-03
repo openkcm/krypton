@@ -8,10 +8,12 @@ import (
 )
 
 var ErrKeyVersionNotFound = errors.New("key version not found")
+var ErrKeyVersionQueryInvalid = errors.New("invalid key version query")
 
 type KeyVersion interface {
 	CreateKeyVersion(ctx context.Context, query CreateKeyVersionQuery) (CreateKeyVersionResult, error)
 	ListKeyVersions(ctx context.Context, query ListKeyVersionsQuery) (ListKeyVersionsResult, error)
+	UpdateKeyVersionStates(ctx context.Context, query UpdateKeyVersionStatesQuery) error
 }
 
 type CreateKeyVersionQuery struct {
@@ -46,4 +48,15 @@ type ListKeyVersionsQuery struct {
 
 type ListKeyVersionsResult struct {
 	KeyVersions []model.KeyVersion
+}
+
+type UpdateKeyVersionStatesQuery struct {
+	TenantID            string
+	KeyID               string
+	Version             int
+	Revision            int
+	FromProcessingState []model.KeyVersionProcessingState
+	ToProcessingState   model.KeyVersionProcessingState
+	FromLifeCycleState  []model.KeyLifeCycleState
+	ToLifeCycleState    model.KeyLifeCycleState
 }

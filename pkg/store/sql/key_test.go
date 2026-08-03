@@ -946,7 +946,7 @@ func TestListKeys(t *testing.T) {
 	})
 }
 
-func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
+func TestUpdateKeyStates(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
@@ -968,7 +968,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:         key.ID,
 			TenantID:   tenant.ID,
 			ToState:    model.KeyLifeCycleCompromised,
@@ -992,7 +992,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:         key.ID,
 			TenantID:   tenant.ID,
 			ToState:    model.KeyLifeCycleCompromised,
@@ -1015,7 +1015,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:        key.ID,
 			TenantID:  tenant.ID,
 			ToState:   model.KeyLifeCycleCompromised,
@@ -1038,7 +1038,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:       key.ID,
 			TenantID: tenant.ID,
 			ToState:  model.KeyLifeCycleCompromised,
@@ -1062,7 +1062,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:         key.ID,
 			TenantID:   tenant.ID,
 			ToState:    model.KeyLifeCycleCompromised,
@@ -1089,7 +1089,7 @@ func TestUpdateKeyLifeCycleAndProcessingState(t *testing.T) {
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
 
 		// when
-		err := keyStore.UpdateKeyLifeCycleAndProcessingState(ctx, store.UpdateKeyLifeCycleAndProcessingStateQuery{
+		err := keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:         key.ID,
 			TenantID:   tenant.ID,
 			ToState:    model.KeyLifeCycleCompromised,

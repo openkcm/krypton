@@ -8,6 +8,7 @@ type KeyVersionProcessingState string
 const (
 	KeyVersionUsable     KeyVersionProcessingState = "usable"
 	KeyVersionReWrapping KeyVersionProcessingState = "re-wrapping"
+	KeyVersionActivating KeyVersionProcessingState = "activating"
 )
 
 // KeyVersion tracks both the version (which key material is used) and the
@@ -32,7 +33,7 @@ func NewKeyVersion(tenantID, keyID string, version int, parentKeyID *string, par
 		TenantID:         tenantID,
 		KeyID:            keyID,
 		Version:          version,
-		Revision:         0,
+		Revision:         1,
 		ParentKeyID:      parentKeyID,
 		ParentKeyVersion: parentKeyVersion,
 		LifeCycleState:   KeyLifeCycleActive,
