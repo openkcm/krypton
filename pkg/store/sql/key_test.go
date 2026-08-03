@@ -824,6 +824,76 @@ func TestListKeys(t *testing.T) {
 		assert.Equal(t, h.ba.ID, result.Keys[0].ID)   // BA
 	})
 
+	t.Run("should treat % as a literal character in name filter", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+		match := model.NewKey(tenant.ID, "50%_off", "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, match))
+		// Negative control: without escaping, ILIKE "%%%" matches any name.
+		decoy := model.NewKey(tenant.ID, "regular-key", "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, decoy))
+
+		query := store.ListKeysQuery{TenantID: tenant.ID, Name: "%"}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, result.Keys, 1)
+		if len(result.Keys) == 1 {
+			assert.Equal(t, match.ID, result.Keys[0].ID)
+		}
+	})
+
+	t.Run("should treat _ as a literal character in name filter", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+		match := model.NewKey(tenant.ID, "a_b", "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, match))
+		// Negative control: without escaping, "a_b" (ILIKE, case-insensitive) also matches "aXb".
+		decoy := model.NewKey(tenant.ID, "aXb", "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, decoy))
+
+		query := store.ListKeysQuery{TenantID: tenant.ID, Name: "a_b"}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, result.Keys, 1)
+		if len(result.Keys) == 1 {
+			assert.Equal(t, match.ID, result.Keys[0].ID)
+		}
+	})
+
+	t.Run("should treat \\ as a literal character in name filter", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+		match := model.NewKey(tenant.ID, `foo\%bar`, "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, match))
+		// Negative control: if user's `\` were not escaped, the user-supplied `%`
+		// (correctly escaped by us to `\%`) combined with the user's unescaped `\`
+		// would form `\\%` in the pattern. Postgres reads `\\` as a literal `\`
+		// and the following `%` as a wildcard, causing a false-positive match on
+		// `foo\XXXbar`. Escaping user's `\` to `\\` prevents this.
+		decoy := model.NewKey(tenant.ID, `foo\XXXbar`, "K1", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, decoy))
+
+		query := store.ListKeysQuery{TenantID: tenant.ID, Name: `foo\%bar`}
+
+		// when
+		result, err := keyStore.ListKeys(ctx, query)
+
+		// then
+		assert.NoError(t, err)
+		assert.Len(t, result.Keys, 1)
+		if len(result.Keys) == 1 {
+			assert.Equal(t, match.ID, result.Keys[0].ID)
+		}
+	})
+
 	t.Run("should filter by multiple criteria", func(t *testing.T) {
 		// given
 		query := store.ListKeysQuery{
