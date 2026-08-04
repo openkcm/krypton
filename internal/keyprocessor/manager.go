@@ -44,6 +44,15 @@ type Manager struct {
 	processors   map[model.KeyKind]processor
 }
 
+type GenerateAndSealSecretRequest struct {
+	KeyVersion model.KeyVersion
+	AAD        []byte
+	KeyKind    model.KeyKind
+}
+
+type GenerateAndSealSecretResponse struct {
+}
+
 var _ cryptor.Sealer = &Manager{}
 
 // NewManager constructs a Manager by resolving the root sealer and building
@@ -73,6 +82,19 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 
 	mgr.processors = processors
 	return mgr, nil
+}
+
+func (m *Manager) GenerateAndSealSecret(ctx context.Context, req GenerateAndSealSecretRequest) (GenerateAndSealSecretResponse, error) {
+	proc, ok := m.processors[req.KeyKind]
+	if !ok {
+		return GenerateAndSealSecretResponse{}, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, req.KeyKind)
+	}
+
+	_, err := proc.createSecret(ctx, createSecretRequest{
+		KeyVersion: req.KeyVersion,
+		AAD:        req.AAD,
+	})
+	return GenerateAndSealSecretResponse{}, err
 }
 
 func buildRootManager(ctx context.Context, s store.Key, bindings map[model.KeyKind]spec.KeyBinding, hierarchy spec.KeyHierarchy) (*rootManager, error) {

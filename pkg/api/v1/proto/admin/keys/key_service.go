@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -28,19 +29,169 @@ type JobPreparer interface {
 type KeyService struct {
 	UnimplementedKeyServiceServer
 
-	rootName    string
-	keyStore    store.Key
-	jobPreparer JobPreparer
-	validator   validator.KeyValidator
+	rootName        string
+	keyStore        store.Key
+	keyVersionStore store.KeyVersion
+	jobPreparer     JobPreparer
+	validator       validator.KeyValidator
+	manager         *keyprocessor.Manager
 }
 
-func NewKeyService(rootName string, keyStore store.Key, validator validator.KeyValidator, jobPreparer JobPreparer) *KeyService {
+func NewKeyService(rootName string, keyStore store.Key, keyVersionStore store.KeyVersion, validator validator.KeyValidator, jobPreparer JobPreparer, manager *keyprocessor.Manager) *KeyService {
 	return &KeyService{
-		rootName:    rootName,
-		keyStore:    keyStore,
-		jobPreparer: jobPreparer,
-		validator:   validator,
+		rootName:        rootName,
+		keyStore:        keyStore,
+		keyVersionStore: keyVersionStore,
+		validator:       validator,
+		jobPreparer:     jobPreparer,
+		manager:         manager,
 	}
+}
+
+func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (*ActivateKeyResponse, error) {
+	vErr := s.validator.ValidateKeyActivate(ctx, validator.ActivateInput{
+		TenantID: req.GetTenantId(),
+		KeyID:    req.GetId(),
+	})
+	if vErr != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(vErr.ToProtoErrCode(), vErr.Error()),
+			vErr.ToProtoDetailCode(),
+		)
+	}
+
+	// transaction starts here
+	// if an error happens inside this needs to be reverted
+	key, err := s.keyStore.GetKeyByID(ctx, req.GetId(), req.GetTenantId())
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to get key"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+	isRoot := key.ParentID == nil
+
+	// make the keys ls=active ks=processing
+	err = s.keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
+		ID:       key.ID,
+		TenantID: key.TenantID,
+		FromState: []model.KeyLifeCycleState{
+			model.KeyLifeCyclePreActivation,
+		},
+		ToState: model.KeyLifeCycleActive,
+		FromStatus: []model.KeyProcessingStatus{
+			model.KeyProcessingCompleted,
+		},
+		ToStatus: model.KeyProcessingInProgress,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrKeyNotFound) {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "key is in wrong processing state or life cycle state"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to update key life cycle and processing state"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	var parentKeyVersion *int
+	if !isRoot {
+		pkv, err := s.keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:        key.TenantID,
+			KeyID:           *key.ParentID,
+			ProcessingState: model.KeyVersionUsable,
+			LifeCycleState:  model.KeyLifeCycleActive,
+			OrderBy: []store.KeyVersionOrder{
+				store.KeyVersionOrderVersionDesc,
+				store.KeyVersionOrderRevisionDesc,
+			},
+			Limit: 1,
+		})
+		if err != nil {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.Internal, "failed to get parent key version"),
+				proto.Code_ERROR_CODE_RETRY,
+			)
+		}
+		if len(pkv.KeyVersions) == 0 {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.FailedPrecondition, "parent key has no usable version"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+		parentKeyVersion = new(pkv.KeyVersions[0].Version)
+	}
+
+	kv := model.NewKeyVersion(key.TenantID, key.ID, 1, key.ParentID, parentKeyVersion)
+	kv.LifeCycleState = model.KeyLifeCyclePreActivation
+	kv.ProcessingState = model.KeyVersionActivating
+
+	// create a kv version with ls=nonactivate ks=processing
+	_, err = s.keyVersionStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{
+		KeyVersion: kv,
+	})
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to create key version"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	if !isRoot {
+		aad := fmt.Appendf(nil, "%s:%s:%d:%d:%d", key.TenantID, key.ID, kv.Version, kv.Revision, kv.CreatedAt)
+		_, err = s.manager.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
+			KeyVersion: kv,
+			AAD:        aad,
+			KeyKind:    key.Kind,
+		})
+		if err != nil {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.Internal, "failed to generate and seal secret"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+	}
+
+	err = s.keyStore.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
+		ID:       key.ID,
+		TenantID: key.TenantID,
+		FromState: []model.KeyLifeCycleState{
+			model.KeyLifeCycleActive,
+		},
+		ToState: model.KeyLifeCycleActive,
+		FromStatus: []model.KeyProcessingStatus{
+			model.KeyProcessingInProgress,
+		},
+		ToStatus: model.KeyProcessingCompleted,
+	})
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to update key processing state"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	err = s.keyVersionStore.UpdateKeyVersionStates(ctx, store.UpdateKeyVersionStatesQuery{
+		TenantID:            kv.TenantID,
+		KeyID:               kv.KeyID,
+		Version:             kv.Version,
+		Revision:            kv.Revision,
+		FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionActivating},
+		ToProcessingState:   model.KeyVersionUsable,
+		FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+		ToLifeCycleState:    model.KeyLifeCycleActive,
+	})
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "failed to update key version life cycle and processing state"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	return &ActivateKeyResponse{}, nil
 }
 
 // AnnounceKey validates the request and checks for an already esisting key with the same name.

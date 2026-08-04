@@ -22,6 +22,7 @@ func TestGetKeys(t *testing.T) {
 	testDB, _ := createDatabase(t)
 	tenantStore := newTenantStore(t, testDB)
 	keyStore := newKeyStore(t, testDB)
+	keyVersionStore := newKeyVersionStore(t, testDB)
 
 	hierarchySpec := defaultTestHierarchy()
 	topology := spec.Topology{
@@ -35,7 +36,7 @@ func TestGetKeys(t *testing.T) {
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", keyStore, keyValidator, &noopJobPreparer{}))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
 	})
 
 	// create tenant

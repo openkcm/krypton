@@ -2,9 +2,12 @@ package keys_test
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,7 +24,16 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
@@ -90,6 +102,14 @@ func defaultTestTopology() spec.Topology {
 	}
 }
 
+func rootTestTopology() spec.Topology {
+	return spec.Topology{
+		Segments: []spec.TopologySegment{
+			{Name: testRootName, Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}},
+		},
+	}
+}
+
 var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 
 const (
@@ -102,18 +122,89 @@ const (
 // job IDs.
 func setupKeyServerAndClient(t *testing.T, db *sql.DB) keys.KeyServiceClient {
 	t.Helper()
-	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{})
+	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, nil)
 }
 
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer) keys.KeyServiceClient {
+func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology) keys.KeyServiceClient {
 	t.Helper()
 
+	if topology == nil {
+		top := defaultTestTopology()
+		topology = &top
+	}
+
 	keyStore := storesql.NewKeyStore(db)
+	keyVersionStore := storesql.NewKeyVersionStore(db)
 	tenantStore := storesql.NewTenantStore(db)
-	v := validator.NewValidator(testRootSegment, defaultTestTopology(), hierarchy, tenantStore, keyStore)
+	v := validator.NewValidator(testRootSegment, *topology, hierarchy, tenantStore, keyStore)
+
+	// create root secret
+	sealerKey := make([]byte, 32)
+	_, err := rand.Read(sealerKey)
+	require.NoError(t, err)
+	envName := "TEST_KMIP_SEALER_KEY"
+	t.Setenv(envName, base64.StdEncoding.EncodeToString(sealerKey))
+
+	// create manager
+	mgr, err := keyprocessor.NewManager(t.Context(), keyprocessor.ManagerConfig{
+		KeyStore:        keyStore,
+		KeyVersionStore: storesql.NewKeyVersionStore(db),
+		Bindings: map[model.KeyKind]spec.KeyBinding{
+			"K0": {
+				SealerSpec: &sealerprovider.Spec{
+					Name: "test-sealer",
+					Type: staticsecret.TypeStaticSecret,
+					Config: &staticsecret.Config{
+						Secret: secretprovider.Spec{
+							Type:   envvar.Type,
+							Config: &envvar.Config{Name: envName},
+						},
+					},
+				},
+			},
+			"K1": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k1",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k1",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k1.db")},
+				},
+			},
+			"K2": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k2",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k2",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k2.db")},
+				},
+			},
+			"K3": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k3",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k3",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k3.db")},
+				},
+			},
+		},
+		Hierarchy: defaultTestHierarchy(),
+	})
+	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, keyStore, v, preparer))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, keyStore, keyVersionStore, v, preparer, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
