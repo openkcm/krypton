@@ -60,8 +60,7 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		)
 	}
 
-	// transaction starts here
-	// if an error happens inside this needs to be reverted
+	// @TODO: Do all this in a database transaction
 	key, err := s.keyStore.GetKeyByID(ctx, req.GetId(), req.GetTenantId())
 	if err != nil {
 		return nil, proto.ErrDetailsWithCode(
