@@ -7,6 +7,7 @@ option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys";
 
 service KeyService {
   rpc AnnounceKey(AnnounceKeyRequest) returns (AnnounceKeyResponse);
+  rpc ActivateKey(ActivateKeyRequest) returns (ActivateKeyResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
   rpc GetParentKeys(GetParentKeysRequest) returns (GetParentKeysResponse);
   rpc GetDescendantKeys(GetDescendantKeysRequest) returns (GetDescendantKeysResponse);
@@ -27,6 +28,7 @@ message Key {
   KeyProcessingState key_processing_state = 11;
 }
 
+
 message KeyProcessingState {
   string status = 1;
   string job_id = 2;
@@ -43,6 +45,14 @@ message AnnounceKeyRequest {
 
 message AnnounceKeyResponse {
   Key key = 1;
+}
+
+message ActivateKeyRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message ActivateKeyResponse {
 }
 
 message GetKeyRequest {

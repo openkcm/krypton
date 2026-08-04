@@ -68,6 +68,7 @@ func main() {
 	tenantStore := storesql.NewTenantStore(db)
 	agentStore := storesql.NewAgentStore(db)
 	keyStore := storesql.NewKeyStore(db)
+	keyVersionStore := storesql.NewKeyVersionStore(db)
 
 	keyValidator := validator.NewValidator(cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
 
@@ -113,7 +114,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyValidator, reconcilerMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyVersionStore, keyValidator, reconcilerMgr, nil))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -132,7 +133,6 @@ func main() {
 	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
 	var kmipSrv *kmip.Server
 	if cfg.KMIP != nil {
-		keyVersionStore := storesql.NewKeyVersionStore(db)
 		bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
 		for kind, binding := range cfg.KeyBindings {
 			bindings[model.KeyKind(kind)] = binding

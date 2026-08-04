@@ -141,6 +141,15 @@ func newKeyStore(t *testing.T, db *sql.DB) store.Key {
 	return storesql.NewKeyStore(db)
 }
 
+// newKeyVersionStore creates a keyversion store.
+func newKeyVersionStore(t *testing.T, db *sql.DB) store.KeyVersion {
+	t.Helper()
+	if db == nil {
+		db, _ = createDatabase(t)
+	}
+	return storesql.NewKeyVersionStore(db)
+}
+
 // createDatabase creates a new PostgreSQL database for testing and returns a connection to it.
 func createDatabase(t *testing.T) (*sql.DB, string) {
 	t.Helper()

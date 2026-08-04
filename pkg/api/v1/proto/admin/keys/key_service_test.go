@@ -137,7 +137,7 @@ func TestAnnounceKey(t *testing.T) {
 		}
 		require.NoError(t, keyStore.CreateKey(ctx, seed))
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists})
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
 		// Subsequent call short-circuits via existing in-progress key,
 		// without ever needing PrepareJob.
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -157,7 +157,7 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: errors.New("boom")})
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: errors.New("boom")}, nil)
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
@@ -355,7 +355,7 @@ func TestAnnounceKey(t *testing.T) {
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
 		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		name := "spy-fresh-" + uuid.NewString()
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -374,7 +374,7 @@ func TestAnnounceKey(t *testing.T) {
 
 	t.Run("root-managed fresh creation does not call PrepareJob", func(t *testing.T) {
 		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -400,7 +400,7 @@ func TestAnnounceKey(t *testing.T) {
 		}))
 
 		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -424,7 +424,7 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy)
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -463,7 +463,7 @@ func TestAnnounceKey(t *testing.T) {
 			NewJobID:  failedJobID,
 		}))
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists})
+		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",

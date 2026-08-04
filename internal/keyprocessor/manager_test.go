@@ -1258,6 +1258,28 @@ func TestManagerExportSecret(t *testing.T) {
 	})
 }
 
+func TestGenerateAndSealSecret(t *testing.T) {
+	t.Run("should generate and seal secret with manager", func(t *testing.T) {
+		// given
+		ps := setupParent(t)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
+		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{ps.parentKey.Kind: *processor})
+
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
+
+		// when
+		resp, err := mgr.GenerateAndSealSecret(t.Context(), keyprocessor.GenerateAndSealSecretRequest{
+			KeyVersion: childKV,
+			AAD:        []byte{},
+			KeyKind:    ps.parentKey.Kind,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, keyprocessor.GenerateAndSealSecretResponse{}, resp)
+	})
+}
+
 type exportSetup struct {
 	tenantID string
 	rootKey  model.Key
