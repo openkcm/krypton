@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -16,18 +18,18 @@ import (
 func TestActivateKey(t *testing.T) {
 	// given
 	ctx := t.Context()
-	db := createDatabase(t)
-
-	require.NoError(t, storesql.Migrate(ctx, db))
-	tenant := createTenant(t, db)
-
-	keyStore := storesql.NewKeyStore(db)
-	keyVersionStore := storesql.NewKeyVersionStore(db)
 	rootTopology := rootTestTopology()
+
+	db := createDatabase(t)
+	require.NoError(t, storesql.Migrate(ctx, db))
 
 	t.Run("should activate root key version", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		keyVersionStore := setup.keyVersionStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// announcing root key
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -72,7 +74,9 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should not activate root key version twice", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		// announcing root key
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -106,7 +110,11 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should activate a intermediate key", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		keyVersionStore := setup.keyVersionStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// announcing root key
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -165,11 +173,27 @@ func TestActivateKey(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Len(t, keyVersion.KeyVersions, 1)
+
+		// check if the secret is store in the vault
+		kv := keyVersion.KeyVersions[0]
+		vaultK1, err := vaultprovider.GetVault(ctx, *setup.vaultK1)
+		require.NoError(t, err)
+		vaultResp, err := vaultK1.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:    kv.TenantID,
+			KeyID:       keyID,
+			KeyVersion:  kv.Version,
+			KeyRevision: kv.Revision,
+		})
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, vaultResp.KeyMaterial)
 	})
 
 	t.Run("should not activate a intermediate key twice", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		// announcing root key
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -219,7 +243,10 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should activate all keys in a chain", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		keyVersionStore := setup.keyVersionStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// given
 		// announcing root key
@@ -308,11 +335,41 @@ func TestActivateKey(t *testing.T) {
 		})
 		// then
 		require.NoError(t, err)
+
+		// Verify that the keyversion is also created and activated
+		keyVersion, err := keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:        tenant.ID,
+			KeyID:           k3ID,
+			Version:         1,
+			LifeCycleState:  model.KeyLifeCycleActive,
+			ProcessingState: model.KeyVersionUsable,
+			Limit:           100,
+		})
+
+		require.NoError(t, err)
+		assert.Len(t, keyVersion.KeyVersions, 1)
+
+		// check if the secret is store in the vault
+		kv := keyVersion.KeyVersions[0]
+		vaultK3, err := vaultprovider.GetVault(ctx, *setup.vaultK3)
+		require.NoError(t, err)
+		vaultResp, err := vaultK3.ExportKey(ctx, vault.ExportKeyRequest{
+			TenantID:    kv.TenantID,
+			KeyID:       k3ID,
+			KeyVersion:  kv.Version,
+			KeyRevision: kv.Revision,
+		})
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, vaultResp.KeyMaterial)
 	})
 
 	t.Run("should return error if there is no parent keyversion", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		cli := setup.cli
+		keyVersionStore := setup.keyVersionStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// announcing root key
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{

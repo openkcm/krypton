@@ -55,7 +55,7 @@ func announceKeyCmd() *cobra.Command {
 	var asJSON bool
 
 	cmd := &cobra.Command{
-		Use:   "key",
+		Use:   keyCmd,
 		Short: "Announce a new key in the selected tenant's hierarchy",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

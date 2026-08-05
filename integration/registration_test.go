@@ -46,6 +46,7 @@ func TestRegistration(t *testing.T) {
 		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + dbConnStr,
 		"SERVER_PORT=" + rootPort,
+		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 	})
 	err := rootCmd.Start()
 	require.NoError(t, err, "failed to start root server process")
