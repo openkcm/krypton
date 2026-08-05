@@ -541,6 +541,7 @@ func TestDataCleanup(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "cannot allocate memory")
+		securemem.CleanUpFunc(subj).Stop()
 	})
 
 	t.Run("should fail if cleanup ref destroys already-unmapped memory", func(t *testing.T) {
@@ -568,5 +569,6 @@ func TestDataCleanup(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "cannot allocate memory")
+		securemem.CleanUpFunc(subj).Stop()
 	})
 }

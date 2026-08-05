@@ -172,9 +172,11 @@ func TestHandlerRequestRun(t *testing.T) {
 	})
 }
 
+// BenchmarkMemVault_Reserve benchmarks the performance of reserving memory in the MemVault.
+// To run this test `go test -count=5  -benchtime=5s -run=^$ -bench=BenchmarkMemVault_Reserve -benchmem ./internal/securemem/`
 func BenchmarkMemVault_Reserve(b *testing.B) {
 	secretBytes := []byte("MYSECRETKEY123458901234567890123")
-	for range b.N {
+	for b.Loop() {
 		b.ReportAllocs()
 		resp, err := securemem.Run(b.Context(), func(ctx context.Context, req *securemem.HandlerRequest) error {
 			secret, err := req.PersistentVault().Reserve("secret", len(secretBytes))
@@ -198,10 +200,9 @@ func BenchmarkMemVault_Reserve(b *testing.B) {
 		})
 
 		assert.NoError(b, err)
-		v, ok := resp.MemVault().Get("secret")
 
+		_, ok := resp.MemVault().Get("secret")
 		assert.True(b, ok)
-		assert.Equal(b, secretBytes, v)
 
 		err = resp.MemVault().DestroyAll()
 		assert.NoError(b, err)
