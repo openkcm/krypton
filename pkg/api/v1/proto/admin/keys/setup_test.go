@@ -42,6 +42,16 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
+type testSetup struct {
+	keyStore        store.Key
+	keyVersionStore store.KeyVersion
+	tenantStore     store.Tenant
+	vaultK1         *vaultprovider.Spec
+	vaultK2         *vaultprovider.Spec
+	vaultK3         *vaultprovider.Spec
+	cli             keys.KeyServiceClient
+}
+
 var pgConnStr string
 
 func TestMain(m *testing.M) {
@@ -120,23 +130,41 @@ const (
 // setupKeyServerAndClient wires KeyService against the given DB using the
 // default test hierarchy and a noop job preparer that assigns deterministic
 // job IDs.
-func setupKeyServerAndClient(t *testing.T, db *sql.DB) keys.KeyServiceClient {
+func setupKeyServerAndClient(t *testing.T, db *sql.DB) *testSetup {
 	t.Helper()
 	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, nil)
 }
 
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology) keys.KeyServiceClient {
+func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology) *testSetup {
 	t.Helper()
+
+	setup := &testSetup{
+		keyStore:        storesql.NewKeyStore(db),
+		keyVersionStore: storesql.NewKeyVersionStore(db),
+		tenantStore:     storesql.NewTenantStore(db),
+		vaultK1: &vaultprovider.Spec{
+			Name:   "vault-k1",
+			Type:   sqlitevault.TypeUnsafe,
+			Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k1.db")},
+		},
+		vaultK2: &vaultprovider.Spec{
+			Name:   "vault-k2",
+			Type:   sqlitevault.TypeUnsafe,
+			Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k2.db")},
+		},
+		vaultK3: &vaultprovider.Spec{
+			Name:   "vault-k3",
+			Type:   sqlitevault.TypeUnsafe,
+			Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k3.db")},
+		},
+	}
 
 	if topology == nil {
 		top := defaultTestTopology()
 		topology = &top
 	}
 
-	keyStore := storesql.NewKeyStore(db)
-	keyVersionStore := storesql.NewKeyVersionStore(db)
-	tenantStore := storesql.NewTenantStore(db)
-	v := validator.NewValidator(testRootSegment, *topology, hierarchy, tenantStore, keyStore)
+	v := validator.NewValidator(testRootSegment, *topology, hierarchy, setup.tenantStore, setup.keyStore)
 
 	// create root secret
 	sealerKey := make([]byte, 32)
@@ -147,8 +175,8 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 
 	// create manager
 	mgr, err := keyprocessor.NewManager(t.Context(), keyprocessor.ManagerConfig{
-		KeyStore:        keyStore,
-		KeyVersionStore: storesql.NewKeyVersionStore(db),
+		KeyStore:        setup.keyStore,
+		KeyVersionStore: setup.keyVersionStore,
 		Bindings: map[model.KeyKind]spec.KeyBinding{
 			"K0": {
 				SealerSpec: &sealerprovider.Spec{
@@ -168,11 +196,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 					Type:   aes256gcm.TypeAES256GCM,
 					Config: &aes256gcm.Config{},
 				},
-				VaultSpec: &vaultprovider.Spec{
-					Name:   "vault-k1",
-					Type:   sqlitevault.TypeUnsafe,
-					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k1.db")},
-				},
+				VaultSpec: setup.vaultK1,
 			},
 			"K2": {
 				CryptorSpec: &cryptorprovider.Spec{
@@ -180,11 +204,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 					Type:   aes256gcm.TypeAES256GCM,
 					Config: &aes256gcm.Config{},
 				},
-				VaultSpec: &vaultprovider.Spec{
-					Name:   "vault-k2",
-					Type:   sqlitevault.TypeUnsafe,
-					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k2.db")},
-				},
+				VaultSpec: setup.vaultK2,
 			},
 			"K3": {
 				CryptorSpec: &cryptorprovider.Spec{
@@ -192,11 +212,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 					Type:   aes256gcm.TypeAES256GCM,
 					Config: &aes256gcm.Config{},
 				},
-				VaultSpec: &vaultprovider.Spec{
-					Name:   "vault-k3",
-					Type:   sqlitevault.TypeUnsafe,
-					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k3.db")},
-				},
+				VaultSpec: setup.vaultK3,
 			},
 		},
 		Hierarchy: defaultTestHierarchy(),
@@ -204,7 +220,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, keyStore, keyVersionStore, v, preparer, mgr))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, setup.keyStore, setup.keyVersionStore, v, preparer, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -232,7 +248,8 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 		conn.Close()
 	})
 
-	return keys.NewKeyServiceClient(conn)
+	setup.cli = keys.NewKeyServiceClient(conn)
+	return setup
 }
 
 func createDatabase(t *testing.T) *sql.DB {
@@ -282,12 +299,10 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 	assert.Equal(t, expCode, dt.GetCode())
 }
 
-func createTenant(t *testing.T, db *sql.DB) model.Tenant {
+func createTenant(t *testing.T, s store.Tenant) model.Tenant {
 	t.Helper()
-	ctx := t.Context()
-	tenantStore := storesql.NewTenantStore(db)
 	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
-	result, err := tenantStore.CreateTenant(ctx, store.CreateTenantQuery{Tenant: tenant})
+	result, err := s.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant
 }

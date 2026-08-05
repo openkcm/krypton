@@ -106,6 +106,19 @@ func main() {
 		}
 	}()
 
+	// initialization of keyprocessor manager
+	bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
+	for kind, binding := range cfg.KeyBindings {
+		bindings[model.KeyKind(kind)] = binding
+	}
+	kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
+		KeyStore:        keyStore,
+		KeyVersionStore: keyVersionStore,
+		Bindings:        bindings,
+		Hierarchy:       cfg.Hierarchy,
+	})
+	handleErr(err, "failed to create key processor manager")
+
 	// gRPC server setup for admin API
 	grpcServer := grpc.NewServer()
 	admin.RegisterTenantServiceServer(grpcServer, admin.NewTenantService(tenantStore))
@@ -114,7 +127,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyVersionStore, keyValidator, reconcilerMgr, nil))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyVersionStore, keyValidator, reconcilerMgr, kpMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -133,17 +146,6 @@ func main() {
 	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
 	var kmipSrv *kmip.Server
 	if cfg.KMIP != nil {
-		bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
-		for kind, binding := range cfg.KeyBindings {
-			bindings[model.KeyKind(kind)] = binding
-		}
-		kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
-			KeyStore:        keyStore,
-			KeyVersionStore: keyVersionStore,
-			Bindings:        bindings,
-			Hierarchy:       cfg.Hierarchy,
-		})
-		handleErr(err, "failed to create key processor manager")
 		kmipSrv, err = kmip.NewServer(*cfg.KMIP, kpMgr)
 		handleErr(err, "failed to create kmip server")
 		go func() {

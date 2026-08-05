@@ -15,6 +15,8 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
+const keyCmd = "key"
+
 type keyRows struct {
 	Keys   []keyRow
 	Cursor string
@@ -80,7 +82,7 @@ func getKeyCmd() *cobra.Command {
 	var asJSON bool
 
 	cmd := &cobra.Command{
-		Use:   "key",
+		Use:   keyCmd,
 		Short: "Get a single key by its tenant ID and key ID",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

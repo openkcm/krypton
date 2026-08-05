@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,12 @@ type testEnvironment struct {
 	Conn      *grpc.ClientConn
 }
 
+// testKey is a 32-byte AES-256 key for testing.
+var testKey = []byte("01234567890123456789012345678901")
+
+// testKeyBase64 is testKey encoded as base64 (standard encoding).
+var testKeyBase64 = base64.StdEncoding.EncodeToString(testKey)
+
 // setupEnvironment builds binaries, writes configs, starts root + agent, and returns
 // a testEnvironment with open DB connections and a gRPC client to root.
 func setupEnvironment(t *testing.T) *testEnvironment {
@@ -46,6 +53,7 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + rootConnStr,
 		"SERVER_PORT=" + rootPort,
+		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 	})
 	require.NoError(t, rootCmd.Start(), "failed to start root server")
 	waitForPort(t, rootPort)

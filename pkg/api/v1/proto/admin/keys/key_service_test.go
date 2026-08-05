@@ -54,7 +54,7 @@ type keyHierarchy struct {
 // activateKey flips a freshly-announced key into Active so it can serve as a
 // parent in subsequent AnnounceKey calls (per the strict "parent must be
 // Active" rule enforced in KeyService.AnnounceKey).
-func activateKey(t *testing.T, ks *storesql.KeyStore, id, tenantID string) {
+func activateKey(t *testing.T, ks store.Key, id, tenantID string) {
 	t.Helper()
 	require.NoError(t, ks.UpdateKeyLifeCycleState(t.Context(), store.UpdateKeyLifeCycleStateQuery{
 		ID:       id,
@@ -69,13 +69,12 @@ func TestAnnounceKey(t *testing.T) {
 	db := createDatabase(t)
 
 	require.NoError(t, storesql.Migrate(ctx, db))
-	keyStore := storesql.NewKeyStore(db)
-
-	tenant := createTenant(t, db)
 
 	t.Run("should create key successfully", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		// when
 		res, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -102,9 +101,11 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should be idempotent on duplicate (tenant, name)", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
-		name := "idempotent-" + uuid.NewString()
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
+		name := "idempotent-" + uuid.NewString()
 		first, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
@@ -127,6 +128,11 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should succeed when orbital reports job already exists for fresh key", func(t *testing.T) {
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		// Pre-seed the key so the lookup-by-name fallback (after orbital
 		// dedupe) finds it.
 		name := "racer-" + uuid.NewString()
@@ -137,7 +143,6 @@ func TestAnnounceKey(t *testing.T) {
 		}
 		require.NoError(t, keyStore.CreateKey(ctx, seed))
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
 		// Subsequent call short-circuits via existing in-progress key,
 		// without ever needing PrepareJob.
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -151,13 +156,17 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should surface RETRY on other PrepareJob errors", func(t *testing.T) {
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: errors.New("boom")}, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		// PrepareJob is only called for non-root-managed keys, so seed an
 		// Active K0 parent and announce a K1 against the agent target.
 		parent := model.NewKey(tenant.ID, "boom-parent-"+uuid.NewString(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: errors.New("boom")}, nil)
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
@@ -172,7 +181,10 @@ func TestAnnounceKey(t *testing.T) {
 
 	t.Run("should create key with parent", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		parentRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -200,7 +212,8 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject when tenant does not exist", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   uuid.NewString(),
@@ -214,7 +227,9 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject when kind is not in hierarchy", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -228,7 +243,9 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject non-root kind without parent", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -242,7 +259,10 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject root kind with parent", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed an Active K0 to use as the (illegal) parent.
 		other := model.NewKey(tenant.ID, "other-root-"+uuid.NewString(), "K0", nil, "root", nil)
@@ -262,7 +282,9 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject when parent does not exist in tenant", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -277,7 +299,10 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject when parent is not active", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed a K0 without activating it.
 		parent := model.NewKey(tenant.ID, "inactive-parent-"+uuid.NewString(), "K0", nil, "root", nil)
@@ -296,7 +321,10 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject when child kind is not adjacent to parent kind", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed an Active K0; try announcing K2 directly under it (skipping K1).
 		parent := model.NewKey(tenant.ID, "skip-parent-"+uuid.NewString(), "K0", nil, "root", nil)
@@ -316,7 +344,10 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should retry by preparing a new job when previous job failed", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed a key already in Failed state from a prior attempt.
 		failedJobID := uuid.NewString()
@@ -349,13 +380,16 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("ExternalID is key.ID for fresh agent-managed creation", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		// Seed an Active K0 parent so the agent-managed K1 announce passes validation.
 		parent := model.NewKey(tenant.ID, "spy-parent-"+uuid.NewString(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
-
-		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		name := "spy-fresh-" + uuid.NewString()
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -374,7 +408,9 @@ func TestAnnounceKey(t *testing.T) {
 
 	t.Run("root-managed fresh creation does not call PrepareJob", func(t *testing.T) {
 		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -389,6 +425,12 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("ExternalID is key.ID for failed retry (no suffix)", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		failedJobID := uuid.NewString()
 		key := model.NewKey(tenant.ID, "spy-retry-"+uuid.NewString(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
@@ -398,9 +440,6 @@ func TestAnnounceKey(t *testing.T) {
 			NewStatus: model.KeyProcessingFailed,
 			NewJobID:  failedJobID,
 		}))
-
-		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -416,15 +455,18 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("retries when existing key is Pending", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		// A key in Pending state (CreateKey succeeded but linkage write didn't,
 		// or the key was created by some other path) should be retried as a
 		// fresh job with ExternalID = key.ID — no :retry: suffix because there
 		// is no previous failed JobID to scope against.
 		key := model.NewKey(tenant.ID, "pending-"+uuid.NewString(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
-
-		spy := &spyJobPreparer{}
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, nil)
 
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -450,6 +492,11 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("concurrent retry collides on deterministic ExternalID", func(t *testing.T) {
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
+
 		// Two simultaneous retries for the same Failed key compute the same
 		// ExternalID and the second PrepareJob should return ErrJobAlreadyExists,
 		// which the service swallows and returns the existing key.
@@ -463,7 +510,6 @@ func TestAnnounceKey(t *testing.T) {
 			NewJobID:  failedJobID,
 		}))
 
-		cli := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), errJobPreparer{err: orbital.ErrJobAlreadyExists}, nil)
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
@@ -477,15 +523,16 @@ func TestAnnounceKey(t *testing.T) {
 	t.Run("should return internal error on database failure", func(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
-
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+
+		setup := setupKeyServerAndClient(t, tmpDB)
+		cli := setup.cli
+
 		// Seed a tenant in the temp DB so tenant-existence passes; then drop
 		// the keys table so the downstream lookup fails.
-		tmpTenant := createTenant(t, tmpDB)
+		tmpTenant := createTenant(t, setup.tenantStore)
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
-
-		cli := setupKeyServerAndClient(t, tmpDB)
 
 		// when
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -503,7 +550,10 @@ func TestAnnounceKey(t *testing.T) {
 	})
 
 	t.Run("should reject conflicting key with same name but different parent", func(t *testing.T) {
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		keyStore := setup.keyStore
+		tenant := createTenant(t, setup.tenantStore)
 
 		// Seed two distinct active K0 parents under this tenant.
 		parentA := model.NewKey(tenant.ID, "conflict-parent-a-"+uuid.NewString(), "K0", nil, "root", nil)
@@ -547,11 +597,11 @@ func TestGetKeyService(t *testing.T) {
 
 	require.NoError(t, storesql.Migrate(ctx, db))
 
-	tenant := createTenant(t, db)
-
 	t.Run("should get key successfully", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		// when
 		created, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -578,7 +628,9 @@ func TestGetKeyService(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		cli := setupKeyServerAndClient(t, db)
+		setup := setupKeyServerAndClient(t, db)
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
 
 		// when
 		resp, err := cli.GetKey(ctx, &keypb.GetKeyRequest{
@@ -602,7 +654,8 @@ func TestGetKeyService(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpDB)
+		setup := setupKeyServerAndClient(t, tmpDB)
+		cli := setup.cli
 
 		// when
 		resp, err := cli.GetKey(ctx, &keypb.GetKeyRequest{
@@ -624,13 +677,13 @@ func TestGetParentKeys(t *testing.T) {
 	db := createDatabase(t)
 
 	require.NoError(t, storesql.Migrate(ctx, db))
-	keyStore := storesql.NewKeyStore(db)
 
-	tenant := createTenant(t, db)
+	setup := setupKeyServerAndClient(t, db)
+	cli := setup.cli
+	keyStore := setup.keyStore
+	tenant := createTenant(t, setup.tenantStore)
 
 	ha := createKeyHierarchy(t, keyStore, tenant)
-
-	cli := setupKeyServerAndClient(t, db)
 
 	t.Run("should get parent keys successfully for intermediate", func(t *testing.T) {
 		// when
@@ -686,7 +739,8 @@ func TestGetParentKeys(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpDB)
+		setup := setupKeyServerAndClient(t, tmpDB)
+		cli := setup.cli
 
 		// when
 		resp, err := cli.GetParentKeys(ctx, &keypb.GetParentKeysRequest{
@@ -706,15 +760,14 @@ func TestGetDescendantKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db := createDatabase(t)
-
 	require.NoError(t, storesql.Migrate(ctx, db))
-	keyStore := storesql.NewKeyStore(db)
 
-	tenant := createTenant(t, db)
+	setup := setupKeyServerAndClient(t, db)
+	cli := setup.cli
+	keyStore := setup.keyStore
+	tenant := createTenant(t, setup.tenantStore)
 
 	ha := createKeyHierarchy(t, keyStore, tenant)
-
-	cli := setupKeyServerAndClient(t, db)
 
 	t.Run("should get descendant keys successfully for root", func(t *testing.T) {
 		// when
@@ -803,7 +856,8 @@ func TestGetDescendantKeys(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpDB)
+		setup := setupKeyServerAndClient(t, tmpDB)
+		cli := setup.cli
 
 		// when
 		resp, err := cli.GetDescendantKeys(ctx, &keypb.GetDescendantKeysRequest{
@@ -823,15 +877,14 @@ func TestListKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db := createDatabase(t)
-
 	require.NoError(t, storesql.Migrate(ctx, db))
-	keyStore := storesql.NewKeyStore(db)
 
-	tenant := createTenant(t, db)
+	setup := setupKeyServerAndClient(t, db)
+	cli := setup.cli
+	keyStore := setup.keyStore
+	tenant := createTenant(t, setup.tenantStore)
 
 	ha := createKeyHierarchy(t, keyStore, tenant)
-
-	cli := setupKeyServerAndClient(t, db)
 
 	t.Run("should return all keys for a tenantID", func(t *testing.T) {
 		// when
@@ -980,7 +1033,8 @@ func TestListKeys(t *testing.T) {
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
 
-		cli := setupKeyServerAndClient(t, tmpDB)
+		setup := setupKeyServerAndClient(t, tmpDB)
+		cli := setup.cli
 
 		// when
 		resp, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
@@ -1006,7 +1060,7 @@ func TestListKeys(t *testing.T) {
 //	    F(K2)
 //	    G(K2)
 //	      H(K3)
-func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenant model.Tenant) keyHierarchy {
+func createKeyHierarchy(t *testing.T, keyStore store.Key, tenant model.Tenant) keyHierarchy {
 	t.Helper()
 	ctx := t.Context()
 
