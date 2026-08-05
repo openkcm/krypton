@@ -547,6 +547,65 @@ func TestKeyHierarchy(t *testing.T) {
 		}
 	})
 
+	t.Run("FindParentKeySpec", func(t *testing.T) {
+		hierarchy := &spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K4", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+		}
+
+		tts := []struct {
+			name       string
+			kind       model.KeyKind
+			expIsFound bool
+			expParent  spec.KeySpec
+		}{
+			{
+				name:       "should return false for the root kind",
+				kind:       "K0",
+				expIsFound: false,
+				expParent:  spec.KeySpec{},
+			},
+			{
+				name:       "should return the root as parent of the first non-root kind",
+				kind:       "K1",
+				expIsFound: true,
+				expParent:  spec.KeySpec{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+			{
+				name:       "should return the preceding kind for a middle kind",
+				kind:       "K2",
+				expIsFound: true,
+				expParent:  spec.KeySpec{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+			{
+				name:       "should return the preceding kind for the last kind",
+				kind:       "K4",
+				expIsFound: true,
+				expParent:  spec.KeySpec{Kind: "K3", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+			{
+				name:       "should return false for an unknown kind",
+				kind:       "nonexistent",
+				expIsFound: false,
+				expParent:  spec.KeySpec{},
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				parent, ok := hierarchy.FindParentKeySpec(tt.kind)
+				assert.Equal(t, tt.expIsFound, ok)
+				assert.Equal(t, tt.expParent, parent)
+			})
+		}
+	})
+
 	t.Run("KindsBetween", func(t *testing.T) {
 		hierarchy := &spec.KeyHierarchy{
 			Name: "test-hierarchy",

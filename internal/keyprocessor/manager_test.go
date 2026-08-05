@@ -541,55 +541,6 @@ func TestManagerHierarchy(t *testing.T) {
 }
 
 func TestNewManager(t *testing.T) {
-	t.Run("should return error when hierarchy has no root key", func(t *testing.T) {
-		// given
-		cfg := keyprocessor.ManagerConfig{
-			KeyStore:        &keyStoreWrapper{},
-			KeyVersionStore: &keyVersionStoreWrapper{},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "test",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K1", Role: spec.KeyRoleKek},
-				},
-			},
-			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K1": {},
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
-
-		// then
-		assert.Nil(t, mgr)
-		assert.ErrorContains(t, err, "no root key spec found in hierarchy")
-	})
-
-	t.Run("should return error when root binding is missing from bindings map", func(t *testing.T) {
-		// given
-		cfg := keyprocessor.ManagerConfig{
-			KeyStore:        &keyStoreWrapper{},
-			KeyVersionStore: &keyVersionStoreWrapper{},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "test",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K0", Role: spec.KeyRoleRoot},
-					{Kind: "K1", Role: spec.KeyRoleDek},
-				},
-			},
-			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K1": {},
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
-
-		// then
-		assert.Nil(t, mgr)
-		assert.ErrorContains(t, err, "no binding found for root key kind K0")
-	})
-
 	t.Run("should return error when root binding has nil sealer spec", func(t *testing.T) {
 		// given
 		cfg := keyprocessor.ManagerConfig{
@@ -640,31 +591,6 @@ func TestNewManager(t *testing.T) {
 		// then
 		assert.Nil(t, mgr)
 		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
-	})
-
-	t.Run("should return error when non-root binding is missing from bindings map", func(t *testing.T) {
-		// given
-		cfg := keyprocessor.ManagerConfig{
-			KeyStore:        &keyStoreWrapper{},
-			KeyVersionStore: &keyVersionStoreWrapper{},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "test",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K0", Role: spec.KeyRoleRoot},
-					{Kind: "K1", Role: spec.KeyRoleDek},
-				},
-			},
-			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K0": {SealerSpec: newTestSealerSpec(t)},
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
-
-		// then
-		assert.Nil(t, mgr)
-		assert.ErrorContains(t, err, "no binding found for key kind K1")
 	})
 
 	t.Run("should return error when non-root cryptor provider fails", func(t *testing.T) {
@@ -897,6 +823,76 @@ func TestNewManager(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 		assert.NotNil(t, mgr)
+	})
+
+	t.Run("should construct manager for two nodes", func(t *testing.T) {
+		t.Run("with root bindings", func(t *testing.T) {
+			// given
+			cfg := keyprocessor.ManagerConfig{
+				KeyStore:        &keyStoreWrapper{},
+				KeyVersionStore: &keyVersionStoreWrapper{},
+				Hierarchy: spec.KeyHierarchy{
+					Name: "test",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot},
+						{Kind: "K1", Role: spec.KeyRoleDek},
+						{Kind: "K2", Role: spec.KeyRoleTek},
+						{Kind: "K3", Role: spec.KeyRoleDek},
+					},
+				},
+				Bindings: map[model.KeyKind]spec.KeyBinding{
+					"K0": {
+						SealerSpec: newTestSealerSpec(t),
+					},
+					"K1": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+					},
+				},
+			}
+
+			// when
+			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+			// then
+			assert.NoError(t, err)
+			assert.NotNil(t, mgr)
+		})
+
+		t.Run("with agent bindings", func(t *testing.T) {
+			// given
+			cfg := keyprocessor.ManagerConfig{
+				KeyStore:        &keyStoreWrapper{},
+				KeyVersionStore: &keyVersionStoreWrapper{},
+				Hierarchy: spec.KeyHierarchy{
+					Name: "test",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot},
+						{Kind: "K1", Role: spec.KeyRoleDek},
+						{Kind: "K2", Role: spec.KeyRoleTek},
+						{Kind: "K3", Role: spec.KeyRoleDek},
+					},
+				},
+				Bindings: map[model.KeyKind]spec.KeyBinding{
+					"K2": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+						SealerSpec:  newTestSealerSpec(t),
+					},
+					"K3": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+					},
+				},
+			}
+
+			// when
+			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+			// then
+			assert.NoError(t, err)
+			assert.NotNil(t, mgr)
+		})
 	})
 }
 

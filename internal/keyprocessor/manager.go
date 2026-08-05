@@ -44,6 +44,8 @@ type Manager struct {
 	processors   map[model.KeyKind]processor
 }
 
+var _ cryptor.Sealer = &Manager{}
+
 type GenerateAndSealSecretRequest struct {
 	KeyVersion model.KeyVersion
 	AAD        []byte
@@ -52,8 +54,6 @@ type GenerateAndSealSecretRequest struct {
 
 type GenerateAndSealSecretResponse struct {
 }
-
-var _ cryptor.Sealer = &Manager{}
 
 // NewManager constructs a Manager by resolving the root sealer and building
 // a processor for each non-root key kind defined in the hierarchy.
@@ -68,19 +68,30 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 	mgr := &Manager{
 		store:        cfg.KeyStore,
 		versionStore: cfg.KeyVersionStore,
+		processors:   make(map[model.KeyKind]processor, len(cfg.Bindings)),
 	}
 
-	rootMgr, err := buildRootManager(ctx, cfg.KeyStore, cfg.Bindings, cfg.Hierarchy)
-	if err != nil {
-		return nil, err
+	for kind, binding := range cfg.Bindings {
+		sp, ok := cfg.Hierarchy.FindKeySpec(kind)
+		if !ok {
+			return nil, fmt.Errorf("no key spec found for key kind %s", kind)
+		}
+		if sp.Role == spec.KeyRoleRoot {
+			continue
+		}
+
+		parent, err := resolveParent(ctx, cfg, mgr, kind)
+		if err != nil {
+			return nil, err
+		}
+
+		proc, err := newProcessor(ctx, binding, parent)
+		if err != nil {
+			return nil, fmt.Errorf("building processor for key kind %s: %w", kind, err)
+		}
+		mgr.processors[kind] = *proc
 	}
 
-	processors, err := buildProcessors(ctx, cfg.Hierarchy, cfg.Bindings, rootMgr, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	mgr.processors = processors
 	return mgr, nil
 }
 
@@ -95,65 +106,6 @@ func (m *Manager) GenerateAndSealSecret(ctx context.Context, req GenerateAndSeal
 		AAD:        req.AAD,
 	})
 	return GenerateAndSealSecretResponse{}, err
-}
-
-func buildRootManager(ctx context.Context, s store.Key, bindings map[model.KeyKind]spec.KeyBinding, hierarchy spec.KeyHierarchy) (*rootManager, error) {
-	for _, ks := range hierarchy.KeySpecs {
-		if ks.Role != spec.KeyRoleRoot {
-			continue
-		}
-
-		binding, ok := bindings[ks.Kind]
-		if !ok {
-			return nil, fmt.Errorf("no binding found for root key kind %s", ks.Kind)
-		}
-		if binding.SealerSpec == nil {
-			return nil, ErrRootMissingSealerSpec
-		}
-
-		sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
-		if err != nil {
-			return nil, err
-		}
-
-		return &rootManager{store: s, sealer: sealer}, nil
-	}
-
-	return nil, fmt.Errorf("no root key spec found in hierarchy %q", hierarchy.Name)
-}
-
-func buildProcessors(ctx context.Context, hierarchy spec.KeyHierarchy, bindings map[model.KeyKind]spec.KeyBinding, rootMgr *rootManager, mgr *Manager) (map[model.KeyKind]processor, error) {
-	processors := make(map[model.KeyKind]processor, len(bindings))
-
-	prevRole := spec.KeyRole("")
-	for _, ks := range hierarchy.KeySpecs {
-		if ks.Role == spec.KeyRoleRoot {
-			prevRole = ks.Role
-			continue
-		}
-
-		binding, ok := bindings[ks.Kind]
-		if !ok {
-			return nil, fmt.Errorf("no binding found for key kind %s", ks.Kind)
-		}
-
-		var parent cryptor.Sealer
-		if prevRole == spec.KeyRoleRoot {
-			parent = rootMgr
-		} else {
-			parent = mgr
-		}
-		prevRole = ks.Role
-
-		proc, err := newProcessor(ctx, binding, parent)
-		if err != nil {
-			return nil, fmt.Errorf("building processor for key kind %s: %w", ks.Kind, err)
-		}
-
-		processors[ks.Kind] = *proc
-	}
-
-	return processors, nil
 }
 
 // ExportSecretRequest identifies the key whose plaintext material to export.
@@ -276,6 +228,32 @@ func (rm *rootManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (c
 	}
 
 	return rm.sealer.Unseal(ctx, req)
+}
+
+func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind) (cryptor.Sealer, error) {
+	parentSpec, ok := cfg.Hierarchy.FindParentKeySpec(kind)
+	if !ok {
+		return nil, fmt.Errorf("no parent key spec found for key kind %s", kind)
+	}
+	if parentSpec.Role != spec.KeyRoleRoot {
+		return mgr, nil
+	}
+	rootBinding, ok := cfg.Bindings[parentSpec.Kind]
+	if !ok {
+		return nil, fmt.Errorf("no binding found for root key kind %s", parentSpec.Kind)
+	}
+	return buildRootManager(ctx, cfg.KeyStore, rootBinding)
+}
+
+func buildRootManager(ctx context.Context, s store.Key, binding spec.KeyBinding) (*rootManager, error) {
+	if binding.SealerSpec == nil {
+		return nil, ErrRootMissingSealerSpec
+	}
+	sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
+	if err != nil {
+		return nil, err
+	}
+	return &rootManager{store: s, sealer: sealer}, nil
 }
 
 // resolveUsableKeyVersion returns the highest usable revision of version, or

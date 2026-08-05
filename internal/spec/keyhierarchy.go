@@ -97,6 +97,16 @@ func (h KeyHierarchy) FindKeySpec(kind model.KeyKind) (KeySpec, bool) {
 	return KeySpec{}, false
 }
 
+// FindParentKeySpec returns the KeySpec immediately preceding kind in the hierarchy.
+// Returns (_, false) if kind is not found or is the first (root) key.
+func (h KeyHierarchy) FindParentKeySpec(kind model.KeyKind) (KeySpec, bool) {
+	idx := h.IndexOf(kind)
+	if idx <= 0 {
+		return KeySpec{}, false
+	}
+	return h.KeySpecs[idx-1], true
+}
+
 // IndexOf returns the position of the given kind in the hierarchy's KeySpecs slice. Returns -1 if not found.
 func (h KeyHierarchy) IndexOf(kind model.KeyKind) int {
 	for i, k := range h.KeySpecs {
