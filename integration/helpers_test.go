@@ -5,17 +5,21 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ovh/kmip-go/kmipclient"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
+	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
 )
 
 // testEnvironment holds the shared infrastructure for tests that require root + agent.
@@ -25,6 +29,15 @@ type testEnvironment struct {
 	RootPort  string
 	AgentPort string
 	Conn      *grpc.ClientConn
+}
+
+// testEnvWithRootKMIP holds the shared infrastructure for tests that require root and kmip server.
+type testEnvWithRootKMIP struct {
+	RootDB                  *sql.DB
+	RootPort                string
+	Conn                    *grpc.ClientConn
+	PreConfiguredTenant     model.Tenant
+	PreConfiguredKMIPClient *kmipclient.Client
 }
 
 // testKey is a 32-byte AES-256 key for testing.
@@ -83,8 +96,55 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 	}
 }
 
-// writeRootConfig writes a valid root config YAML to a temp file with the given
-// agent as a reconciler target and returns the file path.
+func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
+	t.Helper()
+
+	rootDB, rootConnStr := createDatabase(t)
+	rootPort := freePort(t)
+	kmipRootPort := freePort(t)
+
+	// preconfiguring a tenant
+	ctr, err := newTenantStore(t, rootDB).CreateTenant(t.Context(), store.CreateTenantQuery{
+		Tenant: model.NewTenant("preconfigured-tenant-"+uuid.NewString(), nil),
+	})
+	require.NoError(t, err)
+	tenant := ctr.Tenant
+
+	pki := newTestPKI(t, tenant.ID)
+	rootCfgPath := writeRootConfigWithKMIP(t, kmipRootPort, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath)
+
+	rootBinary := buildBinary(t, "root", "../cmd/root")
+
+	rootCmd := createCmd(t, rootBinary, []string{
+		"ROOT_CONFIG_PATH=" + rootCfgPath,
+		"DATABASE_URL=" + rootConnStr,
+		"SERVER_PORT=" + rootPort,
+		"KRYPTON_ROOT_KEY=" + testKeyBase64,
+	})
+	require.NoError(t, rootCmd.Start(), "failed to start root server")
+	waitForPort(t, rootPort)
+
+	conn, err := grpc.NewClient(
+		"localhost:"+rootPort,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	kmipAddr := "localhost:" + kmipRootPort
+	waitTCPReady(t, kmipAddr)
+
+	kmipCli := dialAs(t, kmipAddr, pki, tenant.ID)
+	t.Cleanup(func() { _ = kmipCli.Close() })
+	return &testEnvWithRootKMIP{
+		RootDB:                  rootDB,
+		RootPort:                rootPort,
+		Conn:                    conn,
+		PreConfiguredTenant:     tenant,
+		PreConfiguredKMIPClient: kmipCli,
+	}
+}
+
 func writeRootConfig(t *testing.T, agentName, agentPort string) string {
 	t.Helper()
 
@@ -174,6 +234,72 @@ reconciler:
     - name: %s
       address: localhost:%s
 `, agentName, agentName, agentPort)
+
+	return writeTempFile(t, "root-config-*.yaml", content)
+}
+
+// writeRootConfigWithKMIP writes a root config YAML with KMIP settings to a temp file and returns the path.
+func writeRootConfigWithKMIP(t *testing.T, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath string) string {
+	t.Helper()
+
+	content := fmt.Sprintf(`name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K2
+selector_labels:
+  environment: production
+key_bindings:
+  K0:
+    sealer:
+      name: root-sealer
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
+  K1:
+    crypto:
+      name: kek-crypto
+      type: aes256gcm
+    vault:
+      name: k1-vault
+      type: unsafe-sqlite-memory
+  K2:
+    crypto:
+      name: dek-crypto
+      type: aes256gcm
+    vault:
+      name: k2-vault
+      type: unsafe-sqlite-memory
+hierarchy:
+  name: test-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: kek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K2
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+kmip:
+  bind_addr: localhost
+  port: %s
+  tls:
+    server_cert: %s
+    server_key: %s
+    client_ca: %s
+`, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -332,4 +458,35 @@ func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
 	require.NoError(t, os.MkdirAll(dir, 0700))
 	payload := fmt.Appendf(nil, `{"tenant":{"id":%q,"name":%q}}`, tenantID, tenantName)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
+}
+
+func waitTCPReady(t *testing.T, addr string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	var d net.Dialer
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		conn, err := d.DialContext(ctx, "tcp", addr)
+		cancel()
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("KMIP server did not start listening on %s in time", addr)
+}
+
+func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Client {
+	t.Helper()
+	cc, ok := pki.clientCerts[cn]
+	require.True(t, ok, "no client cert for CN %q", cn)
+	c, err := kmipclient.Dial(
+		addr,
+		kmipclient.WithRootCAPem(pki.caPEM),
+		kmipclient.WithClientCertPEM(cc.certPEM, cc.keyPEM),
+		kmipclient.WithServerName("127.0.0.1"),
+	)
+	require.NoError(t, err, "Dial as %s", cn)
+	return c
 }
