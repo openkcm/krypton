@@ -896,6 +896,220 @@ func TestNewManager(t *testing.T) {
 	})
 }
 
+func TestManagerDescribeKey(t *testing.T) {
+	t.Run("should return key metadata for an active key", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "K1",
+			LifeCycleState: model.KeyLifeCycleActive,
+		}
+		kv := model.KeyVersion{TenantID: key.TenantID, KeyID: key.ID, Version: 1, Revision: 2, ProcessingState: model.KeyVersionUsable}
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			assert.Equal(t, key.TenantID, q.TenantID)
+			assert.Equal(t, key.ID, q.KeyID)
+			assert.Equal(t, 1, q.Version)
+			return store.ListKeyVersionsResult{KeyVersions: []model.KeyVersion{kv}}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, id, tid string) (*model.Key, error) {
+			assert.Equal(t, key.ID, id)
+			assert.Equal(t, key.TenantID, tid)
+			return key, nil
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(ks, kvs, nil,
+			map[model.KeyKind]cryptor.KeyAlgorithm{key.Kind: cryptor.KeyAlgorithmAES256})
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   key.TenantID,
+			KeyID:      key.ID,
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, *key, resp.Key)
+		assert.Equal(t, kv, resp.KeyVersion)
+		assert.Equal(t, cryptor.KeyAlgorithmAES256, resp.Algorithm)
+	})
+
+	t.Run("should resolve the latest usable version when version is zero", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "K1",
+			LifeCycleState: model.KeyLifeCycleActive,
+		}
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			assert.Equal(t, 0, q.Version)
+			return store.ListKeyVersionsResult{
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 3, ProcessingState: model.KeyVersionUsable}},
+			}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return key, nil
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(ks, kvs, nil,
+			map[model.KeyKind]cryptor.KeyAlgorithm{key.Kind: cryptor.KeyAlgorithmAES256})
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID: key.TenantID,
+			KeyID:    key.ID,
+		})
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, 3, resp.KeyVersion.Version)
+	})
+
+	t.Run("should return error if key version resolution fails", func(t *testing.T) {
+		// given
+		kvStoreErr := errors.New("database unavailable")
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{}, kvStoreErr
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(nil, kvs, nil, nil)
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   uuid.NewString(),
+			KeyID:      uuid.NewString(),
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, kvStoreErr)
+		assert.Equal(t, keyprocessor.DescribeKeyResponse{}, resp)
+	})
+
+	t.Run("should return error if no usable key version found", func(t *testing.T) {
+		// given
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{KeyVersions: []model.KeyVersion{}}, nil
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(nil, kvs, nil, nil)
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   uuid.NewString(),
+			KeyID:      uuid.NewString(),
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrNoUsableKeyVersion)
+		assert.Equal(t, keyprocessor.DescribeKeyResponse{}, resp)
+	})
+
+	t.Run("should return error if store lookup fails", func(t *testing.T) {
+		// given
+		storeErr := errors.New("database unavailable")
+		tenantID := uuid.NewString()
+		keyID := uuid.NewString()
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{
+				KeyVersions: []model.KeyVersion{{TenantID: tenantID, KeyID: keyID, Version: 1, ProcessingState: model.KeyVersionUsable}},
+			}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return nil, storeErr
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(ks, kvs, nil, nil)
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   tenantID,
+			KeyID:      keyID,
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, storeErr)
+		assert.Equal(t, keyprocessor.DescribeKeyResponse{}, resp)
+	})
+
+	t.Run("should return error if key is not active", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "K1",
+			LifeCycleState: model.KeyLifeCycleDeactivated,
+		}
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
+			}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return key, nil
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(ks, kvs, nil, nil)
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   key.TenantID,
+			KeyID:      key.ID,
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
+		assert.Equal(t, keyprocessor.DescribeKeyResponse{}, resp)
+	})
+
+	t.Run("should return error if no algorithm registered for key kind", func(t *testing.T) {
+		// given
+		key := &model.Key{
+			ID:             uuid.NewString(),
+			TenantID:       uuid.NewString(),
+			Kind:           "UNKNOWN_KIND",
+			LifeCycleState: model.KeyLifeCycleActive,
+		}
+
+		kvs := &keyVersionStoreWrapper{}
+		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+			return store.ListKeyVersionsResult{
+				KeyVersions: []model.KeyVersion{{TenantID: key.TenantID, KeyID: key.ID, Version: 1, ProcessingState: model.KeyVersionUsable}},
+			}, nil
+		}
+		ks := &keyStoreWrapper{}
+		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
+			return key, nil
+		}
+		c := keyprocessor.NewTestManagerWithAlgorithms(ks, kvs, nil, map[model.KeyKind]cryptor.KeyAlgorithm{})
+
+		// when
+		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
+			TenantID:   key.TenantID,
+			KeyID:      key.ID,
+			KeyVersion: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
+		assert.Equal(t, keyprocessor.DescribeKeyResponse{}, resp)
+	})
+}
+
 type keyStoreWrapper struct {
 	store.Key
 

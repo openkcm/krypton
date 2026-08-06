@@ -71,19 +71,27 @@ func mapKeyProcessorError(ctx context.Context, tenantID, keyID string, err error
 	case errors.Is(err, keyprocessor.ErrKeyNotActivated):
 		return fmt.Errorf("%w: %w", ErrKeyNotActive, err)
 	default:
-		slog.ErrorContext(ctx, "kmip: exporting secret failed",
+		slog.ErrorContext(ctx, "kmip: key processor request failed",
 			"tenant_id", tenantID, "key_id", keyID, "error", err)
 		return ErrInternal
+	}
+}
+
+// kmipAlgorithmInfo translates the cryptor key algorithm into the kmip-go
+// wire constant and the key length in bits; unsupported algorithms fail
+// closed with ErrUnsupportedAlgorithm.
+func kmipAlgorithmInfo(a cryptor.KeyAlgorithm) (kmip.CryptographicAlgorithm, int32, error) {
+	switch a {
+	case cryptor.KeyAlgorithmAES256:
+		return kmip.CryptographicAlgorithmAES, 256, nil
+	default:
+		return 0, 0, fmt.Errorf("%w: %s", ErrUnsupportedAlgorithm, a)
 	}
 }
 
 // kmipAlgorithm translates the cryptor key algorithm into the kmip-go wire
 // constant; unsupported algorithms fail closed with ErrUnsupportedAlgorithm.
 func kmipAlgorithm(a cryptor.KeyAlgorithm) (kmip.CryptographicAlgorithm, error) {
-	switch a {
-	case cryptor.KeyAlgorithmAES256:
-		return kmip.CryptographicAlgorithmAES, nil
-	default:
-		return 0, fmt.Errorf("%w: %s", ErrUnsupportedAlgorithm, a)
-	}
+	alg, _, err := kmipAlgorithmInfo(a)
+	return alg, err
 }

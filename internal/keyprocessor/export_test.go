@@ -52,6 +52,10 @@ func NewTestManager(s store.Key, kvs store.KeyVersion, processors map[model.KeyK
 	return &Manager{store: s, versionStore: kvs, processors: processors}
 }
 
+func NewTestManagerWithAlgorithms(s store.Key, kvs store.KeyVersion, processors map[model.KeyKind]processor, algorithms map[model.KeyKind]cryptor.KeyAlgorithm) *Manager {
+	return &Manager{store: s, versionStore: kvs, processors: processors, algorithms: algorithms}
+}
+
 func NewTestRootManager(s store.Key, sealer cryptor.Sealer) *rootManager {
 	return &rootManager{store: s, sealer: sealer}
 }
