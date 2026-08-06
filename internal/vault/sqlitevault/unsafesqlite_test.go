@@ -101,15 +101,6 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "duplicate key version",
-			req: vault.ImportKeyRequest{
-				TenantID:    "tenant-1",
-				KeyID:       "key-1",
-				KeyVersion:  1,
-				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
-			},
-		},
-		{
 			name: "nil key material",
 			req: vault.ImportKeyRequest{
 				TenantID:   "tenant-1",
@@ -125,6 +116,70 @@ func TestUnsafe_ImportKeyErrors(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+func TestUnsafe_ImportDuplicateKey(t *testing.T) {
+	// given
+	v := newTestUnsafeVault(t)
+	ctx := t.Context()
+
+	keyMaterial1 := newTestSecureData(t, []byte("key-material-1"))
+	keyMaterial2 := newTestSecureData(t, []byte("key-material-2"))
+	aad1 := []byte("aad-1")
+	aad2 := []byte("aad-2")
+
+	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  1,
+		KeyRevision: 1,
+		KeyMaterial: keyMaterial1,
+		AAD:         aad1,
+	})
+	assert.NoError(t, err)
+
+	key1, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  1,
+		KeyRevision: 1,
+	})
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = key1.KeyMaterial.Destroy()
+	})
+
+	// when - import the same key again
+	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  1,
+		KeyRevision: 1,
+		KeyMaterial: keyMaterial2,
+		AAD:         aad2,
+	})
+	assert.NoError(t, err) // In this unsafe implementation, importing a duplicate key overwrites the existing one without error.
+
+	key2, err := v.ExportKey(ctx, vault.ExportKeyRequest{
+		TenantID:    "tenant-1",
+		KeyID:       "key-1",
+		KeyVersion:  1,
+		KeyRevision: 1,
+	})
+
+	// then
+	assert.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = key2.KeyMaterial.Destroy()
+	})
+
+	assert.NotEqual(t, key1.KeyMaterial.SecureBytes(), key2.KeyMaterial.SecureBytes())
+	assert.Equal(t, keyMaterial1.SecureBytes(), key1.KeyMaterial.SecureBytes())
+	assert.Equal(t, keyMaterial2.SecureBytes(), key2.KeyMaterial.SecureBytes())
+	assert.NotEqual(t, key1.AAD, key2.AAD)
+	assert.Equal(t, aad1, key1.AAD)
+	assert.Equal(t, aad2, key2.AAD)
 }
 
 func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {

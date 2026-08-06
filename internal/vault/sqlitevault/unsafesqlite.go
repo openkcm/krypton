@@ -104,7 +104,8 @@ func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*va
 		return nil, vault.ErrInvalidRequest
 	}
 	_, err := u.db.ExecContext(ctx,
-		"INSERT INTO keys (tenant_id, key_id, key_version, key_revision, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		`INSERT INTO keys (tenant_id, key_id, key_version, key_revision, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (tenant_id, key_id, key_version, key_revision) DO UPDATE SET key_material = excluded.key_material, aad = excluded.aad, created_at = excluded.created_at `,
 		req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision, []byte(req.KeyMaterial.SecureBytes()), req.AAD, int64(clock.Now()),
 	)
 	if err != nil {
