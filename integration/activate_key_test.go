@@ -82,9 +82,14 @@ func TestActivateKey(t *testing.T) {
 		// call KMIP Server to get the key material
 		actUID := env.PreConfiguredTenant.ID + ":" + kv.KeyID + ":1"
 
+		// below errors are due to configuration now, but later it should be authorization errors
+		_, err = env.PreConfiguredKMIPClient.GetAttributes(actUID).ExecContext(ctx)
+		assert.Error(t, err)
+
 		kmipResp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
 		assert.Error(t, err)
 		assert.Nil(t, kmipResp)
+
 	})
 
 	t.Run("should activate intermediate keys (K1)", func(t *testing.T) {
@@ -164,7 +169,8 @@ func TestActivateKey(t *testing.T) {
 		assert.Equal(t, model.KeyLifeCycleActive, kv.LifeCycleState)
 		assert.Equal(t, model.KeyVersionUsable, kv.ProcessingState)
 
-		assertKMIPKeyRetrievable(t, env, kv)
+		assertKMIPGetAttributes(t, env, kv)
+		assertKMIPGet(t, env, kv)
 	})
 
 	t.Run("should activate all keys", func(t *testing.T) {
@@ -270,7 +276,8 @@ func TestActivateKey(t *testing.T) {
 		assert.Equal(t, model.KeyLifeCycleActive, kv.LifeCycleState)
 		assert.Equal(t, model.KeyVersionUsable, kv.ProcessingState)
 
-		assertKMIPKeyRetrievable(t, env, kv)
+		assertKMIPGetAttributes(t, env, kv)
+		assertKMIPGet(t, env, kv)
 	})
 
 	t.Run("should return error if activate key is called on already activated key", func(t *testing.T) {
@@ -385,18 +392,35 @@ func TestActivateKey(t *testing.T) {
 	})
 }
 
-func assertKMIPKeyRetrievable(t *testing.T, env *testEnvWithRootKMIP, kv model.KeyVersion) {
+func assertKMIPGetAttributes(t *testing.T, env *testEnvWithRootKMIP, kv model.KeyVersion) {
 	t.Helper()
 
 	ctx := t.Context()
 	actUID := env.PreConfiguredTenant.ID + ":" + kv.KeyID + ":1"
 
-	kmipResp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, actUID, kmipResp.UniqueIdentifier)
+	resp, err := env.PreConfiguredKMIPClient.GetAttributes(actUID).ExecContext(ctx)
+	require.NoError(t, err, "GetAttributes")
+	assert.Equal(t, actUID, resp.UniqueIdentifier)
+	got := indexAttrs(resp.Attribute)
+	assert.Len(t, got, 4)
+	assert.Equal(t, ovhkmip.StateActive, got[ovhkmip.AttributeNameState])
+	assert.Equal(t, ovhkmip.CryptographicAlgorithmAES, got[ovhkmip.AttributeNameCryptographicAlgorithm])
+	assert.Equal(t, int32(256), got[ovhkmip.AttributeNameCryptographicLength])
+	assert.Equal(t, ovhkmip.ObjectTypeSymmetricKey, got[ovhkmip.AttributeNameObjectType])
+}
 
-	sk, ok := kmipResp.Object.(*ovhkmip.SymmetricKey)
-	require.True(t, ok, "Object type = %T", kmipResp.Object)
+func assertKMIPGet(t *testing.T, env *testEnvWithRootKMIP, kv model.KeyVersion) {
+	t.Helper()
+
+	ctx := t.Context()
+	actUID := env.PreConfiguredTenant.ID + ":" + kv.KeyID + ":1"
+
+	resp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, actUID, resp.UniqueIdentifier)
+
+	sk, ok := resp.Object.(*ovhkmip.SymmetricKey)
+	require.True(t, ok, "Object type = %T", resp.Object)
 
 	mat, err := sk.KeyMaterial()
 	require.NoError(t, err, "KeyMaterial")
@@ -412,4 +436,12 @@ func decodeActivatedKeyRow(t *testing.T, output []byte) activatedKeyRow {
 	}
 	require.Len(t, ar, 1, "expected exactly one activated key row in the output")
 	return ar[0]
+}
+
+func indexAttrs(attrs []ovhkmip.Attribute) map[ovhkmip.AttributeName]any {
+	m := make(map[ovhkmip.AttributeName]any, len(attrs))
+	for _, a := range attrs {
+		m[a.AttributeName] = a.AttributeValue
+	}
+	return m
 }
