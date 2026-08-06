@@ -74,6 +74,13 @@ type testEnv struct {
 // an active root and DEK key with one usable version "1".
 func newTestEnv(t *testing.T, tenantID, keyID string) *testEnv {
 	t.Helper()
+	return newTestEnvWithAlgorithm(t, tenantID, keyID, cryptor.KeyAlgorithmAES256)
+}
+
+// newTestEnvWithAlgorithm is newTestEnv with the DEK kind's spec algorithm
+// parameterized, so tests can exercise the unsupported-algorithm path.
+func newTestEnvWithAlgorithm(t *testing.T, tenantID, keyID string, alg cryptor.KeyAlgorithm) *testEnv {
+	t.Helper()
 
 	sealerKey := make([]byte, 32)
 	_, err := rand.Read(sealerKey)
@@ -152,7 +159,7 @@ func newTestEnv(t *testing.T, tenantID, keyID string) *testEnv {
 			Name: "test-hierarchy",
 			KeySpecs: []spec.KeySpec{
 				{Kind: rootKind, Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
-				{Kind: dekKind, Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: dekKind, Role: spec.KeyRoleDek, Algorithm: alg},
 			},
 		},
 	})

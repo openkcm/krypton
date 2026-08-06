@@ -42,6 +42,7 @@ type Manager struct {
 	store        store.Key
 	versionStore store.KeyVersion
 	processors   map[model.KeyKind]processor
+	algorithms   map[model.KeyKind]cryptor.KeyAlgorithm
 }
 
 var _ cryptor.Sealer = &Manager{}
@@ -69,6 +70,7 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 		store:        cfg.KeyStore,
 		versionStore: cfg.KeyVersionStore,
 		processors:   make(map[model.KeyKind]processor, len(cfg.Bindings)),
+		algorithms:   make(map[model.KeyKind]cryptor.KeyAlgorithm, len(cfg.Bindings)),
 	}
 
 	for kind, binding := range cfg.Bindings {
@@ -90,6 +92,7 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 			return nil, fmt.Errorf("building processor for key kind %s: %w", kind, err)
 		}
 		mgr.processors[kind] = *proc
+		mgr.algorithms[kind] = sp.Algorithm
 	}
 
 	return mgr, nil
@@ -122,20 +125,58 @@ func (km *Manager) ExportSecret(ctx context.Context, req ExportSecretRequest) (c
 	return sec, err
 }
 
-// resolveProcessorAndSecret resolves a usable key version, checks the key
-// lifecycle, and unseals its secret via the processor for the key's kind.
-func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyID string, version int) (processor, cryptor.Secret, error) {
+// DescribeKeyRequest identifies the key whose metadata to return.
+type DescribeKeyRequest struct {
+	TenantID   string
+	KeyID      string
+	KeyVersion int
+}
+
+// DescribeKeyResponse carries key metadata; it never contains key material.
+type DescribeKeyResponse struct {
+	Key        model.Key
+	KeyVersion model.KeyVersion
+	Algorithm  cryptor.KeyAlgorithm
+}
+
+// DescribeKey returns metadata for an active key's usable version without
+// unsealing any material. KeyVersion 0 resolves the latest usable version.
+func (km *Manager) DescribeKey(ctx context.Context, req DescribeKeyRequest) (DescribeKeyResponse, error) {
+	key, kv, err := km.resolveActiveKey(ctx, req.TenantID, req.KeyID, req.KeyVersion)
+	if err != nil {
+		return DescribeKeyResponse{}, err
+	}
+	alg, ok := km.algorithms[key.Kind]
+	if !ok {
+		return DescribeKeyResponse{}, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, key.Kind)
+	}
+	return DescribeKeyResponse{Key: *key, KeyVersion: kv, Algorithm: alg}, nil
+}
+
+// resolveActiveKey resolves a usable key version and its key record, requiring
+// the key to be in the active lifecycle state.
+func (km *Manager) resolveActiveKey(ctx context.Context, tenantID, keyID string, version int) (*model.Key, model.KeyVersion, error) {
 	kv, err := km.resolveUsableKeyVersion(ctx, tenantID, keyID, version)
 	if err != nil {
-		return processor{}, cryptor.Secret{}, err
+		return nil, model.KeyVersion{}, err
 	}
 
 	key, err := km.store.GetKeyByID(ctx, keyID, tenantID)
 	if err != nil {
-		return processor{}, cryptor.Secret{}, err
+		return nil, model.KeyVersion{}, err
 	}
 	if key.LifeCycleState != model.KeyLifeCycleActive {
-		return processor{}, cryptor.Secret{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+		return nil, model.KeyVersion{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+	}
+	return key, kv, nil
+}
+
+// resolveProcessorAndSecret resolves a usable key version, checks the key
+// lifecycle, and unseals its secret via the processor for the key's kind.
+func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyID string, version int) (processor, cryptor.Secret, error) {
+	key, kv, err := km.resolveActiveKey(ctx, tenantID, keyID, version)
+	if err != nil {
+		return processor{}, cryptor.Secret{}, err
 	}
 	proc, ok := km.processors[key.Kind]
 	if !ok {

@@ -2,7 +2,6 @@ package kmip
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/ovh/kmip-go"
@@ -99,14 +98,69 @@ func (h *handler) handleGet(ctx context.Context, req *payloads.GetRequestPayload
 	}, nil
 }
 
-// handleGetAttributes is not supported yet; authorized requests fail with
-// OperationNotSupported.
-func (h *handler) handleGetAttributes(ctx context.Context, _ *payloads.GetAttributesRequestPayload) (*payloads.GetAttributesResponsePayload, error) {
-	if _, ok := keyIdentifierFromCtx(ctx); !ok {
+// defaultAttributeNames is the attribute set returned when a GetAttributes
+// request does not name any specific attributes.
+var defaultAttributeNames = []kmip.AttributeName{
+	kmip.AttributeNameState,
+	kmip.AttributeNameCryptographicAlgorithm,
+	kmip.AttributeNameCryptographicLength,
+	kmip.AttributeNameObjectType,
+}
+
+// handleGetAttributes returns metadata attributes for an active key's usable
+// version without touching key material. Requested names outside the
+// supported set are silently omitted — KMIP requires that attributes with no
+// value do not appear in the response.
+func (h *handler) handleGetAttributes(ctx context.Context, req *payloads.GetAttributesRequestPayload) (*payloads.GetAttributesResponsePayload, error) {
+	id, ok := keyIdentifierFromCtx(ctx)
+	if !ok {
 		// The auth middleware did not run — fail closed.
 		slog.ErrorContext(ctx, "kmip: no authorized key identifier on context")
 		return nil, toKMIPError(ErrInternal)
 	}
 
-	return nil, toKMIPError(fmt.Errorf("%w: GetAttributes", ErrNotSupported))
+	meta, err := h.manager.DescribeKey(ctx, keyprocessor.DescribeKeyRequest{
+		TenantID:   id.TenantID,
+		KeyID:      id.KeyID,
+		KeyVersion: id.Version,
+	})
+	if err != nil {
+		return nil, toKMIPError(mapKeyProcessorError(ctx, id.TenantID, id.KeyID, err))
+	}
+
+	alg, lengthBits, err := kmipAlgorithmInfo(meta.Algorithm)
+	if err != nil {
+		return nil, toKMIPError(err)
+	}
+
+	names := req.AttributeName
+	if len(names) == 0 {
+		names = defaultAttributeNames
+	}
+	attrs := make([]kmip.Attribute, 0, len(names))
+	// KMIP 1.x forbids repeating a name in the request; dedupe so the response
+	// never carries multiple instances of a single-instance attribute.
+	seen := make(map[kmip.AttributeName]struct{}, len(names))
+	for _, n := range names {
+		if _, dup := seen[n]; dup {
+			continue
+		}
+		seen[n] = struct{}{}
+		switch n {
+		case kmip.AttributeNameState:
+			// DescribeKey only resolves keys in the active lifecycle state.
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: kmip.StateActive})
+		case kmip.AttributeNameCryptographicAlgorithm:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: alg})
+		case kmip.AttributeNameCryptographicLength:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: lengthBits})
+		case kmip.AttributeNameObjectType:
+			attrs = append(attrs, kmip.Attribute{AttributeName: n, AttributeValue: kmip.ObjectTypeSymmetricKey})
+		}
+	}
+
+	return &payloads.GetAttributesResponsePayload{
+		UniqueIdentifier: req.UniqueIdentifier,
+		Attribute:        attrs,
+	}, nil
 }

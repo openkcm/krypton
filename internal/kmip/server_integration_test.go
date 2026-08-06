@@ -73,16 +73,30 @@ func TestServerIntegration(t *testing.T) {
 		assert.Equal(t, material, mat)
 	})
 
-	t.Run("get attributes is not supported", func(t *testing.T) {
+	t.Run("get attributes returns metadata for the active key", func(t *testing.T) {
 		c := dialAs(t, addr, pki, tenantA)
 		defer c.Close()
 
-		batch, err := c.Batch(context.Background(), &payloads.GetAttributesRequestPayload{UniqueIdentifier: uid})
-		require.NoError(t, err, "Batch")
-		require.Len(t, batch, 1)
-		bi := batch[0]
-		assert.NotEqual(t, ovhkmip.ResultStatusSuccess, bi.ResultStatus)
-		assert.Equal(t, ovhkmip.ResultReasonOperationNotSupported, bi.ResultReason)
+		resp, err := c.GetAttributes(uid).ExecContext(context.Background())
+		require.NoError(t, err, "GetAttributes")
+		assert.Equal(t, uid, resp.UniqueIdentifier)
+		got := indexAttrs(resp.Attribute)
+		assert.Len(t, got, 4)
+		assert.Equal(t, ovhkmip.StateActive, got[ovhkmip.AttributeNameState])
+		assert.Equal(t, ovhkmip.CryptographicAlgorithmAES, got[ovhkmip.AttributeNameCryptographicAlgorithm])
+		assert.Equal(t, int32(256), got[ovhkmip.AttributeNameCryptographicLength])
+		assert.Equal(t, ovhkmip.ObjectTypeSymmetricKey, got[ovhkmip.AttributeNameObjectType])
+	})
+
+	t.Run("get attributes filters to requested names", func(t *testing.T) {
+		c := dialAs(t, addr, pki, tenantA)
+		defer c.Close()
+
+		resp, err := c.GetAttributes(uid, ovhkmip.AttributeNameCryptographicLength).ExecContext(context.Background())
+		require.NoError(t, err, "GetAttributes")
+		got := indexAttrs(resp.Attribute)
+		assert.Len(t, got, 1)
+		assert.Equal(t, int32(256), got[ovhkmip.AttributeNameCryptographicLength])
 	})
 
 	t.Run("cross-tenant get rejected", func(t *testing.T) {
