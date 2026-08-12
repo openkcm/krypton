@@ -71,7 +71,7 @@ agent:
 
 .PHONY: root
 root:
-	SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
+	SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" ROOT_CONFIG_PATH="./demo/krypton.yaml" KRYPTON_ROOT_KEY=$(KRYPTON_ROOT_KEY) go run ./cmd/root
 
 .PHONY: dev
 dev: postgres root
@@ -99,7 +99,7 @@ helm-template:
 
 ROOT_HELM_RELEASE := krypton-root
 ROOT_IMAGE := krypton-root:local
-KRYPTON_ROOT_KEY := $(shell openssl rand -base64 32)
+KRYPTON_ROOT_KEY := uHpU0RZgYfgaqtWkrS5G7qunD9P/HWcpxViEK8w/EMo=
 ROOT_DATABASE_URL := postgres://krypton:krypton@krypton-root-postgres:5432/krypton?sslmode=disable
 
 .PHONY: root-build
@@ -136,3 +136,55 @@ k3d-cluster:
 deploy-postgres:
 	kubectl apply -f hack/postgres.yaml
 
+.PHONY: krypton-down
+krypton-down:
+	docker compose --file ./demo/compose.yaml down krypton
+
+.PHONY: krypton-up
+krypton-up:
+	docker compose --file ./demo/compose.yaml up krypton
+
+.PHONY: postgres-down
+postgres-down:
+	docker compose --file ./demo/compose.yaml down postgres
+
+.PHONY: postgres-up
+postgres-up:
+	docker compose --file ./demo/compose.yaml up postgres
+
+.PHONY: mongodb1-up
+mongodb1-up:
+	@mkdir -p ./demo/mongodb1/db ./demo/mongodb1/configdb
+	docker compose --file ./demo/compose.yaml up mongodb1
+
+.PHONY: mongodb1-down
+mongodb1-down:
+	docker compose --file ./demo/compose.yaml down mongodb1
+
+.PHONY: mongodb2-up
+mongodb2-up:
+	@mkdir -p ./demo/mongodb2/db ./demo/mongodb2/configdb
+	docker compose --file ./demo/compose.yaml up mongodb2
+
+.PHONY: mongodb2-down
+mongodb2-down:
+	docker compose --file ./demo/compose.yaml down mongodb2
+
+TENANT_ID ?= $(shell uuidgen | tr '[:upper:]' '[:lower:]')
+CERTS_DIR ?= ./demo/certs
+
+.PHONY: generate-server-certs
+generate-server-certs:
+	./demo/generate-server-certs.sh "$(CERTS_DIR)"
+
+.PHONY: generate-client-certs
+generate-client-certs:
+	./demo/generate-client-certs.sh "$(TENANT_ID)" "$(CERTS_DIR)"
+
+
+.PHONY: cleanup
+cleanup:
+	@docker compose  --file demo/compose.yaml down
+	@rm -rf ./demo/mongodb1/db ./demo/mongodb1/configdb
+	@rm -rf ./demo/mongodb2/db ./demo/mongodb2/configdb
+	@rm ./demo/k1-vault.db ./demo/k2-vault.db

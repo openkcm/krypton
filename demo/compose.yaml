@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: krypton
+      POSTGRES_PASSWORD: krypton
+      POSTGRES_DB: krypton
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krypton -d krypton"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  krypton:
+    build:
+      context: ../
+      dockerfile: cmd/root/Dockerfile
+    container_name: krypton
+    ports:
+      - "8080:8080"
+      - "5696:5696"
+    environment:
+      SERVER_PORT: "8080"
+      DATABASE_URL: "postgres://krypton:krypton@postgres:5432/krypton?sslmode=disable"
+      ROOT_CONFIG_PATH: "/app/demo/krypton.yaml"
+      KRYPTON_ROOT_KEY: "uHpU0RZgYfgaqtWkrS5G7qunD9P/HWcpxViEK8w/EMo="
+    volumes:
+      - ./:/app/demo
+      - ./certs:/app/demo/certs
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mongodb1:
+    image: mongodb/mongodb-enterprise-server:latest
+    container_name: mongodb1
+    user: "0:0"
+    ports:
+      - "27017:27017"
+    environment:
+      MONGODB_ROOT_USERNAME: root
+      MONGODB_ROOT_PASSWORD: example
+      MONGODB_INITDB_DATABASE: mydb
+    volumes:
+      - ./mongodb1/db:/data/db
+      - ./mongodb1/configdb:/data/configdb
+      - ./mongod.conf:/etc/mongod.conf:ro
+      - ./certs:/etc/tls/cert:ro
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    depends_on:
+      - krypton
+
+  mongodb2:
+    image: mongodb/mongodb-enterprise-server:latest
+    container_name: mongodb2
+    user: "0:0"
+    ports:
+      - "27018:27017"
+    environment:
+      MONGODB_ROOT_USERNAME: root
+      MONGODB_ROOT_PASSWORD: example
+      MONGODB_INITDB_DATABASE: mydb
+    volumes:
+      - ./mongodb2/db:/data/db
+      - ./mongodb2/configdb:/data/configdb
+
+volumes:
+  postgres_data:
+

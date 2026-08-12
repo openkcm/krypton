@@ -1,0 +1,62 @@
+name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K2
+selector_labels:
+  environment: demo
+key_bindings:
+  K0:
+    sealer:
+      name: root-sealer
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
+  K1:
+    crypto:
+      name: kek-crypto
+      type: aes256gcm
+    vault:
+      name: k1-vault
+      type: unsafe-sqlite
+      config:
+        path: ./demo/k1-vault.db
+  K2:
+    crypto:
+      name: dek-crypto
+      type: aes256gcm
+    vault:
+      name: k2-vault
+      type: unsafe-sqlite
+      config:
+        path: ./demo/k2-vault.db
+hierarchy:
+  name: test-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: kek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K2
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+kmip:
+  bind_addr: 0.0.0.0
+  port: 5696
+  tls:
+    server_cert: ./demo/certs/server.pem
+    server_key: ./demo/certs/server-key.pem
+    client_ca: ./demo/certs/ca.pem
+

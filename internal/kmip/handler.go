@@ -2,6 +2,7 @@ package kmip
 
 import (
 	"context"
+	"log"
 	"log/slog"
 
 	"github.com/ovh/kmip-go"
@@ -41,12 +42,15 @@ func (h *handler) handleGet(ctx context.Context, req *payloads.GetRequestPayload
 		return nil, toKMIPError(ErrInternal)
 	}
 
+	log.Printf("Get::: %v\n", id)
+
 	sec, err := h.manager.ExportSecret(ctx, keyprocessor.ExportSecretRequest{
 		TenantID:   id.TenantID,
 		KeyID:      id.KeyID,
 		KeyVersion: id.Version,
 	})
 	if err != nil {
+		log.Println("ExportSecret err:::", err)
 		return nil, toKMIPError(mapKeyProcessorError(ctx, id.TenantID, id.KeyID, err))
 	}
 	if sec.Data == nil {
@@ -119,12 +123,15 @@ func (h *handler) handleGetAttributes(ctx context.Context, req *payloads.GetAttr
 		return nil, toKMIPError(ErrInternal)
 	}
 
+	log.Printf("GetAttributes::: %v\n", id)
+
 	meta, err := h.manager.DescribeKey(ctx, keyprocessor.DescribeKeyRequest{
 		TenantID:   id.TenantID,
 		KeyID:      id.KeyID,
 		KeyVersion: id.Version,
 	})
 	if err != nil {
+		log.Println("DescribeKey err:::", err)
 		return nil, toKMIPError(mapKeyProcessorError(ctx, id.TenantID, id.KeyID, err))
 	}
 
