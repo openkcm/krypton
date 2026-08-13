@@ -23,15 +23,3 @@ type TransactionFunc func(ctx context.Context, stores Stores) error
 type Transactor interface {
 	Transaction(ctx context.Context, fn TransactionFunc) error
 }
-
-// TransactorFunc adapts a function to the Transactor interface, allowing
-// tests to substitute a passthrough transactor:
-//
-//	store.TransactorFunc(func(ctx context.Context, fn store.TransactionFunc) error {
-//		return fn(ctx, store.Stores{Keys: stubKeys})
-//	})
-type TransactorFunc func(ctx context.Context, fn TransactionFunc) error
-
-func (f TransactorFunc) Transaction(ctx context.Context, fn TransactionFunc) error {
-	return f(ctx, fn)
-}

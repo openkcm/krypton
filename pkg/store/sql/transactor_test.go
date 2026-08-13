@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -127,6 +127,54 @@ func TestTransaction(t *testing.T) {
 		got, err := keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
 		require.NoError(t, err)
 		assert.Equal(t, key.ID, got.ID)
+	})
+
+	t.Run("should abort a conflicting transaction under serializable isolation", func(t *testing.T) {
+		// given
+		// classic write skew: each transaction reads the key the other
+		// writes; read committed would commit both, serializable must
+		// abort one with SQLSTATE 40001
+		keyA := model.NewKey(tenant.ID, "tx-skew-key-a", "K0", nil, "root", nil)
+		keyB := model.NewKey(tenant.ID, "tx-skew-key-b", "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, keyA))
+		require.NoError(t, keyStore.CreateKey(ctx, keyB))
+
+		var barrier sync.WaitGroup
+		barrier.Add(2)
+		runTx := func(readKey, writeKey model.Key) error {
+			return transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
+				_, err := stores.Keys.GetKeyByID(ctx, readKey.ID, readKey.TenantID)
+				barrier.Done()
+				if err != nil {
+					return err
+				}
+				barrier.Wait()
+				return stores.Keys.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+					ID:       writeKey.ID,
+					TenantID: writeKey.TenantID,
+					NewState: model.KeyLifeCycleActive,
+				})
+			})
+		}
+
+		// when
+		results := make(chan error, 2)
+		go func() { results <- runTx(keyA, keyB) }()
+		go func() { results <- runTx(keyB, keyA) }()
+
+		// then
+		failures := 0
+		for range 2 {
+			err := <-results
+			if err == nil {
+				continue
+			}
+			failures++
+			var pqErr *pq.Error
+			require.ErrorAs(t, err, &pqErr)
+			assert.Equal(t, "40001", string(pqErr.Code))
+		}
+		require.GreaterOrEqual(t, failures, 1, "expected at least one transaction to be aborted by serialization conflict")
 	})
 
 	t.Run("should fail and commit nothing when the context is cancelled mid-transaction", func(t *testing.T) {
