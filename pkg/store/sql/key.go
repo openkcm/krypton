@@ -20,12 +20,12 @@ import (
 const pgErrCodeUniqueViolation = "23505"
 
 type KeyStore struct {
-	db *sql.DB
+	db DBTX
 }
 
 var _ store.Key = &KeyStore{}
 
-func NewKeyStore(db *sql.DB) *KeyStore {
+func NewKeyStore(db DBTX) *KeyStore {
 	return &KeyStore{db: db}
 }
 

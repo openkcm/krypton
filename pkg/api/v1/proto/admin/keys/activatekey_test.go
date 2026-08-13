@@ -1,6 +1,8 @@
 package keys_test
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,6 +16,35 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+// stubKeyVersionStateUpdater wraps a real key version store and fails only
+// UpdateKeyVersionStates, so key activation reaches its final step before
+// erroring.
+type stubKeyVersionStateUpdater struct {
+	store.KeyVersion
+
+	err error
+}
+
+func (s *stubKeyVersionStateUpdater) UpdateKeyVersionStates(context.Context, store.UpdateKeyVersionStatesQuery) error {
+	return s.err
+}
+
+// failingKeyVersionTx wraps a real transactor and swaps the transaction's
+// key version store for a failing one, so the injected error hits inside
+// the transaction.
+type failingKeyVersionTx struct {
+	store.Transactor
+
+	err error
+}
+
+func (f *failingKeyVersionTx) Transaction(ctx context.Context, fn store.TransactionFunc) error {
+	return f.Transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
+		stores.KeyVersions = &stubKeyVersionStateUpdater{KeyVersion: stores.KeyVersions, err: f.err}
+		return fn(ctx, stores)
+	})
+}
 
 func TestActivateKey(t *testing.T) {
 	// given
@@ -362,6 +393,61 @@ func TestActivateKey(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, vaultResp.KeyMaterial)
+	})
+
+	t.Run("should roll back all writes when a late store call fails", func(t *testing.T) {
+		// given
+		errInjected := errors.New("injected update failure")
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology, func(s *testSetup) {
+			s.transactor = &failingKeyVersionTx{Transactor: s.transactor, err: errInjected}
+		})
+		cli := setup.cli
+		tenant := createTenant(t, setup.tenantStore)
+
+		// announcing root key
+		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
+			TenantId:   tenant.ID,
+			Kind:       "K0",
+			Name:       "root-key-" + uuid.NewString(),
+			TargetName: "",
+			Labels:     map[string]string{"env": "prod"},
+		})
+		require.NoError(t, err)
+		rootID := announceRes.GetKey().GetId()
+
+		// when
+		// activation fails at its last step, UpdateKeyVersionStates
+		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       rootID,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, activateRes)
+
+		// the earlier writes of the flow must have rolled back
+		key, err := setup.keyStore.GetKeyByID(ctx, rootID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
+
+		versions, err := setup.keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID: tenant.ID,
+			KeyID:    rootID,
+			Limit:    100,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, versions.KeyVersions)
+
+		// retrying against a healthy service succeeds: the key is not stuck
+		// in a transient state
+		retrySetup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		_, err = retrySetup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       rootID,
+		})
+		require.NoError(t, err)
 	})
 
 	t.Run("should return error if there is no parent keyversion", func(t *testing.T) {
