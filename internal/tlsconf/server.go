@@ -21,6 +21,6 @@ func (cfg *Server) BuildTLSConfig() (*tls.Config, error) {
 		Certificates: certs,
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    pool,
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 	}, nil
 }
