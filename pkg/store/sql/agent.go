@@ -12,12 +12,12 @@ import (
 )
 
 type AgentStore struct {
-	db *sql.DB
+	db DBTX
 }
 
 var _ store.Agent = &AgentStore{}
 
-func NewAgentStore(db *sql.DB) *AgentStore {
+func NewAgentStore(db DBTX) *AgentStore {
 	return &AgentStore{db: db}
 }
 

@@ -10,12 +10,12 @@ import (
 )
 
 type TenantStore struct {
-	db *sql.DB
+	db DBTX
 }
 
 var _ store.Tenant = &TenantStore{}
 
-func NewTenantStore(db *sql.DB) *TenantStore {
+func NewTenantStore(db DBTX) *TenantStore {
 	return &TenantStore{db: db}
 }
 

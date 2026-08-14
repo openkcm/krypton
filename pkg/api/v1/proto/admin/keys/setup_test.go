@@ -43,6 +43,7 @@ import (
 )
 
 type testSetup struct {
+	transactor      store.Transactor
 	keyStore        store.Key
 	keyVersionStore store.KeyVersion
 	tenantStore     store.Tenant
@@ -135,10 +136,14 @@ func setupKeyServerAndClient(t *testing.T, db *sql.DB) *testSetup {
 	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, nil)
 }
 
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology) *testSetup {
+// setupKeyServerAndClientWith wires a KeyService against db. opts run after
+// the stores are created and before anything consumes them, so tests can
+// swap in failure-injecting store wrappers.
+func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology, opts ...func(*testSetup)) *testSetup {
 	t.Helper()
 
 	setup := &testSetup{
+		transactor:      storesql.NewTransactor(db),
 		keyStore:        storesql.NewKeyStore(db),
 		keyVersionStore: storesql.NewKeyVersionStore(db),
 		tenantStore:     storesql.NewTenantStore(db),
@@ -157,6 +162,10 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 			Type:   sqlitevault.TypeUnsafe,
 			Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k3.db")},
 		},
+	}
+
+	for _, opt := range opts {
+		opt(setup)
 	}
 
 	if topology == nil {
@@ -220,7 +229,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, setup.keyStore, setup.keyVersionStore, v, preparer, mgr))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, setup.transactor, setup.keyStore, setup.keyVersionStore, v, preparer, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)

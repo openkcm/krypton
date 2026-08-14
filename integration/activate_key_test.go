@@ -89,7 +89,6 @@ func TestActivateKey(t *testing.T) {
 		kmipResp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
 		assert.Error(t, err)
 		assert.Nil(t, kmipResp)
-
 	})
 
 	t.Run("should activate intermediate keys (K1)", func(t *testing.T) {

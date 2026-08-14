@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -12,7 +11,7 @@ import (
 )
 
 type KeyVersionStore struct {
-	db *sql.DB
+	db DBTX
 }
 
 var _ store.KeyVersion = &KeyVersionStore{}
@@ -23,7 +22,7 @@ var keyVersionOrderSQL = map[store.KeyVersionOrder]string{
 	store.KeyVersionOrderRevisionDesc:  "revision DESC",
 }
 
-func NewKeyVersionStore(db *sql.DB) *KeyVersionStore {
+func NewKeyVersionStore(db DBTX) *KeyVersionStore {
 	return &KeyVersionStore{db: db}
 }
 

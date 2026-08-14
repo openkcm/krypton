@@ -36,7 +36,7 @@ func TestGetKeys(t *testing.T) {
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", newTransactor(t, testDB), keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
 	})
 
 	// create tenant

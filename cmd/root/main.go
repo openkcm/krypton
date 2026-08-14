@@ -69,6 +69,7 @@ func main() {
 	agentStore := storesql.NewAgentStore(db)
 	keyStore := storesql.NewKeyStore(db)
 	keyVersionStore := storesql.NewKeyVersionStore(db)
+	transactor := storesql.NewTransactor(db)
 
 	keyValidator := validator.NewValidator(cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
 
@@ -127,7 +128,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, keyStore, keyVersionStore, keyValidator, reconcilerMgr, kpMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, transactor, keyStore, keyVersionStore, keyValidator, reconcilerMgr, kpMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
