@@ -42,10 +42,9 @@ type testEnvWithRootKMIP struct {
 
 // testEnvWithRootMTLS holds the shared infrastructure for tests that require a root server with mTLS.
 type testEnvWithRootMTLS struct {
-	clientCertPath string
-	clientKeyPath  string
-	caPath         string
-	serverAddr     string
+	allowedCN  string
+	pki        *testPKI
+	serverAddr string
 }
 
 // testKey is a 32-byte AES-256 key for testing.
@@ -112,8 +111,10 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	_, rootConnStr := createDatabase(t)
 	rootPort := freePort(t)
 
-	pki := newTestPKI(t, "some-client")
-	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath)
+	allowedCN := "allowed-cn" + uuid.NewString()
+	pki := newTestPKI(t, allowedCN)
+
+	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath, allowedCN)
 
 	rootBinary := buildBinary(t, "root", "../cmd/root")
 
@@ -126,16 +127,10 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	require.NoError(t, rootCmd.Start(), "failed to start root server")
 	waitForPort(t, rootPort)
 
-	cliCert, ok := pki.clientCerts["some-client"]
-	require.True(t, ok, "no client cert for CN %q", "some-client")
-
-	serverAddr := "127.0.0.1:" + rootPort
-
 	return &testEnvWithRootMTLS{
-		serverAddr:     serverAddr,
-		clientCertPath: cliCert.certPEMPath,
-		clientKeyPath:  cliCert.keyPEMPath,
-		caPath:         pki.caCertFilePath,
+		serverAddr: "127.0.0.1:" + rootPort,
+		allowedCN:  allowedCN,
+		pki:        pki,
 	}
 }
 
@@ -351,7 +346,7 @@ kmip:
 }
 
 // writeRootConfigWithMTLS writes a root config YAML with mTLS settings to a temp file and returns the path.
-func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath string) string {
+func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath, cn string) string {
 	t.Helper()
 
 	content := fmt.Sprintf(`name: root
@@ -409,7 +404,11 @@ server:
     server_cert: %s
     server_key: %s
     client_ca: %s
-`, serverCertPath, serverKeyPath, clientCAPath)
+authentication:
+  allowed_cns:
+    - %s
+
+`, serverCertPath, serverKeyPath, clientCAPath, cn)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }

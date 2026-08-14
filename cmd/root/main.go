@@ -25,6 +25,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/reconciler"
@@ -122,6 +123,10 @@ func main() {
 
 	var grpcOpts []grpc.ServerOption
 	if cfg.Server.TLS != nil {
+		authn, err := interceptor.NewAuthenticator(cfg.Authentication.AllowedCNs)
+		handleErr(err, "failed to create authenticator for gRPC server")
+		grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(authn.UnaryInterceptor))
+
 		tlsConfig, err := cfg.Server.TLS.BuildTLSConfig()
 		handleErr(err, "failed to build TLS config for gRPC server")
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))

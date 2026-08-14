@@ -257,6 +257,8 @@ func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.
 // exercising mTLS in tests without touching the network.
 type testPKI struct {
 	caPEM          []byte
+	caCert         *x509.Certificate
+	caPrivateKey   *ecdsa.PrivateKey
 	caCertFilePath string
 	serverCertPEM  []byte
 	serverCertPath string
@@ -298,6 +300,8 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 
 	pki := &testPKI{
 		caPEM:         caPEM,
+		caCert:        caCert,
+		caPrivateKey:  caKey,
 		serverCertPEM: serverCertPEM,
 		serverKeyPEM:  serverKeyPEM,
 		clientCerts:   make(map[string]testClientCert, len(clientCNs)),
