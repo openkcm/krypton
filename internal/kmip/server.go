@@ -27,7 +27,7 @@ func NewServer(cfg Config, mgr *keyprocessor.Manager) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kmip: invalid config: %w", err)
 	}
-	tlsCfg, err := buildTLSConfig(cfg.TLS)
+	tlsCfg, err := cfg.TLS.BuildTLSConfig()
 	if err != nil {
 		return nil, fmt.Errorf("kmip: build tls config: %w", err)
 	}

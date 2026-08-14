@@ -216,6 +216,9 @@ func TestAnnounceKey(t *testing.T) {
 		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		homeDir := t.TempDir()
+		// login with no auth
+		loginNoAuth(t, homeDir)
+
 		seedSelectedTenant(t, homeDir, tenantID, tenantName)
 
 		keyName := "cli-key-" + uuid.NewString()

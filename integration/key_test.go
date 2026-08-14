@@ -39,11 +39,15 @@ func TestGetKeys(t *testing.T) {
 		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
 	})
 
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	// create tenant
 	expTenantName := "tenant-" + uuid.NewString()
 	cmd := newCLICommand(
 		t.Context(),
-		t.TempDir(),
+		homeDir,
 		"create",
 		"tenant",
 		"--name", expTenantName,
@@ -67,7 +71,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"key",
 				"--tenant-id", tenantID,
@@ -100,7 +104,7 @@ func TestGetKeys(t *testing.T) {
 			unknownKeyID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"key",
 				"--tenant-id", tenantID,
@@ -119,7 +123,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"key",
 				"--tenant-id", tenantID,
@@ -138,7 +142,7 @@ func TestGetKeys(t *testing.T) {
 			unknownTenantID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"key",
 				"--tenant-id", unknownTenantID,
@@ -155,7 +159,7 @@ func TestGetKeys(t *testing.T) {
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
 			//given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
-			tmpDir := t.TempDir()
+			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
 
 			// when
@@ -179,10 +183,15 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
+			//given
+			// login with no auth
+			homeDir := t.TempDir()
+			loginNoAuth(t, homeDir)
+
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"key",
 				"--key-id", hierarchy.e.ID,
@@ -201,7 +210,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"parent-keys",
 				"--key-id", hierarchy.e.ID,
@@ -229,7 +238,7 @@ func TestGetKeys(t *testing.T) {
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
 			//given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
-			tmpDir := t.TempDir()
+			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
 
 			// when
@@ -258,7 +267,7 @@ func TestGetKeys(t *testing.T) {
 			unknownID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"parent-keys",
 				"--key-id", unknownID,
@@ -277,7 +286,7 @@ func TestGetKeys(t *testing.T) {
 			unknownTenantID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"parent-keys",
 				"--key-id", hierarchy.e.ID,
@@ -295,7 +304,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"parent-keys",
 				"--tenant-id", tenantID,
@@ -309,10 +318,15 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
+			//given
+			// login with no auth
+			homeDir := t.TempDir()
+			loginNoAuth(t, homeDir)
+
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"parent-keys",
 				"--key-id", hierarchy.e.ID,
@@ -331,7 +345,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"descendant-keys",
 				"--key-id", hierarchy.root.ID,
@@ -371,7 +385,7 @@ func TestGetKeys(t *testing.T) {
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
 			//given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
-			tmpDir := t.TempDir()
+			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
 
 			// when
@@ -401,7 +415,7 @@ func TestGetKeys(t *testing.T) {
 			unknownID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"descendant-keys",
 				"--key-id", unknownID,
@@ -420,7 +434,7 @@ func TestGetKeys(t *testing.T) {
 			unknownTenantID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"descendant-keys",
 				"--key-id", hierarchy.e.ID,
@@ -438,7 +452,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"descendant-keys",
 				"--tenant-id", tenantID,
@@ -452,10 +466,15 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
+			//given
+			// login with no auth
+			homeDir := t.TempDir()
+			loginNoAuth(t, homeDir)
+
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"descendant-keys",
 				"--key-id", hierarchy.e.ID,
@@ -474,7 +493,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -519,7 +538,7 @@ func TestGetKeys(t *testing.T) {
 		t.Run("should get all keys for tenant ascending order", func(t *testing.T) {
 			// when
 			cmd = newCLICommand(t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -565,7 +584,7 @@ func TestGetKeys(t *testing.T) {
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
 			//given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
-			tmpDir := t.TempDir()
+			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
 
 			// when
@@ -595,7 +614,7 @@ func TestGetKeys(t *testing.T) {
 			unknownTenantID := uuid.NewString()
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", unknownTenantID,
@@ -609,10 +628,15 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
+			//given
+			// login with no auth
+			homeDir := t.TempDir()
+			loginNoAuth(t, homeDir)
+
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--json",
@@ -628,7 +652,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -653,7 +677,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -681,7 +705,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -706,7 +730,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -731,7 +755,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -756,7 +780,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -782,7 +806,7 @@ func TestGetKeys(t *testing.T) {
 			// given
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -806,7 +830,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -833,7 +857,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,
@@ -850,7 +874,7 @@ func TestGetKeys(t *testing.T) {
 			// when
 			cmd = newCLICommand(
 				t.Context(),
-				t.TempDir(),
+				homeDir,
 				"get",
 				"keys",
 				"--tenant-id", tenantID,

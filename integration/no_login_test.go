@@ -37,7 +37,7 @@ func TestLogin(t *testing.T) {
 				createTestToken(t, tmpHome)
 			}
 
-			cmd := newCLICommand(t.Context(), tmpHome, "login")
+			cmd := newCLICommand(t.Context(), tmpHome, "login", "no-auth")
 
 			output, err := cmd.CombinedOutput()
 			assert.NoError(t, err)
@@ -49,7 +49,7 @@ func TestLogin(t *testing.T) {
 func TestLogin_CreateTokenFile(t *testing.T) {
 	tmpHome := t.TempDir()
 
-	cmd := newCLICommand(t.Context(), tmpHome, "login")
+	cmd := newCLICommand(t.Context(), tmpHome, "login", "no-auth")
 
 	_, err := cmd.CombinedOutput()
 	assert.NoError(t, err)
@@ -74,12 +74,12 @@ func TestLogin_Help(t *testing.T) {
 	}{
 		{
 			name:        "login help with long flag",
-			args:        []string{"login", "--help"},
+			args:        []string{"login", "no-auth", "--help"},
 			expContains: "Authenticate with the Krypton server",
 		},
 		{
 			name:        "login help with short flag",
-			args:        []string{"login", "-h"},
+			args:        []string{"login", "no-auth", "-h"},
 			expContains: "Authenticate with the Krypton server",
 		},
 	}
@@ -103,7 +103,7 @@ func createTestToken(t *testing.T, homeDir string) {
 	assert.NoError(t, err)
 
 	token := authn.Token{
-		Type:      "bearer",
+		Type:      authn.NoAuth,
 		Value:     []byte("test-token-value"),
 		ExpiredAt: 9999999999,
 		Attributes: map[string]any{

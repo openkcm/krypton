@@ -30,12 +30,16 @@ func TestCreateTenant(t *testing.T) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	t.Run("creates tenant with name only", func(t *testing.T) {
 		// given
 		expName := "tenant-" + uuid.NewString()
 
 		// when `kr create tenant --name <name> --json --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--json", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", expName, "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -71,7 +75,7 @@ func TestCreateTenant(t *testing.T) {
 		}
 
 		// when `kr create tenant --name <name> --label env=production,team=platform --json --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", expName, "--label", labelArg.String(), "--json", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", expName, "--label", labelArg.String(), "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -93,7 +97,7 @@ func TestCreateTenant(t *testing.T) {
 		unknownAddr := "localhost:59999"
 
 		// when `kr create tenant --name test --server localhost:59999`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", "test", "--server", unknownAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", "test", "--server", unknownAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -108,10 +112,14 @@ func TestGetTenant(t *testing.T) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	t.Run("gets tenant by id", func(t *testing.T) {
 		// given - create a tenant first
 		tenantName := "tenant-" + uuid.NewString()
-		createCmd := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
+		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
 		if !assert.NoError(t, err) {
 			return
@@ -123,7 +131,7 @@ func TestGetTenant(t *testing.T) {
 		}
 
 		// when `kr get tenant <tenant-id> --json --server <server-addr>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", tenants[0].ID, "--json", "--server", serverAddr)
+		getCmd := newCLICommand(t.Context(), homeDir, "get", "tenant", tenants[0].ID, "--json", "--server", serverAddr)
 		getOutput, err := getCmd.CombinedOutput()
 
 		// then
@@ -141,7 +149,7 @@ func TestGetTenant(t *testing.T) {
 		nonExistentID := uuid.NewString()
 
 		// when `kr get tenant <non-existent-id> --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", nonExistentID, "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "get", "tenant", nonExistentID, "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -151,7 +159,7 @@ func TestGetTenant(t *testing.T) {
 
 	t.Run("fails without tenant id argument", func(t *testing.T) {
 		// when `kr get tenant --server <server-addr>` (missing tenant id)
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenant", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "get", "tenant", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -161,6 +169,10 @@ func TestGetTenant(t *testing.T) {
 }
 
 func TestListTenants(t *testing.T) {
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
 		// given
 		tenantStore := newTenantStore(t, nil)
@@ -169,7 +181,7 @@ func TestListTenants(t *testing.T) {
 		})
 
 		// when `kr get tenants --json --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "get", "tenants", "--json", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -188,16 +200,16 @@ func TestListTenants(t *testing.T) {
 		tenant1Name := "tenant-" + uuid.NewString()
 		tenant2Name := "tenant-" + uuid.NewString()
 
-		createCmd1 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant1Name, "--json", "--server", serverAddr)
+		createCmd1 := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenant1Name, "--json", "--server", serverAddr)
 		_, err := createCmd1.CombinedOutput()
 		assert.NoError(t, err)
 
-		createCmd2 := newCLICommand(t.Context(), t.TempDir(), "create", "tenant", "--name", tenant2Name, "--json", "--server", serverAddr)
+		createCmd2 := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenant2Name, "--json", "--server", serverAddr)
 		_, err = createCmd2.CombinedOutput()
 		assert.NoError(t, err)
 
 		// when `kr get tenants --json --server <server-addr>`
-		getCmd := newCLICommand(t.Context(), t.TempDir(), "get", "tenants", "--json", "--server", serverAddr)
+		getCmd := newCLICommand(t.Context(), homeDir, "get", "tenants", "--json", "--server", serverAddr)
 		output, err := getCmd.CombinedOutput()
 
 		// then
@@ -228,9 +240,12 @@ func TestSelectTenant(t *testing.T) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
 
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	t.Run("selects tenant by ID and persists config", func(t *testing.T) {
 		// given
-		homeDir := t.TempDir()
 		tenantName := "tenant-" + uuid.NewString()
 		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
@@ -261,7 +276,7 @@ func TestSelectTenant(t *testing.T) {
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
 		// when `kr select tenant <non-existent-id> --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", uuid.NewString(), "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "select", "tenant", uuid.NewString(), "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -271,7 +286,7 @@ func TestSelectTenant(t *testing.T) {
 
 	t.Run("fails when both ID and interactive flag provided", func(t *testing.T) {
 		// when `kr select tenant <id> -i --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "some-id", "-i", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "select", "tenant", "some-id", "-i", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then
@@ -281,7 +296,7 @@ func TestSelectTenant(t *testing.T) {
 
 	t.Run("fails when no ID and not interactive", func(t *testing.T) {
 		// when `kr select tenant --server <server-addr>`
-		cmd := newCLICommand(t.Context(), t.TempDir(), "select", "tenant", "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "select", "tenant", "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then

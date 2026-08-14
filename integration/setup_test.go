@@ -21,7 +21,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
@@ -67,6 +66,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+// setupCLI builds the CLI binary and sets up coverage directory. Returns cleanup functions.
 func setupCLI() ([]func(), error) {
 	ctx := context.Background()
 	var cleanupFns []func()
@@ -93,6 +93,7 @@ func setupCLI() ([]func(), error) {
 	return cleanupFns, buildCmd.Run()
 }
 
+// setupPostgres starts a PostgreSQL container and sets the global connection string. Returns cleanup functions.
 func setupPostgres() ([]func(), error) {
 	ctx := context.Background()
 	var cleanupFns []func()
@@ -114,6 +115,7 @@ func setupPostgres() ([]func(), error) {
 	return cleanupFns, err
 }
 
+// runCleanups executes cleanup functions in reverse order.
 func runCleanups(cleanups []func()) {
 	for _, v := range slices.Backward(cleanups) {
 		v()
@@ -131,7 +133,7 @@ func newCLICommand(ctx context.Context, homeDir string, args ...string) *exec.Cm
 	return cmd
 }
 
-// newTenantStore creates a tenant store
+// newTenantStore creates a tenant store.
 func newTenantStore(t *testing.T, db *sql.DB) store.Tenant {
 	t.Helper()
 	if db == nil {
@@ -164,24 +166,20 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	ctx := t.Context()
 
 	db, err := sql.Open("postgres", pgConnStr)
-	if err != nil {
-		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
-	}
+	require.NoError(t, err, "failed to connect to PostgreSQL")
 
 	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 
 	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
 	if err != nil {
 		db.Close()
-		assert.FailNowf(t, "failed to create test database", "error: %v", err)
+		require.NoError(t, err, "failed to create test database")
 	}
 	db.Close()
 
-	pgConStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
-	sqlDB, err := sql.Open("postgres", pgConStr)
-	if err != nil {
-		assert.FailNowf(t, "failed to connect to test database", "error: %v", err)
-	}
+	connStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
+	sqlDB, err := sql.Open("postgres", connStr)
+	require.NoError(t, err, "failed to connect to test database")
 
 	t.Cleanup(func() {
 		sqlDB.Close()
@@ -196,7 +194,7 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	// migrate
 	require.NoError(t, storesql.Migrate(ctx, sqlDB))
 
-	return sqlDB, pgConStr
+	return sqlDB, connStr
 }
 
 // RegisterFunc is a function that registers services to a gRPC server.
@@ -245,6 +243,7 @@ func defaultTestHierarchy() spec.KeyHierarchy {
 	}
 }
 
+// noopJobPreparer is a job preparer that only assigns a UUID if missing.
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
@@ -265,11 +264,16 @@ type testPKI struct {
 	serverKeyPath  string
 	clientCerts    map[string]testClientCert
 }
+
+// testClientCert holds a client certificate and key in PEM format along with their file paths.
 type testClientCert struct {
-	certPEM []byte
-	keyPEM  []byte
+	certPEM     []byte
+	certPEMPath string
+	keyPEM      []byte
+	keyPEMPath  string
 }
 
+// newTestPKI generates a self-contained CA, server certificate, and client certificates for mTLS testing.
 func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	t.Helper()
 
@@ -298,26 +302,34 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 		serverKeyPEM:  serverKeyPEM,
 		clientCerts:   make(map[string]testClientCert, len(clientCNs)),
 	}
+	dir := t.TempDir()
+
 	for _, cn := range clientCNs {
 		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil)
-		pki.clientCerts[cn] = testClientCert{certPEM: certPEM, keyPEM: keyPEM}
+		tc := testClientCert{certPEM: certPEM, keyPEM: keyPEM}
+
+		tc.certPEMPath = filepath.Join(dir, cn+"-cert.pem")
+		writeFile(t, tc.certPEMPath, certPEM)
+
+		tc.keyPEMPath = filepath.Join(dir, cn+"-key.pem")
+		writeFile(t, tc.keyPEMPath, keyPEM)
+
+		pki.clientCerts[cn] = tc
 	}
 
-	dir := t.TempDir()
 	pki.caCertFilePath = filepath.Join(dir, "ca.pem")
 	writeFile(t, pki.caCertFilePath, caPEM)
 
-	certPath := filepath.Join(dir, "server.pem")
-	pki.serverCertPath = certPath
-	writeFile(t, certPath, pki.serverCertPEM)
+	pki.serverCertPath = filepath.Join(dir, "server.pem")
+	writeFile(t, pki.serverCertPath, pki.serverCertPEM)
 
-	keyPath := filepath.Join(dir, "server-key.pem")
-	pki.serverKeyPath = keyPath
-	writeFile(t, keyPath, pki.serverKeyPEM)
+	pki.serverKeyPath = filepath.Join(dir, "server-key.pem")
+	writeFile(t, pki.serverKeyPath, pki.serverKeyPEM)
 
 	return pki
 }
 
+// issueCert creates and signs a certificate (client or server) using the given CA.
 func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, subject pkix.Name, client bool, ips []net.IP) (certPEM, keyPEM []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -346,6 +358,7 @@ func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, 
 	return certPEM, keyPEM
 }
 
+// writeFile writes data to path with 0600 permissions, failing the test on error.
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
 	require.NoError(t, os.WriteFile(path, data, 0o600), "write %s", path)

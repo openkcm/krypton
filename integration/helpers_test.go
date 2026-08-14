@@ -40,6 +40,14 @@ type testEnvWithRootKMIP struct {
 	PreConfiguredKMIPClient *kmipclient.Client
 }
 
+// testEnvWithRootMTLS holds the shared infrastructure for tests that require a root server with mTLS.
+type testEnvWithRootMTLS struct {
+	clientCertPath string
+	clientKeyPath  string
+	caPath         string
+	serverAddr     string
+}
+
 // testKey is a 32-byte AES-256 key for testing.
 var testKey = []byte("01234567890123456789012345678901")
 
@@ -96,6 +104,43 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 	}
 }
 
+// setupRootEnvWithMTLS builds the root binary, starts a root server with mTLS enabled,
+// and returns a testEnvWithRootMTLS with both mTLS and non-mTLS gRPC connections.
+func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
+	t.Helper()
+
+	_, rootConnStr := createDatabase(t)
+	rootPort := freePort(t)
+
+	pki := newTestPKI(t, "some-client")
+	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath)
+
+	rootBinary := buildBinary(t, "root", "../cmd/root")
+
+	rootCmd := createCmd(t, rootBinary, []string{
+		"ROOT_CONFIG_PATH=" + rootCfgPath,
+		"DATABASE_URL=" + rootConnStr,
+		"SERVER_PORT=" + rootPort,
+		"KRYPTON_ROOT_KEY=" + testKeyBase64,
+	})
+	require.NoError(t, rootCmd.Start(), "failed to start root server")
+	waitForPort(t, rootPort)
+
+	cliCert, ok := pki.clientCerts["some-client"]
+	require.True(t, ok, "no client cert for CN %q", "some-client")
+
+	serverAddr := "127.0.0.1:" + rootPort
+
+	return &testEnvWithRootMTLS{
+		serverAddr:     serverAddr,
+		clientCertPath: cliCert.certPEMPath,
+		clientKeyPath:  cliCert.keyPEMPath,
+		caPath:         pki.caCertFilePath,
+	}
+}
+
+// setupRootEnvWithKMIP builds the root binary, starts a root server with KMIP enabled,
+// pre-configures a tenant, and returns a testEnvWithRootKMIP with gRPC and KMIP clients.
 func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 	t.Helper()
 
@@ -145,6 +190,7 @@ func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 	}
 }
 
+// writeRootConfig writes a root config YAML to a temp file and returns the path.
 func writeRootConfig(t *testing.T, agentName, agentPort string) string {
 	t.Helper()
 
@@ -304,6 +350,70 @@ kmip:
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
 
+// writeRootConfigWithMTLS writes a root config YAML with mTLS settings to a temp file and returns the path.
+func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath string) string {
+	t.Helper()
+
+	content := fmt.Sprintf(`name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K2
+selector_labels:
+  environment: production
+key_bindings:
+  K0:
+    sealer:
+      name: root-sealer
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
+  K1:
+    crypto:
+      name: kek-crypto
+      type: aes256gcm
+    vault:
+      name: k1-vault
+      type: unsafe-sqlite-memory
+  K2:
+    crypto:
+      name: dek-crypto
+      type: aes256gcm
+    vault:
+      name: k2-vault
+      type: unsafe-sqlite-memory
+hierarchy:
+  name: test-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: kek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K2
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+server:
+  tls:
+    server_cert: %s
+    server_key: %s
+    client_ca: %s
+`, serverCertPath, serverKeyPath, clientCAPath)
+
+	return writeTempFile(t, "root-config-*.yaml", content)
+}
+
 // writeAgentConfig writes an agent bootstrap config YAML to a temp file and returns the path.
 func writeAgentConfig(t *testing.T, agentName, rootAddress string) string {
 	t.Helper()
@@ -438,6 +548,7 @@ func awaitKeyProcessingStatusViaGRPC(t *testing.T, cli keys.KeyServiceClient, ke
 	}
 }
 
+// writeTempFile writes content to a temporary file matching pattern and returns the path.
 func writeTempFile(t *testing.T, pattern, content string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -452,6 +563,7 @@ func writeTempFile(t *testing.T, pattern, content string) string {
 	return f.Name()
 }
 
+// seedSelectedTenant writes a state.lock file in homeDir/.krypton with the given tenant selection.
 func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
 	t.Helper()
 	dir := filepath.Join(homeDir, ".krypton")
@@ -460,6 +572,7 @@ func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
 }
 
+// waitTCPReady polls the given address until a TCP connection succeeds or 2s timeout is exceeded.
 func waitTCPReady(t *testing.T, addr string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -477,6 +590,7 @@ func waitTCPReady(t *testing.T, addr string) {
 	t.Fatalf("KMIP server did not start listening on %s in time", addr)
 }
 
+// dialAs creates a KMIP client authenticated with the certificate for the given CN.
 func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Client {
 	t.Helper()
 	cc, ok := pki.clientCerts[cn]
@@ -489,4 +603,19 @@ func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Clie
 	)
 	require.NoError(t, err, "Dial as %s", cn)
 	return c
+}
+
+// loginNoAuth runs the CLI command `krypton login no-auth` in a temp dir and asserts it succeeds.
+func loginNoAuth(t *testing.T, homeDir string) {
+	t.Helper()
+
+	cmd := newCLICommand(
+		t.Context(),
+		homeDir,
+		"login",
+		"no-auth")
+	output, err := cmd.CombinedOutput()
+
+	// then
+	require.NoError(t, err, "command should succeed, output: %s", string(output))
 }

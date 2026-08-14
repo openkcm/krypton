@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/kmip"
+	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -14,10 +15,10 @@ func TestConfigValidate(t *testing.T) {
 	valid := kmip.Config{
 		BindAddr: "0.0.0.0",
 		Port:     5696,
-		TLS: kmip.TLSConfig{
-			ServerCert: "/etc/tls/server.pem",
-			ServerKey:  "/etc/tls/server-key.pem",
-			ClientCA:   "/etc/tls/ca.pem",
+		TLS: tlsconf.Server{
+			Cert:     "/etc/tls/server.pem",
+			Key:      "/etc/tls/server-key.pem",
+			ClientCA: "/etc/tls/ca.pem",
 		},
 	}
 
@@ -30,8 +31,8 @@ func TestConfigValidate(t *testing.T) {
 		{"empty bind addr", func(c *kmip.Config) { c.BindAddr = "" }, kmip.ErrEmptyBindAddr},
 		{"port too low", func(c *kmip.Config) { c.Port = 0 }, kmip.ErrInvalidPort},
 		{"port too high", func(c *kmip.Config) { c.Port = 65536 }, kmip.ErrInvalidPort},
-		{"empty server cert", func(c *kmip.Config) { c.TLS.ServerCert = "" }, kmip.ErrEmptyServerCert},
-		{"empty server key", func(c *kmip.Config) { c.TLS.ServerKey = "" }, kmip.ErrEmptyServerKey},
+		{"empty server cert", func(c *kmip.Config) { c.TLS.Cert = "" }, kmip.ErrEmptyServerCert},
+		{"empty server key", func(c *kmip.Config) { c.TLS.Key = "" }, kmip.ErrEmptyServerKey},
 		{"empty client CA", func(c *kmip.Config) { c.TLS.ClientCA = "" }, kmip.ErrEmptyClientCA},
 	}
 	for _, tt := range tests {

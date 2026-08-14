@@ -1,4 +1,4 @@
-package kmip_test
+package tlsconf_test
 
 import (
 	"crypto/tls"
@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/kmip"
+	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
-func TestBuildTLSConfig(t *testing.T) {
+func TestClientBuildTLSConfig(t *testing.T) {
 	t.Parallel()
 	pki := newTestPKI(t, "tenant-a")
 
@@ -21,38 +21,42 @@ func TestBuildTLSConfig(t *testing.T) {
 	caPath := filepath.Join(dir, "client-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, pki.caPEM, 0o600))
 
-	cfg := kmip.TLSConfig{ServerCert: certPath, ServerKey: keyPath, ClientCA: caPath}
-	got, err := kmip.BuildTLSConfig(cfg)
+	cfg := tlsconf.Client{Cert: certPath, Key: keyPath, ServerCA: caPath}
+
+	got, err := cfg.BuildTLSConfig()
 	require.NoError(t, err)
-	assert.Equal(t, tls.RequireAndVerifyClientCert, got.ClientAuth)
 	assert.GreaterOrEqual(t, got.MinVersion, uint16(tls.VersionTLS12))
-	assert.NotNil(t, got.ClientCAs)
+	assert.NotNil(t, got.RootCAs)
 	assert.Len(t, got.Certificates, 1)
 }
 
-func TestBuildTLSConfigErrors(t *testing.T) {
+func TestClientBuildTLSConfigErrors(t *testing.T) {
 	t.Parallel()
 	pki := newTestPKI(t)
 	dir := t.TempDir()
 	certPath, keyPath := pki.writeServerFiles(t, dir)
 
-	t.Run("missing server cert", func(t *testing.T) {
+	t.Run("missing client cert", func(t *testing.T) {
 		t.Parallel()
-		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
-			ServerCert: filepath.Join(dir, "nope.pem"),
-			ServerKey:  keyPath,
-			ClientCA:   filepath.Join(dir, "ca.pem"),
-		})
+
+		cfg := tlsconf.Client{
+			Cert:     filepath.Join(dir, "nope.pem"),
+			Key:      keyPath,
+			ServerCA: filepath.Join(dir, "ca.pem"),
+		}
+		_, err := cfg.BuildTLSConfig()
 		assert.Error(t, err)
 	})
 
 	t.Run("missing CA", func(t *testing.T) {
 		t.Parallel()
-		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
-			ServerCert: certPath,
-			ServerKey:  keyPath,
-			ClientCA:   filepath.Join(dir, "no-ca.pem"),
-		})
+		cfg := tlsconf.Client{
+			Cert:     certPath,
+			Key:      keyPath,
+			ServerCA: filepath.Join(dir, "no-ca.pem"),
+		}
+
+		_, err := cfg.BuildTLSConfig()
 		assert.Error(t, err)
 	})
 
@@ -60,11 +64,12 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 		t.Parallel()
 		badCA := filepath.Join(dir, "bad-ca.pem")
 		require.NoError(t, os.WriteFile(badCA, []byte("not a certificate"), 0o600))
-		_, err := kmip.BuildTLSConfig(kmip.TLSConfig{
-			ServerCert: certPath,
-			ServerKey:  keyPath,
-			ClientCA:   badCA,
-		})
-		assert.ErrorIs(t, err, kmip.ErrClientCAInvalid)
+		cfg := tlsconf.Client{
+			Cert:     certPath,
+			Key:      keyPath,
+			ServerCA: badCA,
+		}
+		_, err := cfg.BuildTLSConfig()
+		assert.ErrorIs(t, err, tlsconf.ErrCAInvalid)
 	})
 }

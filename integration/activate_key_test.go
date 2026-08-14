@@ -29,8 +29,13 @@ func TestActivateKey(t *testing.T) {
 
 	ctx := t.Context()
 
+	// login with no auth
+	homeDir := t.TempDir()
+	loginNoAuth(t, homeDir)
+
 	t.Run("should activate root key (K0)", func(t *testing.T) {
 		// given
+
 		// announce key root key
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
@@ -45,7 +50,7 @@ func TestActivateKey(t *testing.T) {
 		// when
 		cmd := newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -89,7 +94,6 @@ func TestActivateKey(t *testing.T) {
 		kmipResp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
 		assert.Error(t, err)
 		assert.Nil(t, kmipResp)
-
 	})
 
 	t.Run("should activate intermediate keys (K1)", func(t *testing.T) {
@@ -108,7 +112,7 @@ func TestActivateKey(t *testing.T) {
 		// activate root key
 		cmd := newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -135,7 +139,7 @@ func TestActivateKey(t *testing.T) {
 		// activate k1 key
 		cmd = newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -189,7 +193,7 @@ func TestActivateKey(t *testing.T) {
 		// activate root key
 		cmd := newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -215,7 +219,7 @@ func TestActivateKey(t *testing.T) {
 		// activate k1 key
 		cmd = newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -242,7 +246,7 @@ func TestActivateKey(t *testing.T) {
 		// activate k2 key
 		cmd = newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -296,7 +300,7 @@ func TestActivateKey(t *testing.T) {
 		// activate root key
 		cmd := newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -311,7 +315,7 @@ func TestActivateKey(t *testing.T) {
 		// activate root key
 		cmd = newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -330,7 +334,7 @@ func TestActivateKey(t *testing.T) {
 		// when
 		cmd := newCLICommand(
 			t.Context(),
-			t.TempDir(),
+			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
@@ -379,7 +383,7 @@ func TestActivateKey(t *testing.T) {
 				// when
 				cmd := newCLICommand(
 					t.Context(),
-					t.TempDir(),
+					homeDir,
 					tt.args...,
 				)
 

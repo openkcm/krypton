@@ -15,6 +15,7 @@ import (
 	"github.com/openkcm/orbital"
 	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	_ "github.com/lib/pq"
@@ -119,8 +120,15 @@ func main() {
 	})
 	handleErr(err, "failed to create key processor manager")
 
+	var grpcOpts []grpc.ServerOption
+	if cfg.Server.TLS != nil {
+		tlsConfig, err := cfg.Server.TLS.BuildTLSConfig()
+		handleErr(err, "failed to build TLS config for gRPC server")
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+
 	// gRPC server setup for admin API
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpcOpts...)
 	admin.RegisterTenantServiceServer(grpcServer, admin.NewTenantService(tenantStore))
 
 	// gRPC server setup for agent API
