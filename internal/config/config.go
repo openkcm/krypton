@@ -9,6 +9,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 var (
@@ -39,8 +40,21 @@ type KryptonRoot struct {
 	Address Address `yaml:"address"`
 }
 
+// ServerConfig represents the configuration for the server, including mTLS settings.
+type ServerConfig struct {
+	TLS *tlsconf.Server `yaml:"tls,omitempty"`
+}
+
+// AuthenticationConfig holds the configuration for client authentication, specifically allowed Common Names (CNs) for mTLS.
+type AuthenticationConfig struct {
+	// AllowedCNs is a list of Common Names (CNs) that are permitted to authenticate with the server.
+	AllowedCNs []string `yaml:"allowed_cns,omitempty"`
+}
+
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
+	Server         ServerConfig               `yaml:"server"`
+	Authentication AuthenticationConfig       `yaml:"authentication"`
 	Name           string                     `yaml:"name"`
 	Role           spec.AgentRole             `yaml:"role"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`

@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/cli/output"
 	"github.com/openkcm/krypton/cli/state"
@@ -64,11 +62,7 @@ func announceKeyCmd() *cobra.Command {
 				return err
 			}
 
-			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
-			conn, err := grpc.NewClient(
-				serverAddr,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
+			conn, err := newConnection(cmd.Context(), serverAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect: %w", err)
 			}

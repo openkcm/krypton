@@ -9,14 +9,16 @@ import (
 	"testing"
 	"time"
 
-	ovhkmip "github.com/ovh/kmip-go"
 	"github.com/ovh/kmip-go/kmipclient"
 	"github.com/ovh/kmip-go/kmipserver"
 	"github.com/ovh/kmip-go/payloads"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ovhkmip "github.com/ovh/kmip-go"
+
 	"github.com/openkcm/krypton/internal/kmip"
+	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 func TestServerIntegration(t *testing.T) {
@@ -36,10 +38,10 @@ func TestServerIntegration(t *testing.T) {
 	cfg := kmip.Config{
 		BindAddr: "127.0.0.1",
 		Port:     freePort(t),
-		TLS: kmip.TLSConfig{
-			ServerCert: serverCert,
-			ServerKey:  serverKey,
-			ClientCA:   pki.caCertFile,
+		TLS: tlsconf.Server{
+			Cert:     serverCert,
+			Key:      serverKey,
+			ClientCA: pki.caCertFile,
 		},
 	}
 	srv, err := kmip.NewServer(cfg, env.mgr)

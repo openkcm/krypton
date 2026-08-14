@@ -12,8 +12,6 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
-var BuildTLSConfig = buildTLSConfig
-
 // KeyIdentifier re-exports the parsed identifier for authorizer tests.
 type KeyIdentifier = keyIdentifier
 

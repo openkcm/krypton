@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+
+	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 // DefaultPort is the IANA-assigned KMIP TCP port.
@@ -20,17 +22,9 @@ var (
 
 // Config configures the KMIP server.
 type Config struct {
-	BindAddr string    `yaml:"bind_addr"`
-	Port     int       `yaml:"port"`
-	TLS      TLSConfig `yaml:"tls"`
-}
-
-// TLSConfig holds file paths for the server keypair and the CA bundle used
-// to verify client certificates. mTLS is mandatory.
-type TLSConfig struct {
-	ServerCert string `yaml:"server_cert"`
-	ServerKey  string `yaml:"server_key"`
-	ClientCA   string `yaml:"client_ca"`
+	BindAddr string         `yaml:"bind_addr"`
+	Port     int            `yaml:"port"`
+	TLS      tlsconf.Server `yaml:"tls"`
 }
 
 // Validate checks structural correctness. It does not touch the filesystem;
@@ -42,10 +36,10 @@ func (c *Config) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("%w: got %d", ErrInvalidPort, c.Port)
 	}
-	if c.TLS.ServerCert == "" {
+	if c.TLS.Cert == "" {
 		return ErrEmptyServerCert
 	}
-	if c.TLS.ServerKey == "" {
+	if c.TLS.Key == "" {
 		return ErrEmptyServerKey
 	}
 	if c.TLS.ClientCA == "" {

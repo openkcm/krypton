@@ -4,9 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/cli/output"
@@ -21,11 +19,7 @@ func getTenantCmd() *cobra.Command {
 		Short: "Get a tenant by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
-			conn, err := grpc.NewClient(
-				serverAddr,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
+			conn, err := newConnection(cmd.Context(), serverAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect: %w", err)
 			}
@@ -67,11 +61,7 @@ func getTenantsCmd() *cobra.Command {
 		Short: "Get tenants",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// TODO: insecure.NewCredentials is a temporary workaround until TLS is configured
-			conn, err := grpc.NewClient(
-				serverAddr,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
+			conn, err := newConnection(cmd.Context(), serverAddr)
 			if err != nil {
 				return fmt.Errorf("failed to connect: %w", err)
 			}
