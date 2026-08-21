@@ -2,8 +2,8 @@ package agents_test
 
 import (
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -28,7 +28,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should update the status of the registered to deregistered", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
@@ -73,7 +73,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should update the status of the healthy to deregistered", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
@@ -117,7 +117,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should update the status of the unhealthy to deregistered", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
@@ -169,7 +169,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should not return error even if the registration is not found in the store", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := agentStore.Get(ctx, store.GetAgentQuery{
@@ -199,7 +199,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should not return error if deregister is sent multiple times", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
@@ -223,7 +223,7 @@ func TestDeregister(t *testing.T) {
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
@@ -255,7 +255,7 @@ func TestDeregister(t *testing.T) {
 
 		// when
 		_, err := cli.Deregister(ctx, &agents.DeregisterAgentRequest{
-			InstanceId: uuid.NewString(),
+			InstanceId: uuid.New().String(),
 		})
 
 		// then

@@ -18,14 +18,16 @@ import (
 	"slices"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
 
 	_ "github.com/lib/pq"
+
+	guuid "github.com/google/uuid"
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
@@ -222,8 +224,8 @@ func defaultTestHierarchy() spec.KeyHierarchy {
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil {
-		job.ID = uuid.Must(uuid.NewUUID())
+	if job.ID == guuid.Nil {
+		job.ID = guuid.UUID(uuid.NewV7())
 	}
 	return job, nil
 }

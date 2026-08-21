@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,8 +34,8 @@ func TestManagerSeal(t *testing.T) {
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
-			TenantID:  uuid.NewString(),
-			KeyID:     uuid.NewString(),
+			TenantID:  uuid.New().String(),
+			KeyID:     uuid.New().String(),
 			Plaintext: newTestData(t, []byte("data")),
 		})
 
@@ -47,8 +47,8 @@ func TestManagerSeal(t *testing.T) {
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
 		// given
 		kvStoreErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -73,8 +73,8 @@ func TestManagerSeal(t *testing.T) {
 
 	t.Run("should return error if no usable key version found", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -98,8 +98,8 @@ func TestManagerSeal(t *testing.T) {
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
 		// given
 		storeErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -131,8 +131,8 @@ func TestManagerSeal(t *testing.T) {
 	t.Run("should return error if key is not active", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "K1",
 			LifeCycleState: model.KeyLifeCycleDeactivated,
 		}
@@ -165,8 +165,8 @@ func TestManagerSeal(t *testing.T) {
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "UNKNOWN_KIND",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -203,12 +203,12 @@ func TestManagerSeal(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
 		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
-		key := model.NewKey(tenantID, "enc-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		key := model.NewKey(tenantID, "enc-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
@@ -245,8 +245,8 @@ func TestManagerUnseal(t *testing.T) {
 
 		// when
 		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
-			TenantID:   uuid.NewString(),
-			KeyID:      uuid.NewString(),
+			TenantID:   uuid.New().String(),
+			KeyID:      uuid.New().String(),
 			Ciphertext: newTestData(t, []byte("data")),
 		})
 
@@ -258,8 +258,8 @@ func TestManagerUnseal(t *testing.T) {
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
 		// given
 		kvStoreErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -285,8 +285,8 @@ func TestManagerUnseal(t *testing.T) {
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
 		// given
 		storeErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -316,8 +316,8 @@ func TestManagerUnseal(t *testing.T) {
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "UNKNOWN_KIND",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -354,12 +354,12 @@ func TestManagerUnseal(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
 		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
-		key := model.NewKey(tenantID, "dec-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		key := model.NewKey(tenantID, "dec-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
@@ -409,8 +409,8 @@ func TestRootManager(t *testing.T) {
 
 		// when
 		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
-			TenantID:  uuid.NewString(),
-			KeyID:     uuid.NewString(),
+			TenantID:  uuid.New().String(),
+			KeyID:     uuid.New().String(),
 			Plaintext: newTestData(t, []byte("data")),
 		})
 
@@ -422,8 +422,8 @@ func TestRootManager(t *testing.T) {
 	t.Run("should return error if key is not active", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			LifeCycleState: model.KeyLifeCycleDeactivated,
 		}
 		ks := &keyStoreWrapper{}
@@ -450,7 +450,7 @@ func TestRootManager(t *testing.T) {
 		tenantID := createTenant(t, db)
 		keyStore := storesql.NewKeyStore(db)
 
-		key := model.NewKey(tenantID, "root-key-"+uuid.NewString(), "K0", nil, "test", nil)
+		key := model.NewKey(tenantID, "root-key-"+uuid.New().String(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
@@ -487,13 +487,13 @@ func TestManagerHierarchy(t *testing.T) {
 		kvStore := storesql.NewKeyVersionStore(db)
 
 		// root level
-		rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 		activateKey(t, db, rootKey)
 		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		// mid level
-		midKey := model.NewKey(tenantID, "mid-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+		midKey := model.NewKey(tenantID, "mid-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), midKey))
 		activateKey(t, db, midKey)
 		midKV := model.NewKeyVersion(tenantID, midKey.ID, 1, &rootKey.ID, nil)
@@ -506,7 +506,7 @@ func TestManagerHierarchy(t *testing.T) {
 		midMgr := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K1": *midProc})
 
 		// leaf level
-		leafKey := model.NewKey(tenantID, "leaf-"+uuid.NewString(), "K2", &midKey.ID, "test", nil)
+		leafKey := model.NewKey(tenantID, "leaf-"+uuid.New().String(), "K2", &midKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), leafKey))
 		activateKey(t, db, leafKey)
 		leafKV := model.NewKeyVersion(tenantID, leafKey.ID, 1, &midKey.ID, &midKV.Version)
@@ -900,8 +900,8 @@ func TestManagerDescribeKey(t *testing.T) {
 	t.Run("should return key metadata for an active key", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "K1",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -940,8 +940,8 @@ func TestManagerDescribeKey(t *testing.T) {
 	t.Run("should resolve the latest usable version when version is zero", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "K1",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -983,8 +983,8 @@ func TestManagerDescribeKey(t *testing.T) {
 
 		// when
 		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
-			TenantID:   uuid.NewString(),
-			KeyID:      uuid.NewString(),
+			TenantID:   uuid.New().String(),
+			KeyID:      uuid.New().String(),
 			KeyVersion: 1,
 		})
 
@@ -1003,8 +1003,8 @@ func TestManagerDescribeKey(t *testing.T) {
 
 		// when
 		resp, err := c.DescribeKey(t.Context(), keyprocessor.DescribeKeyRequest{
-			TenantID:   uuid.NewString(),
-			KeyID:      uuid.NewString(),
+			TenantID:   uuid.New().String(),
+			KeyID:      uuid.New().String(),
 			KeyVersion: 1,
 		})
 
@@ -1016,8 +1016,8 @@ func TestManagerDescribeKey(t *testing.T) {
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
 		// given
 		storeErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -1046,8 +1046,8 @@ func TestManagerDescribeKey(t *testing.T) {
 	t.Run("should return error if key is not active", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "K1",
 			LifeCycleState: model.KeyLifeCycleDeactivated,
 		}
@@ -1079,8 +1079,8 @@ func TestManagerDescribeKey(t *testing.T) {
 	t.Run("should return error if no algorithm registered for key kind", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "UNKNOWN_KIND",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -1142,7 +1142,7 @@ func newTestSealerSpec(t *testing.T) *sealerprovider.Spec {
 	_, err := rand.Read(key)
 	require.NoError(t, err)
 
-	envName := "TEST_SEALER_KEY_" + uuid.NewString()[:8]
+	envName := "TEST_SEALER_KEY_" + uuid.New().String()[:8]
 	t.Setenv(envName, base64.StdEncoding.EncodeToString(key))
 
 	return &sealerprovider.Spec{
@@ -1176,8 +1176,8 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
 		// given
 		kvStoreErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, q store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -1218,8 +1218,8 @@ func TestManagerExportSecret(t *testing.T) {
 
 				// when
 				sec, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
-					TenantID:   uuid.NewString(),
-					KeyID:      uuid.NewString(),
+					TenantID:   uuid.New().String(),
+					KeyID:      uuid.New().String(),
 					KeyVersion: tc.keyVersion,
 				})
 
@@ -1252,8 +1252,8 @@ func TestManagerExportSecret(t *testing.T) {
 
 				// when
 				_, err := c.ExportSecret(t.Context(), keyprocessor.ExportSecretRequest{
-					TenantID:   uuid.NewString(),
-					KeyID:      uuid.NewString(),
+					TenantID:   uuid.New().String(),
+					KeyID:      uuid.New().String(),
 					KeyVersion: tc.keyVersion,
 				})
 
@@ -1277,8 +1277,8 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
 		// given
 		storeErr := errors.New("database unavailable")
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		kvs := &keyVersionStoreWrapper{}
 		kvs.listKeyVersionsFn = func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
@@ -1309,8 +1309,8 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should return error if key is not active", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "K1",
 			LifeCycleState: model.KeyLifeCycleDeactivated,
 		}
@@ -1342,8 +1342,8 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
 		// given
 		key := &model.Key{
-			ID:             uuid.NewString(),
-			TenantID:       uuid.NewString(),
+			ID:             uuid.New().String(),
+			TenantID:       uuid.New().String(),
 			Kind:           "UNKNOWN_KIND",
 			LifeCycleState: model.KeyLifeCycleActive,
 		}
@@ -1475,7 +1475,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{ps.parentKey.Kind: *processor})
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.NewString(), 1, &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.New().String(), 1, &ps.parentKey.ID, nil)
 
 		// when
 		resp, err := mgr.GenerateAndSealSecret(t.Context(), keyprocessor.GenerateAndSealSecretRequest{
@@ -1506,12 +1506,12 @@ func setupExportStack(t *testing.T) *exportSetup {
 	keyStore := storesql.NewKeyStore(db)
 	kvStore := storesql.NewKeyVersionStore(db)
 
-	rootKey := model.NewKey(tenantID, "root-"+uuid.NewString(), "K0", nil, "test", nil)
+	rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
 	require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
 	activateKey(t, db, rootKey)
 	rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
-	key := model.NewKey(tenantID, "exp-key-"+uuid.NewString(), "K1", &rootKey.ID, "test", nil)
+	key := model.NewKey(tenantID, "exp-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 	require.NoError(t, keyStore.CreateKey(t.Context(), key))
 	activateKey(t, db, key)
 

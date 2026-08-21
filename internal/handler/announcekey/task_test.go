@@ -2,15 +2,17 @@ package announcekey_test
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	guuid "github.com/google/uuid"
 
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/pkg/model"
@@ -33,7 +35,7 @@ func (t *taskCreateOverride) CreateKey(_ context.Context, _ model.Key) error {
 func executeTask(t *testing.T, h orbital.HandlerFunc, data []byte) orbital.TaskResponse {
 	t.Helper()
 	return orbital.ExecuteHandler(t.Context(), h, orbital.TaskRequest{
-		TaskID: uuid.Must(uuid.NewUUID()),
+		TaskID: guuid.UUID(uuid.NewV7()),
 		Type:   announcekey.TaskType,
 		Data:   data,
 	})
@@ -47,7 +49,7 @@ func TestTaskHandler_HappyPath(t *testing.T) {
 
 	// Use a fresh key id (the tenant is reused).
 	data := announcekey.TaskData{
-		KeyID:    uuid.NewString(),
+		KeyID:    uuid.New().String(),
 		TenantID: key.TenantID,
 		Kind:     "K0",
 		Name:     "freshly-announced",
@@ -77,8 +79,8 @@ func TestTaskHandler_AlreadyExists_Idempotent(t *testing.T) {
 	handler := announcekey.NewTaskHandler(&taskCreateOverride{createErr: store.ErrKeyAlreadyExists})
 
 	data := announcekey.TaskData{
-		KeyID:    uuid.NewString(),
-		TenantID: uuid.NewString(),
+		KeyID:    uuid.New().String(),
+		TenantID: uuid.New().String(),
 		Kind:     "K0",
 		Name:     "dupe",
 		Target:   "agent",
@@ -95,8 +97,8 @@ func TestTaskHandler_ForeignKeyViolation_TerminalFail(t *testing.T) {
 	handler := announcekey.NewTaskHandler(&taskCreateOverride{createErr: fkErr})
 
 	data := announcekey.TaskData{
-		KeyID:    uuid.NewString(),
-		TenantID: uuid.NewString(),
+		KeyID:    uuid.New().String(),
+		TenantID: uuid.New().String(),
 		Kind:     "K0",
 		Name:     "fk",
 		Target:   "agent",
@@ -113,8 +115,8 @@ func TestTaskHandler_TransientError_RetriesWithBackoff(t *testing.T) {
 	handler := announcekey.NewTaskHandler(&taskCreateOverride{createErr: errors.New("network blip")})
 
 	data := announcekey.TaskData{
-		KeyID:    uuid.NewString(),
-		TenantID: uuid.NewString(),
+		KeyID:    uuid.New().String(),
+		TenantID: uuid.New().String(),
 		Kind:     "K0",
 		Name:     "transient",
 		Target:   "agent",

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 
@@ -16,7 +16,7 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
-var validUUID = uuid.NewString()
+var validUUID = uuid.New().String()
 var invalidUUID = "invalid-uuid"
 
 type stubTenantStore struct {

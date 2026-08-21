@@ -2,7 +2,7 @@ package securemem
 
 import (
 	"encoding"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"

@@ -1,13 +1,13 @@
 package integration
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
@@ -36,7 +36,7 @@ func TestCreateTenant(t *testing.T) {
 
 	t.Run("creates tenant with name only", func(t *testing.T) {
 		// given
-		expName := "tenant-" + uuid.NewString()
+		expName := "tenant-" + uuid.New().String()
 
 		// when `kr create tenant --name <name> --json --server <server-addr>`
 		cmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", expName, "--json", "--server", serverAddr)
@@ -57,7 +57,7 @@ func TestCreateTenant(t *testing.T) {
 
 	t.Run("creates tenant with name and labels", func(t *testing.T) {
 		// given
-		expName := "tenant-" + uuid.NewString()
+		expName := "tenant-" + uuid.New().String()
 		expLabels := map[string]string{
 			"env":  "production",
 			"team": "platform",
@@ -118,7 +118,7 @@ func TestGetTenant(t *testing.T) {
 
 	t.Run("gets tenant by id", func(t *testing.T) {
 		// given - create a tenant first
-		tenantName := "tenant-" + uuid.NewString()
+		tenantName := "tenant-" + uuid.New().String()
 		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
 		if !assert.NoError(t, err) {
@@ -146,7 +146,7 @@ func TestGetTenant(t *testing.T) {
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
 		// given
-		nonExistentID := uuid.NewString()
+		nonExistentID := uuid.New().String()
 
 		// when `kr get tenant <non-existent-id> --server <server-addr>`
 		cmd := newCLICommand(t.Context(), homeDir, "get", "tenant", nonExistentID, "--server", serverAddr)
@@ -197,8 +197,8 @@ func TestListTenants(t *testing.T) {
 			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
 
-		tenant1Name := "tenant-" + uuid.NewString()
-		tenant2Name := "tenant-" + uuid.NewString()
+		tenant1Name := "tenant-" + uuid.New().String()
+		tenant2Name := "tenant-" + uuid.New().String()
 
 		createCmd1 := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenant1Name, "--json", "--server", serverAddr)
 		_, err := createCmd1.CombinedOutput()
@@ -246,7 +246,7 @@ func TestSelectTenant(t *testing.T) {
 
 	t.Run("selects tenant by ID and persists config", func(t *testing.T) {
 		// given
-		tenantName := "tenant-" + uuid.NewString()
+		tenantName := "tenant-" + uuid.New().String()
 		createCmd := newCLICommand(t.Context(), homeDir, "create", "tenant", "--name", tenantName, "--json", "--server", serverAddr)
 		createOutput, err := createCmd.CombinedOutput()
 		assert.NoError(t, err)
@@ -276,7 +276,7 @@ func TestSelectTenant(t *testing.T) {
 
 	t.Run("fails for non-existent tenant", func(t *testing.T) {
 		// when `kr select tenant <non-existent-id> --server <server-addr>`
-		cmd := newCLICommand(t.Context(), homeDir, "select", "tenant", uuid.NewString(), "--server", serverAddr)
+		cmd := newCLICommand(t.Context(), homeDir, "select", "tenant", uuid.New().String(), "--server", serverAddr)
 		output, err := cmd.CombinedOutput()
 
 		// then

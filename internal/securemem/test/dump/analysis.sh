@@ -29,7 +29,7 @@ set +x
 cd /app
 
 echo "👷 Building secret-runner"
-GOEXPERIMENT=runtimesecret go build -o ./tmp/$TRIGGER_ID internal/securemem/test/dump/main.go
+GOEXPERIMENT=runtimesecret go build -o ./tmp/$TRIGGER_ID ./internal/securemem/test/dump
 echo "🚀 Starting secret-runner in the background..."
 
 # Change to the secret-runner directory

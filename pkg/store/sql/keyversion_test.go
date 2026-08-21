@@ -3,8 +3,8 @@ package sql_test
 import (
 	"database/sql"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +28,7 @@ func TestCreateKeyVersion(t *testing.T) {
 	tenantStore := storesql.NewTenantStore(db)
 
 	tenant := createTenant(t, tenantStore)
-	key := model.NewKey(tenant.ID, "kv-create-key-"+uuid.NewString(), "K1", nil, "root", nil)
+	key := model.NewKey(tenant.ID, "kv-create-key-"+uuid.New().String(), "K1", nil, "root", nil)
 	require.NoError(t, keyStore.CreateKey(ctx, key))
 
 	t.Run("should create key version without parent", func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestCreateKeyVersion(t *testing.T) {
 
 	t.Run("should create key version with parent references", func(t *testing.T) {
 		// given
-		parentKeyID := uuid.NewString()
+		parentKeyID := uuid.New().String()
 		parentKeyVersion := 2
 		now := clock.Now()
 		kv := model.KeyVersion{
@@ -107,7 +107,7 @@ func TestCreateKeyVersion(t *testing.T) {
 		// given
 		now := clock.Now()
 		kv := model.KeyVersion{
-			TenantID:        uuid.NewString(),
+			TenantID:        uuid.New().String(),
 			KeyID:           key.ID,
 			Version:         1,
 			Revision:        0,
@@ -137,7 +137,7 @@ func TestListKeyVersions(t *testing.T) {
 	tenantStore := storesql.NewTenantStore(db)
 
 	tenant := createTenant(t, tenantStore)
-	key := model.NewKey(tenant.ID, "kv-list-key-"+uuid.NewString(), "K1", nil, "root", nil)
+	key := model.NewKey(tenant.ID, "kv-list-key-"+uuid.New().String(), "K1", nil, "root", nil)
 	require.NoError(t, keyStore.CreateKey(ctx, key))
 
 	// seed: version "1" with revisions 0, 1 (usable), 2 (re-wrapping)
@@ -378,7 +378,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 	t.Run("should update processing state", func(t *testing.T) {
 		//given
 		// seed: version "1" with revision 1 (usable)
-		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.NewString(), "K1", nil, "key-1", nil)
+		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.New().String(), "K1", nil, "key-1", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)})
@@ -413,7 +413,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 	t.Run("should return error if", func(t *testing.T) {
 		//given
 		// seed: version "1" with revision 1 (usable)
-		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.NewString(), "K1", nil, "key-2", nil)
+		key := model.NewKey(tenant.ID, "kv-update-key-"+uuid.New().String(), "K1", nil, "key-2", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)})
@@ -478,7 +478,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 			{
 				name: "key version does not exist with given tenant",
 				query: store.UpdateKeyVersionStatesQuery{
-					TenantID:            uuid.NewString(),
+					TenantID:            uuid.New().String(),
 					KeyID:               key.ID,
 					Version:             1,
 					Revision:            1,
@@ -492,7 +492,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 				name: "key version does not exist with given key",
 				query: store.UpdateKeyVersionStatesQuery{
 					TenantID:            tenant.ID,
-					KeyID:               uuid.NewString(),
+					KeyID:               uuid.New().String(),
 					Version:             1,
 					Revision:            1,
 					FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
@@ -513,7 +513,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 	})
 
 	t.Run("should return error if query input is invalid", func(t *testing.T) {
-		validUUID := uuid.NewString()
+		validUUID := uuid.New().String()
 		tts := []struct {
 			name  string
 			query store.UpdateKeyVersionStatesQuery

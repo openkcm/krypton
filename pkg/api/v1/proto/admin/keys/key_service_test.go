@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,7 +80,7 @@ func TestAnnounceKey(t *testing.T) {
 		res, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -105,7 +105,7 @@ func TestAnnounceKey(t *testing.T) {
 		cli := setup.cli
 		tenant := createTenant(t, setup.tenantStore)
 
-		name := "idempotent-" + uuid.NewString()
+		name := "idempotent-" + uuid.New().String()
 		first, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
@@ -135,11 +135,11 @@ func TestAnnounceKey(t *testing.T) {
 
 		// Pre-seed the key so the lookup-by-name fallback (after orbital
 		// dedupe) finds it.
-		name := "racer-" + uuid.NewString()
+		name := "racer-" + uuid.New().String()
 		seed := model.NewKey(tenant.ID, name, "K0", nil, "root", nil)
 		seed.KeyProcessingState = model.KeyProcessingState{
 			Status: model.KeyProcessingInProgress,
-			JobID:  uuid.NewString(),
+			JobID:  uuid.New().String(),
 		}
 		require.NoError(t, keyStore.CreateKey(ctx, seed))
 
@@ -163,14 +163,14 @@ func TestAnnounceKey(t *testing.T) {
 
 		// PrepareJob is only called for non-root-managed keys, so seed an
 		// Active K0 parent and announce a K1 against the agent target.
-		parent := model.NewKey(tenant.ID, "boom-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		parent := model.NewKey(tenant.ID, "boom-parent-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "boom-" + uuid.NewString(),
+			Name:       "boom-" + uuid.New().String(),
 			ParentId:   parent.ID,
 			TargetName: "agent",
 		})
@@ -189,7 +189,7 @@ func TestAnnounceKey(t *testing.T) {
 		parentRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "parent-" + uuid.NewString(),
+			Name:       "parent-" + uuid.New().String(),
 			TargetName: "",
 		})
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestAnnounceKey(t *testing.T) {
 		res, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "child-" + uuid.NewString(),
+			Name:       "child-" + uuid.New().String(),
 			ParentId:   parentRes.GetKey().GetId(),
 			TargetName: "agent",
 		})
@@ -216,9 +216,9 @@ func TestAnnounceKey(t *testing.T) {
 		cli := setup.cli
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   uuid.NewString(),
+			TenantId:   uuid.New().String(),
 			Kind:       "K0",
-			Name:       "no-tenant-" + uuid.NewString(),
+			Name:       "no-tenant-" + uuid.New().String(),
 			TargetName: "",
 		})
 		require.Error(t, err)
@@ -234,7 +234,7 @@ func TestAnnounceKey(t *testing.T) {
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "KX",
-			Name:       "bad-kind-" + uuid.NewString(),
+			Name:       "bad-kind-" + uuid.New().String(),
 			TargetName: "",
 		})
 		require.Error(t, err)
@@ -250,7 +250,7 @@ func TestAnnounceKey(t *testing.T) {
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "rootless-child-" + uuid.NewString(),
+			Name:       "rootless-child-" + uuid.New().String(),
 			TargetName: "agent",
 		})
 		require.Error(t, err)
@@ -265,14 +265,14 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed an Active K0 to use as the (illegal) parent.
-		other := model.NewKey(tenant.ID, "other-root-"+uuid.NewString(), "K0", nil, "root", nil)
+		other := model.NewKey(tenant.ID, "other-root-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, other))
 		activateKey(t, keyStore, other.ID, tenant.ID)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "rooted-root-" + uuid.NewString(),
+			Name:       "rooted-root-" + uuid.New().String(),
 			ParentId:   other.ID,
 			TargetName: "",
 		})
@@ -289,8 +289,8 @@ func TestAnnounceKey(t *testing.T) {
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "missing-parent-" + uuid.NewString(),
-			ParentId:   uuid.NewString(),
+			Name:       "missing-parent-" + uuid.New().String(),
+			ParentId:   uuid.New().String(),
 			TargetName: "agent",
 		})
 		require.Error(t, err)
@@ -305,13 +305,13 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed a K0 without activating it.
-		parent := model.NewKey(tenant.ID, "inactive-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		parent := model.NewKey(tenant.ID, "inactive-parent-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "child-of-inactive-" + uuid.NewString(),
+			Name:       "child-of-inactive-" + uuid.New().String(),
 			ParentId:   parent.ID,
 			TargetName: "agent",
 		})
@@ -327,14 +327,14 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed an Active K0; try announcing K2 directly under it (skipping K1).
-		parent := model.NewKey(tenant.ID, "skip-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		parent := model.NewKey(tenant.ID, "skip-parent-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K2",
-			Name:       "skip-child-" + uuid.NewString(),
+			Name:       "skip-child-" + uuid.New().String(),
 			ParentId:   parent.ID,
 			TargetName: "agent",
 		})
@@ -350,8 +350,8 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Pre-seed a key already in Failed state from a prior attempt.
-		failedJobID := uuid.NewString()
-		key := model.NewKey(tenant.ID, "retry-me-"+uuid.NewString(), "K0", nil, "root", nil)
+		failedJobID := uuid.New().String()
+		key := model.NewKey(tenant.ID, "retry-me-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
 			ID:        key.ID,
@@ -387,11 +387,11 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Seed an Active K0 parent so the agent-managed K1 announce passes validation.
-		parent := model.NewKey(tenant.ID, "spy-parent-"+uuid.NewString(), "K0", nil, "root", nil)
+		parent := model.NewKey(tenant.ID, "spy-parent-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parent))
 		activateKey(t, keyStore, parent.ID, tenant.ID)
 
-		name := "spy-fresh-" + uuid.NewString()
+		name := "spy-fresh-" + uuid.New().String()
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
@@ -415,7 +415,7 @@ func TestAnnounceKey(t *testing.T) {
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-no-job-" + uuid.NewString(),
+			Name:       "root-no-job-" + uuid.New().String(),
 			TargetName: "",
 		})
 		require.NoError(t, err)
@@ -431,8 +431,8 @@ func TestAnnounceKey(t *testing.T) {
 		keyStore := setup.keyStore
 		tenant := createTenant(t, setup.tenantStore)
 
-		failedJobID := uuid.NewString()
-		key := model.NewKey(tenant.ID, "spy-retry-"+uuid.NewString(), "K0", nil, "root", nil)
+		failedJobID := uuid.New().String()
+		key := model.NewKey(tenant.ID, "spy-retry-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
 			ID:        key.ID,
@@ -465,7 +465,7 @@ func TestAnnounceKey(t *testing.T) {
 		// or the key was created by some other path) should be retried as a
 		// fresh job with ExternalID = key.ID — no :retry: suffix because there
 		// is no previous failed JobID to scope against.
-		key := model.NewKey(tenant.ID, "pending-"+uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, "pending-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		resp, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -500,8 +500,8 @@ func TestAnnounceKey(t *testing.T) {
 		// Two simultaneous retries for the same Failed key compute the same
 		// ExternalID and the second PrepareJob should return ErrJobAlreadyExists,
 		// which the service swallows and returns the existing key.
-		failedJobID := uuid.NewString()
-		key := model.NewKey(tenant.ID, "racy-retry-"+uuid.NewString(), "K0", nil, "root", nil)
+		failedJobID := uuid.New().String()
+		key := model.NewKey(tenant.ID, "racy-retry-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
 			ID:        key.ID,
@@ -556,15 +556,15 @@ func TestAnnounceKey(t *testing.T) {
 		tenant := createTenant(t, setup.tenantStore)
 
 		// Seed two distinct active K0 parents under this tenant.
-		parentA := model.NewKey(tenant.ID, "conflict-parent-a-"+uuid.NewString(), "K0", nil, "root", nil)
+		parentA := model.NewKey(tenant.ID, "conflict-parent-a-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parentA))
 		activateKey(t, keyStore, parentA.ID, tenant.ID)
 
-		parentB := model.NewKey(tenant.ID, "conflict-parent-b-"+uuid.NewString(), "K0", nil, "root", nil)
+		parentB := model.NewKey(tenant.ID, "conflict-parent-b-"+uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, parentB))
 		activateKey(t, keyStore, parentB.ID, tenant.ID)
 
-		name := "conflicting-child-" + uuid.NewString()
+		name := "conflicting-child-" + uuid.New().String()
 		// First announce binds (tenant, name) to parentA.
 		_, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
@@ -607,7 +607,7 @@ func TestGetKeyService(t *testing.T) {
 		created, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "get-me-" + uuid.NewString(),
+			Name:       "get-me-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "staging"},
 		})
@@ -634,7 +634,7 @@ func TestGetKeyService(t *testing.T) {
 
 		// when
 		resp, err := cli.GetKey(ctx, &keypb.GetKeyRequest{
-			Id:       uuid.NewString(),
+			Id:       uuid.New().String(),
 			TenantId: tenant.ID,
 		})
 
@@ -659,8 +659,8 @@ func TestGetKeyService(t *testing.T) {
 
 		// when
 		resp, err := cli.GetKey(ctx, &keypb.GetKeyRequest{
-			Id:       uuid.NewString(),
-			TenantId: uuid.NewString(),
+			Id:       uuid.New().String(),
+			TenantId: uuid.New().String(),
 		})
 
 		// then
@@ -719,7 +719,7 @@ func TestGetParentKeys(t *testing.T) {
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// when
 		res, err := cli.GetParentKeys(ctx, &keypb.GetParentKeysRequest{
-			Id:       uuid.NewString(),
+			Id:       uuid.New().String(),
 			TenantId: tenant.ID,
 		})
 
@@ -744,8 +744,8 @@ func TestGetParentKeys(t *testing.T) {
 
 		// when
 		resp, err := cli.GetParentKeys(ctx, &keypb.GetParentKeysRequest{
-			Id:       uuid.NewString(),
-			TenantId: uuid.NewString(),
+			Id:       uuid.New().String(),
+			TenantId: uuid.New().String(),
 		})
 
 		// then
@@ -836,7 +836,7 @@ func TestGetDescendantKeys(t *testing.T) {
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// when
 		res, err := cli.GetDescendantKeys(ctx, &keypb.GetDescendantKeysRequest{
-			Id:       uuid.NewString(),
+			Id:       uuid.New().String(),
 			TenantId: tenant.ID,
 		})
 
@@ -861,8 +861,8 @@ func TestGetDescendantKeys(t *testing.T) {
 
 		// when
 		resp, err := cli.GetDescendantKeys(ctx, &keypb.GetDescendantKeysRequest{
-			Id:       uuid.NewString(),
-			TenantId: uuid.NewString(),
+			Id:       uuid.New().String(),
+			TenantId: uuid.New().String(),
 		})
 
 		// then
@@ -1010,7 +1010,7 @@ func TestListKeys(t *testing.T) {
 
 	t.Run("should return key not found error for an unknown tenantID", func(t *testing.T) {
 		// given
-		unknownTenantID := uuid.NewString()
+		unknownTenantID := uuid.New().String()
 
 		// when
 		res, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
@@ -1038,7 +1038,7 @@ func TestListKeys(t *testing.T) {
 
 		// when
 		resp, err := cli.ListKeys(ctx, &keypb.ListKeysRequest{
-			TenantId: uuid.NewString(),
+			TenantId: uuid.New().String(),
 		})
 
 		// then

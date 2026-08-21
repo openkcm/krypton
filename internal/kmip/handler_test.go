@@ -6,10 +6,11 @@ import (
 	"errors"
 	"testing"
 
-	ovhkmip "github.com/ovh/kmip-go"
 	"github.com/ovh/kmip-go/payloads"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	ovhkmip "github.com/ovh/kmip-go"
 
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/securemem"

@@ -11,8 +11,8 @@ import (
 	"math/big"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -65,7 +65,7 @@ func TestLogin(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.NewString(), Name: "Test Tenant"})
+		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.New().String(), Name: "Test Tenant"})
 
 		// then
 		require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestLogin(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.NewString(), Name: "Test Tenant"})
+		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.New().String(), Name: "Test Tenant"})
 
 		// then
 		require.Error(t, err)
@@ -120,7 +120,7 @@ func TestLogin(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.NewString(), Name: "Test Tenant"})
+		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.New().String(), Name: "Test Tenant"})
 
 		// then
 		require.Error(t, err)
@@ -147,7 +147,7 @@ func TestPrepareTenant(t *testing.T) {
 	t.Run("should successfully prepare tenant", func(t *testing.T) {
 		// given
 		// when
-		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.NewString(), Name: "Test Tenant"})
+		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: uuid.New().String(), Name: "Test Tenant"})
 
 		// then
 		require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestPrepareTenant(t *testing.T) {
 
 	t.Run("should be idempotent when preparing the same tenant", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
+		tenantID := uuid.New().String()
 
 		// first call to prepare tenant
 		resp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -199,8 +199,8 @@ func TestImportKey(t *testing.T) {
 
 	t.Run("should successfully import key", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -223,8 +223,8 @@ func TestImportKey(t *testing.T) {
 
 	t.Run("should successfully import key for nil aad", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -248,8 +248,8 @@ func TestImportKey(t *testing.T) {
 		// given
 		// when
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:   uuid.NewString(),
-			KeyID:      uuid.NewString(),
+			TenantID:   uuid.New().String(),
+			KeyID:      uuid.New().String(),
 			KeyVersion: 1,
 			AAD:        []byte{4, 3, 2, 1},
 		})
@@ -262,8 +262,8 @@ func TestImportKey(t *testing.T) {
 
 	t.Run("should be idempotent when importing the same key", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -298,8 +298,8 @@ func TestImportKey(t *testing.T) {
 
 	t.Run("should fail to import key for non-prepared tenant", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// when
 		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
@@ -342,8 +342,8 @@ func TestExportKey(t *testing.T) {
 
 	t.Run("should successfully export key", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -377,8 +377,8 @@ func TestExportKey(t *testing.T) {
 
 	t.Run("should successfully export key for nil aad", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -411,8 +411,8 @@ func TestExportKey(t *testing.T) {
 
 	t.Run("should fail to export key for non-prepared tenant", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// when
 		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
@@ -429,8 +429,8 @@ func TestExportKey(t *testing.T) {
 
 	t.Run("should fail to export key for non-existing key", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -477,8 +477,8 @@ func TestDestroyKey(t *testing.T) {
 
 	t.Run("should successfully destroy key version", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -530,8 +530,8 @@ func TestDestroyKey(t *testing.T) {
 
 	t.Run("should not return error when destroying key version for non-prepared tenant", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// when
 		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
@@ -547,8 +547,8 @@ func TestDestroyKey(t *testing.T) {
 
 	t.Run("should not return error when destroying key version for non-existing key", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		keyID := uuid.NewString()
+		tenantID := uuid.New().String()
+		keyID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -617,8 +617,8 @@ func TestDestroyTenant(t *testing.T) {
 
 	t.Run("should successfully destroy tenant with keys", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
-		kID := uuid.NewString()
+		tenantID := uuid.New().String()
+		kID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -656,7 +656,7 @@ func TestDestroyTenant(t *testing.T) {
 
 	t.Run("should successfully destroy tenant with no keys", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
+		tenantID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -675,7 +675,7 @@ func TestDestroyTenant(t *testing.T) {
 
 	t.Run("should be idempotent when destroying the same tenant", func(t *testing.T) {
 		// given
-		tenantID := uuid.NewString()
+		tenantID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -702,9 +702,9 @@ func TestDestroyTenant(t *testing.T) {
 
 	t.Run("should not destroy other tenants when destroying a tenant", func(t *testing.T) {
 		// given
-		tenantID1 := uuid.NewString()
-		tenantID2 := uuid.NewString()
-		kID := uuid.NewString()
+		tenantID1 := uuid.New().String()
+		tenantID2 := uuid.New().String()
+		kID := uuid.New().String()
 
 		// prepare tenant 1
 		tResp1, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID1, Name: "Test Tenant 1"})
