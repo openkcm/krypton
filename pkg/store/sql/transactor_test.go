@@ -7,10 +7,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -196,5 +198,97 @@ func TestTransaction(t *testing.T) {
 		require.Error(t, err)
 		_, err = keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}
+
+type transitionInput struct {
+	KeyID    string
+	TenantID string
+	To       model.KeyLifeCycleState
+}
+
+type keyLifecycleValidator struct{}
+
+var _ store.Validator[transitionInput] = keyLifecycleValidator{}
+
+func (keyLifecycleValidator) Validate(ctx context.Context, s store.Stores, in transitionInput) error {
+	key, err := s.Keys.GetKeyByID(ctx, in.KeyID, in.TenantID)
+	if err != nil {
+		return err
+	}
+	return keylifecycle.ValidateTransition(key.LifeCycleState, in.To)
+}
+
+func TestValidatedTx(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	require.NoError(t, storesql.Migrate(ctx, db))
+
+	tenantStore := storesql.NewTenantStore(db)
+	keyStore := storesql.NewKeyStore(db)
+	transactor := storesql.NewTransactor(db)
+	tenant := createTenant(t, tenantStore)
+
+	vt := store.NewValidatedTx(transactor, keyLifecycleValidator{})
+
+	t.Run("validation succeeds", func(t *testing.T) {
+		// given: a freshly-created key sits in PreActivation.
+		key := model.NewKey(tenant.ID, "vt-allowed-"+uuid.NewString(), "K0", nil, "root", nil)
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+		require.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState,
+			"test assumes model.NewKey defaults to PreActivation")
+
+		in := transitionInput{
+			KeyID:    key.ID,
+			TenantID: key.TenantID,
+			To:       model.KeyLifeCycleActive,
+		}
+
+		// when: transition allowed by the state machine (PreActivation -> Active).
+		err = vt.Run(ctx, in, func(ctx context.Context, s store.Stores, in transitionInput) error {
+			return s.Keys.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+				ID:       in.KeyID,
+				TenantID: in.TenantID,
+				NewState: in.To,
+			})
+		},
+		)
+
+		// then: the transition committed and is visible outside the transaction.
+		assert.NoError(t, err)
+		got, err := keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleActive, got.LifeCycleState)
+	})
+
+	t.Run("validation fails", func(t *testing.T) {
+		// given: a freshly-created key sits in Compromised.
+		key := model.NewKey(tenant.ID, "vt-allowed-"+uuid.NewString(), "K0", nil, "root", nil)
+		key.LifeCycleState = model.KeyLifeCycleCompromised
+		require.NoError(t, keyStore.CreateKey(ctx, key))
+
+		in := transitionInput{
+			KeyID:    key.ID,
+			TenantID: key.TenantID,
+			To:       model.KeyLifeCycleActive,
+		}
+
+		// when: transition disallowed by the state machine (Compromised -> Active).
+		err = vt.Run(ctx, in, func(ctx context.Context, s store.Stores, in transitionInput) error {
+			return s.Keys.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+				ID:       in.KeyID,
+				TenantID: in.TenantID,
+				NewState: in.To,
+			})
+		},
+		)
+
+		// then: the transition is aborted.
+		assert.Error(t, err)
+		got, err := keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleCompromised, got.LifeCycleState)
 	})
 }
