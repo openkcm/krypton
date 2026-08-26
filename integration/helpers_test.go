@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -21,6 +23,8 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
+
+const localHost = "127.0.0.1"
 
 // testEnvironment holds the shared infrastructure for tests that require root + agent.
 type testEnvironment struct {
@@ -82,13 +86,12 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 		"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 		"AGENT_DATABASE_URL=" + agentConnStr,
 		"AGENT_PORT=" + agentPort,
-		"ROOT_SERVER_PORT=" + rootPort,
 	})
 	require.NoError(t, agentCmd.Start(), "failed to start agent")
 	waitForPort(t, agentPort)
 
 	conn, err := grpc.NewClient(
-		"localhost:"+rootPort,
+		localAddress(rootPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
@@ -128,7 +131,7 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	waitForPort(t, rootPort)
 
 	return &testEnvWithRootMTLS{
-		serverAddr: "127.0.0.1:" + rootPort,
+		serverAddr: localAddress(rootPort),
 		allowedCN:  allowedCN,
 		pki:        pki,
 	}
@@ -345,6 +348,102 @@ kmip:
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
 
+// writeRootAgentConfigWithMTLS writes a root config YAML with mTLS settings for an agent to a temp file and returns the path.
+func writeRootAgentConfigWithMTLS(t *testing.T, agentName, serverCertPath, serverKeyPath, clientCAPath string) string {
+	t.Helper()
+
+	content := fmt.Sprintf(`name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K1
+selector_labels:
+  environment: production
+key_bindings:
+  K0:
+    sealer:
+      name: root-sealer
+      type: aes256gcm-staticsecret
+      config:
+        secret:
+          type: envvar
+          config:
+            name: KRYPTON_ROOT_KEY
+  K1:
+    crypto:
+      name: kek-crypto
+      type: aes256gcm
+    vault:
+      name: root-vault
+      type: unsafe-sqlite-memory
+hierarchy:
+  name: test-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: kek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K2
+      role: tek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K3
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+  segments:
+    - name: %s
+      segment:
+        start_kind: K2
+        end_kind: K3
+      key_bindings:
+        K2:
+          sealer:
+            name: agent-sealer
+            type: aes256gcm-staticsecret
+            config:
+              secret:
+                type: envvar
+                config:
+                  name: KRYPTON_TEK_KEY
+          crypto:
+            name: agent-crypto
+            type: aes256gcm
+          vault:
+            name: agent-vault
+            type: unsafe-sqlite-memory
+          parent_key_provider:
+            agent_name: root
+        K3:
+          crypto:
+            name: agent-dek-crypto
+            type: aes256gcm
+          vault:
+            name: agent-dek-vault
+            type: unsafe-sqlite-memory
+      selector_labels:
+        cloud: aws
+server:
+  tls:
+    server_cert: %s
+    server_key: %s
+    client_ca: %s
+authentication:
+  allowed_cns:
+    - %s`, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName)
+
+	return writeTempFile(t, "root-config-*.yaml", content)
+}
+
 // writeRootConfigWithMTLS writes a root config YAML with mTLS settings to a temp file and returns the path.
 func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath, cn string) string {
 	t.Helper()
@@ -424,6 +523,25 @@ krypton_root:
     type: grpc
     url: %s
 `, agentName, rootAddress)
+
+	return writeTempFile(t, "agent-config-*.yaml", content)
+}
+
+// writeAgentConfigWithMTLS writes an agent bootstrap config YAML with mTLS settings to a temp file and returns the path.
+func writeAgentConfigWithMTLS(t *testing.T, agentName, rootAddress, clientCertPath, clientKeyPath, serverCAPath string) string {
+	t.Helper()
+	content := fmt.Sprintf(`name: %s
+role: agent
+krypton_root:
+  address:
+    type: grpc
+    url: %s
+client:
+  tls:
+    client_cert: %s
+    client_key: %s
+    server_ca: %s
+`, agentName, rootAddress, clientCertPath, clientKeyPath, serverCAPath)
 
 	return writeTempFile(t, "agent-config-*.yaml", content)
 }
@@ -598,7 +716,7 @@ func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Clie
 		addr,
 		kmipclient.WithRootCAPem(pki.caPEM),
 		kmipclient.WithClientCertPEM(cc.certPEM, cc.keyPEM),
-		kmipclient.WithServerName("127.0.0.1"),
+		kmipclient.WithServerName(localHost),
 	)
 	require.NoError(t, err, "Dial as %s", cn)
 	return c
@@ -617,4 +735,86 @@ func loginNoAuth(t *testing.T, homeDir string) {
 
 	// then
 	require.NoError(t, err, "command should succeed, output: %s", string(output))
+}
+
+// waitForPort polls the given port until a TCP connection succeeds or 10s timeout is exceeded.
+func waitForPort(t *testing.T, port string) {
+	t.Helper()
+
+	ctx := t.Context()
+
+	dialer := net.Dialer{Timeout: time.Second}
+	require.Eventually(t, func() bool {
+		conn, err := dialer.DialContext(ctx, "tcp", localAddress(port))
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}, 10*time.Second, 100*time.Millisecond, "server did not become ready on port "+port)
+}
+
+// buildBinary builds a Go binary from sourceDir and returns the path to the built binary.
+func buildBinary(t *testing.T, binaryName string, sourceDir string) string {
+	t.Helper()
+
+	ctx := t.Context()
+
+	binaryPath := filepath.Join(t.TempDir(), binaryName)
+
+	buildArgs := []string{"build", "-o", binaryPath}
+	if coverDir != "" {
+		buildArgs = append(buildArgs, "-cover", "-covermode=atomic")
+	}
+	buildArgs = append(buildArgs, sourceDir)
+
+	buildCmd := exec.CommandContext(ctx, "go", buildArgs...)
+	buildCmd.Stderr = os.Stderr
+
+	err := buildCmd.Run()
+	require.NoError(t, err, "failed to build agent binary")
+
+	return binaryPath
+}
+
+// freePort is useful for tests that need to start a server on a random port.
+func freePort(t *testing.T) string {
+	t.Helper()
+
+	var lc net.ListenConfig
+	l, err := lc.Listen(t.Context(), "tcp", localAddress("0"))
+	require.NoError(t, err, "failed to find a free port")
+
+	defer l.Close()
+
+	addr, ok := l.Addr().(*net.TCPAddr)
+	require.True(t, ok, "unexpected address type: %T", l.Addr())
+
+	return strconv.Itoa(addr.Port)
+}
+
+// createCmd creates an exec.Cmd for the given binary path and environment variables, and sets up cleanup.
+func createCmd(t *testing.T, path string, env []string) *exec.Cmd {
+	t.Helper()
+	ctx := t.Context()
+	cmd := exec.CommandContext(ctx, path)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stdout
+	cmd.Env = append(os.Environ(),
+		env...,
+	)
+	if coverDir != "" {
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
+
+	t.Cleanup(func() {
+		cmd.Process.Kill() //nolint:errcheck
+		cmd.Wait()         //nolint:errcheck
+	})
+
+	return cmd
+}
+
+func localAddress(port string) string {
+	return net.JoinHostPort(localHost, port)
 }

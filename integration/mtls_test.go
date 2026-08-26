@@ -129,7 +129,7 @@ func TestMTLS(t *testing.T) {
 		homeDir := t.TempDir()
 
 		// issue a cert signed by the trusted CA but with a CN not in the allowlist
-		nonAllowedCert, nonAllowedKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: "non-allowed-cn"}, true, nil)
+		nonAllowedCert, nonAllowedKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: "non-allowed-cn"}, true, nil, false)
 		nonAllowedCertPath := filepath.Join(homeDir, "non_allowed_cert.pem")
 		nonAllowedKeyPath := filepath.Join(homeDir, "non_allowed_key.pem")
 
@@ -156,7 +156,7 @@ func TestMTLS(t *testing.T) {
 		homeDir := t.TempDir()
 
 		// issue a new cert signed by the trusted CA with the allowed CN
-		validCert, validKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: env.allowedCN}, true, nil)
+		validCert, validKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: env.allowedCN}, true, nil, false)
 		validCertPath := filepath.Join(homeDir, "valid_cert.pem")
 		validKeyPath := filepath.Join(homeDir, "valid_key.pem")
 

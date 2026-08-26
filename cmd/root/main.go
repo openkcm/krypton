@@ -219,7 +219,7 @@ func initAgentWorker(agentStore *storesql.AgentStore) *worker.Scheduler {
 		// Optionally, we can also delete deregistered agents after some time to keep the database clean.
 		err3 := agentStore.Delete(ctx, store.DeleteAgentQuery{
 			Status:             core.AgentRegistrationStatusDeregistered,
-			HeartbeatThreshold: time.Second * 91,
+			HeartbeatThreshold: time.Second * 120,
 		})
 
 		return errors.Join(err1, err2, err3)

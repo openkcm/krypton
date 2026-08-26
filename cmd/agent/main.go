@@ -16,6 +16,7 @@ import (
 	"github.com/openkcm/orbital"
 	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	_ "github.com/lib/pq"
@@ -39,9 +40,18 @@ func main() {
 
 	cfg := loadConfig()
 
+	grpcOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	if cfg.Client.TLS != nil {
+		tlsConf, err := cfg.Client.TLS.BuildTLSConfig()
+		handleErr(err, "failed to build TLS config")
+		grpcOpts[0] = grpc.WithTransportCredentials(credentials.NewTLS(tlsConf))
+	}
+
 	conn, err := grpc.NewClient(
 		cfg.KryptonRoot.Address.URL,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpcOpts...,
 	)
 	handleErr(err, "failed to connect to root server")
 	defer conn.Close()
@@ -126,7 +136,7 @@ func loadConfig() *config.AgentBootstrapConfig {
 	if portOverride := os.Getenv("ROOT_SERVER_PORT"); portOverride != "" {
 		_, err := strconv.Atoi(portOverride)
 		handleErr(err, "invalid ROOT_SERVER_PORT")
-		cfg.KryptonRoot.Address.URL = "localhost:" + portOverride
+		cfg.KryptonRoot.Address.URL = "127.0.0.1:" + portOverride
 	}
 
 	return cfg
