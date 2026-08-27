@@ -9,6 +9,8 @@ import (
 	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/pem"
+	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"os"
@@ -56,7 +58,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	pgCleanups, err := setupPostgres()
+	pgContainer, pgCleanups, err := setupPostgres()
 	cleanups = append(cleanups, pgCleanups...)
 	if err != nil {
 		runCleanups(cleanups)
@@ -64,6 +66,16 @@ func TestMain(m *testing.M) {
 	}
 
 	exitCode := m.Run()
+
+	if exitCode != 0 {
+		ctx := context.Background()
+		reader, err := pgContainer.Logs(ctx)
+		if err == nil {
+			logs, _ := io.ReadAll(reader)
+			fmt.Fprintf(os.Stderr, "\n=== PostgreSQL container logs ===\n%s\n", string(logs))
+		}
+	}
+
 	runCleanups(cleanups)
 	os.Exit(exitCode)
 }
@@ -95,8 +107,14 @@ func setupCLI() ([]func(), error) {
 	return cleanupFns, buildCmd.Run()
 }
 
+type stdoutLogConsumer struct{}
+
+func (s *stdoutLogConsumer) Accept(l testcontainers.Log) {
+	fmt.Print(string(l.Content))
+}
+
 // setupPostgres starts a PostgreSQL container and sets the global connection string. Returns cleanup functions.
-func setupPostgres() ([]func(), error) {
+func setupPostgres() (*postgres.PostgresContainer, []func(), error) {
 	ctx := context.Background()
 	var cleanupFns []func()
 
@@ -110,15 +128,16 @@ func setupPostgres() ([]func(), error) {
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			hc.ShmSize = 512 * 1024 * 1024 // 256MB
 		}),
+		testcontainers.WithLogConsumers(&stdoutLogConsumer{}),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cleanupFns = append(cleanupFns, func() { _ = pgContainer.Terminate(ctx) })
 
 	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
 
-	return cleanupFns, err
+	return pgContainer, cleanupFns, err
 }
 
 // runCleanups executes cleanup functions in reverse order.
