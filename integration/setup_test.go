@@ -108,7 +108,7 @@ func setupPostgres() ([]func(), error) {
 		postgres.BasicWaitStrategies(),
 		testcontainers.WithCmdArgs("-c", "max_connections=200"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.ShmSize = 256 * 1024 * 1024 // 256MB
+			hc.ShmSize = 512 * 1024 * 1024 // 256MB
 		}),
 	)
 	if err != nil {
