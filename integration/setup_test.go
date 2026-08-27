@@ -125,8 +125,7 @@ func setupPostgres() (*postgres.PostgresContainer, []func(), error) {
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.ShmSize = 256 * 1024 * 1024           // 256MB
-			hc.Resources.Memory = 1024 * 1024 * 1024 // 1GB (up from 512MB)
+			hc.ShmSize = 256 * 1024 * 1024 // 256MB
 		}),
 		testcontainers.WithCmdArgs(
 			"-c", "shared_buffers=64MB", // down from default 128MB
