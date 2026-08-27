@@ -125,10 +125,14 @@ func setupPostgres() (*postgres.PostgresContainer, []func(), error) {
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.ShmSize = 256 * 1024 * 1024           // 256MB shared memory
-			hc.Resources.Memory = 1024 * 1024 * 1024 // 512MB memory limit
+			hc.ShmSize = 256 * 1024 * 1024           // 256MB
+			hc.Resources.Memory = 1024 * 1024 * 1024 // 1GB (up from 512MB)
 		}),
-		testcontainers.WithCmdArgs("-c", "shared_buffers=64MB", "-c", "max_connections=50"),
+		testcontainers.WithCmdArgs(
+			"-c", "shared_buffers=64MB", // down from default 128MB
+			"-c", "work_mem=2MB", // down from default 4MB, per-sort/hash
+			"-c", "max_connections=50", // down from default 100
+		),
 		testcontainers.WithLogConsumers(&stdoutLogConsumer{}),
 	)
 	if err != nil {
