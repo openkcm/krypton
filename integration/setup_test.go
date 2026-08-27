@@ -106,12 +106,9 @@ func setupPostgres() ([]func(), error) {
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
-		testcontainers.CustomizeRequest(testcontainers.GenericContainerRequest{
-			ContainerRequest: testcontainers.ContainerRequest{
-				HostConfigModifier: func(hc *container.HostConfig) {
-					hc.ShmSize = 256 * 1024 * 1024 // 256MB
-				},
-			},
+		testcontainers.WithCmdArgs("-c", "max_connections=200"),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.ShmSize = 256 * 1024 * 1024 // 256MB
 		}),
 	)
 	if err != nil {
