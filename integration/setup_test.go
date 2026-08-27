@@ -15,18 +15,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
-
-	"github.com/moby/moby/api/types/container"
 
 	_ "github.com/lib/pq"
 
@@ -42,9 +38,6 @@ var (
 	coverDir   string
 )
 
-// Postgres test globals
-var pgConnStr string
-
 func TestMain(m *testing.M) {
 	var cleanups []func()
 
@@ -55,15 +48,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	pgCleanups, err := setupPostgres()
-	cleanups = append(cleanups, pgCleanups...)
-	if err != nil {
-		runCleanups(cleanups)
-		os.Exit(1)
-	}
-
 	exitCode := m.Run()
-
 	runCleanups(cleanups)
 	os.Exit(exitCode)
 }
@@ -96,9 +81,8 @@ func setupCLI() ([]func(), error) {
 }
 
 // setupPostgres starts a PostgreSQL container and sets the global connection string. Returns cleanup functions.
-func setupPostgres() ([]func(), error) {
-	ctx := context.Background()
-	var cleanupFns []func()
+func setupPostgres(t *testing.T) string {
+	ctx := t.Context()
 
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
@@ -106,19 +90,14 @@ func setupPostgres() ([]func(), error) {
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
-		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.ShmSize = 256 * 1024 * 1024 // 256MB shared memory
-		}),
-		testcontainers.WithCmdArgs("-c", "shared_buffers=64MB", "-c", "work_mem=2MB"),
 	)
-	if err != nil {
-		return nil, err
-	}
-	cleanupFns = append(cleanupFns, func() { _ = pgContainer.Terminate(ctx) })
+	require.NoError(t, err, "failed to start PostgreSQL container")
+	t.Cleanup(func() { _ = pgContainer.Terminate(ctx) })
 
-	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
+	pgConnStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err, "failed to get PostgreSQL connection string")
 
-	return cleanupFns, err
+	return pgConnStr
 }
 
 // runCleanups executes cleanup functions in reverse order.
@@ -171,37 +150,17 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 	ctx := t.Context()
 
+	// create a postgres database
+	pgConnStr := setupPostgres(t)
+
 	// Connect to master database to create a test-specific database
-	adminDB, err := sql.Open("postgres", pgConnStr)
+	db, err := sql.Open("postgres", pgConnStr)
 	require.NoError(t, err, "failed to connect to PostgreSQL")
-
-	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	_, err = adminDB.ExecContext(ctx, "CREATE DATABASE "+dbName)
-	adminDB.Close()
-	require.NoError(t, err, "failed to create test database")
-
-	// Connect to the test-specific database
-	connStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
-	db, err := sql.Open("postgres", connStr)
-	require.NoError(t, err, "failed to connect to test database")
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	t.Cleanup(func() {
-		db.Close()
-		// Drop the test database
-		cleanupDB, err := sql.Open("postgres", pgConnStr)
-		if err == nil {
-			_, _ = cleanupDB.ExecContext(context.Background(), "DROP DATABASE "+dbName)
-			cleanupDB.Close()
-		}
-	})
 
 	// migrate
 	require.NoError(t, storesql.Migrate(ctx, db))
 
-	return db, connStr
+	return db, pgConnStr
 }
 
 // RegisterFunc is a function that registers services to a gRPC server.
