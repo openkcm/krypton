@@ -31,6 +31,7 @@ func TestRegistration(t *testing.T) {
 
 	// Setup test database and store
 	db, dbConnStr := createDatabase(t)
+	_, agentDBConnStr := createDatabase(t)
 
 	// Create agent store
 	rootAgentStore := sql.NewAgentStore(db)
@@ -60,7 +61,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 
@@ -135,7 +135,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		// create a new PKI with invalid certificates for the agent
 		invalidPki := newTestPKI(t, allowedAgentName)
@@ -185,7 +184,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 		nonExistingRootPort := freePort(t) // Use a port that is not being listened on
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(nonExistingRootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -220,7 +218,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, "invalid-agent-name", localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 
@@ -255,7 +252,6 @@ func TestRegistration(t *testing.T) {
 		homeDir := t.TempDir()
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		// issue a new cert signed by the trusted CA with the allowed CN
 		validCert, validKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, false)
@@ -299,7 +295,6 @@ func TestRegistration(t *testing.T) {
 		agentID2 := uuid.NewString()
 		agentPort1 := freePort(t)
 		agentPort2 := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath1 := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 		agentCfgPath2 := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -348,7 +343,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 		homeDir := t.TempDir()
 
 		// issue an expired client certificate signed by the trusted CA
@@ -401,7 +395,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 		agentCmd := createCmd(t, agentBinary, []string{
