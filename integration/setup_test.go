@@ -305,7 +305,7 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	require.NoError(t, err, "parse CA")
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 
-	serverCertPEM, serverKeyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: "kmip-server"}, false, []net.IP{net.ParseIP("127.0.0.1")})
+	serverCertPEM, serverKeyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: "kmip-server"}, false, []net.IP{net.ParseIP(localHost)}, false)
 
 	pki := &testPKI{
 		caPEM:         caPEM,
@@ -318,7 +318,7 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	dir := t.TempDir()
 
 	for _, cn := range clientCNs {
-		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil)
+		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil, false)
 		tc := testClientCert{certPEM: certPEM, keyPEM: keyPEM}
 
 		tc.certPEMPath = filepath.Join(dir, cn+"-cert.pem")
@@ -343,17 +343,25 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 }
 
 // issueCert creates and signs a certificate (client or server) using the given CA.
-func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, subject pkix.Name, client bool, ips []net.IP) (certPEM, keyPEM []byte) {
+func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, subject pkix.Name, client bool, ips []net.IP, isExpired bool) (certPEM, keyPEM []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err, "gen key for %s", subject.CommonName)
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	require.NoError(t, err, "gen serial")
+
+	notBefore := time.Now().Add(-time.Hour)
+	notAfter := time.Now().Add(24 * time.Hour)
+	if isExpired {
+		notBefore = time.Now().Add(-48 * time.Hour)
+		notAfter = time.Now().Add(-24 * time.Hour) // expired 24 hours ago
+	}
+
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      subject,
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		IPAddresses:  ips,
 	}

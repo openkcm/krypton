@@ -45,6 +45,11 @@ type ServerConfig struct {
 	TLS *tlsconf.Server `yaml:"tls,omitempty"`
 }
 
+// ClientConfig represents the configuration for the client, including mTLS settings.
+type ClientConfig struct {
+	TLS *tlsconf.Client `yaml:"tls,omitempty"`
+}
+
 // AuthenticationConfig holds the configuration for client authentication, specifically allowed Common Names (CNs) for mTLS.
 type AuthenticationConfig struct {
 	// AllowedCNs is a list of Common Names (CNs) that are permitted to authenticate with the server.
@@ -53,9 +58,9 @@ type AuthenticationConfig struct {
 
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
+	Name           string                     `yaml:"name"`
 	Server         ServerConfig               `yaml:"server"`
 	Authentication AuthenticationConfig       `yaml:"authentication"`
-	Name           string                     `yaml:"name"`
 	Role           spec.AgentRole             `yaml:"role"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
@@ -69,6 +74,7 @@ type RootConfig struct {
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
 type AgentBootstrapConfig struct {
 	Name        string         `yaml:"name"`
+	Client      ClientConfig   `yaml:"client"`
 	Role        spec.AgentRole `yaml:"role"`
 	KryptonRoot KryptonRoot    `yaml:"krypton_root"`
 }

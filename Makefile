@@ -36,7 +36,9 @@ POSTGRES_PORT := 5432
 POSTGRES_USER := krypton
 POSTGRES_PASSWORD := krypton
 POSTGRES_DB := krypton
+POSTGRES_DB_AGENT := krypton_agent
 DATABASE_URL := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
+AGENT_DATABASE_URL := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB_AGENT)?sslmode=disable
 
 .PHONY: postgres
 postgres:
@@ -57,6 +59,7 @@ postgres:
 		fi; \
 		sleep 1; \
 	done
+	@docker exec $(POSTGRES_CONTAINER) psql -U $(POSTGRES_USER) -c "CREATE DATABASE $(POSTGRES_DB_AGENT);" || true
 	@echo "Postgres is ready at localhost:$(POSTGRES_PORT)"
 
 .PHONY: postgres-stop
@@ -67,11 +70,11 @@ ROOT_SERVER_PORT := 8080
 
 .PHONY: agent
 agent:
-	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" go run ./cmd/agent
+	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" AGENT_BOOTSTRAP_CONFIG_PATH="./examples/agent.config.yaml" AGENT_DATABASE_URL="$(AGENT_DATABASE_URL)" go run ./cmd/agent
 
 .PHONY: root
 root:
-	SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
+	KRYPTON_ROOT_KEY="$(KRYPTON_ROOT_KEY)" ROOT_CONFIG_PATH="./examples/root.config.yaml" SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
 
 .PHONY: dev
 dev: postgres root
