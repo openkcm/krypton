@@ -20,8 +20,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/types/container"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
 
@@ -104,6 +106,13 @@ func setupPostgres() ([]func(), error) {
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
+		testcontainers.CustomizeRequest(testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				HostConfigModifier: func(hc *container.HostConfig) {
+					hc.ShmSize = 256 * 1024 * 1024 // 256MB
+				},
+			},
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -189,9 +198,9 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	connStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
 	sqlDB, err := sql.Open("postgres", connStr)
 	require.NoError(t, err, "failed to connect to test database")
-	sqlDB.SetMaxOpenConns(5)
-	sqlDB.SetMaxIdleConns(2)
-	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	// sqlDB.SetMaxOpenConns(5)
+	// sqlDB.SetMaxIdleConns(2)
+	// sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	t.Cleanup(func() {
 		sqlDB.Close()
