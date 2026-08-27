@@ -57,6 +57,9 @@ func main() {
 
 	db, err := sql.Open("postgres", dsn)
 	handleErr(err, "failed to connect to database")
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 
 	// run migrations

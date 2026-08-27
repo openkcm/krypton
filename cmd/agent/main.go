@@ -150,6 +150,9 @@ func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator
 
 	db, err := sql.Open("postgres", dsn)
 	handleErr(err, "failed to connect to agent database")
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	err = storesql.Migrate(ctx, db)
 	handleErr(err, "failed to run agent migrations")
