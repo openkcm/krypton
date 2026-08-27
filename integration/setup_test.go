@@ -203,7 +203,22 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 	ctx := t.Context()
 
-	db, err := sql.Open("postgres", pgConnStr)
+	pgContainer, pgCleanups, err := setupPostgres()
+	var cleanups []func()
+	cleanups = append(cleanups, pgCleanups...)
+	if err != nil {
+		runCleanups(cleanups)
+		os.Exit(1)
+	}
+
+	t.Cleanup(func() {
+		runCleanups(cleanups)
+	})
+
+	pgConnStr1, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	db, err := sql.Open("postgres", pgConnStr1)
 	require.NoError(t, err, "failed to connect to PostgreSQL")
 
 	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -215,17 +230,17 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	}
 	db.Close()
 
-	connStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
+	connStr := strings.Replace(pgConnStr1, "/postgres?", "/"+dbName+"?", 1)
 	sqlDB, err := sql.Open("postgres", connStr)
 	require.NoError(t, err, "failed to connect to test database")
-	sqlDB.SetMaxOpenConns(5)
-	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	t.Cleanup(func() {
 		sqlDB.Close()
 
-		db, err := sql.Open("postgres", pgConnStr)
+		db, err := sql.Open("postgres", pgConnStr1)
 		if err == nil {
 			_, _ = db.ExecContext(context.Background(), "DROP DATABASE "+dbName)
 			db.Close()
