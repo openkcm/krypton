@@ -124,10 +124,11 @@ func setupPostgres() (*postgres.PostgresContainer, []func(), error) {
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
 		postgres.BasicWaitStrategies(),
-		testcontainers.WithCmdArgs("-c", "max_connections=200"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.ShmSize = 512 * 1024 * 1024 // 256MB
+			hc.ShmSize = 256 * 1024 * 1024          // 256MB shared memory
+			hc.Resources.Memory = 512 * 1024 * 1024 // 512MB memory limit
 		}),
+		testcontainers.WithCmdArgs("-c", "shared_buffers=64MB", "-c", "max_connections=100"),
 		testcontainers.WithLogConsumers(&stdoutLogConsumer{}),
 	)
 	if err != nil {
@@ -214,9 +215,9 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	connStr := strings.Replace(pgConnStr, "/postgres?", "/"+dbName+"?", 1)
 	sqlDB, err := sql.Open("postgres", connStr)
 	require.NoError(t, err, "failed to connect to test database")
-	// sqlDB.SetMaxOpenConns(5)
-	// sqlDB.SetMaxIdleConns(2)
-	// sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetMaxOpenConns(5)
+	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	t.Cleanup(func() {
 		sqlDB.Close()
