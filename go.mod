@@ -8,7 +8,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/moby/moby/api v1.55.0
 	github.com/openbao/openbao/api/v2 v2.6.0
-	github.com/openkcm/orbital v0.6.0
+	github.com/openkcm/orbital v0.6.1
 	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
