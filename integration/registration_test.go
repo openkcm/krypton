@@ -258,7 +258,8 @@ func TestRegistration(t *testing.T) {
 		_, agentDBConnStr := createDatabase(t)
 
 		// issue a new cert signed by the trusted CA with the allowed CN
-		validCert, validKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, false)
+		uris := makeURIs(t, allowedAgentName)
+		validCert, validKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, uris, false)
 		validCertPath := filepath.Join(homeDir, "valid_cert.pem")
 		validKeyPath := filepath.Join(homeDir, "valid_key.pem")
 
@@ -352,7 +353,8 @@ func TestRegistration(t *testing.T) {
 		homeDir := t.TempDir()
 
 		// issue an expired client certificate signed by the trusted CA
-		expiredCert, expiredKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, true)
+		uris := makeURIs(t, allowedAgentName)
+		expiredCert, expiredKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, uris, true)
 		expiredCertPath := filepath.Join(homeDir, "expired_cert.pem")
 		expiredKeyPath := filepath.Join(homeDir, "expired_key.pem")
 

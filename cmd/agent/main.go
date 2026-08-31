@@ -43,8 +43,11 @@ func main() {
 	grpcOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
-	if cfg.Client.TLS != nil {
-		tlsConf, err := cfg.Client.TLS.BuildTLSConfig()
+	if cfg.Auth != nil {
+		mtlsConfig, err := config.GetAuthConfig(cfg.Auth.Config)
+		handleErr(err, "failed to get auth config")
+
+		tlsConf, err := mtlsConfig.Client.BuildTLSConfig()
 		handleErr(err, "failed to build TLS config")
 		grpcOpts[0] = grpc.WithTransportCredentials(credentials.NewTLS(tlsConf))
 	}

@@ -103,6 +103,11 @@ func (cfg *RootConfig) Validate() error {
 			return fmt.Errorf("kmip: %w", err)
 		}
 	}
+	if cfg.Auth != nil {
+		if err := cfg.Auth.Validate(); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -117,6 +122,11 @@ func (cfg *AgentBootstrapConfig) Validate() error {
 	}
 	if cfg.KryptonRoot.Address.URL == "" {
 		return ErrConfigAddressEmpty
+	}
+	if cfg.Auth != nil {
+		if err := cfg.Auth.Validate(); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
 	}
 	return nil
 }

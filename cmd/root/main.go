@@ -123,12 +123,15 @@ func main() {
 	handleErr(err, "failed to create key processor manager")
 
 	var grpcOpts []grpc.ServerOption
-	if cfg.Server.TLS != nil {
+	if cfg.Auth != nil {
+		mtlsConfig, err := config.GetAuthConfig(cfg.Auth.Config)
+		handleErr(err, "failed to get auth config for gRPC server")
+
 		authn, err := interceptor.NewAuthenticator(cfg.Authentication.AllowedCNs)
 		handleErr(err, "failed to create authenticator for gRPC server")
 		grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(authn.UnaryInterceptor))
 
-		tlsConfig, err := cfg.Server.TLS.BuildTLSConfig()
+		tlsConfig, err := mtlsConfig.Server.BuildTLSConfig()
 		handleErr(err, "failed to build TLS config for gRPC server")
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}

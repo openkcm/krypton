@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,8 +81,8 @@ func setupCLI() ([]func(), error) {
 	return cleanupFns, buildCmd.Run()
 }
 
-// setupPostgres starts a PostgreSQL container and sets the global connection string. Returns cleanup functions.
 func setupPostgres(t *testing.T) string {
+	t.Helper()
 	ctx := t.Context()
 
 	pgContainer, err := postgres.Run(ctx,
@@ -270,7 +271,16 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	require.NoError(t, err, "parse CA")
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 
-	serverCertPEM, serverKeyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: "kmip-server"}, false, []net.IP{net.ParseIP(localHost)}, false)
+	serverCertPEM, serverKeyPEM := issueCert(
+		t,
+		caCert,
+		caKey,
+		pkix.Name{CommonName: "acme-corp"},
+		false,
+		[]net.IP{net.ParseIP(localHost)},
+		makeURIs(t, "root"),
+		false,
+	)
 
 	pki := &testPKI{
 		caPEM:         caPEM,
@@ -283,7 +293,8 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 	dir := t.TempDir()
 
 	for _, cn := range clientCNs {
-		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil, false)
+		uris := makeURIs(t, cn)
+		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil, uris, false)
 		tc := testClientCert{certPEM: certPEM, keyPEM: keyPEM}
 
 		tc.certPEMPath = filepath.Join(dir, cn+"-cert.pem")
@@ -308,7 +319,16 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 }
 
 // issueCert creates and signs a certificate (client or server) using the given CA.
-func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, subject pkix.Name, client bool, ips []net.IP, isExpired bool) (certPEM, keyPEM []byte) {
+func issueCert(
+	t *testing.T,
+	caCert *x509.Certificate,
+	caKey *ecdsa.PrivateKey,
+	subject pkix.Name,
+	client bool,
+	ips []net.IP,
+	uris []*url.URL,
+	isExpired bool,
+) (certPEM, keyPEM []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err, "gen key for %s", subject.CommonName)
@@ -329,6 +349,7 @@ func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, 
 		NotAfter:     notAfter,
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		IPAddresses:  ips,
+		URIs:         uris,
 	}
 	if client {
 		tmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
@@ -348,4 +369,15 @@ func issueCert(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, 
 func writeFile(t *testing.T, path string, data []byte) {
 	t.Helper()
 	require.NoError(t, os.WriteFile(path, data, 0o600), "write %s", path)
+}
+
+func makeURIs(t *testing.T, uris ...string) []*url.URL {
+	t.Helper()
+	result := make([]*url.URL, 0, len(uris))
+	for _, u := range uris {
+		parsed, err := url.Parse(makeKryptonID(u))
+		require.NoError(t, err, "parse URI %s", u)
+		result = append(result, parsed)
+	}
+	return result
 }

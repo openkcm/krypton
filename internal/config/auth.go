@@ -80,7 +80,7 @@ func (m *RootAuthConfig) Validate() error {
 		}
 		_, err := identity.Parse(i.URI)
 		if err != nil {
-			return fmt.Errorf("%w: invalid identity URI %q: %v", ErrInvalidIdentities, i.URI, err)
+			return fmt.Errorf("%w: invalid identity URI %q: %w", ErrInvalidIdentities, i.URI, err)
 		}
 	}
 	return m.Config.Validate()
