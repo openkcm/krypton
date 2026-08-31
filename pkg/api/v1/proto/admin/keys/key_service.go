@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/model"
@@ -51,162 +52,57 @@ func NewKeyService(rootName string, transactor store.Transactor, keyStore store.
 }
 
 func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (*ActivateKeyResponse, error) {
-	vErr := s.validator.ValidateKeyActivate(ctx, validator.ActivateInput{
-		TenantID: req.GetTenantId(),
-		KeyID:    req.GetId(),
-	})
-	if vErr != nil {
+	tenantID := req.GetTenantId()
+	keyID := req.GetId()
+
+	if err := validator.ValidateActivateRequest(validator.ActivateInput{
+		TenantID: tenantID, KeyID: keyID,
+	}); err != nil {
 		return nil, proto.ErrDetailsWithCode(
-			status.New(vErr.ToProtoErrCode(), vErr.Error()),
-			vErr.ToProtoDetailCode(),
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
 
-	err := s.transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
-		key, err := stores.Keys.GetKeyByID(ctx, req.GetId(), req.GetTenantId())
-		if err != nil {
-			return proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "failed to get key"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
-		isRoot := key.ParentID == nil
+	resolve := keyoperator.InitKeyVersion(tenantID, keyID)
 
-		// make the keys ls=active ks=processing
-		err = stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
-			ID:       key.ID,
-			TenantID: key.TenantID,
-			FromState: []model.KeyLifeCycleState{
-				model.KeyLifeCyclePreActivation,
-			},
-			ToState: model.KeyLifeCycleActive,
-			FromStatus: []model.KeyProcessingStatus{
-				model.KeyProcessingCompleted,
-			},
-			ToStatus: model.KeyProcessingInProgress,
-		})
-		if err != nil {
-			if errors.Is(err, store.ErrKeyNotFound) {
-				return proto.ErrDetailsWithCode(
-					status.New(codes.NotFound, "key is in wrong processing state or life cycle state"),
-					proto.Code_ERROR_CODE_ABORT,
-				)
-			}
-			return proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "failed to update key life cycle and processing state"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
+	err := store.ChainTransaction(ctx, s.transactor,
+		validator.ValidateTenant(tenantID),
+		validator.ValidateTransition(tenantID, keyID, model.KeyLifeCycleActive),
+		validator.ValidateKeyParents(tenantID, keyID),
 
-		var parentKeyVersion *int
-		if !isRoot {
-			pkv, err := stores.KeyVersions.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-				TenantID:        key.TenantID,
-				KeyID:           *key.ParentID,
-				ProcessingState: model.KeyVersionUsable,
-				LifeCycleState:  model.KeyLifeCycleActive,
-				OrderBy: []store.KeyVersionOrder{
-					store.KeyVersionOrderVersionDesc,
-					store.KeyVersionOrderRevisionDesc,
-				},
-				Limit: 1,
-			})
-			if err != nil {
-				return proto.ErrDetailsWithCode(
-					status.New(codes.Internal, "failed to get parent key version"),
-					proto.Code_ERROR_CODE_RETRY,
-				)
-			}
-			if len(pkv.KeyVersions) == 0 {
-				return proto.ErrDetailsWithCode(
-					status.New(codes.FailedPrecondition, "parent key has no usable version"),
-					proto.Code_ERROR_CODE_ABORT,
-				)
-			}
-			parentKeyVersion = new(pkv.KeyVersions[0].Version)
-		}
+		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
+			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+			ToLifeCycle:    model.KeyLifeCycleActive,
+			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+			ToProcessing:   model.KeyProcessingInProgress,
+		}),
 
-		kv := model.NewKeyVersion(key.TenantID, key.ID, 1, key.ParentID, parentKeyVersion)
-		kv.LifeCycleState = model.KeyLifeCyclePreActivation
-		kv.ProcessingState = model.KeyVersionActivating
+		keyoperator.CreateKeyVersion(tenantID, keyID, resolve),
+		keyoperator.GenerateAndSealKeyMaterial(s.manager, tenantID, keyID, resolve),
 
-		// create a kv version with ls=nonactivate ks=processing
-		_, err = stores.KeyVersions.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{
-			KeyVersion: kv,
-		})
-		if err != nil {
-			return proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "failed to create key version"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
+		keyoperator.UpdateKeyVersionState(tenantID, keyID, resolve, keyoperator.VersionTransition{
+			FromProcessing: []model.KeyVersionProcessingState{model.KeyVersionActivating},
+			ToProcessing:   model.KeyVersionUsable,
+			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+			ToLifeCycle:    model.KeyLifeCycleActive,
+		}),
 
-		if !isRoot {
-			// The vault write stays inside the transaction: a vault failure
-			// rolls back all DB writes, while a DB rollback after this point
-			// orphans at most one unreferenced vault entry.
-			aad := fmt.Appendf(nil, "%s:%s:%d:%d:%d", key.TenantID, key.ID, kv.Version, kv.Revision, kv.CreatedAt)
-			_, err = s.manager.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
-				KeyVersion: kv,
-				AAD:        aad,
-				KeyKind:    key.Kind,
-			})
-			if err != nil {
-				return proto.ErrDetailsWithCode(
-					status.New(codes.Internal, "failed to generate and seal secret"),
-					proto.Code_ERROR_CODE_ABORT,
-				)
-			}
-		}
-
-		err = stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
-			ID:       key.ID,
-			TenantID: key.TenantID,
-			FromState: []model.KeyLifeCycleState{
-				model.KeyLifeCycleActive,
-			},
-			ToState: model.KeyLifeCycleActive,
-			FromStatus: []model.KeyProcessingStatus{
-				model.KeyProcessingInProgress,
-			},
-			ToStatus: model.KeyProcessingCompleted,
-		})
-		if err != nil {
-			return proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "failed to update key processing state"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
-
-		err = stores.KeyVersions.UpdateKeyVersionStates(ctx, store.UpdateKeyVersionStatesQuery{
-			TenantID:            kv.TenantID,
-			KeyID:               kv.KeyID,
-			Version:             kv.Version,
-			Revision:            kv.Revision,
-			FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionActivating},
-			ToProcessingState:   model.KeyVersionUsable,
-			FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycleState:    model.KeyLifeCycleActive,
-		})
-		if err != nil {
-			return proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "failed to update key version life cycle and processing state"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
-
-		return nil
-	})
+		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
+			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			ToLifeCycle:    model.KeyLifeCycleActive,
+			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
+			ToProcessing:   model.KeyProcessingCompleted,
+		}),
+	)
 	if err != nil {
-		// Begin/commit failures reach here as plain errors; map them to the
-		// same status + detail-code contract as every other DB failure.
-		if _, ok := status.FromError(err); !ok {
-			return nil, proto.ErrDetailsWithCode(
-				status.New(codes.Internal, "transaction failed"),
-				proto.Code_ERROR_CODE_RETRY,
-			)
+		if mapped := mapToProtoErr(err); mapped != nil {
+			return nil, mapped
 		}
-		return nil, err
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, "transaction failed"),
+			proto.Code_ERROR_CODE_RETRY,
+		)
 	}
 
 	return &ActivateKeyResponse{}, nil

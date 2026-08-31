@@ -23,3 +23,16 @@ type TransactionFunc func(ctx context.Context, stores Stores) error
 type Transactor interface {
 	Transaction(ctx context.Context, fn TransactionFunc) error
 }
+
+// ChainTransaction runs steps sequentially in one transaction. Any error
+// aborts the chain and rolls back.
+func ChainTransaction(ctx context.Context, t Transactor, steps ...TransactionFunc) error {
+	return t.Transaction(ctx, func(ctx context.Context, s Stores) error {
+		for _, step := range steps {
+			if err := step(ctx, s); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
