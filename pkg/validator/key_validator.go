@@ -115,69 +115,65 @@ func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceIn
 	return nil
 }
 
-// ValidateKeyActivate implements [KeyValidator].
-func (v *keyValidator) ValidateKeyActivate(ctx context.Context, input ActivateInput) *ValidationError {
-	ve := &ValidationError{
-		code: Invalid,
-	}
-
+// ValidateActivateRequest verifies that the tenant and key IDs of an
+// activation request are valid UUIDs.
+func ValidateActivateRequest(input ActivateInput) error {
 	switch {
 	case !isValidUUID(input.TenantID):
-		ve.err = ErrEmptyTenantID
-		return ve
+		return ErrEmptyTenantID
 	case !isValidUUID(input.KeyID):
-		ve.err = ErrInvalidKeyID
-		return ve
-	}
-
-	if _, err := v.tenants.GetTenant(ctx, store.GetTenantQuery{ID: input.TenantID}); err != nil {
-		if errors.Is(err, store.ErrTenantNotFound) {
-			ve.code, ve.err = FailedCondition, ErrInvalidTenantID
-			return ve
-		}
-		ve.code, ve.err = Internal, ErrFailedToGetTenant
-		return ve
-	}
-
-	parents, err := v.keys.GetParentKeys(ctx, store.GetParentKeysQuery{
-		KeyID:    input.KeyID,
-		TenantID: input.TenantID,
-	})
-	if err != nil {
-		ve.code, ve.err = Internal, ErrFailedToGetParentKeys
-		return ve
-	}
-
-	totalKs := len(parents.Keys)
-	if totalKs <= 0 {
-		ve.code, ve.err = FailedCondition, ErrFailedToGetParentKeys
-		return ve
-	}
-
-	for index, parent := range parents.Keys {
-		if v.hierarchy.IndexOf(parent.Kind) != index {
-			ve.code, ve.err = FailedCondition, ErrParentKeyNotInOrder
-			return ve
-		}
-		isTargetKey := index+1 == totalKs
-		if !isTargetKey {
-			if parent.LifeCycleState != model.KeyLifeCycleActive || parent.KeyProcessingState.Status != model.KeyProcessingCompleted {
-				ve.code, ve.err = FailedCondition, ErrParentKeyTransientState
-				return ve
-			}
-			continue
-		}
-		// Target key: must be done processing and allow transition to active.
-		if parent.KeyProcessingState.Status != model.KeyProcessingCompleted {
-			ve.code, ve.err = FailedCondition, ErrKeyTransientState
-			return ve
-		}
-		if err := keylifecycle.ValidateTransition(parent.LifeCycleState, model.KeyLifeCycleActive); err != nil {
-			ve.code, ve.err = FailedCondition, err
-			return ve
-		}
+		return ErrInvalidKeyID
 	}
 	return nil
+}
+
+// ValidateTenant returns a transaction step that verifies the tenant
+// exists.
+func ValidateTenant(tenantID string) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		_, err := stores.Tenants.GetTenant(ctx, store.GetTenantQuery{ID: tenantID})
+		return err
+	}
+}
+
+// ValidateTransition returns a transaction step that verifies the target
+// key exists, has completed processing, and can transition to the
+// requested life cycle state.
+func ValidateTransition(tenantID, keyID string, to model.KeyLifeCycleState) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		key, err := stores.Keys.GetKeyByID(ctx, keyID, tenantID)
+		if err != nil {
+			return err
+		}
+		if key.KeyProcessingState.Status != model.KeyProcessingCompleted {
+			return ErrKeyTransientState
+		}
+		return keylifecycle.ValidateTransition(key.LifeCycleState, to)
+	}
+}
+
+// ValidateKeyParents returns a transaction step that verifies every strict
+// ancestor of the target key is active and has completed processing.
+func ValidateKeyParents(tenantID, keyID string) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		parents, err := stores.Keys.GetParentKeys(ctx, store.GetParentKeysQuery{
+			TenantID: tenantID,
+			KeyID:    keyID,
+		})
+		if err != nil {
+			return err
+		}
+		for _, parent := range parents.Keys {
+			if parent.ID == keyID {
+				continue
+			}
+			if parent.LifeCycleState != model.KeyLifeCycleActive ||
+				parent.KeyProcessingState.Status != model.KeyProcessingCompleted {
+				return ErrParentKeyTransientState
+			}
+		}
+		return nil
+	}
 }
 
 func (v *keyValidator) isValidParent(ctx context.Context, parentID string, tenantID string, keySpec spec.KeySpec, ve *ValidationError) bool {

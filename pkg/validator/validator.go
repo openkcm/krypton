@@ -11,7 +11,6 @@ import (
 
 type KeyValidator interface {
 	ValidateKeyAnnounce(context.Context, AnnounceInput) *ValidationError
-	ValidateKeyActivate(context.Context, ActivateInput) *ValidationError
 }
 
 type ErrorKind int

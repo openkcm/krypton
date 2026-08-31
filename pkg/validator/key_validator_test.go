@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -281,200 +282,256 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 	}
 }
 
-func TestValidator_ValidateKeyActivate(t *testing.T) {
-	t.Run("validate input", func(t *testing.T) {
-		// given
-		tts := []struct {
-			name     string
-			input    validator.ActivateInput
-			wantErr  error
-			wantCode codes.Code
-		}{
-			{
-				name:     "invalid tenantID",
-				input:    validator.ActivateInput{TenantID: invalidUUID, KeyID: validUUID},
-				wantErr:  validator.ErrEmptyTenantID,
-				wantCode: codes.InvalidArgument,
+func TestValidator_ValidateActivateRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   validator.ActivateInput
+		wantErr error
+	}{
+		{
+			name:    "invalid tenantID",
+			input:   validator.ActivateInput{TenantID: invalidUUID, KeyID: validUUID},
+			wantErr: validator.ErrEmptyTenantID,
+		},
+		{
+			name:    "invalid keyID",
+			input:   validator.ActivateInput{TenantID: validUUID, KeyID: invalidUUID},
+			wantErr: validator.ErrInvalidKeyID,
+		},
+		{
+			name:    "both valid",
+			input:   validator.ActivateInput{TenantID: validUUID, KeyID: validUUID},
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validator.ValidateActivateRequest(tc.input)
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestValidator_ValidateTenant(t *testing.T) {
+	errBoom := errors.New("boom")
+
+	tests := []struct {
+		name         string
+		tenants      store.Tenant
+		wantNil      bool
+		wantErrIs    []error
+		wantErrIsNot []error
+	}{
+		{
+			name:    "tenant found",
+			tenants: tenantFound(),
+			wantNil: true,
+		},
+		{
+			name:      "tenant not found",
+			tenants:   tenantReturning(store.ErrTenantNotFound),
+			wantErrIs: []error{store.ErrTenantNotFound},
+		},
+		{
+			name:         "generic store error",
+			tenants:      tenantReturning(errBoom),
+			wantErrIs:    []error{errBoom},
+			wantErrIsNot: []error{store.ErrTenantNotFound},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			step := validator.ValidateTenant(validUUID)
+			err := step(t.Context(), store.Stores{Tenants: tc.tenants, Keys: &stubKeyStore{}})
+
+			if tc.wantNil {
+				assert.NoError(t, err)
+				return
+			}
+			if !assert.Error(t, err) {
+				return
+			}
+			for _, s := range tc.wantErrIs {
+				assert.ErrorIs(t, err, s)
+			}
+			for _, s := range tc.wantErrIsNot {
+				assert.NotErrorIs(t, err, s, "unexpected: err matches %v", s)
+			}
+		})
+	}
+}
+
+func TestValidator_ValidateTransition(t *testing.T) {
+	errBoom := errors.New("boom")
+
+	tests := []struct {
+		name         string
+		key          *model.Key
+		getKeyErr    error
+		wantNil      bool
+		wantErrIs    []error
+		wantErrIsNot []error
+	}{
+		{
+			name:      "key not found",
+			getKeyErr: store.ErrKeyNotFound,
+			wantErrIs: []error{store.ErrKeyNotFound},
+		},
+		{
+			name:         "generic store error",
+			getKeyErr:    errBoom,
+			wantErrIs:    []error{errBoom},
+			wantErrIsNot: []error{store.ErrKeyNotFound},
+		},
+		{
+			name: "key still processing",
+			key: &model.Key{
+				ID:                 validUUID,
+				LifeCycleState:     model.KeyLifeCyclePreActivation,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress},
 			},
-			{
-				name:     "invalid keyID",
-				input:    validator.ActivateInput{TenantID: validUUID, KeyID: invalidUUID},
-				wantErr:  validator.ErrInvalidKeyID,
-				wantCode: codes.InvalidArgument,
+			wantErrIs: []error{validator.ErrKeyTransientState},
+		},
+		{
+			name: "invalid transition",
+			key: &model.Key{
+				ID:                 validUUID,
+				LifeCycleState:     model.KeyLifeCycleDestroyed,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
 			},
-		}
-
-		for _, tt := range tts {
-			t.Run(tt.name, func(t *testing.T) {
-				v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), &stubTenantStore{}, &stubKeyStore{})
-
-				// when
-				ve := v.ValidateKeyActivate(t.Context(), tt.input)
-
-				// then
-				assert.NotNil(t, ve)
-				assert.EqualError(t, ve, tt.wantErr.Error())
-				assert.Equal(t, tt.wantCode, ve.ToProtoErrCode())
-			})
-		}
-	})
-	t.Run("should return error if tenant not found", func(t *testing.T) {
-		// given
-		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(store.ErrTenantNotFound), &stubKeyStore{})
-
-		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
-
-		// then
-		assert.NotNil(t, ve)
-		assert.EqualError(t, ve, validator.ErrInvalidTenantID.Error())
-		assert.Equal(t, codes.FailedPrecondition, ve.ToProtoErrCode())
-	})
-
-	t.Run("should return error if tenant store internal error", func(t *testing.T) {
-		// given
-		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantReturning(assert.AnError), &stubKeyStore{})
-
-		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
-
-		// then
-		assert.NotNil(t, ve)
-		assert.EqualError(t, ve, validator.ErrFailedToGetTenant.Error())
-		assert.Equal(t, codes.Internal, ve.ToProtoErrCode())
-	})
-
-	t.Run("should return error if GetParentKeys returns an error", func(t *testing.T) {
-		// given
-		stubKeys := &stubKeyStore{
-			getParentKeys: func(_ context.Context, _ store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
-				return store.GetParentKeysResult{}, errors.New("boom")
+			wantErrIs: []error{keylifecycle.ErrInvalidKeyStateTransition},
+		},
+		{
+			name: "valid transition",
+			key: &model.Key{
+				ID:                 validUUID,
+				LifeCycleState:     model.KeyLifeCyclePreActivation,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
 			},
-		}
-		v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
+			wantNil: true,
+		},
+	}
 
-		// when
-		ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keys := keyStoreReturning(tc.key, tc.getKeyErr)
+			step := validator.ValidateTransition(validUUID, validUUID, model.KeyLifeCycleActive)
+			err := step(t.Context(), store.Stores{Tenants: tenantFound(), Keys: keys})
 
-		// then
-		assert.NotNil(t, ve)
-		assert.EqualError(t, ve, validator.ErrFailedToGetParentKeys.Error())
-		assert.Equal(t, codes.Internal, ve.ToProtoErrCode())
-	})
+			if tc.wantNil {
+				assert.NoError(t, err)
+				return
+			}
+			if !assert.Error(t, err) {
+				return
+			}
+			for _, s := range tc.wantErrIs {
+				assert.ErrorIs(t, err, s)
+			}
+			for _, s := range tc.wantErrIsNot {
+				assert.NotErrorIs(t, err, s, "unexpected: err matches %v", s)
+			}
+		})
+	}
+}
 
-	t.Run("keys hierarchy validation", func(t *testing.T) {
-		tts := []struct {
-			name       string
-			parentKeys []model.Key
-			wantErr    error
-			wantCode   codes.Code
-		}{
-			{
-				name:       "should return error if key has no parent keys",
-				parentKeys: []model.Key{},
-				wantErr:    validator.ErrFailedToGetParentKeys,
-				wantCode:   codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if parent key is not active",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleDestroyed, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}, ParentID: new("parent-id")},
+func TestValidator_ValidateKeyParents(t *testing.T) {
+	errBoom := errors.New("boom")
+
+	target := model.Key{
+		ID:                 validUUID,
+		Kind:               "K1",
+		LifeCycleState:     model.KeyLifeCyclePreActivation,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+		ParentID:           new("parent-id"),
+	}
+	activeCompletedAncestor := model.Key{
+		ID:                 "ancestor-id",
+		Kind:               "K0",
+		LifeCycleState:     model.KeyLifeCycleActive,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+	}
+	suspendedAncestor := model.Key{
+		ID:                 "ancestor-id",
+		Kind:               "K0",
+		LifeCycleState:     model.KeyLifeCycleSuspended,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+	}
+	pendingAncestor := model.Key{
+		ID:                 "ancestor-id",
+		Kind:               "K0",
+		LifeCycleState:     model.KeyLifeCycleActive,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+	}
+
+	tests := []struct {
+		name      string
+		parents   []model.Key
+		listErr   error
+		wantNil   bool
+		wantErrIs []error
+	}{
+		{
+			name:      "key not found",
+			listErr:   store.ErrKeyNotFound,
+			wantErrIs: []error{store.ErrKeyNotFound},
+		},
+		{
+			name:      "generic store error",
+			listErr:   errBoom,
+			wantErrIs: []error{errBoom},
+		},
+		{
+			name:      "strict ancestor not active",
+			parents:   []model.Key{suspendedAncestor, target},
+			wantErrIs: []error{validator.ErrParentKeyTransientState},
+		},
+		{
+			name:      "strict ancestor not completed",
+			parents:   []model.Key{pendingAncestor, target},
+			wantErrIs: []error{validator.ErrParentKeyTransientState},
+		},
+		{
+			name:    "only target key (root)",
+			parents: []model.Key{target},
+			wantNil: true,
+		},
+		{
+			name:    "valid chain",
+			parents: []model.Key{activeCompletedAncestor, target},
+			wantNil: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keys := &stubKeyStore{
+				getParentKeys: func(_ context.Context, _ store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
+					if tc.listErr != nil {
+						return store.GetParentKeysResult{}, tc.listErr
+					}
+					return store.GetParentKeysResult{Keys: tc.parents}, nil
 				},
-				wantErr:  validator.ErrParentKeyTransientState,
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if parent key is not completed",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending}},
-					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}, ParentID: new("parent-id")},
-				},
-				wantErr:  validator.ErrParentKeyTransientState,
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if key to activate is not in completed state",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress}, ParentID: new("parent-id")},
-				},
-				wantErr:  validator.ErrKeyTransientState,
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if key to activate is not in valid state transition",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-					{Kind: "K1", LifeCycleState: model.KeyLifeCycleDestroyed, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}, ParentID: new("parent-id")},
-				},
-				wantErr:  errors.New("cannot transition from destroyed to active: invalid key state transition"),
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if parent keys are not adjacent",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-					{Kind: "K2", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-				},
-				wantErr:  validator.ErrParentKeyNotInOrder,
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return error if key to activate is a root key and processing state is not completed",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress}},
-				},
-				wantErr:  validator.ErrKeyTransientState,
-				wantCode: codes.FailedPrecondition,
-			},
-			{
-				name: "should return nil if all parent keys are active and adjacent",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCycleActive, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}, ParentID: new("parent-id")},
-				},
-				wantErr: nil,
-			},
-			{
-				name: "should return nil if key to activate is a root key",
-				parentKeys: []model.Key{
-					{Kind: "K0", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-				},
-				wantErr: nil,
-			},
-			{
-				name: "should return error if key to activate is only one and is not a root",
-				parentKeys: []model.Key{
-					{Kind: "K1", LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
-				},
-				wantErr:  validator.ErrParentKeyNotInOrder,
-				wantCode: codes.FailedPrecondition,
-			},
-		}
+			}
+			step := validator.ValidateKeyParents(validUUID, validUUID)
+			err := step(t.Context(), store.Stores{Tenants: tenantFound(), Keys: keys})
 
-		for _, tt := range tts {
-			t.Run(tt.name, func(t *testing.T) {
-				// given
-				stubKeys := &stubKeyStore{
-					getParentKeys: func(_ context.Context, _ store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
-						return store.GetParentKeysResult{Keys: tt.parentKeys}, nil
-					},
-				}
-
-				v := validator.NewValidator(testRootSegment, testTopology(), testHierarchy(), tenantFound(), stubKeys)
-				// when
-				ve := v.ValidateKeyActivate(t.Context(), validator.ActivateInput{TenantID: validUUID, KeyID: validUUID})
-
-				// then
-				if tt.wantErr == nil {
-					assert.Nil(t, ve)
-					return
-				}
-				assert.NotNil(t, ve)
-				assert.EqualError(t, ve, tt.wantErr.Error())
-				assert.Equal(t, tt.wantCode, ve.ToProtoErrCode())
-			})
-		}
-	})
+			if tc.wantNil {
+				assert.NoError(t, err)
+				return
+			}
+			if !assert.Error(t, err) {
+				return
+			}
+			for _, s := range tc.wantErrIs {
+				assert.ErrorIs(t, err, s)
+			}
+		})
+	}
 }
