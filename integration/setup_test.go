@@ -239,11 +239,11 @@ type testPKI struct {
 	serverCertPath string
 	serverKeyPEM   []byte
 	serverKeyPath  string
-	clientCerts    map[string]testClientCert
+	agentCerts     map[string]testAgentCert
 }
 
-// testClientCert holds a client certificate and key in PEM format along with their file paths.
-type testClientCert struct {
+// testAgentCert holds a client certificate and key in PEM format along with their file paths.
+type testAgentCert struct {
 	certPEM     []byte
 	certPEMPath string
 	keyPEM      []byte
@@ -251,7 +251,7 @@ type testClientCert struct {
 }
 
 // newTestPKI generates a self-contained CA, server certificate, and client certificates for mTLS testing.
-func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
+func newTestPKI(t *testing.T, agentNames ...string) *testPKI {
 	t.Helper()
 
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -288,22 +288,22 @@ func newTestPKI(t *testing.T, clientCNs ...string) *testPKI {
 		caPrivateKey:  caKey,
 		serverCertPEM: serverCertPEM,
 		serverKeyPEM:  serverKeyPEM,
-		clientCerts:   make(map[string]testClientCert, len(clientCNs)),
+		agentCerts:    make(map[string]testAgentCert, len(agentNames)),
 	}
 	dir := t.TempDir()
 
-	for _, cn := range clientCNs {
-		uris := makeURIs(t, cn)
-		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: cn}, true, nil, uris, false)
-		tc := testClientCert{certPEM: certPEM, keyPEM: keyPEM}
+	for _, n := range agentNames {
+		uris := makeURIs(t, n)
+		certPEM, keyPEM := issueCert(t, caCert, caKey, pkix.Name{CommonName: n}, true, nil, uris, false)
+		tc := testAgentCert{certPEM: certPEM, keyPEM: keyPEM}
 
-		tc.certPEMPath = filepath.Join(dir, cn+"-cert.pem")
+		tc.certPEMPath = filepath.Join(dir, n+"-cert.pem")
 		writeFile(t, tc.certPEMPath, certPEM)
 
-		tc.keyPEMPath = filepath.Join(dir, cn+"-key.pem")
+		tc.keyPEMPath = filepath.Join(dir, n+"-key.pem")
 		writeFile(t, tc.keyPEMPath, keyPEM)
 
-		pki.clientCerts[cn] = tc
+		pki.agentCerts[n] = tc
 	}
 
 	pki.caCertFilePath = filepath.Join(dir, "ca.pem")

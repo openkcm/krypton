@@ -127,7 +127,7 @@ func main() {
 		mtlsConfig, err := config.GetAuthConfig(cfg.Auth.Config)
 		handleErr(err, "failed to get auth config for gRPC server")
 
-		authn, err := interceptor.NewAuthenticator(cfg.Authentication.AllowedCNs)
+		authn, err := interceptor.NewAuthenticator(cfg.Auth.Identities.URIs())
 		handleErr(err, "failed to create authenticator for gRPC server")
 		grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(authn.UnaryInterceptor))
 

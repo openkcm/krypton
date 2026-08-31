@@ -18,13 +18,16 @@ const (
 // AuthType is a discriminator string that selects the authentication strategy.
 type AuthType string
 
+// IdentityConfig is a human-readable name paired with a kryptonid:// URI.
+type Identities []IdentityConfig
+
 // RootAuthConfig holds the auth section of a root instance configuration.
 // It pairs an AuthType discriminator with a list of allowed identities and
 // a polymorphic Config that is decoded based on the type.
 type RootAuthConfig struct {
-	AuthType   AuthType         `yaml:"type"`
-	Identities []IdentityConfig `yaml:"identities,omitempty"`
-	Config     AuthConfig       `yaml:"-"`
+	AuthType   AuthType   `yaml:"type"`
+	Identities Identities `yaml:"identities,omitempty"`
+	Config     AuthConfig `yaml:"-"`
 }
 
 // AgentAuthConfig holds the auth section of an agent bootstrap configuration.
@@ -68,9 +71,7 @@ func (m *RootAuthConfig) Validate() error {
 	if m.AuthType != AuthTypeMTLS {
 		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
 	}
-	if m.Config == nil {
-		return ErrNilConfig
-	}
+
 	if len(m.Identities) == 0 {
 		return fmt.Errorf("%w: identities cannot be empty", ErrInvalidIdentities)
 	}
@@ -83,6 +84,10 @@ func (m *RootAuthConfig) Validate() error {
 			return fmt.Errorf("%w: invalid identity URI %q: %w", ErrInvalidIdentities, i.URI, err)
 		}
 	}
+
+	if m.Config == nil {
+		return ErrNilConfig
+	}
 	return m.Config.Validate()
 }
 
@@ -92,6 +97,7 @@ func (m *AgentAuthConfig) Validate() error {
 	if m.AuthType != AuthTypeMTLS {
 		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
 	}
+
 	if m.Config == nil {
 		return ErrNilConfig
 	}
@@ -179,6 +185,15 @@ func GetAuthConfig(c AuthConfig) (*MTLSConfig, error) {
 		return cfg, nil
 	}
 	return nil, fmt.Errorf("%w: expected *MTLSConfig, got %T", ErrUnknownAuthType, c)
+}
+
+// URIs returns a slice of the URI strings from the Identities list.
+func (i Identities) URIs() []string {
+	res := make([]string, 0, len(i))
+	for _, id := range i {
+		res = append(res, string(id.URI))
+	}
+	return res
 }
 
 func newConfig(t AuthType) (AuthConfig, error) {

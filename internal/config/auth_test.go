@@ -674,3 +674,30 @@ func Test_GetAuthConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestIdentitiesURIs(t *testing.T) {
+	// given
+	cfg := config.RootAuthConfig{
+		Identities: []config.IdentityConfig{
+			{
+				Name: "root-node",
+				URI:  "kryptonid://acme-corp/service/root",
+			},
+			{
+				Name: "kms-service",
+				URI:  "kryptonid://acme-corp/service/agent",
+			},
+		},
+	}
+
+	expectedURIs := []string{
+		"kryptonid://acme-corp/service/root",
+		"kryptonid://acme-corp/service/agent",
+	}
+
+	// when
+	actURIs := cfg.Identities.URIs()
+
+	// then
+	assert.Equal(t, expectedURIs, actURIs)
+}

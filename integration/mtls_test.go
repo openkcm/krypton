@@ -20,6 +20,7 @@ func TestMTLS(t *testing.T) {
 	}
 
 	t.Run("should fail given no login", func(t *testing.T) {
+		t.Parallel()
 		// when
 		cmd := newCLICommand(ctx, t.TempDir(), createTenantCmd()...)
 		output, err := cmd.CombinedOutput()
@@ -30,6 +31,7 @@ func TestMTLS(t *testing.T) {
 	})
 
 	t.Run("should fail given noauth login against mtls server", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
@@ -49,6 +51,7 @@ func TestMTLS(t *testing.T) {
 	})
 
 	t.Run("should create tenant when noauth login is rejected by mtls server and re login with mtls", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
@@ -65,8 +68,8 @@ func TestMTLS(t *testing.T) {
 		require.Contains(t, string(output), "code = Unavailable desc = connection error: desc = \"error reading server preface")
 
 		// re-login with mtls
-		cCerts, ok := env.pki.clientCerts[env.allowedCN]
-		require.True(t, ok, "client certs for allowedCN not found")
+		cCerts, ok := env.pki.agentCerts[env.allowedAgent]
+		require.True(t, ok, "client certs for allowed URIs not found")
 
 		cmd = newCLICommand(ctx, homeDir, "login", "mtls", "--cert", cCerts.certPEMPath, "--key", cCerts.keyPEMPath, "--ca", env.pki.caCertFilePath)
 		output, err = cmd.CombinedOutput()
@@ -82,13 +85,14 @@ func TestMTLS(t *testing.T) {
 	})
 
 	t.Run("should fail when client uses wrong CA to verify server certificate", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
-		// create a new PKI with same allowed CN but different CA (untrusted)
-		untrustedPki := newTestPKI(t, env.allowedCN)
-		untrustedCerts, ok := untrustedPki.clientCerts[env.allowedCN]
-		require.True(t, ok, "client certs for allowedCN not found")
+		// create a new PKI with same allowed URIs but different CA (untrusted)
+		untrustedPki := newTestPKI(t, env.allowedAgent)
+		untrustedCerts, ok := untrustedPki.agentCerts[env.allowedAgent]
+		require.True(t, ok, "client certs for allowed URIs not found")
 
 		// login with mtls using cert signed by untrusted CA
 		cmd := newCLICommand(ctx, homeDir, "login", "mtls", "--cert", untrustedCerts.certPEMPath, "--key", untrustedCerts.keyPEMPath, "--ca", untrustedPki.caCertFilePath)
@@ -105,14 +109,15 @@ func TestMTLS(t *testing.T) {
 		assert.Contains(t, string(output), "transport: authentication handshake failed: tls: failed to verify certificate")
 	})
 
-	t.Run("should reject client cert signed by untrusted CA even with allowed CN", func(t *testing.T) {
+	t.Run("should reject client cert signed by untrusted CA even with allowed URIs", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
-		// create a new PKI with same allowed CN but different CA (untrusted)
-		untrustedPki := newTestPKI(t, env.allowedCN)
-		untrustedCerts, ok := untrustedPki.clientCerts[env.allowedCN]
-		require.True(t, ok, "client certs for allowedCN not found")
+		// create a new PKI with same allowed URIs but different CA (untrusted)
+		untrustedPki := newTestPKI(t, env.allowedAgent)
+		untrustedCerts, ok := untrustedPki.agentCerts[env.allowedAgent]
+		require.True(t, ok, "client certs for allowed URIs not found")
 
 		// when
 		// login with mtls using cert signed by untrusted CA
@@ -124,20 +129,21 @@ func TestMTLS(t *testing.T) {
 		assert.Contains(t, string(output), "Error: failed to verify cert/key pair:")
 	})
 
-	t.Run("should reject client cert with non-allowed CN signed by trusted CA", func(t *testing.T) {
+	t.Run("should reject client cert with non-allowed URIs signed by trusted CA", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
-		// issue a cert signed by the trusted CA but with a CN not in the allowlist
-		uris := makeURIs(t, "non-allowed-cn")
-		nonAllowedCert, nonAllowedKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: "non-allowed-cn"}, true, nil, uris, false)
+		// issue a cert signed by the trusted CA but with a URIs not in the allowlist
+		nonAllowedURIs := makeURIs(t, "non-allowed-agent")
+		nonAllowedCert, nonAllowedKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: env.allowedAgent}, true, nil, nonAllowedURIs, false)
 		nonAllowedCertPath := filepath.Join(homeDir, "non_allowed_cert.pem")
 		nonAllowedKeyPath := filepath.Join(homeDir, "non_allowed_key.pem")
 
 		writeFile(t, nonAllowedCertPath, nonAllowedCert)
 		writeFile(t, nonAllowedKeyPath, nonAllowedKey)
 
-		// login with mtls using cert that has a non-allowed CN
+		// login with mtls using cert that has a non-allowed URIs
 		cmd := newCLICommand(ctx, homeDir, "login", "mtls", "--cert", nonAllowedCertPath, "--key", nonAllowedKeyPath, "--ca", env.pki.caCertFilePath)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "mtls login setup should succeed, output: %s", string(output))
@@ -152,13 +158,14 @@ func TestMTLS(t *testing.T) {
 		assert.Contains(t, string(output), "code = PermissionDenied desc = unauthorized client")
 	})
 
-	t.Run("should accept newly issued cert with allowed CN signed by trusted CA", func(t *testing.T) {
+	t.Run("should accept newly issued cert with allowed URIs signed by trusted CA", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
-		// issue a new cert signed by the trusted CA with the allowed CN
-		uris := makeURIs(t, env.allowedCN)
-		validCert, validKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: env.allowedCN}, true, nil, uris, false)
+		// issue a new cert signed by the trusted CA with the allowed URIs
+		allowedURIs := makeURIs(t, env.allowedAgent)
+		validCert, validKey := issueCert(t, env.pki.caCert, env.pki.caPrivateKey, pkix.Name{CommonName: env.allowedAgent}, true, nil, allowedURIs, false)
 		validCertPath := filepath.Join(homeDir, "valid_cert.pem")
 		validKeyPath := filepath.Join(homeDir, "valid_key.pem")
 
@@ -180,12 +187,13 @@ func TestMTLS(t *testing.T) {
 	})
 
 	t.Run("should create tenant given mtls login", func(t *testing.T) {
+		t.Parallel()
 		// given
 		homeDir := t.TempDir()
 
 		// login with mtls
-		cCerts, ok := env.pki.clientCerts[env.allowedCN]
-		require.True(t, ok, "client certs for allowedCN not found")
+		cCerts, ok := env.pki.agentCerts[env.allowedAgent]
+		require.True(t, ok, "client certs for allowed URIs not found")
 
 		cmd := newCLICommand(ctx, homeDir, "login", "mtls", "--cert", cCerts.certPEMPath, "--key", cCerts.keyPEMPath, "--ca", env.pki.caCertFilePath)
 		output, err := cmd.CombinedOutput()
