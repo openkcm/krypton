@@ -444,6 +444,8 @@ auth:
       key_path: dummy
       ca_path: dummy
   identities:
+    - name: root
+      uri: kryptonid://acme-corp/service/root
     - name: %s
       uri: %s
 `, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName, makeKryptonID(agentName))
@@ -517,6 +519,8 @@ auth:
       key_path: dummy
       ca_path: dummy
   identities:
+    - name: root
+      uri: kryptonid://acme-corp/service/root
     - name: %s
       uri: %s
 `, serverCertPath, serverKeyPath, clientCAPath, allowedAgent, makeKryptonID(allowedAgent))

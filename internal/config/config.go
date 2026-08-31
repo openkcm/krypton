@@ -42,8 +42,8 @@ type KryptonRoot struct {
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
 	Name           string                     `yaml:"name"`
-	Auth           *RootAuthConfig            `yaml:"auth"`
 	Role           spec.AgentRole             `yaml:"role"`
+	Auth           *RootAuthConfig            `yaml:"auth,omitempty"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
 	KeyBindings    map[string]spec.KeyBinding `yaml:"key_bindings"`
@@ -56,8 +56,8 @@ type RootConfig struct {
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
 type AgentBootstrapConfig struct {
 	Name        string           `yaml:"name"`
-	Auth        *AgentAuthConfig `yaml:"auth"`
 	Role        spec.AgentRole   `yaml:"role"`
+	Auth        *AgentAuthConfig `yaml:"auth,omitempty"`
 	KryptonRoot KryptonRoot      `yaml:"krypton_root"`
 }
 
@@ -99,6 +99,9 @@ func (cfg *RootConfig) Validate() error {
 	if cfg.Auth != nil {
 		if err := cfg.Auth.Validate(); err != nil {
 			return fmt.Errorf("auth: %w", err)
+		}
+		if err := cfg.Auth.Identities.ValidateAuthIdentities(cfg); err != nil {
+			return fmt.Errorf("auth identities: %w", err)
 		}
 	}
 

@@ -35,7 +35,7 @@ func TestBuildTLSConfig(t *testing.T) {
 	got, err := cfg.BuildTLSConfig()
 	require.NoError(t, err)
 	assert.Equal(t, tls.RequireAndVerifyClientCert, got.ClientAuth)
-	assert.GreaterOrEqual(t, got.MinVersion, uint16(tls.VersionTLS12))
+	assert.Equal(t, got.MinVersion, uint16(tls.VersionTLS13))
 	assert.NotNil(t, got.ClientCAs)
 	assert.Len(t, got.Certificates, 1)
 }

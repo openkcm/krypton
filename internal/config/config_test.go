@@ -315,6 +315,10 @@ func TestValidateRootConfig(t *testing.T) {
 						},
 					},
 				}
+				c.Auth.Identities = append(c.Auth.Identities, config.IdentityConfig{
+					Name: "agent-aws",
+					URI:  "kryptonid://acme-service/service/agent-aws",
+				})
 			},
 			wantErr: nil,
 		},
@@ -326,6 +330,13 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 			},
 			wantErr: config.ErrUnknownAuthType,
+		},
+		{
+			name: "auth is nil",
+			modify: func(c *config.RootConfig) {
+				c.Auth = nil
+			},
+			wantErr: nil,
 		},
 	}
 
@@ -374,6 +385,11 @@ func TestValidateAgentBootstrapConfig(t *testing.T) {
 			name:    "invalid auth type",
 			modify:  func(c *config.AgentBootstrapConfig) { c.Auth.AuthType = "invalid" },
 			wantErr: config.ErrUnknownAuthType,
+		},
+		{
+			name:    "auth is nil",
+			modify:  func(c *config.AgentBootstrapConfig) { c.Auth = nil },
+			wantErr: nil,
 		},
 	}
 

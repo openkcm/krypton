@@ -9,10 +9,11 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/identity"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
-func TestMTLSConfigValidate(t *testing.T) {
+func TestMTLSConfig_Validate(t *testing.T) {
 	// given
 	tests := []struct {
 		name    string
@@ -149,7 +150,7 @@ func TestMTLSConfigValidate(t *testing.T) {
 	}
 }
 
-func TestMTLSConfigAuthType(t *testing.T) {
+func TestMTLSConfig_AuthType(t *testing.T) {
 	// given
 	cfg := &config.MTLSConfig{}
 
@@ -160,7 +161,7 @@ func TestMTLSConfigAuthType(t *testing.T) {
 	assert.Equal(t, config.AuthTypeMTLS, authType)
 }
 
-func Test_RootAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
+func TestRootAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
 	// given
 	yamlData := `
 type: mtls
@@ -205,7 +206,7 @@ config:
 	assert.Equal(t, "/etc/certs/ca.crt", mtlsConfig.Client.CAPath)
 }
 
-func Test_RootAuthConfig_UnmarshalYAML_Error(t *testing.T) {
+func TestRootAuthConfig_UnmarshalYAML_Error(t *testing.T) {
 	// given
 	// type is set to an unknown value, which should trigger an error during unmarshalling.
 	yamlData := `
@@ -235,7 +236,7 @@ config:
 	assert.ErrorIs(t, err, config.ErrUnknownAuthType)
 }
 
-func Test_RootAuthConfig_UnmarshalYAML_MissingAuthBlock(t *testing.T) {
+func TestRootAuthConfig_UnmarshalYAML_MissingAuthBlock(t *testing.T) {
 	// given
 	// type is set but the auth block is omitted, exercising the Kind==0 branch.
 	yamlData := `
@@ -264,7 +265,7 @@ identities:
 	assert.ErrorIs(t, mtlsConfig.Validate(), tlsconf.ErrInvalidTLSConfig)
 }
 
-func Test_AgentAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
+func TestAgentAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
 	// given
 	yamlData := `
 type: mtls
@@ -298,7 +299,7 @@ config:
 	assert.Equal(t, "/etc/certs/ca.crt", mtlsConfig.Client.CAPath)
 }
 
-func Test_AgentAuthConfig_UnmarshalYAML_Error(t *testing.T) {
+func TestAgentAuthConfig_UnmarshalYAML_Error(t *testing.T) {
 	// given
 	// type is set to an unknown value, which should trigger an error during unmarshalling.
 	yamlData := `
@@ -323,7 +324,7 @@ config:
 	assert.ErrorIs(t, err, config.ErrUnknownAuthType)
 }
 
-func Test_AgentAuthConfig_UnmarshalYAML_MissingAuthBlock(t *testing.T) {
+func TestAgentAuthConfig_UnmarshalYAML_MissingAuthBlock(t *testing.T) {
 	// given
 	// type is set but the auth block is omitted, exercising the Kind==0 branch.
 	yamlData := `
@@ -349,7 +350,7 @@ type: mtls
 	assert.ErrorIs(t, mtlsConfig.Validate(), tlsconf.ErrInvalidTLSConfig)
 }
 
-func Test_UnmarshalYAML_EmptyAuthType(t *testing.T) {
+func TestAuthConfig_UnmarshalYAML_EmptyAuthType(t *testing.T) {
 	// given
 	// type is empty, which should trigger ErrUnknownAuthType.
 	yamlData := `
@@ -377,7 +378,7 @@ type: ""
 	})
 }
 
-func Test_RootAuthConfig_Validate(t *testing.T) {
+func TestRootAuthConfig_Validate(t *testing.T) {
 	// given
 	tts := []struct {
 		name    string
@@ -532,6 +533,31 @@ func Test_RootAuthConfig_Validate(t *testing.T) {
 			},
 			wantErr: config.ErrInvalidIdentities,
 		},
+		{
+			name: "spaced empty identity name for mtls",
+			cfg: config.RootAuthConfig{
+				AuthType: config.AuthTypeMTLS,
+				Identities: []config.IdentityConfig{
+					{
+						Name: "   ",
+						URI:  "kryptonid://acme-corp/service/root",
+					},
+				},
+				Config: &config.MTLSConfig{
+					Server: tlsconf.Server{
+						CertPath: "server-cert.pem",
+						KeyPath:  "server-key.pem",
+						CAPath:   "ca-cert.pem",
+					},
+					Client: tlsconf.Client{
+						CertPath: "client-cert.pem",
+						KeyPath:  "client-key.pem",
+						CAPath:   "ca-cert.pem",
+					},
+				},
+			},
+			wantErr: config.ErrInvalidIdentities,
+		},
 	}
 
 	for _, tt := range tts {
@@ -545,7 +571,7 @@ func Test_RootAuthConfig_Validate(t *testing.T) {
 	}
 }
 
-func Test_AgentAuthConfig_Validate(t *testing.T) {
+func TestAgentAuthConfig_Validate(t *testing.T) {
 	// given
 	tts := []struct {
 		name    string
@@ -624,7 +650,7 @@ type fakeAuthConfig struct{}
 func (f *fakeAuthConfig) AuthType() config.AuthType { return "fake" }
 func (f *fakeAuthConfig) Validate() error           { return nil }
 
-func Test_GetAuthConfig(t *testing.T) {
+func TestGetAuthConfig(t *testing.T) {
 	// given
 	tts := []struct {
 		name    string
@@ -675,7 +701,7 @@ func Test_GetAuthConfig(t *testing.T) {
 	}
 }
 
-func TestIdentitiesURIs(t *testing.T) {
+func TestIdentities_URIs(t *testing.T) {
 	// given
 	cfg := config.RootAuthConfig{
 		Identities: []config.IdentityConfig{
@@ -700,4 +726,144 @@ func TestIdentitiesURIs(t *testing.T) {
 
 	// then
 	assert.Equal(t, expectedURIs, actURIs)
+}
+
+func TestIdentities_ValidateAuthIdentities(t *testing.T) {
+	// given
+	tts := []struct {
+		name       string
+		cfg        *config.RootConfig
+		identities config.Identities
+		wantErr    error
+	}{
+		{
+			name: "valid identities",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: config.Identities{
+				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "only root identity provided",
+			cfg: &config.RootConfig{
+				Name:     "root-node",
+				Topology: spec.Topology{},
+			},
+			identities: config.Identities{
+				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "missing identity for segment",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+						{Name: "segment2"},
+					},
+				},
+			},
+			identities: config.Identities{
+				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
+			},
+			wantErr: config.ErrInvalidIdentities,
+		},
+		{
+			name: "extra identity not in topology",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: config.Identities{
+				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
+				{Name: "extra-segment", URI: "kryptonid://acme-corp/service/extra-segment"},
+			},
+			wantErr: nil, // Extra identities are allowed; only missing ones are an error.
+		},
+		{
+			name: "empty identities list",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: config.Identities{},
+			wantErr:    config.ErrInvalidIdentities,
+		},
+		{
+			name: "nil identities list",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: nil,
+			wantErr:    config.ErrInvalidIdentities,
+		},
+		{
+			name: "missing root identity",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: config.Identities{
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
+			},
+			wantErr: config.ErrInvalidIdentities,
+		},
+		{
+			name: "duplicate identity names",
+			cfg: &config.RootConfig{
+				Name: "root-node",
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{Name: "segment1"},
+					},
+				},
+			},
+			identities: config.Identities{
+				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
+				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1-duplicate"},
+			},
+			wantErr: config.ErrInvalidIdentities,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.identities.ValidateAuthIdentities(tt.cfg)
+
+			// then
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }

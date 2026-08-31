@@ -3,6 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -18,7 +21,7 @@ const (
 // AuthType is a discriminator string that selects the authentication strategy.
 type AuthType string
 
-// IdentityConfig is a human-readable name paired with a kryptonid:// URI.
+// Identities is a list of named identity configurations.
 type Identities []IdentityConfig
 
 // RootAuthConfig holds the auth section of a root instance configuration.
@@ -26,7 +29,7 @@ type Identities []IdentityConfig
 // a polymorphic Config that is decoded based on the type.
 type RootAuthConfig struct {
 	AuthType   AuthType   `yaml:"type"`
-	Identities Identities `yaml:"identities,omitempty"`
+	Identities Identities `yaml:"identities"`
 	Config     AuthConfig `yaml:"-"`
 }
 
@@ -67,59 +70,41 @@ var _ AuthConfig = (*MTLSConfig)(nil)
 
 // Validate checks the RootAuthConfig for structural correctness, including
 // the auth type, identities list, and the underlying AuthConfig.
-func (m *RootAuthConfig) Validate() error {
-	if m.AuthType != AuthTypeMTLS {
-		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
+func (c *RootAuthConfig) Validate() error {
+	if c.AuthType != AuthTypeMTLS {
+		return fmt.Errorf("%w: %q", ErrUnknownAuthType, c.AuthType)
 	}
 
-	if len(m.Identities) == 0 {
+	if len(c.Identities) == 0 {
 		return fmt.Errorf("%w: identities cannot be empty", ErrInvalidIdentities)
 	}
-	for _, i := range m.Identities {
-		if i.Name == "" {
+	for _, i := range c.Identities {
+		if strings.TrimSpace(i.Name) == "" {
 			return fmt.Errorf("%w: identity name cannot be empty", ErrInvalidIdentities)
 		}
 		_, err := identity.Parse(i.URI)
 		if err != nil {
-			return fmt.Errorf("%w: invalid identity URI %q: %w", ErrInvalidIdentities, i.URI, err)
+			return fmt.Errorf("%w: invalid identity URI %q", errors.Join(ErrInvalidIdentities, err), i.URI)
 		}
 	}
 
-	if m.Config == nil {
+	if c.Config == nil {
 		return ErrNilConfig
 	}
-	return m.Config.Validate()
+	return c.Config.Validate()
 }
 
 // Validate checks the AgentAuthConfig for structural correctness,
 // including the auth type and the underlying AuthConfig.
-func (m *AgentAuthConfig) Validate() error {
-	if m.AuthType != AuthTypeMTLS {
-		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
+func (c *AgentAuthConfig) Validate() error {
+	if c.AuthType != AuthTypeMTLS {
+		return fmt.Errorf("%w: %q", ErrUnknownAuthType, c.AuthType)
 	}
 
-	if m.Config == nil {
+	if c.Config == nil {
 		return ErrNilConfig
 	}
-	return m.Config.Validate()
-}
-
-// AuthType returns AuthTypeMTLS.
-func (m *MTLSConfig) AuthType() AuthType {
-	return AuthTypeMTLS
-}
-
-// Validate checks that both server and client TLS paths are non-empty.
-func (m *MTLSConfig) Validate() error {
-	err := m.Server.Validate()
-	if err != nil {
-		return fmt.Errorf("server: %w", err)
-	}
-	err = m.Client.Validate()
-	if err != nil {
-		return fmt.Errorf("client: %w", err)
-	}
-	return nil
+	return c.Config.Validate()
 }
 
 func (c *RootAuthConfig) UnmarshalYAML(node *yaml.Node) error {
@@ -178,6 +163,24 @@ func (c *AgentAuthConfig) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// AuthType returns AuthTypeMTLS.
+func (m *MTLSConfig) AuthType() AuthType {
+	return AuthTypeMTLS
+}
+
+// Validate checks that both server and client TLS paths are non-empty.
+func (m *MTLSConfig) Validate() error {
+	err := m.Server.Validate()
+	if err != nil {
+		return fmt.Errorf("server: %w", err)
+	}
+	err = m.Client.Validate()
+	if err != nil {
+		return fmt.Errorf("client: %w", err)
+	}
+	return nil
+}
+
 // GetAuthConfig extracts the concrete *MTLSConfig from an AuthConfig interface.
 // Returns ErrUnknownAuthType if the underlying type is not *MTLSConfig.
 func GetAuthConfig(c AuthConfig) (*MTLSConfig, error) {
@@ -194,6 +197,31 @@ func (i Identities) URIs() []string {
 		res = append(res, string(id.URI))
 	}
 	return res
+}
+
+// ValidateAuthIdentities checks that every root and topology segment name
+// has a corresponding identity entry, with no duplicates.
+func (i Identities) ValidateAuthIdentities(cfg *RootConfig) error {
+	expected := make(map[string]struct{}, len(cfg.Topology.Segments)+1)
+	expected[cfg.Name] = struct{}{}
+	for _, seg := range cfg.Topology.Segments {
+		expected[seg.Name] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, len(i))
+	for _, id := range i {
+		if _, ok := seen[id.Name]; ok {
+			return fmt.Errorf("%w: duplicate identity name %q", ErrInvalidIdentities, id.Name)
+		}
+		seen[id.Name] = struct{}{}
+		delete(expected, id.Name)
+	}
+
+	if len(expected) > 0 {
+		return fmt.Errorf("%w: missing identities for segments: %v", ErrInvalidIdentities, slices.Collect(maps.Keys(expected)))
+	}
+
+	return nil
 }
 
 func newConfig(t AuthType) (AuthConfig, error) {
