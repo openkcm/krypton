@@ -13,11 +13,8 @@ import (
 const DefaultPort = 5696
 
 var (
-	ErrEmptyBindAddr   = errors.New("bind_addr cannot be empty")
-	ErrInvalidPort     = errors.New("port must be between 1 and 65535")
-	ErrEmptyServerCert = errors.New("tls.server_cert cannot be empty")
-	ErrEmptyServerKey  = errors.New("tls.server_key cannot be empty")
-	ErrEmptyClientCA   = errors.New("tls.client_ca cannot be empty")
+	ErrEmptyBindAddr = errors.New("bind_addr cannot be empty")
+	ErrInvalidPort   = errors.New("port must be between 1 and 65535")
 )
 
 // Config configures the KMIP server.
@@ -36,16 +33,7 @@ func (c *Config) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("%w: got %d", ErrInvalidPort, c.Port)
 	}
-	if c.TLS.Cert == "" {
-		return ErrEmptyServerCert
-	}
-	if c.TLS.Key == "" {
-		return ErrEmptyServerKey
-	}
-	if c.TLS.ClientCA == "" {
-		return ErrEmptyClientCA
-	}
-	return nil
+	return c.TLS.Validate()
 }
 
 // listenAddress returns "host:port" for use with net.Listen.

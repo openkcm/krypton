@@ -30,7 +30,7 @@ func TestBuildTLSConfig(t *testing.T) {
 	caPath := filepath.Join(dir, "client-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, pki.caPEM, 0o600))
 
-	cfg := tlsconf.Server{Cert: certPath, Key: keyPath, ClientCA: caPath}
+	cfg := tlsconf.Server{CertPath: certPath, KeyPath: keyPath, CAPath: caPath}
 
 	got, err := cfg.BuildTLSConfig()
 	require.NoError(t, err)
@@ -38,6 +38,46 @@ func TestBuildTLSConfig(t *testing.T) {
 	assert.GreaterOrEqual(t, got.MinVersion, uint16(tls.VersionTLS12))
 	assert.NotNil(t, got.ClientCAs)
 	assert.Len(t, got.Certificates, 1)
+}
+
+func TestServerValidate(t *testing.T) {
+	// given
+	tts := []struct {
+		name    string
+		cfg     tlsconf.Server
+		wantErr error
+	}{
+		{
+			name:    "valid config",
+			cfg:     tlsconf.Server{CertPath: "cert.pem", KeyPath: "key.pem", CAPath: "ca.pem"},
+			wantErr: nil,
+		},
+		{
+			name:    "missing cert path",
+			cfg:     tlsconf.Server{KeyPath: "key.pem", CAPath: "ca.pem"},
+			wantErr: tlsconf.ErrInvalidTLSConfig,
+		},
+		{
+			name:    "missing key path",
+			cfg:     tlsconf.Server{CertPath: "cert.pem", CAPath: "ca.pem"},
+			wantErr: tlsconf.ErrInvalidTLSConfig,
+		},
+		{
+			name:    "missing CA path",
+			cfg:     tlsconf.Server{CertPath: "cert.pem", KeyPath: "key.pem"},
+			wantErr: tlsconf.ErrInvalidTLSConfig,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.cfg.Validate()
+
+			// then
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }
 
 func TestBuildTLSConfigErrors(t *testing.T) {
@@ -50,9 +90,9 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 		t.Parallel()
 
 		cfg := tlsconf.Server{
-			Cert:     filepath.Join(dir, "nope.pem"),
-			Key:      keyPath,
-			ClientCA: filepath.Join(dir, "ca.pem"),
+			CertPath: filepath.Join(dir, "nope.pem"),
+			KeyPath:  keyPath,
+			CAPath:   filepath.Join(dir, "ca.pem"),
 		}
 		_, err := cfg.BuildTLSConfig()
 		assert.Error(t, err)
@@ -61,9 +101,9 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 	t.Run("missing CA", func(t *testing.T) {
 		t.Parallel()
 		cfg := tlsconf.Server{
-			Cert:     certPath,
-			Key:      keyPath,
-			ClientCA: filepath.Join(dir, "no-ca.pem"),
+			CertPath: certPath,
+			KeyPath:  keyPath,
+			CAPath:   filepath.Join(dir, "no-ca.pem"),
 		}
 
 		_, err := cfg.BuildTLSConfig()
@@ -75,9 +115,9 @@ func TestBuildTLSConfigErrors(t *testing.T) {
 		badCA := filepath.Join(dir, "bad-ca.pem")
 		require.NoError(t, os.WriteFile(badCA, []byte("not a certificate"), 0o600))
 		cfg := tlsconf.Server{
-			Cert:     certPath,
-			Key:      keyPath,
-			ClientCA: badCA,
+			CertPath: certPath,
+			KeyPath:  keyPath,
+			CAPath:   badCA,
 		}
 		_, err := cfg.BuildTLSConfig()
 		assert.ErrorIs(t, err, tlsconf.ErrCAInvalid)

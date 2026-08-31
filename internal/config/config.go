@@ -9,7 +9,6 @@ import (
 
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 var (
@@ -40,16 +39,6 @@ type KryptonRoot struct {
 	Address Address `yaml:"address"`
 }
 
-// ServerConfig represents the configuration for the server, including mTLS settings.
-type ServerConfig struct {
-	TLS *tlsconf.Server `yaml:"tls,omitempty"`
-}
-
-// ClientConfig represents the configuration for the client, including mTLS settings.
-type ClientConfig struct {
-	TLS *tlsconf.Client `yaml:"tls,omitempty"`
-}
-
 // AuthenticationConfig holds the configuration for client authentication, specifically allowed Common Names (CNs) for mTLS.
 type AuthenticationConfig struct {
 	// AllowedCNs is a list of Common Names (CNs) that are permitted to authenticate with the server.
@@ -59,8 +48,8 @@ type AuthenticationConfig struct {
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
 	Name           string                     `yaml:"name"`
-	Server         ServerConfig               `yaml:"server"`
 	Authentication AuthenticationConfig       `yaml:"authentication"`
+	Auth           *RootAuthConfig            `yaml:"auth"`
 	Role           spec.AgentRole             `yaml:"role"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
@@ -73,10 +62,10 @@ type RootConfig struct {
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
 type AgentBootstrapConfig struct {
-	Name        string         `yaml:"name"`
-	Client      ClientConfig   `yaml:"client"`
-	Role        spec.AgentRole `yaml:"role"`
-	KryptonRoot KryptonRoot    `yaml:"krypton_root"`
+	Name        string           `yaml:"name"`
+	Auth        *AgentAuthConfig `yaml:"auth"`
+	Role        spec.AgentRole   `yaml:"role"`
+	KryptonRoot KryptonRoot      `yaml:"krypton_root"`
 }
 
 // Validate checks the RootConfig for structural correctness.
