@@ -443,7 +443,7 @@ auth:
       cert_path: dummy
       key_path: dummy
       ca_path: dummy
-  identities:
+  identity:
     - name: root
       uri: kryptonid://acme-corp/service/root
     - name: %s
@@ -518,7 +518,7 @@ auth:
       cert_path: dummy
       key_path: dummy
       ca_path: dummy
-  identities:
+  identity:
     - name: root
       uri: kryptonid://acme-corp/service/root
     - name: %s

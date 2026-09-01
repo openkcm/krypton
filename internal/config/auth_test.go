@@ -165,7 +165,7 @@ func TestRootAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
 	// given
 	yamlData := `
 type: mtls
-identities:
+identity:
   - name: root-node
     uri: kryptonid://acme-corp/service/root
   - name: kms-service
@@ -189,12 +189,12 @@ config:
 	// then
 	assert.NoError(t, err)
 	assert.Equal(t, config.AuthTypeMTLS, cfg.AuthType)
-	require.Len(t, cfg.Identities, 2)
-	assert.Equal(t, "root-node", cfg.Identities[0].Name)
-	assert.Equal(t, identity.URI("kryptonid://acme-corp/service/root"), cfg.Identities[0].URI)
+	require.Len(t, cfg.IdentityConfigs, 2)
+	assert.Equal(t, "root-node", cfg.IdentityConfigs[0].Name)
+	assert.Equal(t, identity.URI("kryptonid://acme-corp/service/root"), cfg.IdentityConfigs[0].URI)
 
-	assert.Equal(t, "kms-service", cfg.Identities[1].Name)
-	assert.Equal(t, identity.URI("kryptonid://acme-corp/service/agent"), cfg.Identities[1].URI)
+	assert.Equal(t, "kms-service", cfg.IdentityConfigs[1].Name)
+	assert.Equal(t, identity.URI("kryptonid://acme-corp/service/agent"), cfg.IdentityConfigs[1].URI)
 
 	mtlsConfig, ok := cfg.Config.(*config.MTLSConfig)
 	assert.True(t, ok)
@@ -211,7 +211,7 @@ func TestRootAuthConfig_UnmarshalYAML_Error(t *testing.T) {
 	// type is set to an unknown value, which should trigger an error during unmarshalling.
 	yamlData := `
 type: unknown
-identities:
+identity:
   - name: root-node
     uri: kryptonid://acme-corp/service/root
   - name: kms-service
@@ -241,7 +241,7 @@ func TestRootAuthConfig_UnmarshalYAML_MissingAuthBlock(t *testing.T) {
 	// type is set but the auth block is omitted, exercising the Kind==0 branch.
 	yamlData := `
 type: mtls
-identities:
+identity:
   - name: root-node
     uri: kryptonid://acme-corp/service/root
 `
@@ -389,7 +389,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "valid mtls config",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "root-node",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -414,7 +414,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "invalid mtls config with empty server cert path",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "root-node",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -439,7 +439,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "unknown auth type",
 			cfg: config.RootAuthConfig{
 				AuthType: "unknown",
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "root-node",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -453,7 +453,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "nil config for mtls",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "root-node",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -466,8 +466,8 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 		{
 			name: "empty identities for mtls",
 			cfg: config.RootAuthConfig{
-				AuthType:   config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{},
+				AuthType:        config.AuthTypeMTLS,
+				IdentityConfigs: []config.IdentityConfig{},
 				Config: &config.MTLSConfig{
 					Server: tlsconf.Server{
 						CertPath: "server-cert.pem",
@@ -487,7 +487,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "invalid identity URI for mtls",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "root-node",
 						URI:  "invalid-uri",
@@ -512,7 +512,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "empty identity name for mtls",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -537,7 +537,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 			name: "spaced empty identity name for mtls",
 			cfg: config.RootAuthConfig{
 				AuthType: config.AuthTypeMTLS,
-				Identities: []config.IdentityConfig{
+				IdentityConfigs: []config.IdentityConfig{
 					{
 						Name: "   ",
 						URI:  "kryptonid://acme-corp/service/root",
@@ -704,7 +704,7 @@ func TestGetAuthConfig(t *testing.T) {
 func TestIdentities_URIs(t *testing.T) {
 	// given
 	cfg := config.RootAuthConfig{
-		Identities: []config.IdentityConfig{
+		IdentityConfigs: []config.IdentityConfig{
 			{
 				Name: "root-node",
 				URI:  "kryptonid://acme-corp/service/root",
@@ -722,7 +722,7 @@ func TestIdentities_URIs(t *testing.T) {
 	}
 
 	// when
-	actURIs := cfg.Identities.URIs()
+	actURIs := cfg.IdentityConfigs.URIs()
 
 	// then
 	assert.Equal(t, expectedURIs, actURIs)
@@ -733,7 +733,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 	tts := []struct {
 		name       string
 		cfg        *config.RootConfig
-		identities config.Identities
+		identities config.IdentityConfigs
 		wantErr    error
 	}{
 		{
@@ -746,7 +746,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
 			},
@@ -758,7 +758,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 				Name:     "root-node",
 				Topology: spec.Topology{},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
 			},
 			wantErr: nil,
@@ -774,7 +774,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
 			},
@@ -790,7 +790,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
 				{Name: "extra-segment", URI: "kryptonid://acme-corp/service/extra-segment"},
@@ -807,7 +807,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{},
+			identities: config.IdentityConfigs{},
 			wantErr:    config.ErrInvalidIdentities,
 		},
 		{
@@ -833,7 +833,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
 			},
 			wantErr: config.ErrInvalidIdentities,
@@ -848,7 +848,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 					},
 				},
 			},
-			identities: config.Identities{
+			identities: config.IdentityConfigs{
 				{Name: "root-node", URI: "kryptonid://acme-corp/service/root"},
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1"},
 				{Name: "segment1", URI: "kryptonid://acme-corp/service/segment1-duplicate"},

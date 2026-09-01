@@ -21,16 +21,16 @@ const (
 // AuthType is a discriminator string that selects the authentication strategy.
 type AuthType string
 
-// Identities is a list of named identity configurations.
-type Identities []IdentityConfig
+// IdentityConfigs is a list of named identity configurations.
+type IdentityConfigs []IdentityConfig
 
 // RootAuthConfig holds the auth section of a root instance configuration.
 // It pairs an AuthType discriminator with a list of allowed identities and
 // a polymorphic Config that is decoded based on the type.
 type RootAuthConfig struct {
-	AuthType   AuthType   `yaml:"type"`
-	Identities Identities `yaml:"identities"`
-	Config     AuthConfig `yaml:"-"`
+	AuthType        AuthType        `yaml:"type"`
+	IdentityConfigs IdentityConfigs `yaml:"identity"`
+	Config          AuthConfig      `yaml:"-"`
 }
 
 // AgentAuthConfig holds the auth section of an agent bootstrap configuration.
@@ -75,10 +75,10 @@ func (c *RootAuthConfig) Validate() error {
 		return fmt.Errorf("%w: %q", ErrUnknownAuthType, c.AuthType)
 	}
 
-	if len(c.Identities) == 0 {
+	if len(c.IdentityConfigs) == 0 {
 		return fmt.Errorf("%w: identities cannot be empty", ErrInvalidIdentities)
 	}
-	for _, i := range c.Identities {
+	for _, i := range c.IdentityConfigs {
 		if strings.TrimSpace(i.Name) == "" {
 			return fmt.Errorf("%w: identity name cannot be empty", ErrInvalidIdentities)
 		}
@@ -191,7 +191,7 @@ func GetAuthConfig(c AuthConfig) (*MTLSConfig, error) {
 }
 
 // URIs returns a slice of the URI strings from the Identities list.
-func (i Identities) URIs() []string {
+func (i IdentityConfigs) URIs() []string {
 	res := make([]string, 0, len(i))
 	for _, id := range i {
 		res = append(res, string(id.URI))
@@ -201,7 +201,7 @@ func (i Identities) URIs() []string {
 
 // ValidateAuthIdentities checks that every root and topology segment name
 // has a corresponding identity entry, with no duplicates.
-func (i Identities) ValidateAuthIdentities(cfg *RootConfig) error {
+func (i IdentityConfigs) ValidateAuthIdentities(cfg *RootConfig) error {
 	expected := make(map[string]struct{}, len(cfg.Topology.Segments)+1)
 	expected[cfg.Name] = struct{}{}
 	for _, seg := range cfg.Topology.Segments {

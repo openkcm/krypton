@@ -100,7 +100,7 @@ func (cfg *RootConfig) Validate() error {
 		if err := cfg.Auth.Validate(); err != nil {
 			return fmt.Errorf("auth: %w", err)
 		}
-		if err := cfg.Auth.Identities.ValidateAuthIdentities(cfg); err != nil {
+		if err := cfg.Auth.IdentityConfigs.ValidateAuthIdentities(cfg); err != nil {
 			return fmt.Errorf("auth identities: %w", err)
 		}
 	}

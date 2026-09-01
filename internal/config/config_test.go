@@ -79,7 +79,7 @@ func validRootConfig() *config.RootConfig {
 		Topology: spec.Topology{},
 		Auth: &config.RootAuthConfig{
 			AuthType: config.AuthTypeMTLS,
-			Identities: []config.IdentityConfig{
+			IdentityConfigs: []config.IdentityConfig{
 				{
 					Name: "root",
 					URI:  "kryptonid://acme-service/service/root",
@@ -315,7 +315,7 @@ func TestValidateRootConfig(t *testing.T) {
 						},
 					},
 				}
-				c.Auth.Identities = append(c.Auth.Identities, config.IdentityConfig{
+				c.Auth.IdentityConfigs = append(c.Auth.IdentityConfigs, config.IdentityConfig{
 					Name: "agent-aws",
 					URI:  "kryptonid://acme-service/service/agent-aws",
 				})
