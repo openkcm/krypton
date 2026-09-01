@@ -84,9 +84,9 @@ func NewMTLSCredentialsValue(b []byte) (*MTLSCredentialsValue, error) {
 
 func (v *MTLSCredentialsValue) TLSConfig() (*tls.Config, error) {
 	return (&tlsconf.Client{
-		Cert:     v.PublicCertPath,
-		Key:      v.PrivateKeyPath,
-		ServerCA: v.CaCertPath,
+		CertPath: v.PublicCertPath,
+		KeyPath:  v.PrivateKeyPath,
+		CAPath:   v.CaCertPath,
 	}).BuildTLSConfig()
 }
 

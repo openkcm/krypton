@@ -16,9 +16,9 @@ func TestConfigValidate(t *testing.T) {
 		BindAddr: "0.0.0.0",
 		Port:     5696,
 		TLS: tlsconf.Server{
-			Cert:     "/etc/tls/server.pem",
-			Key:      "/etc/tls/server-key.pem",
-			ClientCA: "/etc/tls/ca.pem",
+			CertPath: "/etc/tls/server.pem",
+			KeyPath:  "/etc/tls/server-key.pem",
+			CAPath:   "/etc/tls/ca.pem",
 		},
 	}
 
@@ -31,9 +31,9 @@ func TestConfigValidate(t *testing.T) {
 		{"empty bind addr", func(c *kmip.Config) { c.BindAddr = "" }, kmip.ErrEmptyBindAddr},
 		{"port too low", func(c *kmip.Config) { c.Port = 0 }, kmip.ErrInvalidPort},
 		{"port too high", func(c *kmip.Config) { c.Port = 65536 }, kmip.ErrInvalidPort},
-		{"empty server cert", func(c *kmip.Config) { c.TLS.Cert = "" }, kmip.ErrEmptyServerCert},
-		{"empty server key", func(c *kmip.Config) { c.TLS.Key = "" }, kmip.ErrEmptyServerKey},
-		{"empty client CA", func(c *kmip.Config) { c.TLS.ClientCA = "" }, kmip.ErrEmptyClientCA},
+		{"empty server cert", func(c *kmip.Config) { c.TLS.CertPath = "" }, tlsconf.ErrInvalidTLSConfig},
+		{"empty server key", func(c *kmip.Config) { c.TLS.KeyPath = "" }, tlsconf.ErrInvalidTLSConfig},
+		{"empty client CA", func(c *kmip.Config) { c.TLS.CAPath = "" }, tlsconf.ErrInvalidTLSConfig},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

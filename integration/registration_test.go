@@ -26,11 +26,12 @@ func TestRegistration(t *testing.T) {
 
 	// pki
 	pki := newTestPKI(t, allowedAgentName)
-	clientPki, ok := pki.clientCerts[allowedAgentName]
+	clientPki, ok := pki.agentCerts[allowedAgentName]
 	require.True(t, ok, "client certificate for agent not found in PKI")
 
 	// Setup test database and store
 	db, dbConnStr := createDatabase(t)
+	_, agentDBConnStr := createDatabase(t)
 
 	// Create agent store
 	rootAgentStore := sql.NewAgentStore(db)
@@ -60,7 +61,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 
@@ -135,11 +135,10 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		// create a new PKI with invalid certificates for the agent
 		invalidPki := newTestPKI(t, allowedAgentName)
-		invalidClientPki, ok := invalidPki.clientCerts[allowedAgentName]
+		invalidClientPki, ok := invalidPki.agentCerts[allowedAgentName]
 		require.True(t, ok, "client certificate for agent not found in invalid PKI")
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), invalidClientPki.certPEMPath, invalidClientPki.keyPEMPath, invalidPki.caCertFilePath)
@@ -185,7 +184,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 		nonExistingRootPort := freePort(t) // Use a port that is not being listened on
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(nonExistingRootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -220,7 +218,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, "invalid-agent-name", localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 
@@ -255,10 +252,10 @@ func TestRegistration(t *testing.T) {
 		homeDir := t.TempDir()
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
-		// issue a new cert signed by the trusted CA with the allowed CN
-		validCert, validKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, false)
+		// issue a new cert signed by the trusted CA with the allowed URIs
+		uris := makeURIs(t, allowedAgentName)
+		validCert, validKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, uris, false)
 		validCertPath := filepath.Join(homeDir, "valid_cert.pem")
 		validKeyPath := filepath.Join(homeDir, "valid_key.pem")
 
@@ -299,7 +296,6 @@ func TestRegistration(t *testing.T) {
 		agentID2 := uuid.NewString()
 		agentPort1 := freePort(t)
 		agentPort2 := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath1 := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 		agentCfgPath2 := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -348,11 +344,11 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 		homeDir := t.TempDir()
 
 		// issue an expired client certificate signed by the trusted CA
-		expiredCert, expiredKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, true)
+		uris := makeURIs(t, allowedAgentName)
+		expiredCert, expiredKey := issueCert(t, pki.caCert, pki.caPrivateKey, pkix.Name{CommonName: allowedAgentName}, true, nil, uris, true)
 		expiredCertPath := filepath.Join(homeDir, "expired_cert.pem")
 		expiredKeyPath := filepath.Join(homeDir, "expired_key.pem")
 
@@ -401,7 +397,6 @@ func TestRegistration(t *testing.T) {
 		// given
 		agentID := uuid.NewString()
 		agentPort := freePort(t)
-		_, agentDBConnStr := createDatabase(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
 		agentCmd := createCmd(t, agentBinary, []string{

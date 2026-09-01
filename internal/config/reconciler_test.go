@@ -1,4 +1,4 @@
-package config
+package config_test
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/openkcm/krypton/internal/config"
 )
 
 func TestLoadReconcilerConfig(t *testing.T) {
@@ -20,19 +22,19 @@ reconciler:
 `), 0o600)
 	require.NoError(t, err)
 
-	cfg, err := LoadReconcilerConfig(path)
+	cfg, err := config.LoadReconcilerConfig(path)
 	require.NoError(t, err)
 
 	assert.Equal(t, uint64(5), cfg.MaxReconcileCount)
 	require.Len(t, cfg.Targets, 1)
-	assert.Equal(t, ReconcilerTarget{Name: "agent-aws", Address: "localhost:9091"}, cfg.Targets[0])
+	assert.Equal(t, config.ReconcilerTarget{Name: "agent-aws", Address: "localhost:9091"}, cfg.Targets[0])
 }
 
 func TestRootConfigIncludesReconcilerConfig(t *testing.T) {
 	cfg := validRootConfig()
-	cfg.Reconciler = ReconcilerConfig{
+	cfg.Reconciler = config.ReconcilerConfig{
 		MaxReconcileCount: 12,
-		Targets: []ReconcilerTarget{
+		Targets: []config.ReconcilerTarget{
 			{Name: "agent-aws", Address: "localhost:9091"},
 		},
 	}
@@ -40,7 +42,7 @@ func TestRootConfigIncludesReconcilerConfig(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 
 	assert.Equal(t, uint64(12), cfg.Reconciler.MaxReconcileCount)
-	assert.Equal(t, []ReconcilerTarget{{Name: "agent-aws", Address: "localhost:9091"}}, cfg.Reconciler.Targets)
+	assert.Equal(t, []config.ReconcilerTarget{{Name: "agent-aws", Address: "localhost:9091"}}, cfg.Reconciler.Targets)
 }
 
 func TestRootConfigLeavesEmptyReconcilerConfigAlone(t *testing.T) {
@@ -48,46 +50,46 @@ func TestRootConfigLeavesEmptyReconcilerConfigAlone(t *testing.T) {
 
 	require.NoError(t, cfg.Validate())
 
-	assert.Equal(t, ReconcilerConfig{}, cfg.Reconciler)
+	assert.Equal(t, config.ReconcilerConfig{}, cfg.Reconciler)
 }
 
 func TestReconcilerConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
-		modify  func(*ReconcilerConfig)
+		modify  func(*config.ReconcilerConfig)
 		wantErr error
 	}{
 		{
 			name:   "valid default config",
-			modify: func(*ReconcilerConfig) {},
+			modify: func(*config.ReconcilerConfig) {},
 		},
 		{
 			name: "duplicate target",
-			modify: func(c *ReconcilerConfig) {
+			modify: func(c *config.ReconcilerConfig) {
 				target := validReconcilerTarget("agent-aws")
-				c.Targets = []ReconcilerTarget{target, target}
+				c.Targets = []config.ReconcilerTarget{target, target}
 			},
-			wantErr: ErrReconcilerTargetDuplicate,
+			wantErr: config.ErrReconcilerTargetDuplicate,
 		},
 		{
 			name: "target name required",
-			modify: func(c *ReconcilerConfig) {
-				c.Targets = []ReconcilerTarget{{Address: "localhost:9091"}}
+			modify: func(c *config.ReconcilerConfig) {
+				c.Targets = []config.ReconcilerTarget{{Address: "localhost:9091"}}
 			},
-			wantErr: ErrReconcilerTargetNameEmpty,
+			wantErr: config.ErrReconcilerTargetNameEmpty,
 		},
 		{
 			name: "target address required",
-			modify: func(c *ReconcilerConfig) {
-				c.Targets = []ReconcilerTarget{{Name: "agent-aws"}}
+			modify: func(c *config.ReconcilerConfig) {
+				c.Targets = []config.ReconcilerTarget{{Name: "agent-aws"}}
 			},
-			wantErr: ErrReconcilerTargetAddressEmpty,
+			wantErr: config.ErrReconcilerTargetAddressEmpty,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := ReconcilerConfig{}
+			cfg := config.ReconcilerConfig{}
 			tt.modify(&cfg)
 
 			err := cfg.Validate()
@@ -100,6 +102,6 @@ func TestReconcilerConfigValidate(t *testing.T) {
 	}
 }
 
-func validReconcilerTarget(name string) ReconcilerTarget {
-	return ReconcilerTarget{Name: name, Address: "localhost:9091"}
+func validReconcilerTarget(name string) config.ReconcilerTarget {
+	return config.ReconcilerTarget{Name: name, Address: "localhost:9091"}
 }

@@ -39,9 +39,9 @@ func TestServerIntegration(t *testing.T) {
 		BindAddr: "127.0.0.1",
 		Port:     freePort(t),
 		TLS: tlsconf.Server{
-			Cert:     serverCert,
-			Key:      serverKey,
-			ClientCA: pki.caCertFile,
+			CertPath: serverCert,
+			KeyPath:  serverKey,
+			CAPath:   pki.caCertFile,
 		},
 	}
 	srv, err := kmip.NewServer(cfg, env.mgr)

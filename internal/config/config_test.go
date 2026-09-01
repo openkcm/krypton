@@ -1,4 +1,4 @@
-package config
+package config_test
 
 import (
 	"os"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
@@ -15,6 +16,7 @@ import (
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/tlsconf"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -39,8 +41,8 @@ func validSealerSpec() *sealerprovider.Spec {
 	}
 }
 
-func validRootConfig() *RootConfig {
-	return &RootConfig{
+func validRootConfig() *config.RootConfig {
+	return &config.RootConfig{
 		Name: "root",
 		Role: "root",
 		Segment: spec.HierarchySegment{
@@ -75,15 +77,51 @@ func validRootConfig() *RootConfig {
 			},
 		},
 		Topology: spec.Topology{},
+		Auth: &config.RootAuthConfig{
+			AuthType: config.AuthTypeMTLS,
+			IdentityConfigs: []config.IdentityConfig{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-service/service/root",
+				},
+			},
+			Config: &config.MTLSConfig{
+				Server: tlsconf.Server{
+					CertPath: "certpath",
+					KeyPath:  "keypath",
+					CAPath:   "capath",
+				},
+				Client: tlsconf.Client{
+					CertPath: "certpath",
+					KeyPath:  "keypath",
+					CAPath:   "capath",
+				},
+			},
+		},
 	}
 }
 
-func validAgentBootstrapConfig() *AgentBootstrapConfig {
-	return &AgentBootstrapConfig{
+func validAgentBootstrapConfig() *config.AgentBootstrapConfig {
+	return &config.AgentBootstrapConfig{
 		Name: "agent-aws",
 		Role: "agent",
-		KryptonRoot: KryptonRoot{
-			Address: Address{Type: AddressTypeHTTP, URL: "https://root:8443"},
+		KryptonRoot: config.KryptonRoot{
+			Address: config.Address{Type: config.AddressTypeHTTP, URL: "https://root:8443"},
+		},
+		Auth: &config.AgentAuthConfig{
+			AuthType: config.AuthTypeMTLS,
+			Config: &config.MTLSConfig{
+				Server: tlsconf.Server{
+					CertPath: "certpath",
+					KeyPath:  "keypath",
+					CAPath:   "capath",
+				},
+				Client: tlsconf.Client{
+					CertPath: "certpath",
+					KeyPath:  "keypath",
+					CAPath:   "capath",
+				},
+			},
 		},
 	}
 }
@@ -99,32 +137,32 @@ func writeTestFile(t *testing.T, dir, name, content string) string {
 func TestValidateRootConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		modify  func(*RootConfig)
+		modify  func(*config.RootConfig)
 		wantErr error
 	}{
 		{
 			name:    "valid config",
-			modify:  func(_ *RootConfig) {},
+			modify:  func(_ *config.RootConfig) {},
 			wantErr: nil,
 		},
 		{
 			name:    "empty name",
-			modify:  func(c *RootConfig) { c.Name = "" },
-			wantErr: ErrConfigNameEmpty,
+			modify:  func(c *config.RootConfig) { c.Name = "" },
+			wantErr: config.ErrConfigNameEmpty,
 		},
 		{
 			name:    "wrong role",
-			modify:  func(c *RootConfig) { c.Role = "agent" },
-			wantErr: ErrRoleInvalid,
+			modify:  func(c *config.RootConfig) { c.Role = "agent" },
+			wantErr: config.ErrRoleInvalid,
 		},
 		{
 			name:    "invalid hierarchy",
-			modify:  func(c *RootConfig) { c.Hierarchy.Name = "" },
+			modify:  func(c *config.RootConfig) { c.Hierarchy.Name = "" },
 			wantErr: spec.ErrKeyHierarchyNameEmpty,
 		},
 		{
 			name: "invalid topology segment",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Topology = spec.Topology{
 					Segments: []spec.TopologySegment{
 						{
@@ -144,7 +182,7 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name: "invalid LabelsSpec in hierarchy",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Hierarchy.KeySpecs[0].LabelsSpec = spec.LabelsSpec{
 					Requirements: map[string]spec.LabelRequirement{
 						"env": {
@@ -160,27 +198,27 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name:    "invalid segment",
-			modify:  func(c *RootConfig) { c.Segment.StartKind = "" },
+			modify:  func(c *config.RootConfig) { c.Segment.StartKind = "" },
 			wantErr: spec.ErrStartKindEmpty,
 		},
 		{
 			name:    "empty key bindings",
-			modify:  func(c *RootConfig) { c.KeyBindings = map[string]spec.KeyBinding{} },
-			wantErr: ErrConfigKeyBindingsEmpty,
+			modify:  func(c *config.RootConfig) { c.KeyBindings = map[string]spec.KeyBinding{} },
+			wantErr: config.ErrConfigKeyBindingsEmpty,
 		},
 		{
 			name:    "nil key bindings",
-			modify:  func(c *RootConfig) { c.KeyBindings = nil },
-			wantErr: ErrConfigKeyBindingsEmpty,
+			modify:  func(c *config.RootConfig) { c.KeyBindings = nil },
+			wantErr: config.ErrConfigKeyBindingsEmpty,
 		},
 		{
 			name:    "empty topology is valid",
-			modify:  func(c *RootConfig) { c.Topology = spec.Topology{} },
+			modify:  func(c *config.RootConfig) { c.Topology = spec.Topology{} },
 			wantErr: nil,
 		},
 		{
 			name: "cross-validation: root start not hierarchy first key",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
@@ -200,7 +238,7 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name: "cross-validation: root end kind is tek",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
@@ -220,7 +258,7 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name: "cross-validation: agent start not tek",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
@@ -250,7 +288,7 @@ func TestValidateRootConfig(t *testing.T) {
 		},
 		{
 			name: "cross-validation: valid full config with topology",
-			modify: func(c *RootConfig) {
+			modify: func(c *config.RootConfig) {
 				c.Hierarchy = spec.KeyHierarchy{
 					Name: "h",
 					KeySpecs: []spec.KeySpec{
@@ -277,6 +315,26 @@ func TestValidateRootConfig(t *testing.T) {
 						},
 					},
 				}
+				c.Auth.IdentityConfigs = append(c.Auth.IdentityConfigs, config.IdentityConfig{
+					Name: "agent-aws",
+					URI:  "kryptonid://acme-service/service/agent-aws",
+				})
+			},
+			wantErr: nil,
+		},
+		{
+			name: "invalid auth type",
+			modify: func(c *config.RootConfig) {
+				c.Auth = &config.RootAuthConfig{
+					AuthType: "invalid",
+				}
+			},
+			wantErr: config.ErrUnknownAuthType,
+		},
+		{
+			name: "auth is nil",
+			modify: func(c *config.RootConfig) {
+				c.Auth = nil
 			},
 			wantErr: nil,
 		},
@@ -300,28 +358,38 @@ func TestValidateRootConfig(t *testing.T) {
 func TestValidateAgentBootstrapConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		modify  func(*AgentBootstrapConfig)
+		modify  func(*config.AgentBootstrapConfig)
 		wantErr error
 	}{
 		{
 			name:    "valid config",
-			modify:  func(_ *AgentBootstrapConfig) {},
+			modify:  func(_ *config.AgentBootstrapConfig) {},
 			wantErr: nil,
 		},
 		{
 			name:    "empty name",
-			modify:  func(c *AgentBootstrapConfig) { c.Name = "" },
-			wantErr: ErrConfigNameEmpty,
+			modify:  func(c *config.AgentBootstrapConfig) { c.Name = "" },
+			wantErr: config.ErrConfigNameEmpty,
 		},
 		{
 			name:    "wrong role",
-			modify:  func(c *AgentBootstrapConfig) { c.Role = "root" },
-			wantErr: ErrRoleInvalid,
+			modify:  func(c *config.AgentBootstrapConfig) { c.Role = "root" },
+			wantErr: config.ErrRoleInvalid,
 		},
 		{
 			name:    "empty address URL",
-			modify:  func(c *AgentBootstrapConfig) { c.KryptonRoot.Address.URL = "" },
-			wantErr: ErrConfigAddressEmpty,
+			modify:  func(c *config.AgentBootstrapConfig) { c.KryptonRoot.Address.URL = "" },
+			wantErr: config.ErrConfigAddressEmpty,
+		},
+		{
+			name:    "invalid auth type",
+			modify:  func(c *config.AgentBootstrapConfig) { c.Auth.AuthType = "invalid" },
+			wantErr: config.ErrUnknownAuthType,
+		},
+		{
+			name:    "auth is nil",
+			modify:  func(c *config.AgentBootstrapConfig) { c.Auth = nil },
+			wantErr: nil,
 		},
 	}
 
@@ -449,12 +517,12 @@ reconciler:
 		yaml       string
 		wantErr    bool
 		errContain string
-		validate   func(*testing.T, *RootConfig)
+		validate   func(*testing.T, *config.RootConfig)
 	}{
 		{
 			name: "valid root config",
 			yaml: validYAML,
-			validate: func(t *testing.T, cfg *RootConfig) {
+			validate: func(t *testing.T, cfg *config.RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
 				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
@@ -513,7 +581,7 @@ hierarchy:
 			dir := t.TempDir()
 			path := writeTestFile(t, dir, "config.yaml", tt.yaml)
 
-			cfg, err := LoadRootConfig(path)
+			cfg, err := config.LoadRootConfig(path)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, cfg)
@@ -531,7 +599,7 @@ hierarchy:
 	}
 
 	t.Run("file not found", func(t *testing.T) {
-		cfg, err := LoadRootConfig("/nonexistent/path.yaml")
+		cfg, err := config.LoadRootConfig("/nonexistent/path.yaml")
 		assert.Error(t, err)
 		assert.Nil(t, cfg)
 		assert.Contains(t, err.Error(), "failed to read file")
@@ -552,16 +620,16 @@ krypton_root:
 		yaml       string
 		wantErr    bool
 		errContain string
-		validate   func(*testing.T, *AgentBootstrapConfig)
+		validate   func(*testing.T, *config.AgentBootstrapConfig)
 	}{
 		{
 			name: "valid bootstrap config",
 			yaml: validYAML,
-			validate: func(t *testing.T, cfg *AgentBootstrapConfig) {
+			validate: func(t *testing.T, cfg *config.AgentBootstrapConfig) {
 				t.Helper()
 				assert.Equal(t, "agent-aws", cfg.Name)
 				assert.Equal(t, spec.AgentRole("agent"), cfg.Role)
-				assert.Equal(t, AddressTypeHTTP, cfg.KryptonRoot.Address.Type)
+				assert.Equal(t, config.AddressTypeHTTP, cfg.KryptonRoot.Address.Type)
 				assert.Equal(t, "https://root.krypton.example.com:8443", cfg.KryptonRoot.Address.URL)
 			},
 		},
@@ -590,7 +658,7 @@ krypton_root:
 			dir := t.TempDir()
 			path := writeTestFile(t, dir, "config.yaml", tt.yaml)
 
-			cfg, err := LoadAgentBootstrapConfig(path)
+			cfg, err := config.LoadAgentBootstrapConfig(path)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, cfg)
@@ -608,7 +676,7 @@ krypton_root:
 	}
 
 	t.Run("file not found", func(t *testing.T) {
-		cfg, err := LoadAgentBootstrapConfig("/nonexistent/path.yaml")
+		cfg, err := config.LoadAgentBootstrapConfig("/nonexistent/path.yaml")
 		assert.Error(t, err)
 		assert.Nil(t, cfg)
 		assert.Contains(t, err.Error(), "failed to read file")

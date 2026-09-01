@@ -46,9 +46,9 @@ type testEnvWithRootKMIP struct {
 
 // testEnvWithRootMTLS holds the shared infrastructure for tests that require a root server with mTLS.
 type testEnvWithRootMTLS struct {
-	allowedCN  string
-	pki        *testPKI
-	serverAddr string
+	allowedAgent string
+	pki          *testPKI
+	serverAddr   string
 }
 
 // testKey is a 32-byte AES-256 key for testing.
@@ -114,10 +114,10 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	_, rootConnStr := createDatabase(t)
 	rootPort := freePort(t)
 
-	allowedCN := "allowed-cn" + uuid.NewString()
-	pki := newTestPKI(t, allowedCN)
+	allowedAgent := "allowed-agent" + uuid.NewString()
+	pki := newTestPKI(t, allowedAgent)
 
-	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath, allowedCN)
+	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath, allowedAgent)
 
 	rootBinary := buildBinary(t, "root", "../cmd/root")
 
@@ -131,9 +131,9 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	waitForPort(t, rootPort)
 
 	return &testEnvWithRootMTLS{
-		serverAddr: localAddress(rootPort),
-		allowedCN:  allowedCN,
-		pki:        pki,
+		serverAddr:   localAddress(rootPort),
+		allowedAgent: allowedAgent,
+		pki:          pki,
 	}
 }
 
@@ -340,9 +340,9 @@ kmip:
   bind_addr: localhost
   port: %s
   tls:
-    server_cert: %s
-    server_key: %s
-    client_ca: %s
+    cert_path: %s
+    key_path: %s
+    ca_path: %s
 `, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
@@ -432,20 +432,29 @@ topology:
             type: unsafe-sqlite-memory
       selector_labels:
         cloud: aws
-server:
-  tls:
-    server_cert: %s
-    server_key: %s
-    client_ca: %s
-authentication:
-  allowed_cns:
-    - %s`, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName)
+auth:
+  type: mtls
+  config:
+    server:
+      cert_path: %s
+      key_path: %s
+      ca_path: %s
+    client:
+      cert_path: dummy
+      key_path: dummy
+      ca_path: dummy
+  identity:
+    - name: root
+      uri: kryptonid://acme-corp/service/root
+    - name: %s
+      uri: %s
+`, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName, makeKryptonID(agentName))
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
 
 // writeRootConfigWithMTLS writes a root config YAML with mTLS settings to a temp file and returns the path.
-func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath, cn string) string {
+func writeRootConfigWithMTLS(t *testing.T, serverCertPath, serverKeyPath, clientCAPath, allowedAgent string) string {
 	t.Helper()
 
 	content := fmt.Sprintf(`name: root
@@ -498,16 +507,23 @@ hierarchy:
       labels_spec:
         allow_user_labels: true
 topology:
-server:
-  tls:
-    server_cert: %s
-    server_key: %s
-    client_ca: %s
-authentication:
-  allowed_cns:
-    - %s
-
-`, serverCertPath, serverKeyPath, clientCAPath, cn)
+auth:
+  type: mtls
+  config:
+    server:
+      cert_path: %s
+      key_path: %s
+      ca_path: %s
+    client:
+      cert_path: dummy
+      key_path: dummy
+      ca_path: dummy
+  identity:
+    - name: root
+      uri: kryptonid://acme-corp/service/root
+    - name: %s
+      uri: %s
+`, serverCertPath, serverKeyPath, clientCAPath, allowedAgent, makeKryptonID(allowedAgent))
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -536,11 +552,17 @@ krypton_root:
   address:
     type: grpc
     url: %s
-client:
-  tls:
-    client_cert: %s
-    client_key: %s
-    server_ca: %s
+auth:
+  type: mtls
+  config:
+    client:
+      cert_path: %s
+      key_path: %s
+      ca_path: %s
+    server:
+      cert_path: dummy
+      key_path: dummy
+      ca_path: dummy
 `, agentName, rootAddress, clientCertPath, clientKeyPath, serverCAPath)
 
 	return writeTempFile(t, "agent-config-*.yaml", content)
@@ -710,7 +732,7 @@ func waitTCPReady(t *testing.T, addr string) {
 // dialAs creates a KMIP client authenticated with the certificate for the given CN.
 func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Client {
 	t.Helper()
-	cc, ok := pki.clientCerts[cn]
+	cc, ok := pki.agentCerts[cn]
 	require.True(t, ok, "no client cert for CN %q", cn)
 	c, err := kmipclient.Dial(
 		addr,
@@ -817,4 +839,8 @@ func createCmd(t *testing.T, path string, env []string) *exec.Cmd {
 
 func localAddress(port string) string {
 	return net.JoinHostPort(localHost, port)
+}
+
+func makeKryptonID(uri string) string {
+	return "kryptonid://acme-corp/service/" + uri
 }

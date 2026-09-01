@@ -1,17 +1,19 @@
 package tlsconf
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+)
 
 // Client holds file paths for the client keypair and the server CA bundle used to verify the server (mTLS).
 type Client struct {
-	Cert     string `yaml:"client_cert"`
-	Key      string `yaml:"client_key"`
-	ServerCA string `yaml:"server_ca"`
+	CertPath string `yaml:"cert_path"`
+	KeyPath  string `yaml:"key_path"`
+	CAPath   string `yaml:"ca_path"`
 }
 
 // BuildTLSConfig constructs a tls.Config for the client, enforcing mTLS with the provided certificates.
 func (cfg *Client) BuildTLSConfig() (*tls.Config, error) {
-	certs, pool, err := tlsConfig(cfg.Cert, cfg.Key, cfg.ServerCA)
+	certs, pool, err := tlsConfig(cfg.CertPath, cfg.KeyPath, cfg.CAPath)
 	if err != nil {
 		return nil, err
 	}
@@ -20,4 +22,12 @@ func (cfg *Client) BuildTLSConfig() (*tls.Config, error) {
 		RootCAs:      pool,
 		MinVersion:   tls.VersionTLS12,
 	}, nil
+}
+
+// Validate checks that all required paths are provided for the client configuration.
+func (cfg *Client) Validate() error {
+	if cfg.CertPath == "" || cfg.KeyPath == "" || cfg.CAPath == "" {
+		return ErrInvalidTLSConfig
+	}
+	return nil
 }
