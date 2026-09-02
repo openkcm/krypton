@@ -53,7 +53,7 @@ type Topology struct {
 	Segments []TopologySegment `yaml:"segments"` // List of agent segments (0 to N agents)
 }
 
-func (t *Topology) GetSegemntByName(name string) *TopologySegment {
+func (t *Topology) GetSegmentByName(name string) *TopologySegment {
 	for _, seg := range t.Segments {
 		if seg.Name == name {
 			return &seg
@@ -127,4 +127,22 @@ func (t *Topology) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (t *Topology) Children(agentName string) (map[string]struct{}, bool) {
+	cs := make(map[string]struct{}, len(t.Segments))
+	for _, seg := range t.Segments {
+		if seg.Name == agentName {
+			continue
+		}
+		for _, binding := range seg.KeyBindings {
+			if binding.ParentKeyProvider != nil && binding.ParentKeyProvider.AgentName == agentName {
+				cs[seg.Name] = struct{}{}
+			}
+		}
+	}
+	if len(cs) == 0 {
+		return nil, false
+	}
+	return cs, true
 }

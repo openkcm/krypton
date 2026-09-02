@@ -11,7 +11,6 @@ import (
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -44,8 +43,8 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 		return nil, err
 	}
 
-	seg, ok := a.topologySegment(agentName)
-	if !ok {
+	seg := a.config.Topology.GetSegmentByName(agentName)
+	if seg == nil {
 		slog.Error("agent not found in topology", "agentName", agentName)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "agent not found in topology"),
@@ -53,14 +52,26 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 		)
 	}
 
-	cfg := spec.NewAgentConfig(a.config.Hierarchy, seg)
+	var ids config.IdentityConfigs
+	if a.config.Auth != nil {
+		ids, err = a.config.AgentIdentities(agentName)
+		if err != nil {
+			slog.Error("failed to get agent identity configs", "agentName", agentName, "error", err)
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.FailedPrecondition, "failed to get agent identity configs"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
+		}
+	}
+
+	cfg := config.NewAgentConfig(a.config.Hierarchy, *seg, ids)
 
 	pCfg, err := yaml.Marshal(cfg)
 	if err != nil {
 		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.Internal, "failed to marshal agent config to yaml"),
-			proto.Code_ERROR_CODE_RETRY)
+			proto.Code_ERROR_CODE_ABORT)
 	}
 
 	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
@@ -93,8 +104,8 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 		return nil, err
 	}
 
-	_, ok := a.topologySegment(agentName)
-	if !ok {
+	seg := a.config.Topology.GetSegmentByName(agentName)
+	if seg == nil {
 		slog.Error("agent not found in topology", "agentName", agentName)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "agent not found in topology"),
@@ -151,13 +162,14 @@ func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest
 	return &DeregisterAgentResponse{}, nil
 }
 
-func (a *AgentService) topologySegment(agentName string) (spec.TopologySegment, bool) {
-	for _, seg := range a.config.Topology.Segments {
-		if seg.Name == agentName {
-			return seg, true
-		}
+func UnmarshalAgentConfig(b []byte) (*config.AgentConfig, error) {
+	var cfg config.AgentConfig
+	err := yaml.Unmarshal(b, &cfg)
+	if err != nil {
+		slog.Error("failed to unmarshal agent config from yaml", "error", err)
+		return nil, err
 	}
-	return spec.TopologySegment{}, false
+	return &cfg, nil
 }
 
 func validateInput(agentName, instanceID string) error {
@@ -176,14 +188,4 @@ func validateInput(agentName, instanceID string) error {
 		)
 	}
 	return nil
-}
-
-func UnmarshalAgentConfig(b []byte) (*spec.AgentConfig, error) {
-	var cfg spec.AgentConfig
-	err := yaml.Unmarshal(b, &cfg)
-	if err != nil {
-		slog.Error("failed to unmarshal agent config from yaml", "error", err)
-		return nil, err
-	}
-	return &cfg, nil
 }

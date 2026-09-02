@@ -134,56 +134,105 @@ func createDatabase(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-func validCryptorSpec() *cryptorprovider.Spec {
-	return &cryptorprovider.Spec{
-		Name:   "test-crypto",
-		Type:   aes256gcm.TypeAES256GCM,
-		Config: &aes256gcm.Config{},
-	}
-}
-
-func validRootConfig(agentName string) config.RootConfig {
-	expSegment := spec.TopologySegment{
-		Name:           agentName,
-		SelectorLabels: map[string]string{"region": "us-west"},
-		Segment: spec.HierarchySegment{
-			StartKind: "K2",
-			EndKind:   "K2",
+// baseRootConfig builds a RootConfig with the shared hierarchy, topology, and
+// the identity entries common to every test variant. Callers append extra
+// identities via extraIdentities.
+func baseRootConfig(agentName string, extraIdentities ...config.IdentityConfig) config.RootConfig {
+	identities := config.IdentityConfigs{
+		{
+			Name: agentName,
+			URI:  "kryptonid://acme-corp/service/agent-aws",
 		},
-		KeyBindings: map[string]spec.KeyBinding{
-			"binding1": {
-				CryptorSpec: validCryptorSpec(),
-				ParentKeyProvider: &spec.ParentKeyProviderRef{
-					AgentName: agentName,
+	}
+	identities = append(identities, extraIdentities...)
+	identities = append(identities,
+		config.IdentityConfig{
+			Name: "child-agent-1",
+			URI:  "kryptonid://acme-corp/service/child-agent-1",
+		},
+		config.IdentityConfig{
+			Name: "child-agent-2",
+			URI:  "kryptonid://acme-corp/service/child-agent-2",
+		},
+		config.IdentityConfig{
+			Name: "child-agent-3",
+			URI:  "kryptonid://acme-corp/service/child-agent-3",
+		},
+	)
+
+	return config.RootConfig{
+		Name: "root",
+		Hierarchy: spec.KeyHierarchy{
+			Name: "root-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0"},
+				{Kind: "K1"},
+				{Kind: "K2"},
+				{Kind: "K3"},
+			},
+		},
+		Auth: &config.RootAuthConfig{
+			IdentityConfigs: identities,
+		},
+		Topology: spec.Topology{
+			Segments: []spec.TopologySegment{
+				{
+					Name: agentName,
+					KeyBindings: map[string]spec.KeyBinding{
+						"K1": {
+							CryptorSpec: validCryptor(),
+						},
+					},
+					SelectorLabels: spec.SelectorLabels{"region": "us-west"},
+				},
+				{
+					Name: "child-agent-1",
+					KeyBindings: map[string]spec.KeyBinding{
+						"K2": {
+							ParentKeyProvider: &spec.ParentKeyProviderRef{
+								AgentName: agentName,
+							},
+						},
+					},
+				},
+				{
+					Name: "child-agent-2",
+					KeyBindings: map[string]spec.KeyBinding{
+						"K2": {
+							ParentKeyProvider: &spec.ParentKeyProviderRef{
+								AgentName: agentName,
+							},
+						},
+					},
+				},
+				{
+					Name: "child-agent-3",
+					KeyBindings: map[string]spec.KeyBinding{
+						"K3": {},
+					},
 				},
 			},
 		},
 	}
-	topology := spec.Topology{
-		Segments: []spec.TopologySegment{expSegment},
-	}
+}
 
-	expHierarchy := spec.KeyHierarchy{
-		Name: "some-hierarchy",
-		KeySpecs: []spec.KeySpec{
-			{
-				Kind:      "K1",
-				Role:      spec.KeyRoleRoot,
-				Algorithm: "",
-			},
-			{
-				Kind:      "K2",
-				Role:      spec.KeyRoleDek,
-				Algorithm: "",
-			},
-		},
-	}
+// rootConfigMissingRootIdentity returns a RootConfig that is missing the
+// root's own identity in Auth.IdentityConfigs, causing AgentIdentities to fail.
+func rootConfigMissingRootIdentity(agentName string) config.RootConfig {
+	return baseRootConfig(agentName)
+}
 
-	rootConfig := config.RootConfig{
-		Hierarchy: expHierarchy,
-		Topology:  topology,
-	}
-	return rootConfig
+func rootConfigWithNilAuth(agentName string) config.RootConfig {
+	cfg := baseRootConfig(agentName)
+	cfg.Auth = nil
+	return cfg
+}
+
+func validRootConfig(agentName string) config.RootConfig {
+	return baseRootConfig(agentName, config.IdentityConfig{
+		Name: "root",
+		URI:  "kryptonid://acme-corp/service/root",
+	})
 }
 
 func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
@@ -196,4 +245,12 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 	dt, ok := dts[0].(*proto.ErrorDetails)
 	require.True(t, ok, "expected error details of type proto.ErrorDetails")
 	assert.Equal(t, expCode, dt.GetCode())
+}
+
+func validCryptor() *cryptorprovider.Spec {
+	return &cryptorprovider.Spec{
+		Name:   "test-crypto",
+		Type:   aes256gcm.TypeAES256GCM,
+		Config: &aes256gcm.Config{},
+	}
 }

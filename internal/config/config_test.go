@@ -525,7 +525,7 @@ reconciler:
 			validate: func(t *testing.T, cfg *config.RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
-				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
+				assert.Equal(t, config.Role("root"), cfg.Role)
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
@@ -628,7 +628,7 @@ krypton_root:
 			validate: func(t *testing.T, cfg *config.AgentBootstrapConfig) {
 				t.Helper()
 				assert.Equal(t, "agent-aws", cfg.Name)
-				assert.Equal(t, spec.AgentRole("agent"), cfg.Role)
+				assert.Equal(t, config.Role("agent"), cfg.Role)
 				assert.Equal(t, config.AddressTypeHTTP, cfg.KryptonRoot.Address.Type)
 				assert.Equal(t, "https://root.krypton.example.com:8443", cfg.KryptonRoot.Address.URL)
 			},
@@ -681,6 +681,333 @@ krypton_root:
 		assert.Nil(t, cfg)
 		assert.Contains(t, err.Error(), "failed to read file")
 	})
+}
+
+func TestAgentIdentities(t *testing.T) {
+	// given
+	expAgentName := "agent-aws"
+
+	tts := []struct {
+		name       string
+		rootConfig config.RootConfig
+		expOutput  config.IdentityConfigs
+		isErr      error
+	}{
+		{
+			name: "returns root identity when agent has no children",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+					},
+				},
+			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+			},
+			isErr: nil,
+		},
+		{
+			name: "returns ErrAgentNotAllowed when agent not in identity configs",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: "unknown-aws",
+							URI:  "kryptonid://acme-corp/service/unknown-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: "unknown-aws",
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAgentNotAllowed,
+		},
+		{
+			name: "returns root and child identity configs when agent has one child",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+						{
+							Name: "child-agent",
+							URI:  "kryptonid://acme-corp/service/child-agent",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+				{
+					Name: "child-agent",
+					URI:  "kryptonid://acme-corp/service/child-agent",
+				},
+			},
+			isErr: nil,
+		},
+		{
+			name: "returns root and multiple children identity configs",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+						{
+							Name: "child-agent-1",
+							URI:  "kryptonid://acme-corp/service/child-agent-1",
+						},
+						{
+							Name: "child-agent-2",
+							URI:  "kryptonid://acme-corp/service/child-agent-2",
+						},
+						{
+							Name: "child-agent-3",
+							URI:  "kryptonid://acme-corp/service/child-agent-3",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent-1",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+						{
+							Name: "child-agent-2",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+						{
+							Name: "child-agent-3",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {},
+							},
+						},
+					},
+				},
+			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+				{
+					Name: "child-agent-1",
+					URI:  "kryptonid://acme-corp/service/child-agent-1",
+				},
+				{
+					Name: "child-agent-2",
+					URI:  "kryptonid://acme-corp/service/child-agent-2",
+				},
+			},
+			isErr: nil,
+		},
+		{
+			name: "returns ErrIdentityConfigsMissing when child has no identity config",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrIdentityConfigsMissing,
+		},
+		{
+			name: "returns ErrAuthConfigMissing when Auth is nil",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: nil,
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAuthConfigMissing,
+		},
+		{
+			name: "returns ErrAgentNotAllowed when identity config is empty",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAgentNotAllowed,
+		},
+		{
+			name: "returns ErrIdentityConfigsMissing when root identity is missing",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+					},
+				},
+
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrIdentityConfigsMissing,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			res, err := tt.rootConfig.AgentIdentities(expAgentName)
+
+			// then
+			assert.Equal(t, tt.expOutput, res)
+			assert.ErrorIs(t, err, tt.isErr)
+		})
+	}
 }
 
 func validLabelsSpec() spec.LabelsSpec {
