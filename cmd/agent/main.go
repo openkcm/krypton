@@ -23,6 +23,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -31,6 +32,9 @@ import (
 // This is a simple agent that registers itself with the root server,
 // sends periodic heartbeats, and deregisters on shutdown.
 func main() {
+	err := securemem.NoDump()
+	handleErr(err, "failed to set no-dump for secure memory")
+
 	ctx := context.Background()
 
 	agentID := os.Getenv("AGENT_ID")

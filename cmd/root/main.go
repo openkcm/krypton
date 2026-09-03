@@ -29,6 +29,7 @@ import (
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
@@ -43,11 +44,14 @@ import (
 // Simple krypton server for manual testing and development.
 // Not intended for production use (yet).
 func main() {
+	err := securemem.NoDump()
+	handleErr(err, "failed to set no-dump for secure memory")
+
 	srvPort := os.Getenv("SERVER_PORT")
 	if srvPort == "" {
 		srvPort = "8080"
 	}
-	_, err := strconv.Atoi(srvPort)
+	_, err = strconv.Atoi(srvPort)
 	handleErr(err, "invalid SERVER_PORT value")
 
 	dsn := os.Getenv("DATABASE_URL")
