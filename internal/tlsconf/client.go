@@ -20,7 +20,7 @@ func (cfg *Client) BuildTLSConfig() (*tls.Config, error) {
 	return &tls.Config{
 		Certificates: certs,
 		RootCAs:      pool,
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 	}, nil
 }
 

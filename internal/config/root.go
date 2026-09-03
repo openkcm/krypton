@@ -3,7 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -14,35 +16,16 @@ import (
 var (
 	ErrConfigNameEmpty        = errors.New("config name cannot be empty")
 	ErrRoleInvalid            = errors.New("invalid config role")
-	ErrConfigAddressEmpty     = errors.New("address URL cannot be empty")
 	ErrConfigKeyBindingsEmpty = errors.New("key bindings cannot be empty")
+	ErrAuthConfigMissing      = errors.New("auth config is missing")
+	ErrAgentNotAllowed        = errors.New("agent is not allowed to connect to root")
+	ErrIdentityConfigsMissing = errors.New("identity configs missing for topology members")
 )
-
-// AddressType identifies the transport protocol for inter-service communication.
-type AddressType string
-
-const (
-	// AddressTypeHTTP represents HTTP/HTTPS transport.
-	AddressTypeHTTP AddressType = "http"
-	// AddressTypeGRPC represents gRPC transport.
-	AddressTypeGRPC AddressType = "grpc"
-)
-
-// Address represents a network address for inter-service communication.
-type Address struct {
-	Type AddressType `yaml:"type"`
-	URL  string      `yaml:"url"`
-}
-
-// KryptonRoot holds the configuration for reaching the root instance.
-type KryptonRoot struct {
-	Address Address `yaml:"address"`
-}
 
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
 type RootConfig struct {
 	Name           string                     `yaml:"name"`
-	Role           spec.AgentRole             `yaml:"role"`
+	Role           Role                       `yaml:"role"`
 	Auth           *RootAuthConfig            `yaml:"auth,omitempty"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
@@ -53,14 +36,6 @@ type RootConfig struct {
 	KMIP           *kmip.Config               `yaml:"kmip,omitempty"`
 }
 
-// AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
-type AgentBootstrapConfig struct {
-	Name        string           `yaml:"name"`
-	Role        spec.AgentRole   `yaml:"role"`
-	Auth        *AgentAuthConfig `yaml:"auth,omitempty"`
-	KryptonRoot KryptonRoot      `yaml:"krypton_root"`
-}
-
 // Validate checks the RootConfig for structural correctness.
 func (cfg *RootConfig) Validate() error {
 	if cfg.Name == "" {
@@ -69,8 +44,8 @@ func (cfg *RootConfig) Validate() error {
 	if err := cfg.Reconciler.Validate(); err != nil {
 		return fmt.Errorf("reconciler: %w", err)
 	}
-	if cfg.Role != spec.RootRole {
-		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.RootRole)
+	if cfg.Role != RootRole {
+		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, RootRole)
 	}
 	if err := cfg.Hierarchy.Validate(); err != nil {
 		return fmt.Errorf("hierarchy: %w", err)
@@ -108,23 +83,47 @@ func (cfg *RootConfig) Validate() error {
 	return nil
 }
 
-// Validate checks the AgentBootstrapConfig for structural correctness.
-func (cfg *AgentBootstrapConfig) Validate() error {
-	if cfg.Name == "" {
-		return ErrConfigNameEmpty
+// AgentIdentities returns the identity configs required by the named agent:
+// the identities of its topology children plus the root's own identity. It
+// returns ErrAuthConfigMissing if the root has no auth config, ErrAgentNotAllowed
+// if the agent is not present in the configured identities, and
+// ErrIdentityConfigsMissing if any required child/root identity has no configured entry.
+func (cfg *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error) {
+	if cfg.Auth == nil {
+		return nil, fmt.Errorf("%w: no auth config found in root config", ErrAuthConfigMissing)
 	}
-	if cfg.Role != spec.DefaultRole {
-		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, spec.DefaultRole)
+
+	cns, ok := cfg.Topology.ChildrenNames(agentName)
+	if !ok {
+		cns = make(map[string]struct{}, 1)
 	}
-	if cfg.KryptonRoot.Address.URL == "" {
-		return ErrConfigAddressEmpty
-	}
-	if cfg.Auth != nil {
-		if err := cfg.Auth.Validate(); err != nil {
-			return fmt.Errorf("auth: %w", err)
+	cns[cfg.Name] = struct{}{}
+
+	res := make(IdentityConfigs, 0, len(cns))
+
+	isAgentAllowed := false
+	for _, id := range cfg.Auth.IdentityConfigs {
+		// check if the agent is allowed to connect to root
+		if id.Name == agentName {
+			isAgentAllowed = true
+		}
+
+		if _, ok := cns[id.Name]; ok {
+			delete(cns, id.Name)
+			res = append(res, id)
 		}
 	}
-	return nil
+
+	// should not happen as this validated in the mTLS authenticator
+	if !isAgentAllowed {
+		return nil, fmt.Errorf("%w: %q is not allowed to connect to root", ErrAgentNotAllowed, agentName)
+	}
+
+	if len(cns) > 0 {
+		return nil, fmt.Errorf("%w: %v", ErrIdentityConfigsMissing, slices.Collect(maps.Keys(cns)))
+	}
+
+	return res, nil
 }
 
 // LoadRootConfig reads a YAML file, parses it into a RootConfig, and validates it.
@@ -135,24 +134,6 @@ func LoadRootConfig(path string) (*RootConfig, error) {
 	}
 
 	var cfg RootConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-// LoadAgentBootstrapConfig reads a YAML file, parses it into an AgentBootstrapConfig, and validates it.
-func LoadAgentBootstrapConfig(path string) (*AgentBootstrapConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	var cfg AgentBootstrapConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}

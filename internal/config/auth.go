@@ -60,8 +60,8 @@ type AuthConfig interface {
 var (
 	// ErrUnknownAuthType is returned when the auth type is not recognized.
 	ErrUnknownAuthType = errors.New("unknown auth type")
-	// ErrNilConfig is returned when the auth config block is nil.
-	ErrNilConfig = errors.New("auth config cannot be nil")
+	// ErrNilAuthConfig is returned when the auth config block is nil.
+	ErrNilAuthConfig = errors.New("auth config cannot be nil")
 	// ErrInvalidIdentities is returned when the identities list is missing or malformed.
 	ErrInvalidIdentities = errors.New("invalid identities")
 )
@@ -89,7 +89,7 @@ func (c *RootAuthConfig) Validate() error {
 	}
 
 	if c.Config == nil {
-		return ErrNilConfig
+		return ErrNilAuthConfig
 	}
 	return c.Config.Validate()
 }
@@ -102,7 +102,7 @@ func (c *AgentAuthConfig) Validate() error {
 	}
 
 	if c.Config == nil {
-		return ErrNilConfig
+		return ErrNilAuthConfig
 	}
 	return c.Config.Validate()
 }

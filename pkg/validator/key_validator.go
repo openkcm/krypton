@@ -94,7 +94,7 @@ func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceIn
 
 	segment := v.rootSegment
 	if input.TargetName != "" {
-		topologySegment := v.topology.GetSegemntByName(input.TargetName)
+		topologySegment := v.topology.GetSegmentByName(input.TargetName)
 		if topologySegment == nil {
 			ve.code, ve.err = FailedCondition, ErrTargetNotInTopolgy
 			return ve

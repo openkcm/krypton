@@ -461,7 +461,7 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 				},
 				Config: nil,
 			},
-			wantErr: config.ErrNilConfig,
+			wantErr: config.ErrNilAuthConfig,
 		},
 		{
 			name: "empty identities for mtls",
@@ -630,7 +630,7 @@ func TestAgentAuthConfig_Validate(t *testing.T) {
 				AuthType: config.AuthTypeMTLS,
 				Config:   nil,
 			},
-			wantErr: config.ErrNilConfig,
+			wantErr: config.ErrNilAuthConfig,
 		},
 	}
 

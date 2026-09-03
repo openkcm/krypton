@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/store"
@@ -45,7 +45,10 @@ func TestRegister(t *testing.T) {
 		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
 		require.NoError(t, err)
 
-		assert.Equal(t, spec.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0]), *actConfig)
+		identities, err := rootCfg.AgentIdentities(expAgentName)
+		require.NoError(t, err)
+
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities), *actConfig)
 
 		result, err := agentStore.Get(ctx, store.GetAgentQuery{
 			Name:       expAgentName,
@@ -61,6 +64,53 @@ func TestRegister(t *testing.T) {
 			CreatedAt:     result.Registration.CreatedAt,
 			UpdatedAt:     result.Registration.UpdatedAt,
 		}, result.Registration)
+	})
+
+	t.Run("should return error if there is an error in root config's auth identity", func(t *testing.T) {
+		// given
+		expInstanceID := uuid.NewString()
+		rootCfg := rootConfigMissingRootIdentity(expAgentName)
+		cli := setupServerAndClient(t, agentStore, rootCfg)
+
+		// when
+		resp, err := cli.Register(ctx, &agents.RegisterAgentRequest{
+			AgentName:  expAgentName,
+			InstanceId: expInstanceID,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+
+		assert.Nil(t, resp)
+
+		_, err = agentStore.Get(ctx, store.GetAgentQuery{
+			Name:       expAgentName,
+			InstanceID: expInstanceID,
+		})
+		assert.ErrorIs(t, err, store.ErrAgentNotFound)
+	})
+
+	t.Run("should not return error from identity if the auth is nil", func(t *testing.T) {
+		// given
+		expInstanceID := uuid.NewString()
+		rootCfg := rootConfigWithNilAuth(expAgentName)
+		cli := setupServerAndClient(t, agentStore, rootCfg)
+
+		// when
+		resp, err := cli.Register(ctx, &agents.RegisterAgentRequest{
+			AgentName:  expAgentName,
+			InstanceId: expInstanceID,
+		})
+
+		// then
+		assert.NoError(t, err)
+
+		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
+		require.NoError(t, err)
+
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], config.IdentityConfigs{}), *actConfig)
 	})
 
 	t.Run("should update registration if agent registers two times", func(t *testing.T) {

@@ -1,4 +1,4 @@
-package spec
+package spec_test
 
 import (
 	"testing"
@@ -11,6 +11,7 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
@@ -40,12 +41,12 @@ func validSealerSpec() *sealerprovider.Spec {
 func TestValidateHierarchySegment(t *testing.T) {
 	tests := []struct {
 		name    string
-		segment HierarchySegment
+		segment spec.HierarchySegment
 		wantErr error
 	}{
 		{
 			name: "valid segment",
-			segment: HierarchySegment{
+			segment: spec.HierarchySegment{
 				StartKind: "K2",
 				EndKind:   "K3",
 			},
@@ -53,7 +54,7 @@ func TestValidateHierarchySegment(t *testing.T) {
 		},
 		{
 			name: "same start and end kind",
-			segment: HierarchySegment{
+			segment: spec.HierarchySegment{
 				StartKind: "K4",
 				EndKind:   "K4",
 			},
@@ -61,27 +62,27 @@ func TestValidateHierarchySegment(t *testing.T) {
 		},
 		{
 			name: "empty start kind",
-			segment: HierarchySegment{
+			segment: spec.HierarchySegment{
 				StartKind: "",
 				EndKind:   "K3",
 			},
-			wantErr: ErrStartKindEmpty,
+			wantErr: spec.ErrStartKindEmpty,
 		},
 		{
 			name: "empty end kind",
-			segment: HierarchySegment{
+			segment: spec.HierarchySegment{
 				StartKind: "K2",
 				EndKind:   "",
 			},
-			wantErr: ErrEndKindEmpty,
+			wantErr: spec.ErrEndKindEmpty,
 		},
 		{
 			name: "both empty",
-			segment: HierarchySegment{
+			segment: spec.HierarchySegment{
 				StartKind: "",
 				EndKind:   "",
 			},
-			wantErr: ErrStartKindEmpty,
+			wantErr: spec.ErrStartKindEmpty,
 		},
 	}
 
@@ -100,18 +101,18 @@ func TestValidateHierarchySegment(t *testing.T) {
 func TestValidateKeyBinding(t *testing.T) {
 	tests := []struct {
 		name    string
-		binding KeyBinding
+		binding spec.KeyBinding
 		wantErr error
 	}{
 		{
 			name: "valid binding with cryptor and all fields",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
 				},
-				ParentKeyProvider: &ParentKeyProviderRef{
+				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: "root",
 				},
 			},
@@ -119,14 +120,14 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "valid binding with sealer only",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				SealerSpec: validSealerSpec(),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid binding with both sealer and cryptor",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				SealerSpec:  validSealerSpec(),
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
@@ -138,7 +139,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "valid binding without parent key provider",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
@@ -149,24 +150,24 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "valid binding with cryptor spec only (no vault)",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "missing both sealer and cryptor",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
 				},
 			},
-			wantErr: ErrBindingMissingSealerOrCryptor,
+			wantErr: spec.ErrBindingMissingSealerOrCryptor,
 		},
 		{
 			name: "empty cryptor spec name",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: &cryptorprovider.Spec{
 					Name:   "",
 					Type:   aes256gcm.TypeAES256GCM,
@@ -181,7 +182,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "empty sealer spec name",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				SealerSpec: &sealerprovider.Spec{
 					Name: "",
 					Type: staticsecret.TypeStaticSecret,
@@ -197,7 +198,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "empty vault name",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "",
@@ -208,7 +209,7 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "empty vault type",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
@@ -219,17 +220,17 @@ func TestValidateKeyBinding(t *testing.T) {
 		},
 		{
 			name: "empty parent key provider agent name",
-			binding: KeyBinding{
+			binding: spec.KeyBinding{
 				CryptorSpec: validCryptorSpec(),
 				VaultSpec: &vaultprovider.Spec{
 					Name: "my-vault",
 					Type: sqlitevault.TypeUnsafeMemory,
 				},
-				ParentKeyProvider: &ParentKeyProviderRef{
+				ParentKeyProvider: &spec.ParentKeyProviderRef{
 					AgentName: "",
 				},
 			},
-			wantErr: ErrParentKeyProviderAgentEmpty,
+			wantErr: spec.ErrParentKeyProviderAgentEmpty,
 		},
 	}
 
@@ -246,7 +247,7 @@ func TestValidateKeyBinding(t *testing.T) {
 }
 
 func TestValidateTopologySegment(t *testing.T) {
-	validKeyBindings := map[string]KeyBinding{
+	validKeyBindings := map[string]spec.KeyBinding{
 		"K2": {
 			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
@@ -258,27 +259,27 @@ func TestValidateTopologySegment(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		segment TopologySegment
+		segment spec.TopologySegment
 		wantErr error
 	}{
 		{
 			name: "valid topology segment",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-aws",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
 				KeyBindings:    validKeyBindings,
-				SelectorLabels: SelectorLabels{"cloud": "aws"},
+				SelectorLabels: spec.SelectorLabels{"cloud": "aws"},
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid topology segment without labels",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-gcp",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
@@ -288,63 +289,63 @@ func TestValidateTopologySegment(t *testing.T) {
 		},
 		{
 			name: "empty agent name",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
 				KeyBindings: validKeyBindings,
 			},
-			wantErr: ErrAgentNameEmpty,
+			wantErr: spec.ErrAgentNameEmpty,
 		},
 		{
 			name: "invalid hierarchy segment - empty start",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-aws",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "",
 					EndKind:   "K3",
 				},
 				KeyBindings: validKeyBindings,
 			},
-			wantErr: ErrStartKindEmpty,
+			wantErr: spec.ErrStartKindEmpty,
 		},
 		{
 			name: "invalid hierarchy segment - empty end",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-aws",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "",
 				},
 				KeyBindings: validKeyBindings,
 			},
-			wantErr: ErrEndKindEmpty,
+			wantErr: spec.ErrEndKindEmpty,
 		},
 		{
 			name: "empty key bindings",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-aws",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
-				KeyBindings: map[string]KeyBinding{},
+				KeyBindings: map[string]spec.KeyBinding{},
 			},
-			wantErr: ErrKeyBindingsEmpty,
+			wantErr: spec.ErrKeyBindingsEmpty,
 		},
 		{
 			name: "nil key bindings",
-			segment: TopologySegment{
+			segment: spec.TopologySegment{
 				Name: "agent-aws",
-				Segment: HierarchySegment{
+				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
 				},
 				KeyBindings: nil,
 			},
-			wantErr: ErrKeyBindingsEmpty,
+			wantErr: spec.ErrKeyBindingsEmpty,
 		},
 	}
 
@@ -361,7 +362,7 @@ func TestValidateTopologySegment(t *testing.T) {
 }
 
 func TestValidateTopology(t *testing.T) {
-	validKeyBindings := map[string]KeyBinding{
+	validKeyBindings := map[string]spec.KeyBinding{
 		"K2": {
 			CryptorSpec: validCryptorSpec(),
 			VaultSpec: &vaultprovider.Spec{
@@ -373,28 +374,28 @@ func TestValidateTopology(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		topology Topology
+		topology spec.Topology
 		wantErr  error
 	}{
 		{
 			name:     "empty topology (0 agents) is valid",
-			topology: Topology{},
+			topology: spec.Topology{},
 			wantErr:  nil,
 		},
 		{
 			name: "nil segments is valid",
-			topology: Topology{
+			topology: spec.Topology{
 				Segments: nil,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid single segment",
-			topology: Topology{
-				Segments: []TopologySegment{
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
 					{
 						Name: "agent-aws",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
@@ -406,11 +407,11 @@ func TestValidateTopology(t *testing.T) {
 		},
 		{
 			name: "valid multiple segments",
-			topology: Topology{
-				Segments: []TopologySegment{
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
 					{
 						Name: "agent-aws",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
@@ -418,7 +419,7 @@ func TestValidateTopology(t *testing.T) {
 					},
 					{
 						Name: "agent-gcp",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
@@ -430,11 +431,11 @@ func TestValidateTopology(t *testing.T) {
 		},
 		{
 			name: "invalid segment with empty agent name",
-			topology: Topology{
-				Segments: []TopologySegment{
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
 					{
 						Name: "",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
@@ -442,15 +443,15 @@ func TestValidateTopology(t *testing.T) {
 					},
 				},
 			},
-			wantErr: ErrAgentNameEmpty,
+			wantErr: spec.ErrAgentNameEmpty,
 		},
 		{
 			name: "invalid segment with empty key bindings at index 1",
-			topology: Topology{
-				Segments: []TopologySegment{
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
 					{
 						Name: "agent-aws",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
@@ -458,15 +459,15 @@ func TestValidateTopology(t *testing.T) {
 					},
 					{
 						Name: "agent-gcp",
-						Segment: HierarchySegment{
+						Segment: spec.HierarchySegment{
 							StartKind: "K2",
 							EndKind:   "K3",
 						},
-						KeyBindings: map[string]KeyBinding{},
+						KeyBindings: map[string]spec.KeyBinding{},
 					},
 				},
 			},
-			wantErr: ErrKeyBindingsEmpty,
+			wantErr: spec.ErrKeyBindingsEmpty,
 		},
 	}
 
@@ -478,6 +479,183 @@ func TestValidateTopology(t *testing.T) {
 			} else {
 				assert.ErrorIs(t, err, tt.wantErr)
 			}
+		})
+	}
+}
+
+func TestChildrenNames(t *testing.T) {
+	t.Parallel()
+
+	// given
+	tests := []struct {
+		name      string
+		topology  spec.Topology
+		agentName string
+		want      map[string]struct{}
+		isFound   bool
+	}{
+		{
+			name: "single child found",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name: "child-1",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K2": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "agent-aws",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName: "agent-aws",
+			want:      map[string]struct{}{"child-1": {}},
+			isFound:   true,
+		},
+		{
+			name: "multiple children from different segments",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name: "child-1",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "agent-aws",
+								},
+							},
+						},
+					},
+					{
+						Name:        "child-2",
+						KeyBindings: map[string]spec.KeyBinding{},
+					},
+					{
+						Name: "child-3",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K3": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "agent-aws",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName: "agent-aws",
+			want:      map[string]struct{}{"child-1": {}, "child-3": {}},
+			isFound:   true,
+		},
+		{
+			name: "no children when bindings have no parent provider",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name: "child-1",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {},
+						},
+					},
+					{
+						Name:        "child-2",
+						KeyBindings: map[string]spec.KeyBinding{},
+					},
+					{
+						Name: "child-3",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K3": {},
+						},
+					},
+				},
+			},
+			agentName: "agent-aws",
+			want:      nil,
+			isFound:   false,
+		},
+		{
+			name: "no children when bindings reference other agents",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name: "child-1",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "agent-gcp",
+								},
+							},
+						},
+					},
+					{
+						Name:        "child-2",
+						KeyBindings: map[string]spec.KeyBinding{},
+					},
+					{
+						Name: "child-3",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K3": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "agent-azure",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName: "agent-aws",
+			want:      nil,
+			isFound:   false,
+		},
+		{
+			name: "empty segments slice",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{},
+			},
+			agentName: "agent-aws",
+			want:      nil,
+			isFound:   false,
+		},
+		{
+			name: "nil segments slice",
+			topology: spec.Topology{
+				Segments: nil,
+			},
+			agentName: "agent-aws",
+			want:      nil,
+			isFound:   false,
+		},
+		{
+			name: "nil ParentKeyProvider is ignored",
+			topology: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name: "child-1",
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: nil,
+							},
+						},
+					},
+				},
+			},
+			agentName: "agent-aws",
+			want:      nil,
+			isFound:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// when
+			got, ok := tt.topology.ChildrenNames(tt.agentName)
+
+			// then
+			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.isFound, ok)
 		})
 	}
 }

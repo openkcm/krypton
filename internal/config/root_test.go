@@ -101,31 +101,6 @@ func validRootConfig() *config.RootConfig {
 	}
 }
 
-func validAgentBootstrapConfig() *config.AgentBootstrapConfig {
-	return &config.AgentBootstrapConfig{
-		Name: "agent-aws",
-		Role: "agent",
-		KryptonRoot: config.KryptonRoot{
-			Address: config.Address{Type: config.AddressTypeHTTP, URL: "https://root:8443"},
-		},
-		Auth: &config.AgentAuthConfig{
-			AuthType: config.AuthTypeMTLS,
-			Config: &config.MTLSConfig{
-				Server: tlsconf.Server{
-					CertPath: "certpath",
-					KeyPath:  "keypath",
-					CAPath:   "capath",
-				},
-				Client: tlsconf.Client{
-					CertPath: "certpath",
-					KeyPath:  "keypath",
-					CAPath:   "capath",
-				},
-			},
-		},
-	}
-}
-
 func writeTestFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -355,59 +330,6 @@ func TestValidateRootConfig(t *testing.T) {
 	}
 }
 
-func TestValidateAgentBootstrapConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		modify  func(*config.AgentBootstrapConfig)
-		wantErr error
-	}{
-		{
-			name:    "valid config",
-			modify:  func(_ *config.AgentBootstrapConfig) {},
-			wantErr: nil,
-		},
-		{
-			name:    "empty name",
-			modify:  func(c *config.AgentBootstrapConfig) { c.Name = "" },
-			wantErr: config.ErrConfigNameEmpty,
-		},
-		{
-			name:    "wrong role",
-			modify:  func(c *config.AgentBootstrapConfig) { c.Role = "root" },
-			wantErr: config.ErrRoleInvalid,
-		},
-		{
-			name:    "empty address URL",
-			modify:  func(c *config.AgentBootstrapConfig) { c.KryptonRoot.Address.URL = "" },
-			wantErr: config.ErrConfigAddressEmpty,
-		},
-		{
-			name:    "invalid auth type",
-			modify:  func(c *config.AgentBootstrapConfig) { c.Auth.AuthType = "invalid" },
-			wantErr: config.ErrUnknownAuthType,
-		},
-		{
-			name:    "auth is nil",
-			modify:  func(c *config.AgentBootstrapConfig) { c.Auth = nil },
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := validAgentBootstrapConfig()
-			tt.modify(cfg)
-
-			err := cfg.Validate()
-			if tt.wantErr == nil {
-				assert.NoError(t, err)
-			} else {
-				assert.ErrorIs(t, err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestLoadRootConfig(t *testing.T) {
 	const validYAML = `name: "root"
 role: "root"
@@ -525,7 +447,7 @@ reconciler:
 			validate: func(t *testing.T, cfg *config.RootConfig) {
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
-				assert.Equal(t, spec.AgentRole("root"), cfg.Role)
+				assert.Equal(t, config.Role("root"), cfg.Role)
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
@@ -606,81 +528,331 @@ hierarchy:
 	})
 }
 
-func TestLoadAgentBootstrapConfig(t *testing.T) {
-	const validYAML = `name: "agent-aws"
-role: "agent"
-krypton_root:
-  address:
-    type: "http"
-    url: "https://root.krypton.example.com:8443"
-`
+func TestAgentIdentities(t *testing.T) {
+	// given
+	expAgentName := "agent-aws"
 
-	tests := []struct {
+	tts := []struct {
 		name       string
-		yaml       string
-		wantErr    bool
-		errContain string
-		validate   func(*testing.T, *config.AgentBootstrapConfig)
+		rootConfig config.RootConfig
+		expOutput  config.IdentityConfigs
+		isErr      error
 	}{
 		{
-			name: "valid bootstrap config",
-			yaml: validYAML,
-			validate: func(t *testing.T, cfg *config.AgentBootstrapConfig) {
-				t.Helper()
-				assert.Equal(t, "agent-aws", cfg.Name)
-				assert.Equal(t, spec.AgentRole("agent"), cfg.Role)
-				assert.Equal(t, config.AddressTypeHTTP, cfg.KryptonRoot.Address.Type)
-				assert.Equal(t, "https://root.krypton.example.com:8443", cfg.KryptonRoot.Address.URL)
+			name: "returns root identity when agent has no children",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+					},
+				},
 			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+			},
+			isErr: nil,
 		},
 		{
-			name:       "malformed YAML",
-			yaml:       "this is: [not valid yaml: {{",
-			wantErr:    true,
-			errContain: "failed to parse YAML",
+			name: "returns ErrAgentNotAllowed when agent not in identity configs",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: "unknown-aws",
+							URI:  "kryptonid://acme-corp/service/unknown-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: "unknown-aws",
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAgentNotAllowed,
 		},
 		{
-			name: "valid YAML but fails validation",
-			yaml: `name: ""
-role: "agent"
-krypton_root:
-  address:
-    type: "http"
-    url: "https://root:8443"
-`,
-			wantErr:    true,
-			errContain: "config name cannot be empty",
+			name: "returns root and child identity configs when agent has one child",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+						{
+							Name: "child-agent",
+							URI:  "kryptonid://acme-corp/service/child-agent",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+				{
+					Name: "child-agent",
+					URI:  "kryptonid://acme-corp/service/child-agent",
+				},
+			},
+			isErr: nil,
+		},
+		{
+			name: "returns root and multiple children identity configs",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+						{
+							Name: "child-agent-1",
+							URI:  "kryptonid://acme-corp/service/child-agent-1",
+						},
+						{
+							Name: "child-agent-2",
+							URI:  "kryptonid://acme-corp/service/child-agent-2",
+						},
+						{
+							Name: "child-agent-3",
+							URI:  "kryptonid://acme-corp/service/child-agent-3",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent-1",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+						{
+							Name: "child-agent-2",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+						{
+							Name: "child-agent-3",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {},
+							},
+						},
+					},
+				},
+			},
+			expOutput: config.IdentityConfigs{
+				{
+					Name: "root",
+					URI:  "kryptonid://acme-corp/service/root",
+				},
+				{
+					Name: "child-agent-1",
+					URI:  "kryptonid://acme-corp/service/child-agent-1",
+				},
+				{
+					Name: "child-agent-2",
+					URI:  "kryptonid://acme-corp/service/child-agent-2",
+				},
+			},
+			isErr: nil,
+		},
+		{
+			name: "returns ErrIdentityConfigsMissing when child has no identity config",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+						{
+							Name: "root",
+							URI:  "kryptonid://acme-corp/service/root",
+						},
+					},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrIdentityConfigsMissing,
+		},
+		{
+			name: "returns ErrAuthConfigMissing when Auth is nil",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: nil,
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAuthConfigMissing,
+		},
+		{
+			name: "returns ErrAgentNotAllowed when identity config is empty",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{},
+				},
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+						{
+							Name: "child-agent",
+							KeyBindings: map[string]spec.KeyBinding{
+								"K1": {
+									ParentKeyProvider: &spec.ParentKeyProviderRef{
+										AgentName: expAgentName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrAgentNotAllowed,
+		},
+		{
+			name: "returns ErrIdentityConfigsMissing when root identity is missing",
+			rootConfig: config.RootConfig{
+				Name: "root",
+				Auth: &config.RootAuthConfig{
+					IdentityConfigs: config.IdentityConfigs{
+						{
+							Name: expAgentName,
+							URI:  "kryptonid://acme-corp/service/agent-aws",
+						},
+					},
+				},
+
+				Topology: spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name: expAgentName,
+						},
+					},
+				},
+			},
+			expOutput: nil,
+			isErr:     config.ErrIdentityConfigsMissing,
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range tts {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := writeTestFile(t, dir, "config.yaml", tt.yaml)
+			// when
+			res, err := tt.rootConfig.AgentIdentities(expAgentName)
 
-			cfg, err := config.LoadAgentBootstrapConfig(path)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, cfg)
-				if tt.errContain != "" {
-					assert.Contains(t, err.Error(), tt.errContain)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, cfg)
-				if tt.validate != nil {
-					tt.validate(t, cfg)
-				}
-			}
+			// then
+			assert.Equal(t, tt.expOutput, res)
+			assert.ErrorIs(t, err, tt.isErr)
 		})
 	}
-
-	t.Run("file not found", func(t *testing.T) {
-		cfg, err := config.LoadAgentBootstrapConfig("/nonexistent/path.yaml")
-		assert.Error(t, err)
-		assert.Nil(t, cfg)
-		assert.Contains(t, err.Error(), "failed to read file")
-	})
 }
 
 func validLabelsSpec() spec.LabelsSpec {
