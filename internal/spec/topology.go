@@ -129,14 +129,12 @@ func (t *Topology) Validate() error {
 	return nil
 }
 
-func (t *Topology) Children(agentName string) (map[string]struct{}, bool) {
+func (t *Topology) ChildrenNames(parentAgent string) (map[string]struct{}, bool) {
 	cs := make(map[string]struct{}, len(t.Segments))
+
 	for _, seg := range t.Segments {
-		if seg.Name == agentName {
-			continue
-		}
 		for _, binding := range seg.KeyBindings {
-			if binding.ParentKeyProvider != nil && binding.ParentKeyProvider.AgentName == agentName {
+			if binding.ParentKeyProvider != nil && binding.ParentKeyProvider.AgentName == parentAgent {
 				cs[seg.Name] = struct{}{}
 			}
 		}

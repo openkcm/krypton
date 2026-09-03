@@ -483,7 +483,7 @@ func TestValidateTopology(t *testing.T) {
 	}
 }
 
-func TestChildren(t *testing.T) {
+func TestChildrenNames(t *testing.T) {
 	t.Parallel()
 
 	// given
@@ -627,36 +627,6 @@ func TestChildren(t *testing.T) {
 			isFound:   false,
 		},
 		{
-			name: "agent own segment is excluded from results",
-			topology: spec.Topology{
-				Segments: []spec.TopologySegment{
-					{
-						Name: "agent-aws",
-						KeyBindings: map[string]spec.KeyBinding{
-							"K1": {
-								ParentKeyProvider: &spec.ParentKeyProviderRef{
-									AgentName: "agent-aws",
-								},
-							},
-						},
-					},
-					{
-						Name: "child-1",
-						KeyBindings: map[string]spec.KeyBinding{
-							"K2": {
-								ParentKeyProvider: &spec.ParentKeyProviderRef{
-									AgentName: "agent-aws",
-								},
-							},
-						},
-					},
-				},
-			},
-			agentName: "agent-aws",
-			want:      map[string]struct{}{"child-1": {}},
-			isFound:   true,
-		},
-		{
 			name: "nil ParentKeyProvider is ignored",
 			topology: spec.Topology{
 				Segments: []spec.TopologySegment{
@@ -681,7 +651,7 @@ func TestChildren(t *testing.T) {
 			t.Parallel()
 
 			// when
-			got, ok := tt.topology.Children(tt.agentName)
+			got, ok := tt.topology.ChildrenNames(tt.agentName)
 
 			// then
 			assert.Equal(t, tt.want, got)

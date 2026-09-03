@@ -118,13 +118,13 @@ func (cfg *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error
 		return nil, fmt.Errorf("%w: no auth config found in root config", ErrAuthConfigMissing)
 	}
 
-	cs, ok := cfg.Topology.Children(agentName)
+	cns, ok := cfg.Topology.ChildrenNames(agentName)
 	if !ok {
-		cs = make(map[string]struct{}, 1)
+		cns = make(map[string]struct{}, 1)
 	}
-	cs[cfg.Name] = struct{}{}
+	cns[cfg.Name] = struct{}{}
 
-	res := make(IdentityConfigs, 0, len(cs))
+	res := make(IdentityConfigs, 0, len(cns))
 
 	isAgentAllowed := false
 	for _, id := range cfg.Auth.IdentityConfigs {
@@ -133,8 +133,8 @@ func (cfg *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error
 			isAgentAllowed = true
 		}
 
-		if _, ok := cs[id.Name]; ok {
-			delete(cs, id.Name)
+		if _, ok := cns[id.Name]; ok {
+			delete(cns, id.Name)
 			res = append(res, id)
 		}
 	}
@@ -144,8 +144,8 @@ func (cfg *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error
 		return nil, fmt.Errorf("%w: %q is not allowed to connect to root", ErrAgentNotAllowed, agentName)
 	}
 
-	if len(cs) > 0 {
-		return nil, fmt.Errorf("%w: %v", ErrIdentityConfigsMissing, slices.Collect(maps.Keys(cs)))
+	if len(cns) > 0 {
+		return nil, fmt.Errorf("%w: %v", ErrIdentityConfigsMissing, slices.Collect(maps.Keys(cns)))
 	}
 
 	return res, nil
