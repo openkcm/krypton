@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/openkcm/krypton/internal/clock"
 )
@@ -17,7 +17,7 @@ type Tenant struct {
 func NewTenant(name string, labels map[string]string) Tenant {
 	now := clock.Now()
 	return Tenant{
-		ID:        uuid.NewString(),
+		ID:        uuid.New().String(),
 		Name:      name,
 		Labels:    labels,
 		CreatedAt: now,

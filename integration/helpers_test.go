@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/ovh/kmip-go/kmipclient"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -114,7 +114,7 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	_, rootConnStr := createDatabase(t)
 	rootPort := freePort(t)
 
-	allowedAgent := "allowed-agent" + uuid.NewString()
+	allowedAgent := "allowed-agent" + uuid.New().String()
 	pki := newTestPKI(t, allowedAgent)
 
 	rootCfgPath := writeRootConfigWithMTLS(t, pki.serverCertPath, pki.serverKeyPath, pki.caCertFilePath, allowedAgent)
@@ -148,7 +148,7 @@ func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 
 	// preconfiguring a tenant
 	ctr, err := newTenantStore(t, rootDB).CreateTenant(t.Context(), store.CreateTenantQuery{
-		Tenant: model.NewTenant("preconfigured-tenant-"+uuid.NewString(), nil),
+		Tenant: model.NewTenant("preconfigured-tenant-"+uuid.New().String(), nil),
 	})
 	require.NoError(t, err)
 	tenant := ctr.Tenant
@@ -586,7 +586,7 @@ func insertTenant(t *testing.T, db *sql.DB, tenantID, tenantName string) {
 // under test.
 func insertActiveParentKey(t *testing.T, db *sql.DB, tenantID, kind string) string {
 	t.Helper()
-	keyID := uuid.NewString()
+	keyID := uuid.New().String()
 	insertActiveParentKeyWithID(t, db, tenantID, kind, keyID)
 	return keyID
 }

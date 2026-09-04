@@ -9,6 +9,7 @@ includes:
     flatten: true
     excludes: [] # put task names in here which are overwritten in this file
     vars:
+      LINTER_VERSION: v2.13.1
       CODE_DIRS: "{{.ROOT_DIR}}/api-specs/... {{.ROOT_DIR}}/cli/... {{.ROOT_DIR}}/cmd/... {{.ROOT_DIR}}/pkg/... {{.ROOT_DIR}}/internal/..."
       COMPONENTS: 'agent root'
       CHART_COMPONENTS: 'root'

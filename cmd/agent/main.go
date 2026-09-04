@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
 	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"

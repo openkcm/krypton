@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -270,7 +270,7 @@ func createDatabase(t *testing.T) *sql.DB {
 		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
 	}
 
-	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	dbName := "test_" + strings.ReplaceAll(uuid.New().String(), "-", "")
 	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
 	if err != nil {
 		db.Close()
@@ -310,7 +310,7 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 
 func createTenant(t *testing.T, s store.Tenant) model.Tenant {
 	t.Helper()
-	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
+	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
 	result, err := s.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant
@@ -319,8 +319,8 @@ func createTenant(t *testing.T, s store.Tenant) model.Tenant {
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil {
-		job.ID = uuid.Must(uuid.NewUUID())
+	if job.ID == uuid.Nil() {
+		job.ID = uuid.NewV7()
 	}
 	return job, nil
 }
@@ -332,8 +332,8 @@ type spyJobPreparer struct {
 }
 
 func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil {
-		job.ID = uuid.Must(uuid.NewUUID())
+	if job.ID == uuid.Nil() {
+		job.ID = uuid.NewV7()
 	}
 	s.jobs = append(s.jobs, job)
 	return job, nil

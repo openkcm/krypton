@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -59,7 +59,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should register agent", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -133,7 +133,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should reject agent with wrong mtls certificates", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 
 		// create a new PKI with invalid certificates for the agent
@@ -182,7 +182,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should not start agent without root server", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 		nonExistingRootPort := freePort(t) // Use a port that is not being listened on
 
@@ -216,7 +216,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should not start agent if name is not in root config", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, "invalid-agent-name", localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)
@@ -250,7 +250,7 @@ func TestRegistration(t *testing.T) {
 	t.Run("should register agent with newly issued certificates", func(t *testing.T) {
 		// given
 		homeDir := t.TempDir()
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 
 		// issue a new cert signed by the trusted CA with the allowed URIs
@@ -292,8 +292,8 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should register multiple agent instances", func(t *testing.T) {
 		// given
-		agentID1 := uuid.NewString()
-		agentID2 := uuid.NewString()
+		agentID1 := uuid.New().String()
+		agentID2 := uuid.New().String()
 		agentPort1 := freePort(t)
 		agentPort2 := freePort(t)
 
@@ -342,7 +342,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should reject agent with expired client certificate", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 		homeDir := t.TempDir()
 
@@ -395,7 +395,7 @@ func TestRegistration(t *testing.T) {
 
 	t.Run("should transition through unhealthy/deregistered/deleted on SIGKILL", func(t *testing.T) {
 		// given
-		agentID := uuid.NewString()
+		agentID := uuid.New().String()
 		agentPort := freePort(t)
 
 		agentCfgPath := writeAgentConfigWithMTLS(t, allowedAgentName, localAddress(rootPort), clientPki.certPEMPath, clientPki.keyPEMPath, pki.caCertFilePath)

@@ -1,10 +1,10 @@
 package integration
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,7 +40,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -102,7 +102,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -127,7 +127,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			TargetName: "",
 			ParentId:   rootKeyID,
 			Labels:     map[string]string{"cloud": "aws"},
@@ -183,7 +183,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -208,7 +208,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			TargetName: "",
 			ParentId:   rootKeyID,
 			Labels:     map[string]string{"cloud": "aws"},
@@ -234,7 +234,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
-			Name:       "k2-key-" + uuid.NewString(),
+			Name:       "k2-key-" + uuid.New().String(),
 			TargetName: "",
 			ParentId:   k1KeyID,
 			Labels:     map[string]string{"cloud": "aws"},
@@ -290,7 +290,7 @@ func TestActivateKey(t *testing.T) {
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
 		})
@@ -338,7 +338,7 @@ func TestActivateKey(t *testing.T) {
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
-			"--key-id", uuid.NewString(),
+			"--key-id", uuid.New().String(),
 			"--json",
 			"--server", "localhost:"+env.RootPort)
 
@@ -351,7 +351,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should return error", func(t *testing.T) {
 		// given
-		validUUID := uuid.NewString()
+		validUUID := uuid.New().String()
 		tts := []struct {
 			name string
 			args []string

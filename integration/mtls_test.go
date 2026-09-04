@@ -4,19 +4,20 @@ import (
 	"crypto/x509/pkix"
 	"path/filepath"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMTLS(t *testing.T) {
+	t.Parallel()
 	// given
 	ctx := t.Context()
 	env := setupRootEnvWithMTLS(t)
 
 	createTenantCmd := func() []string {
-		return []string{"create", "tenant", "--name", uuid.NewString(), "--json", "--server", env.serverAddr}
+		return []string{"create", "tenant", "--name", uuid.New().String(), "--json", "--server", env.serverAddr}
 	}
 
 	t.Run("should fail given no login", func(t *testing.T) {

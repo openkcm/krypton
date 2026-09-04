@@ -22,7 +22,7 @@ import (
 
 const (
 	scriptDest = "/usr/local/bin/analysis.sh"
-	image      = "golang:1.26-alpine"
+	image      = "golang:1.27-alpine"
 )
 
 func TestProtection(t *testing.T) {

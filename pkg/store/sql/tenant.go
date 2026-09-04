@@ -3,7 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"encoding/json/v2"
 
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
