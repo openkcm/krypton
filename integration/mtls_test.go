@@ -11,6 +11,7 @@ import (
 )
 
 func TestMTLS(t *testing.T) {
+	t.Parallel()
 	// given
 	ctx := t.Context()
 	env := setupRootEnvWithMTLS(t)

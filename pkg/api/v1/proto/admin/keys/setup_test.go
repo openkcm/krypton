@@ -23,8 +23,6 @@ import (
 
 	_ "github.com/lib/pq"
 
-	guuid "github.com/google/uuid"
-
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
@@ -321,8 +319,8 @@ func createTenant(t *testing.T, s store.Tenant) model.Tenant {
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == guuid.Nil {
-		job.ID = guuid.UUID(uuid.NewV7())
+	if job.ID == uuid.Nil() {
+		job.ID = uuid.NewV7()
 	}
 	return job, nil
 }
@@ -334,8 +332,8 @@ type spyJobPreparer struct {
 }
 
 func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == guuid.Nil {
-		job.ID = guuid.UUID(uuid.NewV7())
+	if job.ID == uuid.Nil() {
+		job.ID = uuid.NewV7()
 	}
 	s.jobs = append(s.jobs, job)
 	return job, nil

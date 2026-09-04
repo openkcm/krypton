@@ -27,8 +27,6 @@ import (
 
 	_ "github.com/lib/pq"
 
-	guuid "github.com/google/uuid"
-
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/store"
@@ -224,8 +222,8 @@ func defaultTestHierarchy() spec.KeyHierarchy {
 type noopJobPreparer struct{}
 
 func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == guuid.Nil {
-		job.ID = guuid.UUID(uuid.NewV7())
+	if job.ID == uuid.Nil() {
+		job.ID = uuid.NewV7()
 	}
 	return job, nil
 }

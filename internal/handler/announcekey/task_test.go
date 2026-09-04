@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	guuid "github.com/google/uuid"
-
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -35,7 +33,7 @@ func (t *taskCreateOverride) CreateKey(_ context.Context, _ model.Key) error {
 func executeTask(t *testing.T, h orbital.HandlerFunc, data []byte) orbital.TaskResponse {
 	t.Helper()
 	return orbital.ExecuteHandler(t.Context(), h, orbital.TaskRequest{
-		TaskID: guuid.UUID(uuid.NewV7()),
+		TaskID: uuid.NewV7(),
 		Type:   announcekey.TaskType,
 		Data:   data,
 	})
