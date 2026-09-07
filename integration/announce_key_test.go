@@ -1,11 +1,11 @@
 package integration
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,12 +23,12 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-root-test-" + uuid.NewString(),
+			Name: "announce-root-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 		tenantID := tenantResp.GetTenant().GetId()
 
-		keyName := "root-key-" + uuid.NewString()
+		keyName := "root-key-" + uuid.New().String()
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K0",
@@ -47,7 +47,7 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-test-" + uuid.NewString(),
+			Name: "announce-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 
@@ -58,7 +58,7 @@ func TestAnnounceKey(t *testing.T) {
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
 		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
-		keyName := "test-key-" + uuid.NewString()
+		keyName := "test-key-" + uuid.New().String()
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
@@ -86,7 +86,7 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-fail-test-" + uuid.NewString(),
+			Name: "announce-fail-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 
@@ -95,7 +95,7 @@ func TestAnnounceKey(t *testing.T) {
 		// → agent CreateKey fails with FK violation → resp.Fail() → job FAILED
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
 
-		keyName := "test-key-fail-" + uuid.NewString()
+		keyName := "test-key-fail-" + uuid.New().String()
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
@@ -117,7 +117,7 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "idempotent-test-" + uuid.NewString(),
+			Name: "idempotent-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 		tenantID := tenantResp.GetTenant().GetId()
@@ -125,7 +125,7 @@ func TestAnnounceKey(t *testing.T) {
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
 		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
-		keyName := "idempotent-key-" + uuid.NewString()
+		keyName := "idempotent-key-" + uuid.New().String()
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
@@ -156,7 +156,7 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-recover-test-" + uuid.NewString(),
+			Name: "announce-recover-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 
@@ -166,7 +166,7 @@ func TestAnnounceKey(t *testing.T) {
 		// hits the tenant FK violation → job FAILED → key processing Failed.
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
 
-		keyName := "recover-key-" + uuid.NewString()
+		keyName := "recover-key-" + uuid.New().String()
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
@@ -204,7 +204,7 @@ func TestAnnounceKey(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-cli-test-" + uuid.NewString(),
+			Name: "announce-cli-test-" + uuid.New().String(),
 		})
 		require.NoError(t, err)
 
@@ -221,7 +221,7 @@ func TestAnnounceKey(t *testing.T) {
 
 		seedSelectedTenant(t, homeDir, tenantID, tenantName)
 
-		keyName := "cli-key-" + uuid.NewString()
+		keyName := "cli-key-" + uuid.New().String()
 		cmd := newCLICommand(ctx, homeDir, "announce", "key",
 			"--kind", "K2",
 			"--name", keyName,

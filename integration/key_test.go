@@ -1,10 +1,10 @@
 package integration
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -44,7 +44,7 @@ func TestGetKeys(t *testing.T) {
 	loginNoAuth(t, homeDir)
 
 	// create tenant
-	expTenantName := "tenant-" + uuid.NewString()
+	expTenantName := "tenant-" + uuid.New().String()
 	cmd := newCLICommand(
 		t.Context(),
 		homeDir,
@@ -91,7 +91,7 @@ func TestGetKeys(t *testing.T) {
 			assert.Equal(t, hierarchy.e.Kind, actKeys[0].Kind)
 			assert.Equal(t, hierarchy.e.ParentID, actKeys[0].ParentID)
 			assert.Equal(t, "agent-azure", actKeys[0].ManagedBy)
-			assert.Nil(t, actKeys[0].Labels)
+			assert.Empty(t, actKeys[0].Labels)
 			assert.Equal(t, model.KeyLifeCycleActive, actKeys[0].LifeCycleState)
 			assert.Equal(t, model.KeyProcessingPending, actKeys[0].KeyProcessingState.Status)
 			assert.Empty(t, actKeys[0].KeyProcessingState.JobID)
@@ -101,7 +101,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if key does not exist", func(t *testing.T) {
 			// when
-			unknownKeyID := uuid.NewString()
+			unknownKeyID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -139,7 +139,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if tenant does not exist", func(t *testing.T) {
 			// when
-			unknownTenantID := uuid.NewString()
+			unknownTenantID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -264,7 +264,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if no parent keys exist", func(t *testing.T) {
 			// when
-			unknownID := uuid.NewString()
+			unknownID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -283,7 +283,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if tenant does not exist", func(t *testing.T) {
 			// when
-			unknownTenantID := uuid.NewString()
+			unknownTenantID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -412,7 +412,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if no descendant keys exist", func(t *testing.T) {
 			// when
-			unknownID := uuid.NewString()
+			unknownID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -431,7 +431,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if tenant does not exist", func(t *testing.T) {
 			// when
-			unknownTenantID := uuid.NewString()
+			unknownTenantID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,
@@ -611,7 +611,7 @@ func TestGetKeys(t *testing.T) {
 
 		t.Run("should fail if tenant does not exist", func(t *testing.T) {
 			// when
-			unknownTenantID := uuid.NewString()
+			unknownTenantID := uuid.New().String()
 			cmd = newCLICommand(
 				t.Context(),
 				homeDir,

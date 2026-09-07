@@ -3,8 +3,7 @@ package model
 import (
 	"iter"
 	"slices"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/openkcm/krypton/internal/clock"
 )
@@ -96,7 +95,7 @@ type KeyTreeTraverser interface {
 func NewKey(tenantID, name string, kind string, parentID *string, managedBy string, labels Labels) Key {
 	now := clock.Now()
 	return Key{
-		ID:                 uuid.NewString(),
+		ID:                 uuid.New().String(),
 		Name:               name,
 		TenantID:           tenantID,
 		Kind:               KeyKind(kind),

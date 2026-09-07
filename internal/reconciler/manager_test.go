@@ -22,8 +22,8 @@ func TestNewManager(t *testing.T) {
 		return &fakeInitiator{}, nil
 	})
 
-	cfg := config.ReconcilerConfig{MaxReconcileCount: 6}
-	cfg.Targets = []config.ReconcilerTarget{validTarget("agent-aws"), validTarget("agent-gcp")}
+	cfg := config.ReconcilerConfig{MaxReconcileCount: 6,
+		Targets: []config.ReconcilerTarget{validTarget("agent-aws"), validTarget("agent-gcp")}}
 
 	manager, err := reconciler.NewManager(t.Context(), &cfg, newNoopRepo(), targetProvider, []reconciler.JobHandler{&fakeJobHandler{jobType: "job.type"}})
 	require.NoError(t, err)

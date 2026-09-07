@@ -2,8 +2,8 @@ package agents_test
 
 import (
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -29,7 +29,7 @@ func TestRegister(t *testing.T) {
 
 	t.Run("should register agent successfully", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		rootCfg := validRootConfig(expAgentName)
 		cli := setupServerAndClient(t, agentStore, rootCfg)
 
@@ -68,7 +68,7 @@ func TestRegister(t *testing.T) {
 
 	t.Run("should return error if there is an error in root config's auth identity", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		rootCfg := rootConfigMissingRootIdentity(expAgentName)
 		cli := setupServerAndClient(t, agentStore, rootCfg)
 
@@ -94,7 +94,7 @@ func TestRegister(t *testing.T) {
 
 	t.Run("should not return error from identity if the auth is nil", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		rootCfg := rootConfigWithNilAuth(expAgentName)
 		cli := setupServerAndClient(t, agentStore, rootCfg)
 
@@ -115,7 +115,7 @@ func TestRegister(t *testing.T) {
 
 	t.Run("should update registration if agent registers two times", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// register first time
@@ -166,7 +166,7 @@ func TestRegister(t *testing.T) {
 		// when
 		_, err := cli.Register(t.Context(), &agents.RegisterAgentRequest{
 			AgentName:  "unknown-agent",
-			InstanceId: uuid.NewString(),
+			InstanceId: uuid.New().String(),
 		})
 
 		// then
@@ -177,7 +177,7 @@ func TestRegister(t *testing.T) {
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
@@ -209,7 +209,7 @@ func TestRegister(t *testing.T) {
 
 		// when
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
-			InstanceId: uuid.NewString(),
+			InstanceId: uuid.New().String(),
 		})
 
 		// then

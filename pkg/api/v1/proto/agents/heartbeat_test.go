@@ -2,8 +2,8 @@ package agents_test
 
 import (
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -28,7 +28,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	t.Run("should update the status of the registered to healthy", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
@@ -74,7 +74,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	t.Run("should re-register the agent if it is not found in the registry store", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := agentStore.Get(ctx, store.GetAgentQuery{
@@ -111,7 +111,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	t.Run("should not return error if heartbeat is sent multiple times", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		_, err := cli.Register(ctx, &agents.RegisterAgentRequest{
@@ -135,7 +135,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	t.Run("should return error if agent name is not found in topology", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		cli := setupServerAndClient(t, agentStore, validRootConfig(expAgentName))
 
 		// when
@@ -153,7 +153,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	t.Run("should return internal error if there is an error in the registry store", func(t *testing.T) {
 		// given
-		expInstanceID := uuid.NewString()
+		expInstanceID := uuid.New().String()
 		tmpDB := createDatabase(t)
 
 		require.NoError(t, storesql.Migrate(ctx, tmpDB))
@@ -184,7 +184,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 		// when
 		_, err := cli.SendHeartbeat(ctx, &agents.SendHeartbeatRequest{
-			InstanceId: uuid.NewString(),
+			InstanceId: uuid.New().String(),
 		})
 
 		// then

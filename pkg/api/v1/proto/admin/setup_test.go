@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -102,7 +102,7 @@ func createDatabase(t *testing.T) *sql.DB {
 		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
 	}
 
-	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	dbName := "test_" + strings.ReplaceAll(uuid.New().String(), "-", "")
 	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
 	if err != nil {
 		db.Close()

@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -106,7 +106,7 @@ func TestCreateKey(t *testing.T) {
 	})
 
 	t.Run("should fail with invalid parent reference", func(t *testing.T) {
-		badParent := uuid.NewString()
+		badParent := uuid.New().String()
 		key := model.NewKey(tenant.ID, "orphan-key", "K1", &badParent, "root", nil)
 
 		err := keyStore.CreateKey(ctx, key)
@@ -114,7 +114,7 @@ func TestCreateKey(t *testing.T) {
 	})
 
 	t.Run("should fail with invalid tenant reference", func(t *testing.T) {
-		key := model.NewKey(uuid.NewString(), "bad-tenant-key", "K0", nil, "root", nil)
+		key := model.NewKey(uuid.New().String(), "bad-tenant-key", "K0", nil, "root", nil)
 
 		err := keyStore.CreateKey(ctx, key)
 		assert.Error(t, err)
@@ -169,7 +169,7 @@ func TestGetKey(t *testing.T) {
 	})
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
-		_, err := keyStore.GetKeyByID(ctx, uuid.NewString(), tenant.ID)
+		_, err := keyStore.GetKeyByID(ctx, uuid.New().String(), tenant.ID)
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 
@@ -177,7 +177,7 @@ func TestGetKey(t *testing.T) {
 		key := model.NewKey(tenant.ID, "wrong-tenant-key", "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
-		_, err := keyStore.GetKeyByID(ctx, key.ID, uuid.NewString())
+		_, err := keyStore.GetKeyByID(ctx, key.ID, uuid.New().String())
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }
@@ -212,7 +212,7 @@ func TestUpdateKeyLifeCycleState(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		err := keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
-			ID: uuid.NewString(), TenantID: tenant.ID, NewState: model.KeyLifeCycleActive,
+			ID: uuid.New().String(), TenantID: tenant.ID, NewState: model.KeyLifeCycleActive,
 		})
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
@@ -222,7 +222,7 @@ func TestUpdateKeyLifeCycleState(t *testing.T) {
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		err := keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
-			ID: key.ID, TenantID: uuid.NewString(), NewState: model.KeyLifeCycleActive,
+			ID: key.ID, TenantID: uuid.New().String(), NewState: model.KeyLifeCycleActive,
 		})
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
@@ -245,7 +245,7 @@ func TestUpdateKeyProcessingState(t *testing.T) {
 		key := model.NewKey(tenant.ID, "processing-key", "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
-		jobID := uuid.NewString()
+		jobID := uuid.New().String()
 		err := keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
 			ID: key.ID, TenantID: tenant.ID,
 			NewStatus: model.KeyProcessingInProgress,
@@ -279,7 +279,7 @@ func TestUpdateKeyProcessingState(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		err := keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
-			ID: uuid.NewString(), TenantID: tenant.ID,
+			ID: uuid.New().String(), TenantID: tenant.ID,
 			NewStatus: model.KeyProcessingFailed,
 		})
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
@@ -339,7 +339,7 @@ func TestGetKeyByName(t *testing.T) {
 		key := model.NewKey(tenant.ID, "tenant-scoped", "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
-		_, err := keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{TenantID: uuid.NewString(), Name: "tenant-scoped"})
+		_, err := keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{TenantID: uuid.New().String(), Name: "tenant-scoped"})
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
 }
@@ -417,7 +417,7 @@ func TestGetParentKeys(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		query := store.GetParentKeysQuery{KeyID: uuid.NewString(), TenantID: h.tenant.ID}
+		query := store.GetParentKeysQuery{KeyID: uuid.New().String(), TenantID: h.tenant.ID}
 
 		// when
 		_, err := keyStore.GetParentKeys(ctx, query)
@@ -428,7 +428,7 @@ func TestGetParentKeys(t *testing.T) {
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
 		// given
-		query := store.GetParentKeysQuery{KeyID: h.h.ID, TenantID: uuid.NewString()}
+		query := store.GetParentKeysQuery{KeyID: h.h.ID, TenantID: uuid.New().String()}
 
 		// when
 		_, err := keyStore.GetParentKeys(ctx, query)
@@ -537,7 +537,7 @@ func TestGetDescendantKeys(t *testing.T) {
 
 	t.Run("should return not found for nonexistent key", func(t *testing.T) {
 		// given
-		query := store.GetDescendantKeysQuery{KeyID: uuid.NewString(), TenantID: k.tenant.ID}
+		query := store.GetDescendantKeysQuery{KeyID: uuid.New().String(), TenantID: k.tenant.ID}
 
 		// when
 		_, err := keyStore.GetDescendantKeys(ctx, query)
@@ -548,7 +548,7 @@ func TestGetDescendantKeys(t *testing.T) {
 
 	t.Run("should return not found for wrong tenant", func(t *testing.T) {
 		// given
-		query := store.GetDescendantKeysQuery{KeyID: k.root.ID, TenantID: uuid.NewString()}
+		query := store.GetDescendantKeysQuery{KeyID: k.root.ID, TenantID: uuid.New().String()}
 
 		// when
 		_, err := keyStore.GetDescendantKeys(ctx, query)
@@ -915,7 +915,7 @@ func TestListKeys(t *testing.T) {
 
 	t.Run("should return key not found error if there are no matching keys for given filter", func(t *testing.T) {
 		// given
-		unknownTenantID := uuid.NewString()
+		unknownTenantID := uuid.New().String()
 		query := store.ListKeysQuery{
 			TenantID: unknownTenantID,
 		}
@@ -962,7 +962,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should update key life cycle and processing state", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
@@ -988,7 +988,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should update when from state guard is not specified", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
@@ -1011,7 +1011,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should update when from status guard is not specified", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
@@ -1034,7 +1034,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should update when no guards are specified", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 
 		// when
@@ -1056,7 +1056,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should not update when from status guard does not match", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
@@ -1083,7 +1083,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	t.Run("should not update when from state guard does not match", func(t *testing.T) {
 		// given
-		key := model.NewKey(tenant.ID, uuid.NewString(), "K0", nil, "root", nil)
+		key := model.NewKey(tenant.ID, uuid.New().String(), "K0", nil, "root", nil)
 		require.NoError(t, keyStore.CreateKey(ctx, key))
 		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
 		assert.Equal(t, model.KeyProcessingPending, key.KeyProcessingState.Status)
@@ -1191,7 +1191,7 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 
 func createTenant(t *testing.T, s *storesql.TenantStore) model.Tenant {
 	t.Helper()
-	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
+	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
 	result, err := s.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant

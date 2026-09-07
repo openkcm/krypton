@@ -26,6 +26,8 @@ func main() {
 		}
 	}()
 
+	allowPtrace()
+
 	// Enable dump protection before any secrets are loaded into memory
 	if isDumpProtectionEnabled == "true" {
 		enableDump()

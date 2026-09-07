@@ -2,8 +2,8 @@ package validator
 
 import (
 	"context"
+	"uuid"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto"

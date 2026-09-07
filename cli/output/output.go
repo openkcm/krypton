@@ -1,7 +1,8 @@
 package output
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -213,7 +214,12 @@ func (b *Builder) renderJSON(w io.Writer) error {
 		rows[i] = obj
 	}
 
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(rows)
+	err := json.MarshalWrite(w, rows, json.Deterministic(true), jsontext.WithIndent("  "))
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(w, "\n")
+
+	return err
 }

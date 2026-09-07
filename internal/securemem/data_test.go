@@ -2,7 +2,8 @@ package securemem_test
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -163,7 +164,7 @@ func TestAvoidLogSecureBytesPrints(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, json.Valid(got))
+		assert.True(t, jsontext.Value(got).IsValid())
 
 		var decoded string
 		err = json.Unmarshal(got, &decoded)
@@ -249,7 +250,7 @@ func TestAvoidLogDataPrints(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, json.Valid(got))
+		assert.True(t, jsontext.Value(got).IsValid())
 
 		var decoded string
 		err = json.Unmarshal(got, &decoded)

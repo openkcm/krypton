@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -61,7 +61,7 @@ func createDatabase(t *testing.T) *sql.DB {
 		assert.FailNowf(t, "failed to connect to PostgreSQL", "error: %v", err)
 	}
 
-	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	dbName := "test_" + strings.ReplaceAll(uuid.New().String(), "-", "")
 
 	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
 	if err != nil {
@@ -94,7 +94,7 @@ func createDatabase(t *testing.T) *sql.DB {
 func createTenant(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	tenantStore := storesql.NewTenantStore(db)
-	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
+	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
 	result, err := tenantStore.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant.ID

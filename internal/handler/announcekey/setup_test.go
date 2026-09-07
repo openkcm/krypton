@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
@@ -60,7 +60,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("postgres", pgConnStr)
 	require.NoError(t, err)
 
-	dbName := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	dbName := "test_" + strings.ReplaceAll(uuid.New().String(), "-", "")
 	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -88,12 +88,12 @@ func seedTenantAndKey(t *testing.T, db *sql.DB) model.Key {
 	ctx := t.Context()
 
 	tenantStore := storesql.NewTenantStore(db)
-	tenant := model.NewTenant("test-tenant-"+uuid.NewString(), nil)
+	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
 	tenantRes, err := tenantStore.CreateTenant(ctx, store.CreateTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 
 	keyStore := storesql.NewKeyStore(db)
-	key := model.NewKey(tenantRes.Tenant.ID, "test-key-"+uuid.NewString(), "K0", nil, "agent", nil)
+	key := model.NewKey(tenantRes.Tenant.ID, "test-key-"+uuid.New().String(), "K0", nil, "agent", nil)
 	require.NoError(t, keyStore.CreateKey(ctx, key))
 	return key
 }

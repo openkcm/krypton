@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -66,7 +66,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -113,7 +113,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -151,7 +151,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -169,7 +169,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			ParentId:   rootKeyID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
@@ -230,7 +230,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -248,7 +248,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			ParentId:   rootKeyID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
@@ -285,7 +285,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -306,7 +306,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			ParentId:   k0ID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
@@ -328,7 +328,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K2",
-			Name:       "k2-key-" + uuid.NewString(),
+			Name:       "k2-key-" + uuid.New().String(),
 			ParentId:   k1ID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
@@ -350,7 +350,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K3",
-			Name:       "k3-key-" + uuid.NewString(),
+			Name:       "k3-key-" + uuid.New().String(),
 			ParentId:   k2ID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
@@ -408,7 +408,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -461,7 +461,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K0",
-			Name:       "root-key-" + uuid.NewString(),
+			Name:       "root-key-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"env": "prod"},
 		})
@@ -492,7 +492,7 @@ func TestActivateKey(t *testing.T) {
 		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenant.ID,
 			Kind:       "K1",
-			Name:       "k1-key-" + uuid.NewString(),
+			Name:       "k1-key-" + uuid.New().String(),
 			ParentId:   rootKeyID,
 			TargetName: testRootName,
 			Labels:     map[string]string{"env": "prod"},
