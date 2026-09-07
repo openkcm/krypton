@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/spec"
@@ -47,10 +48,20 @@ func TestNewAgentConfig(t *testing.T) {
 			URI:  "root",
 		},
 	}
+	expConnections := config.ConnectionConfigs{
+		{
+			Name: "root",
+			Address: config.Address{
+				Type: config.AddressTypeGRPC,
+				URL:  "localhost:5050",
+			},
+		},
+	}
 
 	expConfig := config.AgentConfig{
 		Name:            "segment1",
 		IdentityConfigs: expIdentityConfigs,
+		Connections:     expConnections,
 		KeyBindings:     topologySegment.KeyBindings,
 		Segment:         topologySegment.Segment,
 		SelectorLabels:  topologySegment.SelectorLabels,
@@ -60,7 +71,7 @@ func TestNewAgentConfig(t *testing.T) {
 	}
 
 	// when
-	actConfig := config.NewAgentConfig(expHierarchy, topologySegment, expIdentityConfigs)
+	actConfig := config.NewAgentConfig(expHierarchy, topologySegment, expIdentityConfigs, expConnections)
 
 	// then
 	assert.Equal(t, expConfig, actConfig)
@@ -203,6 +214,96 @@ krypton_root:
 	})
 }
 
+func TestUnmarshalAgentConfig(t *testing.T) {
+	// given
+	tests := []struct {
+		name    string
+		input   []byte
+		wantCfg *config.AgentConfig
+		wantErr bool
+	}{
+		{
+			name: "valid YAML round-trip",
+			input: mustMarshalYAML(t, config.AgentConfig{
+				Name: "agent-aws",
+				Role: config.AgentRole,
+				Connections: config.ConnectionConfigs{
+					{
+						Name: "root",
+						Address: config.Address{
+							Type: config.AddressTypeGRPC,
+							URL:  "localhost:5050",
+						},
+					},
+				},
+				IdentityConfigs: config.IdentityConfigs{
+					{Name: "root", URI: "kryptonid://acme/root"},
+				},
+				Segment: spec.HierarchySegment{
+					StartKind: "K1",
+					EndKind:   "K2",
+				},
+				KeepAlive: 30,
+			}),
+			wantCfg: &config.AgentConfig{
+				Name:        "agent-aws",
+				Role:        config.AgentRole,
+				KeyBindings: map[string]spec.KeyBinding{},
+				Connections: config.ConnectionConfigs{
+					{
+						Name: "root",
+						Address: config.Address{
+							Type: config.AddressTypeGRPC,
+							URL:  "localhost:5050",
+						},
+					},
+				},
+				IdentityConfigs: config.IdentityConfigs{
+					{Name: "root", URI: "kryptonid://acme/root"},
+				},
+				Segment: spec.HierarchySegment{
+					StartKind: "K1",
+					EndKind:   "K2",
+				},
+				SelectorLabels: spec.SelectorLabels{},
+				Hierarchy: spec.KeyHierarchy{
+					KeySpecs: []spec.KeySpec{},
+				},
+				KeepAlive: 30,
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid YAML",
+			input:   []byte("{{invalid yaml"),
+			wantCfg: nil,
+			wantErr: true,
+		},
+		{
+			name:    "nil input",
+			input:   nil,
+			wantCfg: &config.AgentConfig{},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			got, err := config.UnmarshalAgentConfig(tt.input)
+
+			// then
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, got)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantCfg, got)
+			}
+		})
+	}
+}
+
 func validAgentBootstrapConfig() *config.AgentBootstrapConfig {
 	return &config.AgentBootstrapConfig{
 		Name: "agent-aws",
@@ -226,4 +327,13 @@ func validAgentBootstrapConfig() *config.AgentBootstrapConfig {
 			},
 		},
 	}
+}
+
+func mustMarshalYAML(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := yaml.Marshal(v)
+	if err != nil {
+		t.Fatalf("failed to marshal YAML: %v", err)
+	}
+	return b
 }

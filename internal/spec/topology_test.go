@@ -659,3 +659,120 @@ func TestChildrenNames(t *testing.T) {
 		})
 	}
 }
+
+func TestTopology_ParentName(t *testing.T) {
+	tests := []struct {
+		name          string
+		subj          spec.Topology
+		agentName     string
+		expParentName string
+		isFound       bool
+	}{
+		{
+			name: "should return parent name when found",
+			subj: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name:    "agent-aws",
+						Segment: spec.HierarchySegment{},
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "root",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName:     "agent-aws",
+			expParentName: "root",
+			isFound:       true,
+		},
+		{
+			name: "should return empty parent name when not found",
+			subj: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name:    "agent-aws",
+						Segment: spec.HierarchySegment{},
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "root",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName:     "unknown",
+			expParentName: "",
+			isFound:       false,
+		},
+		{
+			name: "should return empty parent name when no parent key provider",
+			subj: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name:    "agent-aws",
+						Segment: spec.HierarchySegment{},
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: nil,
+							},
+						},
+					},
+				},
+			},
+			agentName:     "agent-aws",
+			expParentName: "",
+			isFound:       false,
+		},
+		{
+			name: "should return empty parent name when no key bindings",
+			subj: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name:        "agent-aws",
+						Segment:     spec.HierarchySegment{},
+						KeyBindings: nil,
+					},
+				},
+			},
+
+			agentName:     "agent-aws",
+			expParentName: "",
+			isFound:       false,
+		},
+		{
+			name: "should return empty parent name when parent key provider has empty agent name",
+			subj: spec.Topology{
+				Segments: []spec.TopologySegment{
+					{
+						Name:    "agent-aws",
+						Segment: spec.HierarchySegment{},
+						KeyBindings: map[string]spec.KeyBinding{
+							"K1": {
+								ParentKeyProvider: &spec.ParentKeyProviderRef{
+									AgentName: "",
+								},
+							},
+						},
+					},
+				},
+			},
+			agentName:     "agent-aws",
+			expParentName: "",
+			isFound:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actParent, actFound := tt.subj.ParentName(tt.agentName)
+
+			assert.Equal(t, tt.expParentName, actParent)
+			assert.Equal(t, tt.isFound, actFound)
+		})
+	}
+}

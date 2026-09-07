@@ -13,8 +13,6 @@ import (
 type (
 	Role            string
 	KeepAliveConfig int
-	// AddressType identifies the transport protocol for inter-service communication.
-	AddressType string
 )
 
 const (
@@ -25,16 +23,7 @@ const (
 
 	// defaultKeepAlive is the default keep-alive interval (in seconds) assigned to agents.
 	defaultKeepAlive KeepAliveConfig = 30
-
-	// AddressTypeGRPC represents gRPC transport.
-	AddressTypeGRPC AddressType = "grpc"
 )
-
-// Address represents a network address for inter-service communication.
-type Address struct {
-	Type AddressType `yaml:"type"`
-	URL  string      `yaml:"url"`
-}
 
 // KryptonRoot holds the configuration for reaching the root instance.
 type KryptonRoot struct {
@@ -45,6 +34,7 @@ type KryptonRoot struct {
 type AgentConfig struct {
 	Name            string                     `yaml:"name"`
 	KeyBindings     map[string]spec.KeyBinding `yaml:"key_bindings"`
+	Connections     ConnectionConfigs          `yaml:"connections"`
 	IdentityConfigs IdentityConfigs            `yaml:"identity"`
 	Segment         spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels  spec.SelectorLabels        `yaml:"selector_labels"`
@@ -65,10 +55,11 @@ var ErrConfigAddressEmpty = errors.New("address URL cannot be empty")
 var ErrAddressTypeInvalid = errors.New("address type must be 'grpc'")
 
 // NewAgentConfig creates a new AgentConfig based on the provided KeyHierarchy and TopologySegment.
-func NewAgentConfig(h spec.KeyHierarchy, seg spec.TopologySegment, identities IdentityConfigs) AgentConfig {
+func NewAgentConfig(h spec.KeyHierarchy, seg spec.TopologySegment, identities IdentityConfigs, connections ConnectionConfigs) AgentConfig {
 	return AgentConfig{
 		Name:            seg.Name,
 		IdentityConfigs: identities,
+		Connections:     connections,
 		KeyBindings:     seg.KeyBindings,
 		Segment:         seg.Segment,
 		SelectorLabels:  seg.SelectorLabels,
@@ -104,11 +95,8 @@ func (cfg *AgentBootstrapConfig) Validate() error {
 	if cfg.Role != AgentRole {
 		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, AgentRole)
 	}
-	if cfg.KryptonRoot.Address.Type != AddressTypeGRPC {
-		return fmt.Errorf("%w: must be %q", ErrAddressTypeInvalid, AddressTypeGRPC)
-	}
-	if cfg.KryptonRoot.Address.URL == "" {
-		return ErrConfigAddressEmpty
+	if err := cfg.KryptonRoot.Address.Validate(); err != nil {
+		return fmt.Errorf("krypton_root.address: %w", err)
 	}
 	if cfg.Auth != nil {
 		if err := cfg.Auth.Validate(); err != nil {
@@ -116,4 +104,14 @@ func (cfg *AgentBootstrapConfig) Validate() error {
 		}
 	}
 	return nil
+}
+
+// UnmarshalAgentConfig takes a byte slice containing YAML data and unmarshals it into an AgentConfig struct.
+func UnmarshalAgentConfig(b []byte) (*AgentConfig, error) {
+	var cfg AgentConfig
+	err := yaml.Unmarshal(b, &cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }

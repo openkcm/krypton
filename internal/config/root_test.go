@@ -76,6 +76,15 @@ func validRootConfig() *config.RootConfig {
 				},
 			},
 		},
+		Connections: config.ConnectionConfigs{
+			{
+				Name: "root",
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5050",
+				},
+			},
+		},
 		Topology: spec.Topology{},
 		Auth: &config.RootAuthConfig{
 			AuthType: config.AuthTypeMTLS,
@@ -294,6 +303,16 @@ func TestValidateRootConfig(t *testing.T) {
 					Name: "agent-aws",
 					URI:  "kryptonid://acme-service/service/agent-aws",
 				})
+				c.Connections = config.ConnectionConfigs{
+					{
+						Name:    "root",
+						Address: config.Address{Type: config.AddressTypeGRPC, URL: "something"},
+					},
+					{
+						Name:    "agent-aws",
+						Address: config.Address{Type: config.AddressTypeGRPC, URL: "something"},
+					},
+				}
 			},
 			wantErr: nil,
 		},
@@ -312,6 +331,42 @@ func TestValidateRootConfig(t *testing.T) {
 				c.Auth = nil
 			},
 			wantErr: nil,
+		},
+		{
+			name: "should fail if connection is invalid",
+			modify: func(c *config.RootConfig) {
+				c.Hierarchy = spec.KeyHierarchy{
+					Name: "h",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: validLabelsSpec()},
+						{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: validLabelsSpec()},
+						{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: validLabelsSpec()},
+						{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: validLabelsSpec()},
+					},
+				}
+				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
+				c.KeyBindings = map[string]spec.KeyBinding{
+					"K0": {SealerSpec: validSealerSpec()},
+					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+				}
+				c.Topology = spec.Topology{
+					Segments: []spec.TopologySegment{
+						{
+							Name:    "agent-aws",
+							Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
+							KeyBindings: map[string]spec.KeyBinding{
+								"K2": {SealerSpec: validSealerSpec(), CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
+								"K3": {CryptorSpec: validCryptorSpec()},
+							},
+						},
+					},
+				}
+				c.Auth.IdentityConfigs = append(c.Auth.IdentityConfigs, config.IdentityConfig{
+					Name: "agent-aws",
+					URI:  "kryptonid://acme-service/service/agent-aws",
+				})
+			},
+			wantErr: config.ErrInvalidConnectionConfig,
 		},
 	}
 
@@ -432,6 +487,15 @@ reconciler:
   targets:
     - name: agent-aws
       address: localhost:9091
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: something
+  - name: agent-aws
+    address:
+      type: grpc
+      url: something
 `
 
 	tests := []struct {
@@ -448,21 +512,33 @@ reconciler:
 				t.Helper()
 				assert.Equal(t, "root", cfg.Name)
 				assert.Equal(t, config.Role("root"), cfg.Role)
+
 				assert.Equal(t, "K0", cfg.Segment.StartKind)
 				assert.Equal(t, "K1", cfg.Segment.EndKind)
+
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
+
 				assert.Len(t, cfg.KeyBindings, 2)
 				assert.Equal(t, "root-sealer", cfg.KeyBindings["K0"].SealerSpec.Name)
 				assert.Nil(t, cfg.KeyBindings["K0"].CryptorSpec)
+
 				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].VaultSpec.Name)
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)
+
 				assert.Equal(t, "production-hierarchy", cfg.Hierarchy.Name)
+
 				assert.Len(t, cfg.Hierarchy.KeySpecs, 4)
 				assert.Equal(t, model.KeyKind("K0"), cfg.Hierarchy.KeySpecs[0].Kind)
+
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
+
 				assert.Equal(t, uint64(7), cfg.Reconciler.MaxReconcileCount)
 				assert.Equal(t, "localhost:9091", cfg.Reconciler.Targets[0].Address)
+
+				assert.Len(t, cfg.Connections, 2)
+				assert.Equal(t, "root", cfg.Connections[0].Name)
+				assert.Equal(t, "agent-aws", cfg.Connections[1].Name)
 			},
 		},
 		{

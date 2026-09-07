@@ -42,13 +42,19 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 
-		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
+		actConfig, err := config.UnmarshalAgentConfig(resp.GetConfig())
 		require.NoError(t, err)
 
 		identities, err := rootCfg.AgentIdentities(expAgentName)
 		require.NoError(t, err)
 
-		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities), *actConfig)
+		parentAgentName, ok := rootCfg.Topology.ParentName(expAgentName)
+		require.True(t, ok, "expected parent agent to be found for agent %s", expAgentName)
+
+		ccs, err := rootCfg.Connections.ByNames(parentAgentName)
+		require.NoError(t, err, "expected connection config to be found for agent %s", expAgentName)
+
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities, ccs), *actConfig)
 
 		result, err := agentStore.Get(ctx, store.GetAgentQuery{
 			Name:       expAgentName,
@@ -107,10 +113,16 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.NoError(t, err)
 
-		actConfig, err := agents.UnmarshalAgentConfig(resp.GetConfig())
+		actConfig, err := config.UnmarshalAgentConfig(resp.GetConfig())
 		require.NoError(t, err)
 
-		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], config.IdentityConfigs{}), *actConfig)
+		parentAgentName, ok := rootCfg.Topology.ParentName(expAgentName)
+		require.True(t, ok, "expected parent agent to be found for agent %s", expAgentName)
+
+		ccs, err := rootCfg.Connections.ByNames(parentAgentName)
+		require.NoError(t, err)
+
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], config.IdentityConfigs{}, ccs), *actConfig)
 	})
 
 	t.Run("should update registration if agent registers two times", func(t *testing.T) {
@@ -172,6 +184,22 @@ func TestRegister(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return error if there is no parent agent for the agent in topology", func(t *testing.T) {
+		// given
+		cli := setupServerAndClient(t, agentStore, rootConfigWithNoParentConfig(expAgentName))
+
+		// when
+		_, err := cli.Register(t.Context(), &agents.RegisterAgentRequest{
+			AgentName:  expAgentName,
+			InstanceId: uuid.New().String(),
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err), err.Error())
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 

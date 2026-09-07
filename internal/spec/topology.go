@@ -129,6 +129,22 @@ func (t *Topology) Validate() error {
 	return nil
 }
 
+// ParentName returns the parent agent name for the given agent name, if it exists.
+func (t *Topology) ParentName(agentName string) (string, bool) {
+	for _, seg := range t.Segments {
+		if seg.Name != agentName {
+			continue
+		}
+		for _, binding := range seg.KeyBindings {
+			if binding.ParentKeyProvider != nil && binding.ParentKeyProvider.AgentName != "" {
+				return binding.ParentKeyProvider.AgentName, true
+			}
+		}
+	}
+	return "", false
+}
+
+// ChildrenNames returns a map of child agent names for the given parent agent name.
 func (t *Topology) ChildrenNames(parentAgent string) (map[string]struct{}, bool) {
 	cs := make(map[string]struct{}, len(t.Segments))
 

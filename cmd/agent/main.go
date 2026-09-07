@@ -73,7 +73,7 @@ func main() {
 	})
 	handleErr(err, "failed to register agent")
 
-	agentCfg, err := agents.UnmarshalAgentConfig(reg.GetConfig())
+	agentCfg, err := config.UnmarshalAgentConfig(reg.GetConfig())
 	handleErr(err, "failed to unmarshal agent config")
 
 	keepAliveInterval := time.Duration(agentCfg.KeepAlive) * time.Second
