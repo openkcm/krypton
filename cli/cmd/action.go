@@ -83,7 +83,7 @@ func actionStatusCmd() *cobra.Command {
 	cmd.Flags().StringVar(&actionID, "action-id", "", "id of the action")
 	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "id of the tenant")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output in JSON format")
-	cmd.MarkFlagRequired("action-id")
+	_ = cmd.MarkFlagRequired("action-id")
 
 	return cmd
 }
