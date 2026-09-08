@@ -277,7 +277,16 @@ reconciler:
   targets:
     - name: %s
       address: localhost:%s
-`, agentName, agentName, agentPort)
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:50051
+  - name: %s
+    address:
+      type: grpc
+      url: localhost:50051
+`, agentName, agentName, agentPort, agentName)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -343,6 +352,11 @@ kmip:
     cert_path: %s
     key_path: %s
     ca_path: %s
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:50051
 `, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
@@ -448,7 +462,16 @@ auth:
       uri: kryptonid://acme-corp/service/root
     - name: %s
       uri: %s
-`, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName, makeKryptonID(agentName))
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:50051
+  - name: %s
+    address:
+      type: grpc
+      url: localhost:50051
+`, agentName, serverCertPath, serverKeyPath, clientCAPath, agentName, makeKryptonID(agentName), agentName)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -523,6 +546,11 @@ auth:
       uri: kryptonid://acme-corp/service/root
     - name: %s
       uri: %s
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:50051
 `, serverCertPath, serverKeyPath, clientCAPath, allowedAgent, makeKryptonID(allowedAgent))
 
 	return writeTempFile(t, "root-config-*.yaml", content)

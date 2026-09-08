@@ -36,6 +36,7 @@ func NewAgentService(store store.Agent, config config.RootConfig) *AgentService 
 // It validates the input, checks if the agent is defined in the topology, creates the
 // agent config, stores the registration, and returns the config as YAML.
 func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*RegisterAgentResponse, error) {
+	// TODO: Get agentname from the authenticated context instead of the request, to prevent spoofing.
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -64,9 +65,27 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 		}
 	}
 
-	cfg := config.NewAgentConfig(a.config.Hierarchy, *seg, ids)
+	parentName, ok := a.config.Topology.ParentName(agentName)
+	if !ok {
+		slog.Error("parent agent not found in topology", "agentName", agentName)
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, "parent agent not found in topology"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
 
-	pCfg, err := yaml.Marshal(cfg)
+	ccs, err := a.config.Connections.ByNames(parentName)
+	if err != nil {
+		slog.Error("failed to get connection configs", "agentName", agentName, "error", err)
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, "failed to get connection configs"),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
+
+	cfg := config.NewAgentConfig(a.config.Hierarchy, *seg, ids, ccs)
+
+	rawCfg, err := yaml.Marshal(cfg)
 	if err != nil {
 		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
 		return nil, proto.ErrDetailsWithCode(
@@ -91,7 +110,7 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	}
 
 	return &RegisterAgentResponse{
-		Config: pCfg,
+		Config: rawCfg,
 	}, nil
 }
 
@@ -160,16 +179,6 @@ func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest
 	}
 
 	return &DeregisterAgentResponse{}, nil
-}
-
-func UnmarshalAgentConfig(b []byte) (*config.AgentConfig, error) {
-	var cfg config.AgentConfig
-	err := yaml.Unmarshal(b, &cfg)
-	if err != nil {
-		slog.Error("failed to unmarshal agent config from yaml", "error", err)
-		return nil, err
-	}
-	return &cfg, nil
 }
 
 func validateInput(agentName, instanceID string) error {

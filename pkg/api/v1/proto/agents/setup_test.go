@@ -135,16 +135,14 @@ func createDatabase(t *testing.T) *sql.DB {
 }
 
 // baseRootConfig builds a RootConfig with the shared hierarchy, topology, and
-// the identity entries common to every test variant. Callers append extra
-// identities via extraIdentities.
-func baseRootConfig(agentName string, extraIdentities ...config.IdentityConfig) config.RootConfig {
+// the identity entries common to every test variant.
+func baseRootConfig(agentName string) config.RootConfig {
 	identities := config.IdentityConfigs{
 		{
 			Name: agentName,
 			URI:  "kryptonid://acme-corp/service/agent-aws",
 		},
 	}
-	identities = append(identities, extraIdentities...)
 	identities = append(identities,
 		config.IdentityConfig{
 			Name: "child-agent-1",
@@ -174,6 +172,43 @@ func baseRootConfig(agentName string, extraIdentities ...config.IdentityConfig) 
 		Auth: &config.RootAuthConfig{
 			IdentityConfigs: identities,
 		},
+		Connections: config.ConnectionConfigs{
+			{
+				Name: "root",
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5050",
+				},
+			},
+			{
+				Name: agentName,
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5051",
+				},
+			},
+			{
+				Name: "child-agent-1",
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5052",
+				},
+			},
+			{
+				Name: "child-agent-2",
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5053",
+				},
+			},
+			{
+				Name: "child-agent-3",
+				Address: config.Address{
+					Type: config.AddressTypeGRPC,
+					URL:  "localhost:5054",
+				},
+			},
+		},
 		Topology: spec.Topology{
 			Segments: []spec.TopologySegment{
 				{
@@ -181,6 +216,9 @@ func baseRootConfig(agentName string, extraIdentities ...config.IdentityConfig) 
 					KeyBindings: map[string]spec.KeyBinding{
 						"K1": {
 							CryptorSpec: validCryptor(),
+							ParentKeyProvider: &spec.ParentKeyProviderRef{
+								AgentName: "root",
+							},
 						},
 					},
 					SelectorLabels: spec.SelectorLabels{"region": "us-west"},
@@ -229,10 +267,32 @@ func rootConfigWithNilAuth(agentName string) config.RootConfig {
 }
 
 func validRootConfig(agentName string) config.RootConfig {
-	return baseRootConfig(agentName, config.IdentityConfig{
-		Name: "root",
-		URI:  "kryptonid://acme-corp/service/root",
-	})
+	cfg := baseRootConfig(agentName)
+
+	cfg.Auth.IdentityConfigs = append(cfg.Auth.IdentityConfigs,
+		config.IdentityConfig{
+			Name: "root",
+			URI:  "kryptonid://acme-corp/service/root",
+		})
+	return cfg
+}
+
+func rootConfigWithNoParentConfig(agentName string) config.RootConfig {
+	cfg := baseRootConfig(agentName)
+
+	cfg.Auth.IdentityConfigs = append(cfg.Auth.IdentityConfigs,
+		config.IdentityConfig{
+			Name: "root",
+			URI:  "kryptonid://acme-corp/service/root",
+		})
+
+	for i := range cfg.Topology.Segments {
+		for k, binding := range cfg.Topology.Segments[i].KeyBindings {
+			binding.ParentKeyProvider = nil
+			cfg.Topology.Segments[i].KeyBindings[k] = binding
+		}
+	}
+	return cfg
 }
 
 func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {

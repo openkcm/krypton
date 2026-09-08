@@ -33,6 +33,7 @@ type RootConfig struct {
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
 	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
+	Connections    ConnectionConfigs          `yaml:"connections"`
 	KMIP           *kmip.Config               `yaml:"kmip,omitempty"`
 }
 
@@ -78,6 +79,9 @@ func (cfg *RootConfig) Validate() error {
 		if err := cfg.Auth.IdentityConfigs.ValidateAuthIdentities(cfg); err != nil {
 			return fmt.Errorf("auth identities: %w", err)
 		}
+	}
+	if err := cfg.Connections.Validate(cfg); err != nil {
+		return fmt.Errorf("connections: %w", err)
 	}
 
 	return nil
