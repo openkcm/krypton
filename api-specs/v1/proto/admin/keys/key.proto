@@ -12,6 +12,7 @@ service KeyService {
   rpc GetParentKeys(GetParentKeysRequest) returns (GetParentKeysResponse);
   rpc GetDescendantKeys(GetDescendantKeysRequest) returns (GetDescendantKeysResponse);
   rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
+  rpc GetAction(GetActionRequest) returns (GetActionResponse);
 }
 
 message Key {
@@ -32,6 +33,17 @@ message Key {
 message KeyProcessingState {
   string status = 1;
   string job_id = 2;
+}
+
+message Action {
+  string id = 1;
+  string key_id = 2;
+  string tenant_id = 3;
+  string type = 4;
+  string status = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+  repeated KeyTree key_tree = 8;
 }
 
 message AnnounceKeyRequest {
@@ -84,6 +96,15 @@ message KeyTree {
 
 message GetDescendantKeysResponse {
   repeated KeyTree key_tree = 1;
+}
+
+message GetActionRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message GetActionResponse {
+  Action action = 1;
 }
 
 message ListKeysRequest {
