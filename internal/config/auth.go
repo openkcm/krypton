@@ -10,7 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/identity"
-	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 const (
@@ -41,8 +40,8 @@ type AgentAuthConfig struct {
 
 // MTLSConfig contains server and client TLS paths for mutual TLS authentication.
 type MTLSConfig struct {
-	Server tlsconf.Server `yaml:"server"`
-	Client tlsconf.Client `yaml:"client"`
+	Server TLSServer `yaml:"server"`
+	Client TLSClient `yaml:"client"`
 }
 
 // IdentityConfig maps a human-readable name to a kryptonid:// URI.

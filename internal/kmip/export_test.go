@@ -20,9 +20,6 @@ func Authorize(ctx context.Context, uniqueIdentifier string) (KeyIdentifier, err
 	return newAuthorizer().authorizeIdentifier(ctx, uniqueIdentifier)
 }
 
-// ListenAddress exposes (*Config).listenAddress for tests.
-func ListenAddress(c *Config) string { return c.listenAddress() }
-
 // SetPeerCertsFn swaps the package-level peer-cert resolver and returns a
 // restore func for t.Cleanup.
 func SetPeerCertsFn(fn func(context.Context) []*x509.Certificate) func() {
