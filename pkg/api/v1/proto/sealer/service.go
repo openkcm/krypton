@@ -29,11 +29,6 @@ var _ ServiceServer = (*SealerService)(nil)
 
 // Seal implements [ServiceServer].
 func (s *SealerService) Seal(ctx context.Context, req *SealRequest) (*SealResponse, error) {
-	vault := securemem.NewMemVault()
-
-	// TODO: will be destroyed in post hook
-	ctx = VaultToContext(ctx, vault)
-
 	// create securemem.Data from plaintext
 	rData, err := securemem.NewData("request", len(req.GetPlaintext()))
 	if err != nil {
@@ -48,6 +43,11 @@ func (s *SealerService) Seal(ctx context.Context, req *SealRequest) (*SealRespon
 
 	// clear the request bytes
 	securemem.Zero(req.GetPlaintext())
+
+	vault := securemem.NewMemVault()
+
+	// TODO: will be destroyed in post hook
+	ctx = VaultToContext(ctx, vault)
 
 	// import the securemem.Data into the vault for tracking
 	err = vaultImport(vault, "input", rData)
@@ -87,11 +87,6 @@ func (s *SealerService) Seal(ctx context.Context, req *SealRequest) (*SealRespon
 
 // Unseal implements [ServiceServer].
 func (s *SealerService) Unseal(ctx context.Context, req *UnsealRequest) (*UnsealResponse, error) {
-	vault := securemem.NewMemVault()
-
-	// TODO: will be destroyed in post hook
-	ctx = VaultToContext(ctx, vault)
-
 	// create securemem.Data from ciphertext
 	rData, err := securemem.NewData("request", len(req.GetCiphertext()))
 	if err != nil {
@@ -106,6 +101,11 @@ func (s *SealerService) Unseal(ctx context.Context, req *UnsealRequest) (*Unseal
 
 	// clear the request bytes
 	securemem.Zero(req.GetCiphertext())
+
+	vault := securemem.NewMemVault()
+
+	// TODO: will be destroyed in post hook
+	ctx = VaultToContext(ctx, vault)
 
 	// import the securemem.Data into the vault for tracking
 	err = vaultImport(vault, "input", rData)
