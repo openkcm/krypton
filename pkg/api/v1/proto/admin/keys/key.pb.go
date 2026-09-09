@@ -198,106 +198,6 @@ func (x *KeyProcessingState) GetJobId() string {
 	return ""
 }
 
-type Action struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
-	TenantId      string                 `protobuf:"bytes,3,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	Type          string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	KeyTree       []*KeyTree             `protobuf:"bytes,8,rep,name=key_tree,json=keyTree,proto3" json:"key_tree,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Action) Reset() {
-	*x = Action{}
-	mi := &file_key_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Action) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Action) ProtoMessage() {}
-
-func (x *Action) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Action.ProtoReflect.Descriptor instead.
-func (*Action) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *Action) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Action) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
-	}
-	return ""
-}
-
-func (x *Action) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *Action) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *Action) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *Action) GetCreatedAt() int64 {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return 0
-}
-
-func (x *Action) GetUpdatedAt() int64 {
-	if x != nil {
-		return x.UpdatedAt
-	}
-	return 0
-}
-
-func (x *Action) GetKeyTree() []*KeyTree {
-	if x != nil {
-		return x.KeyTree
-	}
-	return nil
-}
-
 type AnnounceKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
@@ -312,7 +212,7 @@ type AnnounceKeyRequest struct {
 
 func (x *AnnounceKeyRequest) Reset() {
 	*x = AnnounceKeyRequest{}
-	mi := &file_key_proto_msgTypes[3]
+	mi := &file_key_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -324,7 +224,7 @@ func (x *AnnounceKeyRequest) String() string {
 func (*AnnounceKeyRequest) ProtoMessage() {}
 
 func (x *AnnounceKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[3]
+	mi := &file_key_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -337,7 +237,7 @@ func (x *AnnounceKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceKeyRequest.ProtoReflect.Descriptor instead.
 func (*AnnounceKeyRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{3}
+	return file_key_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AnnounceKeyRequest) GetTenantId() string {
@@ -391,7 +291,7 @@ type AnnounceKeyResponse struct {
 
 func (x *AnnounceKeyResponse) Reset() {
 	*x = AnnounceKeyResponse{}
-	mi := &file_key_proto_msgTypes[4]
+	mi := &file_key_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -403,7 +303,7 @@ func (x *AnnounceKeyResponse) String() string {
 func (*AnnounceKeyResponse) ProtoMessage() {}
 
 func (x *AnnounceKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[4]
+	mi := &file_key_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -416,7 +316,7 @@ func (x *AnnounceKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnounceKeyResponse.ProtoReflect.Descriptor instead.
 func (*AnnounceKeyResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{4}
+	return file_key_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AnnounceKeyResponse) GetKey() *Key {
@@ -436,7 +336,7 @@ type ActivateKeyRequest struct {
 
 func (x *ActivateKeyRequest) Reset() {
 	*x = ActivateKeyRequest{}
-	mi := &file_key_proto_msgTypes[5]
+	mi := &file_key_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -448,7 +348,7 @@ func (x *ActivateKeyRequest) String() string {
 func (*ActivateKeyRequest) ProtoMessage() {}
 
 func (x *ActivateKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[5]
+	mi := &file_key_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -461,7 +361,7 @@ func (x *ActivateKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivateKeyRequest.ProtoReflect.Descriptor instead.
 func (*ActivateKeyRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{5}
+	return file_key_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ActivateKeyRequest) GetId() string {
@@ -486,7 +386,7 @@ type ActivateKeyResponse struct {
 
 func (x *ActivateKeyResponse) Reset() {
 	*x = ActivateKeyResponse{}
-	mi := &file_key_proto_msgTypes[6]
+	mi := &file_key_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -498,7 +398,7 @@ func (x *ActivateKeyResponse) String() string {
 func (*ActivateKeyResponse) ProtoMessage() {}
 
 func (x *ActivateKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[6]
+	mi := &file_key_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -511,7 +411,7 @@ func (x *ActivateKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivateKeyResponse.ProtoReflect.Descriptor instead.
 func (*ActivateKeyResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{6}
+	return file_key_proto_rawDescGZIP(), []int{5}
 }
 
 type GetKeyRequest struct {
@@ -524,7 +424,7 @@ type GetKeyRequest struct {
 
 func (x *GetKeyRequest) Reset() {
 	*x = GetKeyRequest{}
-	mi := &file_key_proto_msgTypes[7]
+	mi := &file_key_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +436,7 @@ func (x *GetKeyRequest) String() string {
 func (*GetKeyRequest) ProtoMessage() {}
 
 func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[7]
+	mi := &file_key_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,7 +449,7 @@ func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyRequest.ProtoReflect.Descriptor instead.
 func (*GetKeyRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{7}
+	return file_key_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetKeyRequest) GetId() string {
@@ -575,7 +475,7 @@ type GetKeyResponse struct {
 
 func (x *GetKeyResponse) Reset() {
 	*x = GetKeyResponse{}
-	mi := &file_key_proto_msgTypes[8]
+	mi := &file_key_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -587,7 +487,7 @@ func (x *GetKeyResponse) String() string {
 func (*GetKeyResponse) ProtoMessage() {}
 
 func (x *GetKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[8]
+	mi := &file_key_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -600,7 +500,7 @@ func (x *GetKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyResponse.ProtoReflect.Descriptor instead.
 func (*GetKeyResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{8}
+	return file_key_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetKeyResponse) GetKey() *Key {
@@ -620,7 +520,7 @@ type GetParentKeysRequest struct {
 
 func (x *GetParentKeysRequest) Reset() {
 	*x = GetParentKeysRequest{}
-	mi := &file_key_proto_msgTypes[9]
+	mi := &file_key_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +532,7 @@ func (x *GetParentKeysRequest) String() string {
 func (*GetParentKeysRequest) ProtoMessage() {}
 
 func (x *GetParentKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[9]
+	mi := &file_key_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,7 +545,7 @@ func (x *GetParentKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParentKeysRequest.ProtoReflect.Descriptor instead.
 func (*GetParentKeysRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{9}
+	return file_key_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetParentKeysRequest) GetId() string {
@@ -671,7 +571,7 @@ type GetParentKeysResponse struct {
 
 func (x *GetParentKeysResponse) Reset() {
 	*x = GetParentKeysResponse{}
-	mi := &file_key_proto_msgTypes[10]
+	mi := &file_key_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -683,7 +583,7 @@ func (x *GetParentKeysResponse) String() string {
 func (*GetParentKeysResponse) ProtoMessage() {}
 
 func (x *GetParentKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[10]
+	mi := &file_key_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -696,7 +596,7 @@ func (x *GetParentKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParentKeysResponse.ProtoReflect.Descriptor instead.
 func (*GetParentKeysResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{10}
+	return file_key_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetParentKeysResponse) GetKeys() []*Key {
@@ -716,7 +616,7 @@ type GetDescendantKeysRequest struct {
 
 func (x *GetDescendantKeysRequest) Reset() {
 	*x = GetDescendantKeysRequest{}
-	mi := &file_key_proto_msgTypes[11]
+	mi := &file_key_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -728,7 +628,7 @@ func (x *GetDescendantKeysRequest) String() string {
 func (*GetDescendantKeysRequest) ProtoMessage() {}
 
 func (x *GetDescendantKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[11]
+	mi := &file_key_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -741,7 +641,7 @@ func (x *GetDescendantKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDescendantKeysRequest.ProtoReflect.Descriptor instead.
 func (*GetDescendantKeysRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{11}
+	return file_key_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetDescendantKeysRequest) GetId() string {
@@ -767,7 +667,7 @@ type KeyTree struct {
 
 func (x *KeyTree) Reset() {
 	*x = KeyTree{}
-	mi := &file_key_proto_msgTypes[12]
+	mi := &file_key_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -779,7 +679,7 @@ func (x *KeyTree) String() string {
 func (*KeyTree) ProtoMessage() {}
 
 func (x *KeyTree) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[12]
+	mi := &file_key_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -792,7 +692,7 @@ func (x *KeyTree) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeyTree.ProtoReflect.Descriptor instead.
 func (*KeyTree) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{12}
+	return file_key_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *KeyTree) GetKeys() []*Key {
@@ -811,7 +711,7 @@ type GetDescendantKeysResponse struct {
 
 func (x *GetDescendantKeysResponse) Reset() {
 	*x = GetDescendantKeysResponse{}
-	mi := &file_key_proto_msgTypes[13]
+	mi := &file_key_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -823,7 +723,7 @@ func (x *GetDescendantKeysResponse) String() string {
 func (*GetDescendantKeysResponse) ProtoMessage() {}
 
 func (x *GetDescendantKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[13]
+	mi := &file_key_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -836,108 +736,12 @@ func (x *GetDescendantKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDescendantKeysResponse.ProtoReflect.Descriptor instead.
 func (*GetDescendantKeysResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{13}
+	return file_key_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetDescendantKeysResponse) GetKeyTree() []*KeyTree {
 	if x != nil {
 		return x.KeyTree
-	}
-	return nil
-}
-
-type GetActionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetActionRequest) Reset() {
-	*x = GetActionRequest{}
-	mi := &file_key_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetActionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetActionRequest) ProtoMessage() {}
-
-func (x *GetActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetActionRequest.ProtoReflect.Descriptor instead.
-func (*GetActionRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *GetActionRequest) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *GetActionRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-type GetActionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Action        *Action                `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetActionResponse) Reset() {
-	*x = GetActionResponse{}
-	mi := &file_key_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetActionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetActionResponse) ProtoMessage() {}
-
-func (x *GetActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetActionResponse.ProtoReflect.Descriptor instead.
-func (*GetActionResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *GetActionResponse) GetAction() *Action {
-	if x != nil {
-		return x.Action
 	}
 	return nil
 }
@@ -959,7 +763,7 @@ type ListKeysRequest struct {
 
 func (x *ListKeysRequest) Reset() {
 	*x = ListKeysRequest{}
-	mi := &file_key_proto_msgTypes[16]
+	mi := &file_key_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -971,7 +775,7 @@ func (x *ListKeysRequest) String() string {
 func (*ListKeysRequest) ProtoMessage() {}
 
 func (x *ListKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[16]
+	mi := &file_key_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -984,7 +788,7 @@ func (x *ListKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListKeysRequest) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{16}
+	return file_key_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListKeysRequest) GetTenantId() string {
@@ -1060,7 +864,7 @@ type ListKeysResponse struct {
 
 func (x *ListKeysResponse) Reset() {
 	*x = ListKeysResponse{}
-	mi := &file_key_proto_msgTypes[17]
+	mi := &file_key_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1072,7 +876,7 @@ func (x *ListKeysResponse) String() string {
 func (*ListKeysResponse) ProtoMessage() {}
 
 func (x *ListKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_proto_msgTypes[17]
+	mi := &file_key_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1085,7 +889,7 @@ func (x *ListKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListKeysResponse) Descriptor() ([]byte, []int) {
-	return file_key_proto_rawDescGZIP(), []int{17}
+	return file_key_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListKeysResponse) GetKeys() []*Key {
@@ -1128,18 +932,7 @@ const file_key_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x12KeyProcessingState\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x15\n" +
-	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"\xf1\x01\n" +
-	"\x06Action\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n" +
-	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x1b\n" +
-	"\ttenant_id\x18\x03 \x01(\tR\btenantId\x12\x12\n" +
-	"\x04type\x18\x04 \x01(\tR\x04type\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n" +
-	"\n" +
-	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
-	"\n" +
-	"updated_at\x18\a \x01(\x03R\tupdatedAt\x129\n" +
-	"\bkey_tree\x18\b \x03(\v2\x1e.krypton.v1.admin.keys.KeyTreeR\akeyTree\"\xa1\x02\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\"\xa1\x02\n" +
 	"\x12AnnounceKeyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -1173,12 +966,7 @@ const file_key_proto_rawDesc = "" +
 	"\aKeyTree\x12.\n" +
 	"\x04keys\x18\x01 \x03(\v2\x1a.krypton.v1.admin.keys.KeyR\x04keys\"V\n" +
 	"\x19GetDescendantKeysResponse\x129\n" +
-	"\bkey_tree\x18\x01 \x03(\v2\x1e.krypton.v1.admin.keys.KeyTreeR\akeyTree\"?\n" +
-	"\x10GetActionRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"J\n" +
-	"\x11GetActionResponse\x125\n" +
-	"\x06action\x18\x01 \x01(\v2\x1d.krypton.v1.admin.keys.ActionR\x06action\"\x8f\x03\n" +
+	"\bkey_tree\x18\x01 \x03(\v2\x1e.krypton.v1.admin.keys.KeyTreeR\akeyTree\"\x8f\x03\n" +
 	"\x0fListKeysRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1195,7 +983,7 @@ const file_key_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Z\n" +
 	"\x10ListKeysResponse\x12.\n" +
 	"\x04keys\x18\x01 \x03(\v2\x1a.krypton.v1.admin.keys.KeyR\x04keys\x12\x16\n" +
-	"\x06cursor\x18\x02 \x01(\tR\x06cursor2\xd0\x05\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor2\xf0\x04\n" +
 	"\n" +
 	"KeyService\x12d\n" +
 	"\vAnnounceKey\x12).krypton.v1.admin.keys.AnnounceKeyRequest\x1a*.krypton.v1.admin.keys.AnnounceKeyResponse\x12d\n" +
@@ -1203,8 +991,7 @@ const file_key_proto_rawDesc = "" +
 	"\x06GetKey\x12$.krypton.v1.admin.keys.GetKeyRequest\x1a%.krypton.v1.admin.keys.GetKeyResponse\x12j\n" +
 	"\rGetParentKeys\x12+.krypton.v1.admin.keys.GetParentKeysRequest\x1a,.krypton.v1.admin.keys.GetParentKeysResponse\x12v\n" +
 	"\x11GetDescendantKeys\x12/.krypton.v1.admin.keys.GetDescendantKeysRequest\x1a0.krypton.v1.admin.keys.GetDescendantKeysResponse\x12[\n" +
-	"\bListKeys\x12&.krypton.v1.admin.keys.ListKeysRequest\x1a'.krypton.v1.admin.keys.ListKeysResponse\x12^\n" +
-	"\tGetAction\x12'.krypton.v1.admin.keys.GetActionRequest\x1a(.krypton.v1.admin.keys.GetActionResponseB8Z6github.com/openkcm/krypton/pkg/api/v1/proto/admin/keysb\x06proto3"
+	"\bListKeys\x12&.krypton.v1.admin.keys.ListKeysRequest\x1a'.krypton.v1.admin.keys.ListKeysResponseB8Z6github.com/openkcm/krypton/pkg/api/v1/proto/admin/keysb\x06proto3"
 
 var (
 	file_key_proto_rawDescOnce sync.Once
@@ -1218,62 +1005,55 @@ func file_key_proto_rawDescGZIP() []byte {
 	return file_key_proto_rawDescData
 }
 
-var file_key_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_key_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_key_proto_goTypes = []any{
 	(*Key)(nil),                       // 0: krypton.v1.admin.keys.Key
 	(*KeyProcessingState)(nil),        // 1: krypton.v1.admin.keys.KeyProcessingState
-	(*Action)(nil),                    // 2: krypton.v1.admin.keys.Action
-	(*AnnounceKeyRequest)(nil),        // 3: krypton.v1.admin.keys.AnnounceKeyRequest
-	(*AnnounceKeyResponse)(nil),       // 4: krypton.v1.admin.keys.AnnounceKeyResponse
-	(*ActivateKeyRequest)(nil),        // 5: krypton.v1.admin.keys.ActivateKeyRequest
-	(*ActivateKeyResponse)(nil),       // 6: krypton.v1.admin.keys.ActivateKeyResponse
-	(*GetKeyRequest)(nil),             // 7: krypton.v1.admin.keys.GetKeyRequest
-	(*GetKeyResponse)(nil),            // 8: krypton.v1.admin.keys.GetKeyResponse
-	(*GetParentKeysRequest)(nil),      // 9: krypton.v1.admin.keys.GetParentKeysRequest
-	(*GetParentKeysResponse)(nil),     // 10: krypton.v1.admin.keys.GetParentKeysResponse
-	(*GetDescendantKeysRequest)(nil),  // 11: krypton.v1.admin.keys.GetDescendantKeysRequest
-	(*KeyTree)(nil),                   // 12: krypton.v1.admin.keys.KeyTree
-	(*GetDescendantKeysResponse)(nil), // 13: krypton.v1.admin.keys.GetDescendantKeysResponse
-	(*GetActionRequest)(nil),          // 14: krypton.v1.admin.keys.GetActionRequest
-	(*GetActionResponse)(nil),         // 15: krypton.v1.admin.keys.GetActionResponse
-	(*ListKeysRequest)(nil),           // 16: krypton.v1.admin.keys.ListKeysRequest
-	(*ListKeysResponse)(nil),          // 17: krypton.v1.admin.keys.ListKeysResponse
-	nil,                               // 18: krypton.v1.admin.keys.Key.LabelsEntry
-	nil,                               // 19: krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
-	nil,                               // 20: krypton.v1.admin.keys.ListKeysRequest.LabelsEntry
+	(*AnnounceKeyRequest)(nil),        // 2: krypton.v1.admin.keys.AnnounceKeyRequest
+	(*AnnounceKeyResponse)(nil),       // 3: krypton.v1.admin.keys.AnnounceKeyResponse
+	(*ActivateKeyRequest)(nil),        // 4: krypton.v1.admin.keys.ActivateKeyRequest
+	(*ActivateKeyResponse)(nil),       // 5: krypton.v1.admin.keys.ActivateKeyResponse
+	(*GetKeyRequest)(nil),             // 6: krypton.v1.admin.keys.GetKeyRequest
+	(*GetKeyResponse)(nil),            // 7: krypton.v1.admin.keys.GetKeyResponse
+	(*GetParentKeysRequest)(nil),      // 8: krypton.v1.admin.keys.GetParentKeysRequest
+	(*GetParentKeysResponse)(nil),     // 9: krypton.v1.admin.keys.GetParentKeysResponse
+	(*GetDescendantKeysRequest)(nil),  // 10: krypton.v1.admin.keys.GetDescendantKeysRequest
+	(*KeyTree)(nil),                   // 11: krypton.v1.admin.keys.KeyTree
+	(*GetDescendantKeysResponse)(nil), // 12: krypton.v1.admin.keys.GetDescendantKeysResponse
+	(*ListKeysRequest)(nil),           // 13: krypton.v1.admin.keys.ListKeysRequest
+	(*ListKeysResponse)(nil),          // 14: krypton.v1.admin.keys.ListKeysResponse
+	nil,                               // 15: krypton.v1.admin.keys.Key.LabelsEntry
+	nil,                               // 16: krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
+	nil,                               // 17: krypton.v1.admin.keys.ListKeysRequest.LabelsEntry
 }
 var file_key_proto_depIdxs = []int32{
-	18, // 0: krypton.v1.admin.keys.Key.labels:type_name -> krypton.v1.admin.keys.Key.LabelsEntry
+	15, // 0: krypton.v1.admin.keys.Key.labels:type_name -> krypton.v1.admin.keys.Key.LabelsEntry
 	1,  // 1: krypton.v1.admin.keys.Key.key_processing_state:type_name -> krypton.v1.admin.keys.KeyProcessingState
-	12, // 2: krypton.v1.admin.keys.Action.key_tree:type_name -> krypton.v1.admin.keys.KeyTree
-	19, // 3: krypton.v1.admin.keys.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
-	0,  // 4: krypton.v1.admin.keys.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
-	0,  // 5: krypton.v1.admin.keys.GetKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
-	0,  // 6: krypton.v1.admin.keys.GetParentKeysResponse.keys:type_name -> krypton.v1.admin.keys.Key
-	0,  // 7: krypton.v1.admin.keys.KeyTree.keys:type_name -> krypton.v1.admin.keys.Key
-	12, // 8: krypton.v1.admin.keys.GetDescendantKeysResponse.key_tree:type_name -> krypton.v1.admin.keys.KeyTree
-	2,  // 9: krypton.v1.admin.keys.GetActionResponse.action:type_name -> krypton.v1.admin.keys.Action
-	20, // 10: krypton.v1.admin.keys.ListKeysRequest.labels:type_name -> krypton.v1.admin.keys.ListKeysRequest.LabelsEntry
-	0,  // 11: krypton.v1.admin.keys.ListKeysResponse.keys:type_name -> krypton.v1.admin.keys.Key
-	3,  // 12: krypton.v1.admin.keys.KeyService.AnnounceKey:input_type -> krypton.v1.admin.keys.AnnounceKeyRequest
-	5,  // 13: krypton.v1.admin.keys.KeyService.ActivateKey:input_type -> krypton.v1.admin.keys.ActivateKeyRequest
-	7,  // 14: krypton.v1.admin.keys.KeyService.GetKey:input_type -> krypton.v1.admin.keys.GetKeyRequest
-	9,  // 15: krypton.v1.admin.keys.KeyService.GetParentKeys:input_type -> krypton.v1.admin.keys.GetParentKeysRequest
-	11, // 16: krypton.v1.admin.keys.KeyService.GetDescendantKeys:input_type -> krypton.v1.admin.keys.GetDescendantKeysRequest
-	16, // 17: krypton.v1.admin.keys.KeyService.ListKeys:input_type -> krypton.v1.admin.keys.ListKeysRequest
-	14, // 18: krypton.v1.admin.keys.KeyService.GetAction:input_type -> krypton.v1.admin.keys.GetActionRequest
-	4,  // 19: krypton.v1.admin.keys.KeyService.AnnounceKey:output_type -> krypton.v1.admin.keys.AnnounceKeyResponse
-	6,  // 20: krypton.v1.admin.keys.KeyService.ActivateKey:output_type -> krypton.v1.admin.keys.ActivateKeyResponse
-	8,  // 21: krypton.v1.admin.keys.KeyService.GetKey:output_type -> krypton.v1.admin.keys.GetKeyResponse
-	10, // 22: krypton.v1.admin.keys.KeyService.GetParentKeys:output_type -> krypton.v1.admin.keys.GetParentKeysResponse
-	13, // 23: krypton.v1.admin.keys.KeyService.GetDescendantKeys:output_type -> krypton.v1.admin.keys.GetDescendantKeysResponse
-	17, // 24: krypton.v1.admin.keys.KeyService.ListKeys:output_type -> krypton.v1.admin.keys.ListKeysResponse
-	15, // 25: krypton.v1.admin.keys.KeyService.GetAction:output_type -> krypton.v1.admin.keys.GetActionResponse
-	19, // [19:26] is the sub-list for method output_type
-	12, // [12:19] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	16, // 2: krypton.v1.admin.keys.AnnounceKeyRequest.labels:type_name -> krypton.v1.admin.keys.AnnounceKeyRequest.LabelsEntry
+	0,  // 3: krypton.v1.admin.keys.AnnounceKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
+	0,  // 4: krypton.v1.admin.keys.GetKeyResponse.key:type_name -> krypton.v1.admin.keys.Key
+	0,  // 5: krypton.v1.admin.keys.GetParentKeysResponse.keys:type_name -> krypton.v1.admin.keys.Key
+	0,  // 6: krypton.v1.admin.keys.KeyTree.keys:type_name -> krypton.v1.admin.keys.Key
+	11, // 7: krypton.v1.admin.keys.GetDescendantKeysResponse.key_tree:type_name -> krypton.v1.admin.keys.KeyTree
+	17, // 8: krypton.v1.admin.keys.ListKeysRequest.labels:type_name -> krypton.v1.admin.keys.ListKeysRequest.LabelsEntry
+	0,  // 9: krypton.v1.admin.keys.ListKeysResponse.keys:type_name -> krypton.v1.admin.keys.Key
+	2,  // 10: krypton.v1.admin.keys.KeyService.AnnounceKey:input_type -> krypton.v1.admin.keys.AnnounceKeyRequest
+	4,  // 11: krypton.v1.admin.keys.KeyService.ActivateKey:input_type -> krypton.v1.admin.keys.ActivateKeyRequest
+	6,  // 12: krypton.v1.admin.keys.KeyService.GetKey:input_type -> krypton.v1.admin.keys.GetKeyRequest
+	8,  // 13: krypton.v1.admin.keys.KeyService.GetParentKeys:input_type -> krypton.v1.admin.keys.GetParentKeysRequest
+	10, // 14: krypton.v1.admin.keys.KeyService.GetDescendantKeys:input_type -> krypton.v1.admin.keys.GetDescendantKeysRequest
+	13, // 15: krypton.v1.admin.keys.KeyService.ListKeys:input_type -> krypton.v1.admin.keys.ListKeysRequest
+	3,  // 16: krypton.v1.admin.keys.KeyService.AnnounceKey:output_type -> krypton.v1.admin.keys.AnnounceKeyResponse
+	5,  // 17: krypton.v1.admin.keys.KeyService.ActivateKey:output_type -> krypton.v1.admin.keys.ActivateKeyResponse
+	7,  // 18: krypton.v1.admin.keys.KeyService.GetKey:output_type -> krypton.v1.admin.keys.GetKeyResponse
+	9,  // 19: krypton.v1.admin.keys.KeyService.GetParentKeys:output_type -> krypton.v1.admin.keys.GetParentKeysResponse
+	12, // 20: krypton.v1.admin.keys.KeyService.GetDescendantKeys:output_type -> krypton.v1.admin.keys.GetDescendantKeysResponse
+	14, // 21: krypton.v1.admin.keys.KeyService.ListKeys:output_type -> krypton.v1.admin.keys.ListKeysResponse
+	16, // [16:22] is the sub-list for method output_type
+	10, // [10:16] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_key_proto_init() }
@@ -1287,7 +1067,7 @@ func file_key_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_key_proto_rawDesc), len(file_key_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

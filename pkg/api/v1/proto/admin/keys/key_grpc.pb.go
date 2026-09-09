@@ -26,7 +26,6 @@ const (
 	KeyService_GetParentKeys_FullMethodName     = "/krypton.v1.admin.keys.KeyService/GetParentKeys"
 	KeyService_GetDescendantKeys_FullMethodName = "/krypton.v1.admin.keys.KeyService/GetDescendantKeys"
 	KeyService_ListKeys_FullMethodName          = "/krypton.v1.admin.keys.KeyService/ListKeys"
-	KeyService_GetAction_FullMethodName         = "/krypton.v1.admin.keys.KeyService/GetAction"
 )
 
 // KeyServiceClient is the client API for KeyService service.
@@ -39,7 +38,6 @@ type KeyServiceClient interface {
 	GetParentKeys(ctx context.Context, in *GetParentKeysRequest, opts ...grpc.CallOption) (*GetParentKeysResponse, error)
 	GetDescendantKeys(ctx context.Context, in *GetDescendantKeysRequest, opts ...grpc.CallOption) (*GetDescendantKeysResponse, error)
 	ListKeys(ctx context.Context, in *ListKeysRequest, opts ...grpc.CallOption) (*ListKeysResponse, error)
-	GetAction(ctx context.Context, in *GetActionRequest, opts ...grpc.CallOption) (*GetActionResponse, error)
 }
 
 type keyServiceClient struct {
@@ -110,16 +108,6 @@ func (c *keyServiceClient) ListKeys(ctx context.Context, in *ListKeysRequest, op
 	return out, nil
 }
 
-func (c *keyServiceClient) GetAction(ctx context.Context, in *GetActionRequest, opts ...grpc.CallOption) (*GetActionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetActionResponse)
-	err := c.cc.Invoke(ctx, KeyService_GetAction_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // KeyServiceServer is the server API for KeyService service.
 // All implementations must embed UnimplementedKeyServiceServer
 // for forward compatibility.
@@ -130,7 +118,6 @@ type KeyServiceServer interface {
 	GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error)
 	GetDescendantKeys(context.Context, *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error)
 	ListKeys(context.Context, *ListKeysRequest) (*ListKeysResponse, error)
-	GetAction(context.Context, *GetActionRequest) (*GetActionResponse, error)
 	mustEmbedUnimplementedKeyServiceServer()
 }
 
@@ -158,9 +145,6 @@ func (UnimplementedKeyServiceServer) GetDescendantKeys(context.Context, *GetDesc
 }
 func (UnimplementedKeyServiceServer) ListKeys(context.Context, *ListKeysRequest) (*ListKeysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListKeys not implemented")
-}
-func (UnimplementedKeyServiceServer) GetAction(context.Context, *GetActionRequest) (*GetActionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetAction not implemented")
 }
 func (UnimplementedKeyServiceServer) mustEmbedUnimplementedKeyServiceServer() {}
 func (UnimplementedKeyServiceServer) testEmbeddedByValue()                    {}
@@ -291,24 +275,6 @@ func _KeyService_ListKeys_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KeyService_GetAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetActionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KeyServiceServer).GetAction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: KeyService_GetAction_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KeyServiceServer).GetAction(ctx, req.(*GetActionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // KeyService_ServiceDesc is the grpc.ServiceDesc for KeyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -339,10 +305,6 @@ var KeyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListKeys",
 			Handler:    _KeyService_ListKeys_Handler,
-		},
-		{
-			MethodName: "GetAction",
-			Handler:    _KeyService_GetAction_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
