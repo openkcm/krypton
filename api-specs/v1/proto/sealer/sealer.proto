@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package krypton.v1.sealers;
+package krypton.v1.sealer;
 
-option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/sealers";
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/sealer";
 
 service Service {
   rpc Seal(SealRequest) returns (SealResponse);

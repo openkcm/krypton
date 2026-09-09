@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.1
-// source: sealers.proto
+// source: sealer.proto
 
-package sealers
+package sealer
 
 import (
 	reflect "reflect"
@@ -35,7 +35,7 @@ type SealRequest struct {
 
 func (x *SealRequest) Reset() {
 	*x = SealRequest{}
-	mi := &file_sealers_proto_msgTypes[0]
+	mi := &file_sealer_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +47,7 @@ func (x *SealRequest) String() string {
 func (*SealRequest) ProtoMessage() {}
 
 func (x *SealRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sealers_proto_msgTypes[0]
+	mi := &file_sealer_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +60,7 @@ func (x *SealRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SealRequest.ProtoReflect.Descriptor instead.
 func (*SealRequest) Descriptor() ([]byte, []int) {
-	return file_sealers_proto_rawDescGZIP(), []int{0}
+	return file_sealer_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SealRequest) GetTenantId() string {
@@ -107,7 +107,7 @@ type SealResponse struct {
 
 func (x *SealResponse) Reset() {
 	*x = SealResponse{}
-	mi := &file_sealers_proto_msgTypes[1]
+	mi := &file_sealer_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -119,7 +119,7 @@ func (x *SealResponse) String() string {
 func (*SealResponse) ProtoMessage() {}
 
 func (x *SealResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sealers_proto_msgTypes[1]
+	mi := &file_sealer_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -132,7 +132,7 @@ func (x *SealResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SealResponse.ProtoReflect.Descriptor instead.
 func (*SealResponse) Descriptor() ([]byte, []int) {
-	return file_sealers_proto_rawDescGZIP(), []int{1}
+	return file_sealer_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SealResponse) GetCiphertext() []byte {
@@ -155,7 +155,7 @@ type UnsealRequest struct {
 
 func (x *UnsealRequest) Reset() {
 	*x = UnsealRequest{}
-	mi := &file_sealers_proto_msgTypes[2]
+	mi := &file_sealer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +167,7 @@ func (x *UnsealRequest) String() string {
 func (*UnsealRequest) ProtoMessage() {}
 
 func (x *UnsealRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sealers_proto_msgTypes[2]
+	mi := &file_sealer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,7 +180,7 @@ func (x *UnsealRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnsealRequest.ProtoReflect.Descriptor instead.
 func (*UnsealRequest) Descriptor() ([]byte, []int) {
-	return file_sealers_proto_rawDescGZIP(), []int{2}
+	return file_sealer_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *UnsealRequest) GetTenantId() string {
@@ -227,7 +227,7 @@ type UnsealResponse struct {
 
 func (x *UnsealResponse) Reset() {
 	*x = UnsealResponse{}
-	mi := &file_sealers_proto_msgTypes[3]
+	mi := &file_sealer_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -239,7 +239,7 @@ func (x *UnsealResponse) String() string {
 func (*UnsealResponse) ProtoMessage() {}
 
 func (x *UnsealResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sealers_proto_msgTypes[3]
+	mi := &file_sealer_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -252,7 +252,7 @@ func (x *UnsealResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnsealResponse.ProtoReflect.Descriptor instead.
 func (*UnsealResponse) Descriptor() ([]byte, []int) {
-	return file_sealers_proto_rawDescGZIP(), []int{3}
+	return file_sealer_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *UnsealResponse) GetPlaintext() []byte {
@@ -262,11 +262,11 @@ func (x *UnsealResponse) GetPlaintext() []byte {
 	return nil
 }
 
-var File_sealers_proto protoreflect.FileDescriptor
+var File_sealer_proto protoreflect.FileDescriptor
 
-const file_sealers_proto_rawDesc = "" +
+const file_sealer_proto_rawDesc = "" +
 	"\n" +
-	"\rsealers.proto\x12\x12krypton.v1.sealers\"\x92\x01\n" +
+	"\fsealer.proto\x12\x11krypton.v1.sealer\"\x92\x01\n" +
 	"\vSealRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x1f\n" +
@@ -288,35 +288,35 @@ const file_sealers_proto_rawDesc = "" +
 	"ciphertext\x12\x10\n" +
 	"\x03aad\x18\x05 \x01(\fR\x03aad\".\n" +
 	"\x0eUnsealResponse\x12\x1c\n" +
-	"\tplaintext\x18\x01 \x01(\fR\tplaintext2\xa5\x01\n" +
-	"\aService\x12I\n" +
-	"\x04Seal\x12\x1f.krypton.v1.sealers.SealRequest\x1a .krypton.v1.sealers.SealResponse\x12O\n" +
-	"\x06Unseal\x12!.krypton.v1.sealers.UnsealRequest\x1a\".krypton.v1.sealers.UnsealResponseB5Z3github.com/openkcm/krypton/pkg/api/v1/proto/sealersb\x06proto3"
+	"\tplaintext\x18\x01 \x01(\fR\tplaintext2\xa1\x01\n" +
+	"\aService\x12G\n" +
+	"\x04Seal\x12\x1e.krypton.v1.sealer.SealRequest\x1a\x1f.krypton.v1.sealer.SealResponse\x12M\n" +
+	"\x06Unseal\x12 .krypton.v1.sealer.UnsealRequest\x1a!.krypton.v1.sealer.UnsealResponseB4Z2github.com/openkcm/krypton/pkg/api/v1/proto/sealerb\x06proto3"
 
 var (
-	file_sealers_proto_rawDescOnce sync.Once
-	file_sealers_proto_rawDescData []byte
+	file_sealer_proto_rawDescOnce sync.Once
+	file_sealer_proto_rawDescData []byte
 )
 
-func file_sealers_proto_rawDescGZIP() []byte {
-	file_sealers_proto_rawDescOnce.Do(func() {
-		file_sealers_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sealers_proto_rawDesc), len(file_sealers_proto_rawDesc)))
+func file_sealer_proto_rawDescGZIP() []byte {
+	file_sealer_proto_rawDescOnce.Do(func() {
+		file_sealer_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sealer_proto_rawDesc), len(file_sealer_proto_rawDesc)))
 	})
-	return file_sealers_proto_rawDescData
+	return file_sealer_proto_rawDescData
 }
 
-var file_sealers_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_sealers_proto_goTypes = []any{
-	(*SealRequest)(nil),    // 0: krypton.v1.sealers.SealRequest
-	(*SealResponse)(nil),   // 1: krypton.v1.sealers.SealResponse
-	(*UnsealRequest)(nil),  // 2: krypton.v1.sealers.UnsealRequest
-	(*UnsealResponse)(nil), // 3: krypton.v1.sealers.UnsealResponse
+var file_sealer_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_sealer_proto_goTypes = []any{
+	(*SealRequest)(nil),    // 0: krypton.v1.sealer.SealRequest
+	(*SealResponse)(nil),   // 1: krypton.v1.sealer.SealResponse
+	(*UnsealRequest)(nil),  // 2: krypton.v1.sealer.UnsealRequest
+	(*UnsealResponse)(nil), // 3: krypton.v1.sealer.UnsealResponse
 }
-var file_sealers_proto_depIdxs = []int32{
-	0, // 0: krypton.v1.sealers.Service.Seal:input_type -> krypton.v1.sealers.SealRequest
-	2, // 1: krypton.v1.sealers.Service.Unseal:input_type -> krypton.v1.sealers.UnsealRequest
-	1, // 2: krypton.v1.sealers.Service.Seal:output_type -> krypton.v1.sealers.SealResponse
-	3, // 3: krypton.v1.sealers.Service.Unseal:output_type -> krypton.v1.sealers.UnsealResponse
+var file_sealer_proto_depIdxs = []int32{
+	0, // 0: krypton.v1.sealer.Service.Seal:input_type -> krypton.v1.sealer.SealRequest
+	2, // 1: krypton.v1.sealer.Service.Unseal:input_type -> krypton.v1.sealer.UnsealRequest
+	1, // 2: krypton.v1.sealer.Service.Seal:output_type -> krypton.v1.sealer.SealResponse
+	3, // 3: krypton.v1.sealer.Service.Unseal:output_type -> krypton.v1.sealer.UnsealResponse
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -324,26 +324,26 @@ var file_sealers_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_sealers_proto_init() }
-func file_sealers_proto_init() {
-	if File_sealers_proto != nil {
+func init() { file_sealer_proto_init() }
+func file_sealer_proto_init() {
+	if File_sealer_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sealers_proto_rawDesc), len(file_sealers_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sealer_proto_rawDesc), len(file_sealer_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_sealers_proto_goTypes,
-		DependencyIndexes: file_sealers_proto_depIdxs,
-		MessageInfos:      file_sealers_proto_msgTypes,
+		GoTypes:           file_sealer_proto_goTypes,
+		DependencyIndexes: file_sealer_proto_depIdxs,
+		MessageInfos:      file_sealer_proto_msgTypes,
 	}.Build()
-	File_sealers_proto = out.File
-	file_sealers_proto_goTypes = nil
-	file_sealers_proto_depIdxs = nil
+	File_sealer_proto = out.File
+	file_sealer_proto_goTypes = nil
+	file_sealer_proto_depIdxs = nil
 }

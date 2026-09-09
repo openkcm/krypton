@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.35.1
-// source: sealers.proto
+// source: sealer.proto
 
-package sealers
+package sealer
 
 import (
 	context "context"
@@ -20,8 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Service_Seal_FullMethodName   = "/krypton.v1.sealers.Service/Seal"
-	Service_Unseal_FullMethodName = "/krypton.v1.sealers.Service/Unseal"
+	Service_Seal_FullMethodName   = "/krypton.v1.sealer.Service/Seal"
+	Service_Unseal_FullMethodName = "/krypton.v1.sealer.Service/Unseal"
 )
 
 // ServiceClient is the client API for Service service.
@@ -143,7 +143,7 @@ func _Service_Unseal_Handler(srv interface{}, ctx context.Context, dec func(inte
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Service_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "krypton.v1.sealers.Service",
+	ServiceName: "krypton.v1.sealer.Service",
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -156,5 +156,5 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "sealers.proto",
+	Metadata: "sealer.proto",
 }
