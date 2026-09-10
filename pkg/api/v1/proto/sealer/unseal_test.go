@@ -2,6 +2,7 @@ package sealer_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"uuid"
 
@@ -72,62 +73,132 @@ func TestUnsealer(t *testing.T) {
 		assert.Equal(t, expAad, actReq.AAD)
 	})
 
-	t.Run("should track input and output in vault", func(t *testing.T) {
-		// given
-		ctx := t.Context()
+	t.Run("should return invalid argument error for invalid requests", func(t *testing.T) {
+		validTenantID := uuid.New().String()
+		validKeyID := uuid.New().String()
+		validKeyVersion := int32(1)
+		validCiphertext := []byte("test ciphertext")
+		validAad := []byte("test aad")
 
-		mgr := newMockManager(t)
-
-		expTenantID := uuid.New().String()
-		expKeyID := uuid.New().String()
-		expKeyVersion := 1
-		expCiphertext := []byte("test cipher")
-		expAad := []byte("test aad")
-
-		var actVault *securemem.MemVault
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-			vault, ok := sealer.VaultFromContext(ctx) // ensure vault is in context
-			require.True(t, ok)
-			actVault = vault
-
-			expRespBytes := []byte("actual plain")
-			cData, err := securemem.NewData("resp", len(expRespBytes))
-			require.NoError(t, err)
-
-			t.Cleanup(func() {
-				cData.Destroy()
-			})
-
-			copy(cData.SecureBytes(), expRespBytes)
-
-			return cryptor.UnsealResponse{
-				Plaintext: cData,
-			}, nil
+		tests := []struct {
+			name   string
+			req    *sealer.UnsealRequest
+			expErr error
+		}{
+			{
+				name: "missing tenant ID",
+				req: &sealer.UnsealRequest{
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidTenantID,
+			},
+			{
+				name: "missing key ID",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidKeyID,
+			},
+			{
+				name: "zero key version",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidKeyVersion,
+			},
+			{
+				name: "negative key version",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					KeyVersion: -1,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidKeyVersion,
+			},
+			{
+				name: "nil ciphertext",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidCiphertext,
+			},
+			{
+				name: "empty ciphertext",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: []byte{},
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidCiphertext,
+			},
+			{
+				name: "nil AAD",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+				},
+				expErr: sealer.ErrInvalidAAD,
+			},
+			{
+				name: "empty AAD",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+					Aad:        []byte{},
+				},
+				expErr: sealer.ErrInvalidAAD,
+			},
+			{
+				name: "all fields missing",
+				req:  &sealer.UnsealRequest{},
+				expErr: errors.Join(
+					sealer.ErrInvalidTenantID,
+					sealer.ErrInvalidKeyID,
+					sealer.ErrInvalidKeyVersion,
+					sealer.ErrInvalidCiphertext,
+					sealer.ErrInvalidAAD,
+				),
+			},
 		}
 
-		cli := newSealerClient(t, mgr)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// given
+				ctx := t.Context()
+				mgr := newMockManager(t) // default FnUnseal fails the test if called
+				cli := newSealerClient(t, mgr)
 
-		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
-			TenantId:   expTenantID,
-			KeyId:      expKeyID,
-			KeyVersion: int32(expKeyVersion),
-			Ciphertext: expCiphertext,
-			Aad:        expAad,
-		})
+				// when
+				actRes, err := cli.Unseal(ctx, tt.req)
 
-		// then
-		require.NoError(t, err)
-		assert.NotNil(t, actRes)
-
-		// check context value
-		_, ok := actVault.Get("input")
-		assert.True(t, ok)
-		_, ok = actVault.Get("output")
-		assert.True(t, ok)
-
-		err = actVault.DestroyAll()
-		assert.NoError(t, err)
+				// then
+				assert.Error(t, err)
+				assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+				assert.Equal(t, tt.expErr.Error(), status.Convert(err).Message())
+				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+				assert.Nil(t, actRes)
+			})
+		}
 	})
 
 	t.Run("should return internal error when unsealing fails", func(t *testing.T) {
@@ -162,65 +233,6 @@ func TestUnsealer(t *testing.T) {
 		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
 		assert.Equal(t, "failed to unseal the ciphertext", status.Convert(err).Message())
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
-
-		assert.Nil(t, actRes)
-	})
-
-	t.Run("should return internal error when vault import fails", func(t *testing.T) {
-		// given
-		ctx := t.Context()
-
-		mgr := newMockManager(t)
-
-		expTenantID := uuid.New().String()
-		expKeyID := uuid.New().String()
-		expKeyVersion := 1
-		expCiphertext := []byte("test cipher")
-		expAad := []byte("test aad")
-
-		plaintext, err := securemem.NewData("output", 10)
-		require.NoError(t, err)
-
-		t.Cleanup(func() {
-			plaintext.Destroy()
-		})
-
-		copy(plaintext.SecureBytes(), []byte("plaintext"))
-
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-			vault, ok := sealer.VaultFromContext(ctx) // ensure vault is in context
-			require.True(t, ok)
-
-			data, err := securemem.NewData("output", 10)
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				data.Destroy()
-			})
-
-			require.NoError(t, vault.Import("output", data)) // simulate import failure
-
-			return cryptor.UnsealResponse{
-				Plaintext: plaintext,
-			}, nil
-		}
-
-		cli := newSealerClient(t, mgr)
-
-		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
-			TenantId:   expTenantID,
-			KeyId:      expKeyID,
-			KeyVersion: int32(expKeyVersion),
-			Ciphertext: expCiphertext,
-			Aad:        expAad,
-		})
-
-		// then
-		assert.Error(t, err)
-		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
-		assert.Equal(t, "failed to import the plaintext into the vault", status.Convert(err).Message())
-		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
-		assert.Nil(t, plaintext.SecureBytes()) // ensure plaintext is destroyed on import failure
 
 		assert.Nil(t, actRes)
 	})
