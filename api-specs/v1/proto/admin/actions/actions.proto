@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+
+package krypton.v1.admin.actions;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions";
+
+service ActionService {
+  rpc GetAction(GetActionRequest) returns (GetActionResponse);
+}
+
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED = 0;
+  ANNOUNCE_KEY = 1;
+  ACTIVATE_KEY = 2;
+}
+
+enum TargetType {
+  TARGET_TYPE_UNSPECIFIED = 0;
+  TARGET_TYPE_TENANT = 1;
+  TARGET_TYPE_KEY = 2;
+  TARGET_TYPE_KEY_VERSION = 3;
+}
+
+message Action {
+  string id = 1;
+  ActionType type = 2;
+  string status = 3;
+  TargetType target_type = 4;
+  string target_id = 5;
+  bool cascading = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+}
+
+message GetActionRequest {
+  string id = 1;
+}
+
+message GetActionResponse {
+  Action action = 1;
+}

@@ -37,12 +37,12 @@ type key struct {
 type keyRow struct {
 	Kind           model.KeyKind
 	ID             string
-	ParentID       string
 	Name           string
+	ParentID       string
 	LifeCycleState model.KeyLifeCycleState
-	Labels         model.Labels
-	ManagedBy      string
 	Status         model.KeyProcessingStatus
+	ManagedBy      string
+	Labels         model.Labels
 }
 
 func newKeyRow(k *keys.Key) keyRow {

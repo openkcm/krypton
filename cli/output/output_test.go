@@ -183,6 +183,134 @@ func TestFrom_Tabular(t *testing.T) {
 	}
 }
 
+func TestFrom_KeyValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+	}{
+		{
+			name:     "single struct",
+			input:    Person{Name: "alice", Age: 30},
+			expected: "Name: alice\nAge: 30\n",
+		},
+		{
+			name:     "slice of one",
+			input:    []Person{{Name: "solo", Age: 99}},
+			expected: "Name: solo\nAge: 99\n",
+		},
+		{
+			name:     "slice with multiple records has blank line between them",
+			input:    []Person{{Name: "a", Age: 1}, {Name: "b", Age: 2}},
+			expected: "Name: a\nAge: 1\n\nName: b\nAge: 2\n",
+		},
+		{
+			name:     "empty slice produces no output",
+			input:    []Person{},
+			expected: "",
+		},
+		{
+			name:     "pointer to struct behaves like struct",
+			input:    &Person{Name: "ptr", Age: 42},
+			expected: "Name: ptr\nAge: 42\n",
+		},
+		{
+			name:     "mixed types render via %v",
+			input:    MultiType{String: "hello", Int: 42, Bool: true},
+			expected: "String: hello\nInt: 42\nBool: true\n",
+		},
+		{
+			name:     "nested struct renders via %v",
+			input:    Nested{Name: "outer", Inner: Person{Name: "inner", Age: 10}},
+			expected: "Name: outer\nInner: {inner 10}\n",
+		},
+		{
+			name:     "zero values are not skipped",
+			input:    Person{},
+			expected: "Name: \nAge: 0\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			var buf bytes.Buffer
+
+			// when
+			builder, err := output.From(tt.input)
+			assert.NoError(t, err)
+
+			err = builder.As(output.KeyValue).To(&buf)
+
+			// then
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, buf.String())
+		})
+	}
+}
+
+func TestFrom_KeyValue_Formatters(t *testing.T) {
+	t.Run("ForName transforms the matching field", func(t *testing.T) {
+		// given
+		var buf bytes.Buffer
+		input := Person{Name: "alice", Age: 30}
+		formatter := output.ForName("Name", func(v any) any {
+			s, _ := v.(string)
+			return s + "!"
+		})
+
+		// when
+		builder, err := output.From(input)
+		assert.NoError(t, err)
+		err = builder.Format(formatter).As(output.KeyValue).To(&buf)
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, "Name: alice!\nAge: 30\n", buf.String())
+	})
+
+	t.Run("ForType transforms values by type", func(t *testing.T) {
+		// given
+		var buf bytes.Buffer
+		input := Person{Name: "alice", Age: 30}
+		formatter := output.ForType(func(i int) any { return i * 2 })
+
+		// when
+		builder, err := output.From(input)
+		assert.NoError(t, err)
+		err = builder.Format(formatter).As(output.KeyValue).To(&buf)
+
+		// then
+		assert.NoError(t, err)
+		assert.Equal(t, "Name: alice\nAge: 60\n", buf.String())
+	})
+}
+
+func TestFrom_KeyValue_BlankLineSeparator(t *testing.T) {
+	// given: three records
+	var buf bytes.Buffer
+	input := []Person{
+		{Name: "a", Age: 1},
+		{Name: "b", Age: 2},
+		{Name: "c", Age: 3},
+	}
+
+	// when
+	builder, err := output.From(input)
+	assert.NoError(t, err)
+	err = builder.As(output.KeyValue).To(&buf)
+
+	// then: exactly one blank line between records, no trailing blank line
+	assert.NoError(t, err)
+	assert.Equal(t,
+		"Name: a\nAge: 1\n"+
+			"\n"+
+			"Name: b\nAge: 2\n"+
+			"\n"+
+			"Name: c\nAge: 3\n",
+		buf.String())
+}
+
 func TestFrom_Errors(t *testing.T) {
 	tests := []struct {
 		name  string

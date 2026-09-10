@@ -22,8 +22,9 @@ var (
 type Format int
 
 const (
-	Tabular Format = iota // Tab-aligned columns
-	JSON                  // JSON array of objects
+	Tabular  Format = iota // Tab-aligned columns
+	JSON                   // JSON array of objects
+	KeyValue               // One "name: value" line per field (vertical, single-record detail view)
 )
 
 // Formatter receives a field name and value, and returns a formatted value
@@ -93,6 +94,8 @@ func (b *Builder) To(w io.Writer) error {
 	switch b.format {
 	case JSON:
 		return b.renderJSON(w)
+	case KeyValue:
+		return b.renderKeyValue(w)
 	default:
 		return b.renderTabular(w)
 	}
@@ -222,4 +225,20 @@ func (b *Builder) renderJSON(w io.Writer) error {
 	_, err = io.WriteString(w, "\n")
 
 	return err
+}
+
+func (b *Builder) renderKeyValue(w io.Writer) error {
+	for i, r := range b.rows {
+		if i > 0 {
+			if _, err := fmt.Fprintln(w); err != nil {
+				return err
+			}
+		}
+		for _, c := range r {
+			if _, err := fmt.Fprintf(w, "%s: %v\n", c.Name, c.Value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
