@@ -21,12 +21,6 @@ var (
 	ErrTaskHandlerNil       = errors.New("task handler cannot be nil")
 	ErrTaskTypeEmpty        = errors.New("task handler type cannot be empty")
 	ErrTaskHandlerDuplicate = errors.New("duplicate task handler")
-
-	ErrGroupHandlerNil       = errors.New("job group handler cannot be nil")
-	ErrGroupTypeEmpty        = errors.New("job group handler type cannot be empty")
-	ErrGroupHandlerDuplicate = errors.New("duplicate job group handler")
-
-	ErrLocalTargetDuplicate = errors.New("embedded target name collides with a configured target")
 )
 
 // buildTaskDispatch returns a single orbital.HandlerFunc that routes each task
@@ -60,27 +54,6 @@ func buildTaskHandlerMap(handlers []TaskHandler) (map[string]TaskHandler, error)
 			return nil, fmt.Errorf("%w: %s", ErrTaskHandlerDuplicate, taskType)
 		}
 		result[taskType] = handler
-	}
-
-	return result, nil
-}
-
-func buildGroupHandlerMap(handlers []JobGroupHandler) (map[string]JobGroupHandler, error) {
-	result := make(map[string]JobGroupHandler, len(handlers))
-	for _, handler := range handlers {
-		if handler == nil {
-			return nil, ErrGroupHandlerNil
-		}
-
-		groupType := handler.JobGroupType()
-		if groupType == "" {
-			return nil, ErrGroupTypeEmpty
-		}
-
-		if _, ok := result[groupType]; ok {
-			return nil, fmt.Errorf("%w: %s", ErrGroupHandlerDuplicate, groupType)
-		}
-		result[groupType] = handler
 	}
 
 	return result, nil

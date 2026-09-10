@@ -20,8 +20,8 @@
 //  1. Define the job, job-group, and task type constants for the operation.
 //  2. Implement a [JobHandler] (and, for grouped work, a [JobGroupHandler]).
 //  3. Implement a [TaskHandler] for each task type the operation runs on root.
-//  4. Pass them to [NewManager] via [Handlers].
-//  5. Register the manager where the process is wired (a later PR moves the
+//  4. Pass them to [New] via [Handlers].
+//  5. Register the orchestrator where the process is wired (a later PR moves the
 //     running binaries onto this package).
 //
 // Label keys written to orbital must be prefixed "krypton/"; the "orbital/"

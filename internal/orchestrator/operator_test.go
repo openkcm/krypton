@@ -1,7 +1,6 @@
 package orchestrator_test
 
 import (
-	"context"
 	"testing"
 	"uuid"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
@@ -41,9 +39,9 @@ func TestTaskDispatchUnknownTypeFails(t *testing.T) {
 	assert.Contains(t, resp.ErrorMessage, "mystery")
 }
 
-func TestManagerRegistersEmbeddedTargetWhenTaskHandlerPresent(t *testing.T) {
-	manager, err := orchestrator.NewManager(
-		t.Context(), &config.ReconcilerConfig{}, newNoopRepo(),
+func TestOrchestratorRegistersEmbeddedTargetWhenTaskHandlerPresent(t *testing.T) {
+	orch, err := orchestrator.New(
+		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{
 			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
 			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}},
@@ -51,39 +49,33 @@ func TestManagerRegistersEmbeddedTargetWhenTaskHandlerPresent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Contains(t, manager.Targets(), orchestrator.DefaultLocalTargetName)
+	assert.Contains(t, orch.Targets(), orchestrator.DefaultLocalTargetName)
 }
 
-func TestManagerAddsNoEmbeddedTargetWhenNoTaskHandler(t *testing.T) {
-	manager, err := orchestrator.NewManager(
-		t.Context(), &config.ReconcilerConfig{}, newNoopRepo(),
+func TestOrchestratorAddsNoEmbeddedTargetWhenNoTaskHandler(t *testing.T) {
+	orch, err := orchestrator.New(
+		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}},
 	)
 	require.NoError(t, err)
 
-	assert.NotContains(t, manager.Targets(), orchestrator.DefaultLocalTargetName)
-	assert.Empty(t, manager.Targets())
+	assert.NotContains(t, orch.Targets(), orchestrator.DefaultLocalTargetName)
+	assert.Empty(t, orch.Targets())
 }
 
-func TestManagerLocalTargetDuplicateClosesClients(t *testing.T) {
-	initiator := &fakeInitiator{}
-	targetProvider := orchestrator.NewTargetProvider(func(context.Context, config.ReconcilerTarget) (orbital.Initiator, error) {
-		return initiator, nil
-	})
-
-	cfg := config.ReconcilerConfig{Targets: []config.ReconcilerTarget{validTarget("collides")}}
-	_, err := orchestrator.NewManager(
-		t.Context(), &cfg, newNoopRepo(),
+func TestOrchestratorUsesLocalTargetNameForEmbeddedOperator(t *testing.T) {
+	orch, err := orchestrator.New(
+		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{
 			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
 			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}},
 		},
-		orchestrator.WithTargetProvider(targetProvider),
-		orchestrator.WithLocalTargetName("collides"),
+		orchestrator.WithLocalTargetName("custom-embedded"),
 	)
+	require.NoError(t, err)
 
-	assert.ErrorIs(t, err, orchestrator.ErrLocalTargetDuplicate)
-	assert.True(t, initiator.closed)
+	assert.Equal(t, "custom-embedded", orch.LocalTarget())
+	assert.Contains(t, orch.Targets(), "custom-embedded")
 }
 
 func TestBuildTaskHandlerMap(t *testing.T) {
