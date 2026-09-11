@@ -39,16 +39,15 @@ type Orchestrator struct {
 	jobHandlers    map[string]JobHandler
 	groupHandlers  map[string]JobGroupHandler
 	taskHandlers   map[string]TaskHandler
-	targets        map[string]orbital.TargetManager
-	localTarget    string
+	embeddedClient *embedded.Client
 
 	embeddedBufferSize     int
 	embeddedHandlerTimeout time.Duration
 	orbitalMutators        []func(*orbital.Manager)
 }
 
-// New wires the registered handlers, the embedded operator (only when at least
-// one task handler is registered), and orbital worker config.
+// New wires the registered handlers, the embedded operator, and orbital worker
+// config. At least one job handler and one task handler are required.
 func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts ...Option) (*Orchestrator, error) {
 	if repo == nil {
 		return nil, ErrRepositoryNil
@@ -72,8 +71,6 @@ func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts 
 		jobHandlers:            jobHandlers,
 		groupHandlers:          groupHandlers,
 		taskHandlers:           taskHandlers,
-		targets:                make(map[string]orbital.TargetManager),
-		localTarget:            DefaultLocalTargetName,
 		embeddedBufferSize:     defaultEmbeddedBufferSize,
 		embeddedHandlerTimeout: defaultEmbeddedHandlerTimeout,
 	}
@@ -81,14 +78,20 @@ func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts 
 		opt(o)
 	}
 
-	if len(taskHandlers) > 0 {
-		if err := o.addEmbeddedTarget(); err != nil {
-			return nil, err
-		}
+	embeddedClient, err := embedded.NewClient(
+		buildTaskDispatch(taskHandlers),
+		embedded.WithBufferSize(o.embeddedBufferSize),
+		embedded.WithHandlerTimeout(o.embeddedHandlerTimeout),
+	)
+	if err != nil {
+		return nil, err
 	}
+	o.embeddedClient = embeddedClient
 
 	orbitalOpts := []orbital.ManagerOptsFunc{
-		orbital.WithTargets(o.targets),
+		orbital.WithTargets(map[string]orbital.TargetManager{
+			DefaultLocalTargetName: {Client: embeddedClient},
+		}),
 		orbital.WithJobConfirmFunc(o.confirmJob),
 		orbital.WithJobDoneEventFunc(o.jobDone),
 		orbital.WithJobFailedEventFunc(o.jobFailed),
@@ -104,7 +107,7 @@ func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts 
 
 	orbitalManager, err := orbital.NewManager(repo, o.resolveTasks, orbitalOpts...)
 	if err != nil {
-		return nil, errors.Join(err, closeTargets(ctx, o.targets))
+		return nil, errors.Join(err, embeddedClient.Close(ctx))
 	}
 
 	// Apply the default first so WithMaxPendingReconciles can override it.
@@ -117,26 +120,10 @@ func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts 
 	return o, nil
 }
 
-// addEmbeddedTarget registers the in-process embedded operator under the local
-// target name.
-func (o *Orchestrator) addEmbeddedTarget() error {
-	client, err := embedded.NewClient(
-		buildTaskDispatch(o.taskHandlers),
-		embedded.WithBufferSize(o.embeddedBufferSize),
-		embedded.WithHandlerTimeout(o.embeddedHandlerTimeout),
-	)
-	if err != nil {
-		return err
-	}
-
-	o.targets[o.localTarget] = orbital.TargetManager{Client: client}
-	return nil
-}
-
-// LocalTarget returns the target name of the embedded operator. A task handler's
-// ResolveTasks sets orbital.TaskInfo.Target to this value to run the task on root.
+// LocalTarget returns the target name of the embedded operator. Job handlers
+// use this constant as orbital.TaskInfo.Target to route tasks to root.
 func (o *Orchestrator) LocalTarget() string {
-	return o.localTarget
+	return DefaultLocalTargetName
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
@@ -144,7 +131,7 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 }
 
 func (o *Orchestrator) Stop(ctx context.Context) error {
-	return errors.Join(o.orbitalManager.Stop(ctx), closeTargets(ctx, o.targets))
+	return errors.Join(o.orbitalManager.Stop(ctx), o.embeddedClient.Close(ctx))
 }
 
 func (o *Orchestrator) PrepareJob(ctx context.Context, job orbital.Job) (orbital.Job, error) {
@@ -302,17 +289,4 @@ func buildGroupHandlerMap(handlers []JobGroupHandler) (map[string]JobGroupHandle
 	}
 
 	return result, nil
-}
-
-func closeTargets(ctx context.Context, targets map[string]orbital.TargetManager) error {
-	var errs []error
-	for name, target := range targets {
-		if target.Client != nil {
-			if err := target.Client.Close(ctx); err != nil {
-				errs = append(errs, fmt.Errorf("target %s: %w", name, err))
-			}
-		}
-	}
-
-	return errors.Join(errs...)
 }

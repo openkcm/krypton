@@ -41,14 +41,6 @@ func WithExecInterval(d time.Duration) Option {
 	}
 }
 
-// WithLocalTargetName overrides the name under which the embedded operator is
-// registered (default DefaultLocalTargetName).
-func WithLocalTargetName(name string) Option {
-	return func(o *Orchestrator) {
-		o.localTarget = name
-	}
-}
-
 // WithEmbeddedHandlerTimeout sets the per-task timeout for the embedded operator.
 func WithEmbeddedHandlerTimeout(d time.Duration) Option {
 	return func(o *Orchestrator) {

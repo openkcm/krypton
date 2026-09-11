@@ -14,11 +14,17 @@ import (
 	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
+func minHandlers(extra ...orchestrator.JobHandler) orchestrator.Handlers {
+	jobs := []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}
+	jobs = append(jobs, extra...)
+	return orchestrator.Handlers{
+		Jobs:  jobs,
+		Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+	}
+}
+
 func TestNew(t *testing.T) {
-	orch, err := orchestrator.New(
-		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}},
-	)
+	orch, err := orchestrator.New(t.Context(), newNoopRepo(), minHandlers())
 	require.NoError(t, err)
 
 	assert.Equal(t, orchestrator.DefaultMaxPendingReconciles, orch.OrbitalManager().Config.MaxPendingReconciles)
@@ -27,8 +33,7 @@ func TestNew(t *testing.T) {
 
 func TestNewOptions(t *testing.T) {
 	orch, err := orchestrator.New(
-		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}},
+		t.Context(), newNoopRepo(), minHandlers(),
 		orchestrator.WithMaxPendingReconciles(42),
 		orchestrator.WithConfirmJobAfter(3*time.Second),
 		orchestrator.WithExecInterval(250*time.Millisecond),
@@ -56,7 +61,7 @@ func TestNewValidation(t *testing.T) {
 	}{
 		{
 			name:     "nil repo",
-			handlers: orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}},
+			handlers: minHandlers(),
 			wantErr:  orchestrator.ErrRepositoryNil,
 		},
 		{
@@ -65,23 +70,40 @@ func TestNewValidation(t *testing.T) {
 			wantErr: orchestrator.ErrJobHandlerRequired,
 		},
 		{
-			name:     "nil job handler",
-			repo:     newNoopRepo(),
-			handlers: orchestrator.Handlers{Jobs: []orchestrator.JobHandler{nil}},
-			wantErr:  orchestrator.ErrJobHandlerNil,
+			name: "task handler required",
+			repo: newNoopRepo(),
+			handlers: orchestrator.Handlers{
+				Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			},
+			wantErr: orchestrator.ErrTaskHandlerRequired,
 		},
 		{
-			name:     "empty job handler type",
-			repo:     newNoopRepo(),
-			handlers: orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{}}},
-			wantErr:  orchestrator.ErrJobTypeEmpty,
+			name: "nil job handler",
+			repo: newNoopRepo(),
+			handlers: orchestrator.Handlers{
+				Jobs:  []orchestrator.JobHandler{nil},
+				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			},
+			wantErr: orchestrator.ErrJobHandlerNil,
+		},
+		{
+			name: "empty job handler type",
+			repo: newNoopRepo(),
+			handlers: orchestrator.Handlers{
+				Jobs:  []orchestrator.JobHandler{&fakeJobHandler{}},
+				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			},
+			wantErr: orchestrator.ErrJobTypeEmpty,
 		},
 		{
 			name: "duplicate job handler",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{Jobs: []orchestrator.JobHandler{
-				&fakeJobHandler{jobType: "dup"}, &fakeJobHandler{jobType: "dup"},
-			}},
+			handlers: orchestrator.Handlers{
+				Jobs: []orchestrator.JobHandler{
+					&fakeJobHandler{jobType: "dup"}, &fakeJobHandler{jobType: "dup"},
+				},
+				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			},
 			wantErr: orchestrator.ErrJobHandlerDuplicate,
 		},
 		{
@@ -98,6 +120,7 @@ func TestNewValidation(t *testing.T) {
 			repo: newNoopRepo(),
 			handlers: orchestrator.Handlers{
 				Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+				Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 				Groups: []orchestrator.JobGroupHandler{nil},
 			},
 			wantErr: orchestrator.ErrGroupHandlerNil,
@@ -116,7 +139,10 @@ func TestOrchestratorRoutesJobHandler(t *testing.T) {
 	handler := &fakeJobHandler{jobType: "job.type"}
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{handler}},
+		orchestrator.Handlers{
+			Jobs:  []orchestrator.JobHandler{handler},
+			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+		},
 	)
 	require.NoError(t, err)
 
@@ -142,7 +168,10 @@ func TestOrchestratorRoutesJobHandler(t *testing.T) {
 func TestOrchestratorUnknownJobTypeCancels(t *testing.T) {
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "known"}}},
+		orchestrator.Handlers{
+			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "known"}},
+			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+		},
 	)
 	require.NoError(t, err)
 
@@ -166,6 +195,7 @@ func TestOrchestratorRoutesJobGroupHandler(t *testing.T) {
 		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{
 			Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 			Groups: []orchestrator.JobGroupHandler{group},
 		},
 	)
@@ -190,6 +220,7 @@ func TestOrchestratorUnknownJobGroupTypeIsNoop(t *testing.T) {
 		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{
 			Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 			Groups: []orchestrator.JobGroupHandler{group},
 		},
 	)

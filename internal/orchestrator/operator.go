@@ -18,6 +18,7 @@ const (
 )
 
 var (
+	ErrTaskHandlerRequired  = errors.New("at least one task handler is required")
 	ErrTaskHandlerNil       = errors.New("task handler cannot be nil")
 	ErrTaskTypeEmpty        = errors.New("task handler type cannot be empty")
 	ErrTaskHandlerDuplicate = errors.New("duplicate task handler")
@@ -39,6 +40,10 @@ func buildTaskDispatch(handlers map[string]TaskHandler) orbital.HandlerFunc {
 }
 
 func buildTaskHandlerMap(handlers []TaskHandler) (map[string]TaskHandler, error) {
+	if len(handlers) == 0 {
+		return nil, ErrTaskHandlerRequired
+	}
+
 	result := make(map[string]TaskHandler, len(handlers))
 	for _, handler := range handlers {
 		if handler == nil {

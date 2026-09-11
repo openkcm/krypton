@@ -39,7 +39,7 @@ func TestTaskDispatchUnknownTypeFails(t *testing.T) {
 	assert.Contains(t, resp.ErrorMessage, "mystery")
 }
 
-func TestOrchestratorRegistersEmbeddedTargetWhenTaskHandlerPresent(t *testing.T) {
+func TestOrchestratorRegistersEmbeddedTarget(t *testing.T) {
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
 		orchestrator.Handlers{
@@ -52,32 +52,6 @@ func TestOrchestratorRegistersEmbeddedTargetWhenTaskHandlerPresent(t *testing.T)
 	assert.Contains(t, orch.Targets(), orchestrator.DefaultLocalTargetName)
 }
 
-func TestOrchestratorAddsNoEmbeddedTargetWhenNoTaskHandler(t *testing.T) {
-	orch, err := orchestrator.New(
-		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}},
-	)
-	require.NoError(t, err)
-
-	assert.NotContains(t, orch.Targets(), orchestrator.DefaultLocalTargetName)
-	assert.Empty(t, orch.Targets())
-}
-
-func TestOrchestratorUsesLocalTargetNameForEmbeddedOperator(t *testing.T) {
-	orch, err := orchestrator.New(
-		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}},
-		},
-		orchestrator.WithLocalTargetName("custom-embedded"),
-	)
-	require.NoError(t, err)
-
-	assert.Equal(t, "custom-embedded", orch.LocalTarget())
-	assert.Contains(t, orch.Targets(), "custom-embedded")
-}
-
 func TestBuildTaskHandlerMap(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -85,7 +59,7 @@ func TestBuildTaskHandlerMap(t *testing.T) {
 		wantErr  error
 		wantLen  int
 	}{
-		{name: "empty is ok", handlers: nil, wantLen: 0},
+		{name: "empty returns error", handlers: nil, wantErr: orchestrator.ErrTaskHandlerRequired},
 		{name: "single", handlers: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}}, wantLen: 1},
 		{name: "nil handler", handlers: []orchestrator.TaskHandler{nil}, wantErr: orchestrator.ErrTaskHandlerNil},
 		{name: "empty type", handlers: []orchestrator.TaskHandler{&fakeTaskHandler{}}, wantErr: orchestrator.ErrTaskTypeEmpty},

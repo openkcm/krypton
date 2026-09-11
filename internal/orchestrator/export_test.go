@@ -23,10 +23,12 @@ func (o *Orchestrator) OrbitalManager() *orbital.Manager {
 	return o.orbitalManager
 }
 
-// Targets exposes the resolved target map (the embedded operator when task
-// handlers are registered).
+// Targets returns a map containing the embedded operator target, mirroring what
+// was passed to orbital. Used by tests to verify the embedded target is wired.
 func (o *Orchestrator) Targets() map[string]orbital.TargetManager {
-	return o.targets
+	return map[string]orbital.TargetManager{
+		DefaultLocalTargetName: {Client: o.embeddedClient},
+	}
 }
 
 func (o *Orchestrator) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
