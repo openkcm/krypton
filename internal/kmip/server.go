@@ -9,6 +9,7 @@ import (
 
 	"github.com/ovh/kmip-go/kmipserver"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
 )
@@ -23,7 +24,7 @@ type Server struct {
 // NewServer opens an mTLS listener and serves KMIP backed by the manager.
 // Each connection gets a fresh securemem.MemVault (ConnectHook) that the
 // TerminateHook destroys, so served key material is zeroed on disconnect.
-func NewServer(cfg Config, mgr *keyprocessor.Manager) (*Server, error) {
+func NewServer(cfg config.KMIP, mgr *keyprocessor.Manager) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kmip: invalid config: %w", err)
 	}
@@ -32,9 +33,9 @@ func NewServer(cfg Config, mgr *keyprocessor.Manager) (*Server, error) {
 		return nil, fmt.Errorf("kmip: build tls config: %w", err)
 	}
 
-	ln, err := tls.Listen("tcp", cfg.listenAddress(), tlsCfg)
+	ln, err := tls.Listen("tcp", cfg.ListenAddress(), tlsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("kmip: listen %s: %w", cfg.listenAddress(), err)
+		return nil, fmt.Errorf("kmip: listen %s: %w", cfg.ListenAddress(), err)
 	}
 
 	inner := kmipserver.NewServer(ln, newHandler(mgr)).

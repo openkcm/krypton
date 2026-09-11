@@ -10,7 +10,6 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/identity"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 func TestMTLSConfig_Validate(t *testing.T) {
@@ -23,12 +22,12 @@ func TestMTLSConfig_Validate(t *testing.T) {
 		{
 			name: "valid config with non-empty paths",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",
@@ -39,103 +38,103 @@ func TestMTLSConfig_Validate(t *testing.T) {
 		{
 			name: "invalid config with empty server cert path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "invalid config with empty server key path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "invalid config with empty server CA path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "invalid config with empty client cert path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "invalid config with empty client key path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "",
 					CAPath:   "ca-cert.pem",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "invalid config with empty client CA path",
 			config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "",
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name:    "invalid config with zero-value struct",
 			config:  &config.MTLSConfig{},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 	}
 
@@ -262,7 +261,7 @@ identity:
 	assert.Empty(t, mtlsConfig.Server.CertPath)
 	assert.Empty(t, mtlsConfig.Client.CertPath)
 	// Validate should fail on the zero-value config.
-	assert.ErrorIs(t, mtlsConfig.Validate(), tlsconf.ErrInvalidTLSConfig)
+	assert.ErrorIs(t, mtlsConfig.Validate(), config.ErrInvalidTLSConfig)
 }
 
 func TestAgentAuthConfig_UnmarshalYAML_Valid(t *testing.T) {
@@ -347,7 +346,7 @@ type: mtls
 	assert.Empty(t, mtlsConfig.Server.CertPath)
 	assert.Empty(t, mtlsConfig.Client.CertPath)
 	// Validate should fail on the zero-value config.
-	assert.ErrorIs(t, mtlsConfig.Validate(), tlsconf.ErrInvalidTLSConfig)
+	assert.ErrorIs(t, mtlsConfig.Validate(), config.ErrInvalidTLSConfig)
 }
 
 func TestAuthConfig_UnmarshalYAML_EmptyAuthType(t *testing.T) {
@@ -396,12 +395,12 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 					},
 				},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -421,19 +420,19 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 					},
 				},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "unknown auth type",
@@ -469,12 +468,12 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 				AuthType:        config.AuthTypeMTLS,
 				IdentityConfigs: []config.IdentityConfig{},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -494,12 +493,12 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 					},
 				},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -519,12 +518,12 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 					},
 				},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -544,12 +543,12 @@ func TestRootAuthConfig_Validate(t *testing.T) {
 					},
 				},
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -583,12 +582,12 @@ func TestAgentAuthConfig_Validate(t *testing.T) {
 			cfg: config.AgentAuthConfig{
 				AuthType: config.AuthTypeMTLS,
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "client-cert.pem",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
@@ -602,19 +601,19 @@ func TestAgentAuthConfig_Validate(t *testing.T) {
 			cfg: config.AgentAuthConfig{
 				AuthType: config.AuthTypeMTLS,
 				Config: &config.MTLSConfig{
-					Server: tlsconf.Server{
+					Server: config.TLSServer{
 						CertPath: "server-cert.pem",
 						KeyPath:  "server-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
-					Client: tlsconf.Client{
+					Client: config.TLSClient{
 						CertPath: "",
 						KeyPath:  "client-key.pem",
 						CAPath:   "ca-cert.pem",
 					},
 				},
 			},
-			wantErr: tlsconf.ErrInvalidTLSConfig,
+			wantErr: config.ErrInvalidTLSConfig,
 		},
 		{
 			name: "unknown auth type",
@@ -660,12 +659,12 @@ func TestGetAuthConfig(t *testing.T) {
 		{
 			name: "valid MTLSConfig",
 			input: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "server-cert.pem",
 					KeyPath:  "server-key.pem",
 					CAPath:   "ca-cert.pem",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "client-cert.pem",
 					KeyPath:  "client-key.pem",
 					CAPath:   "ca-cert.pem",

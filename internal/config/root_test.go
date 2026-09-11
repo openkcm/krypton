@@ -16,7 +16,6 @@ import (
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/internal/tlsconf"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -95,12 +94,12 @@ func validRootConfig() *config.RootConfig {
 				},
 			},
 			Config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "certpath",
 					KeyPath:  "keypath",
 					CAPath:   "capath",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "certpath",
 					KeyPath:  "keypath",
 					CAPath:   "capath",

@@ -9,7 +9,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/spec"
 )
 
@@ -34,7 +33,7 @@ type RootConfig struct {
 	Topology       spec.Topology              `yaml:"topology"`
 	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
 	Connections    ConnectionConfigs          `yaml:"connections"`
-	KMIP           *kmip.Config               `yaml:"kmip,omitempty"`
+	KMIP           *KMIP                      `yaml:"kmip,omitempty"`
 }
 
 // Validate checks the RootConfig for structural correctness.

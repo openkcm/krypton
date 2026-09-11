@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openkcm/krypton/internal/tlsconf"
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/pkg/authn"
 )
 
@@ -83,7 +83,7 @@ func NewMTLSCredentialsValue(b []byte) (*MTLSCredentialsValue, error) {
 }
 
 func (v *MTLSCredentialsValue) TLSConfig() (*tls.Config, error) {
-	return (&tlsconf.Client{
+	return (&config.TLSClient{
 		CertPath: v.PublicCertPath,
 		KeyPath:  v.PrivateKeyPath,
 		CAPath:   v.CaCertPath,

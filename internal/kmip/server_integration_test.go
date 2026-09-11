@@ -17,8 +17,8 @@ import (
 
 	ovhkmip "github.com/ovh/kmip-go"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/kmip"
-	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 func TestServerIntegration(t *testing.T) {
@@ -35,10 +35,10 @@ func TestServerIntegration(t *testing.T) {
 	env := newTestEnv(t, tenantA, keyID)
 	env.seedSecret(t, material)
 
-	cfg := kmip.Config{
+	cfg := config.KMIP{
 		BindAddr: "127.0.0.1",
 		Port:     freePort(t),
-		TLS: tlsconf.Server{
+		TLS: config.TLSServer{
 			CertPath: serverCert,
 			KeyPath:  serverKey,
 			CAPath:   pki.caCertFile,

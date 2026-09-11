@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package krypton.v1.sealer;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/sealer";
+
+service Service {
+  rpc Seal(SealRequest) returns (SealResponse);
+  rpc Unseal(UnsealRequest) returns (UnsealResponse);
+}
+
+message SealRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  int32 key_version = 3;
+  bytes plaintext = 4;
+  bytes aad = 5;
+}
+
+message SealResponse {
+  bytes ciphertext = 1;
+}
+
+message UnsealRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  int32 key_version = 3;
+  bytes ciphertext = 4;
+  bytes aad = 5;
+}
+
+message UnsealResponse {
+  bytes plaintext = 1;
+}

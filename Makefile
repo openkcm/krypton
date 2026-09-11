@@ -82,6 +82,7 @@ dev: postgres root
 .PHONY: proto-gen
 proto-gen:
 	./scripts/proto-gen.sh "api-specs/v1/proto/agents"
+	./scripts/proto-gen.sh "api-specs/v1/proto/sealer"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/keys"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/actions"

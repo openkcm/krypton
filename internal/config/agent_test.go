@@ -8,7 +8,6 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/internal/tlsconf"
 )
 
 func TestNewAgentConfig(t *testing.T) {
@@ -314,12 +313,12 @@ func validAgentBootstrapConfig() *config.AgentBootstrapConfig {
 		Auth: &config.AgentAuthConfig{
 			AuthType: config.AuthTypeMTLS,
 			Config: &config.MTLSConfig{
-				Server: tlsconf.Server{
+				Server: config.TLSServer{
 					CertPath: "certpath",
 					KeyPath:  "keypath",
 					CAPath:   "capath",
 				},
-				Client: tlsconf.Client{
+				Client: config.TLSClient{
 					CertPath: "certpath",
 					KeyPath:  "keypath",
 					CAPath:   "capath",
