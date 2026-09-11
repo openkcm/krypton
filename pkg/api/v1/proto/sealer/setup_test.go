@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 )
@@ -63,7 +64,19 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 func newSealerClient(t *testing.T, mgr cryptor.Sealer) sealer.ServiceClient {
 	t.Helper()
 
-	srv := grpc.NewServer()
+	return newSealerClientInternal(t, mgr)
+}
+
+func newSealerClientWithRPCHandler(t *testing.T, mgr cryptor.Sealer) sealer.ServiceClient {
+	t.Helper()
+
+	return newSealerClientInternal(t, mgr, grpc.StatsHandler(securemem.NewRPCHandler()))
+}
+
+func newSealerClientInternal(t *testing.T, mgr cryptor.Sealer, opts ...grpc.ServerOption) sealer.ServiceClient {
+	t.Helper()
+
+	srv := grpc.NewServer(opts...)
 	sealerSrv := sealer.NewSealerService(mgr)
 
 	sealer.RegisterServiceServer(srv, sealerSrv)

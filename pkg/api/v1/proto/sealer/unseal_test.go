@@ -18,18 +18,18 @@ import (
 )
 
 func TestUnsealer(t *testing.T) {
+	expTenantID := uuid.New().String()
+	expKeyID := uuid.New().String()
+	expKeyVersion := 1
+	expCiphertext := []byte("test ciphertext")
+	expAad := []byte("test aad")
+	expRespBytes := []byte("actual plaintext")
+
 	t.Run("should unseal ciphertext successfully", func(t *testing.T) {
 		// given
 		ctx := t.Context()
 
 		mgr := newMockManager(t)
-
-		expTenantID := uuid.New().String()
-		expKeyID := uuid.New().String()
-		expKeyVersion := 1
-		expCiphertext := []byte("test ciphertext")
-		expAad := []byte("test aad")
-		expRespBytes := []byte("actual plaintext")
 
 		actReqCiphertext := make([]byte, len(expCiphertext))
 		var actReq cryptor.UnsealRequest
@@ -51,7 +51,7 @@ func TestUnsealer(t *testing.T) {
 			}, nil
 		}
 
-		cli := newSealerClient(t, mgr)
+		cli := newSealerClientWithRPCHandler(t, mgr)
 
 		// when
 		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
@@ -71,6 +71,45 @@ func TestUnsealer(t *testing.T) {
 		assert.Equal(t, expKeyVersion, actReq.KeyVersion)
 		assert.Equal(t, expCiphertext, actReqCiphertext)
 		assert.Equal(t, expAad, actReq.AAD)
+	})
+
+	t.Run("should destroy secure memory after RPC completes", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+
+		mgr := newMockManager(t)
+
+		cData, err := securemem.NewData("resp", len(expRespBytes))
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			cData.Destroy()
+		})
+
+		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			copy(cData.SecureBytes(), expRespBytes)
+
+			return cryptor.UnsealResponse{
+				Plaintext: cData,
+			}, nil
+		}
+
+		cli := newSealerClientWithRPCHandler(t, mgr)
+
+		// when
+		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+			TenantId:   expTenantID,
+			KeyId:      expKeyID,
+			KeyVersion: int32(expKeyVersion),
+			Ciphertext: expCiphertext,
+			Aad:        expAad,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, expRespBytes, actRes.GetPlaintext())
+
+		assert.Nil(t, cData.SecureBytes(), "expected the secure memory to be destroyed after the RPC")
 	})
 
 	t.Run("should return invalid argument error for invalid requests", func(t *testing.T) {
@@ -96,9 +135,31 @@ func TestUnsealer(t *testing.T) {
 				expErr: sealer.ErrInvalidTenantID,
 			},
 			{
+				name: "invalid tenant ID format",
+				req: &sealer.UnsealRequest{
+					TenantId:   "not-a-uuid",
+					KeyId:      validKeyID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidTenantID,
+			},
+			{
 				name: "missing key ID",
 				req: &sealer.UnsealRequest{
 					TenantId:   validTenantID,
+					KeyVersion: validKeyVersion,
+					Ciphertext: validCiphertext,
+					Aad:        validAad,
+				},
+				expErr: sealer.ErrInvalidKeyID,
+			},
+			{
+				name: "invalid key ID format",
+				req: &sealer.UnsealRequest{
+					TenantId:   validTenantID,
+					KeyId:      "not-a-uuid",
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
@@ -134,7 +195,7 @@ func TestUnsealer(t *testing.T) {
 					KeyVersion: validKeyVersion,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidCiphertext,
+				expErr: sealer.ErrInvalidText,
 			},
 			{
 				name: "empty ciphertext",
@@ -145,7 +206,7 @@ func TestUnsealer(t *testing.T) {
 					Ciphertext: []byte{},
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidCiphertext,
+				expErr: sealer.ErrInvalidText,
 			},
 			{
 				name: "nil AAD",
@@ -175,7 +236,7 @@ func TestUnsealer(t *testing.T) {
 					sealer.ErrInvalidTenantID,
 					sealer.ErrInvalidKeyID,
 					sealer.ErrInvalidKeyVersion,
-					sealer.ErrInvalidCiphertext,
+					sealer.ErrInvalidText,
 					sealer.ErrInvalidAAD,
 				),
 			},
@@ -207,17 +268,11 @@ func TestUnsealer(t *testing.T) {
 
 		mgr := newMockManager(t)
 
-		expTenantID := uuid.New().String()
-		expKeyID := uuid.New().String()
-		expKeyVersion := 1
-		expCiphertext := []byte("test cipher")
-		expAad := []byte("test aad")
-
 		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
 			return cryptor.UnsealResponse{}, assert.AnError
 		}
 
-		cli := newSealerClient(t, mgr)
+		cli := newSealerClientWithRPCHandler(t, mgr)
 
 		// when
 		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
@@ -235,5 +290,86 @@ func TestUnsealer(t *testing.T) {
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 
 		assert.Nil(t, actRes)
+	})
+
+	t.Run("should return internal error when RPCHandler is not configured", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+
+		mgr := newMockManager(t)
+
+		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			pData, err := securemem.NewData("resp", len(expRespBytes))
+			require.NoError(t, err)
+
+			t.Cleanup(func() {
+				pData.Destroy()
+			})
+
+			copy(pData.SecureBytes(), expRespBytes)
+
+			return cryptor.UnsealResponse{
+				Plaintext: pData,
+			}, nil
+		}
+
+		// client without RPCHandler — context will not contain a vault
+		cli := newSealerClient(t, mgr)
+
+		// when
+		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+			TenantId:   expTenantID,
+			KeyId:      expKeyID,
+			KeyVersion: int32(expKeyVersion),
+			Ciphertext: expCiphertext,
+			Aad:        expAad,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err), err.Error())
+		assert.Equal(t, "failed to get the vault from the context", status.Convert(err).Message())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+
+		assert.Nil(t, actRes)
+	})
+
+	t.Run("should cleanup secure memory when RPCHandler is not configured", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+
+		mgr := newMockManager(t)
+
+		pData, err := securemem.NewData("resp", len(expRespBytes))
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			pData.Destroy()
+		})
+		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			copy(pData.SecureBytes(), expRespBytes)
+
+			return cryptor.UnsealResponse{
+				Plaintext: pData,
+			}, nil
+		}
+
+		// client without RPCHandler — context will not contain a vault
+		cli := newSealerClient(t, mgr)
+
+		// when
+		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+			TenantId:   expTenantID,
+			KeyId:      expKeyID,
+			KeyVersion: int32(expKeyVersion),
+			Ciphertext: expCiphertext,
+			Aad:        expAad,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.Nil(t, actRes)
+
+		assert.Nil(t, pData.SecureBytes(), "expected to be destroyed if there is an error adding to context vault")
 	})
 }
