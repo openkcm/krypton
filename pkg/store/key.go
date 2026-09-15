@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrKeyNotFound      = errors.New("key not found")
+	ErrKeyNotFound       = errors.New("key not found")
 	ErrKeyInsertConflict = errors.New("key insert skipped due to conflict")
 )
 
