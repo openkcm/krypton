@@ -74,7 +74,7 @@ func TestTaskHandler_CorruptPayload_TerminalFail(t *testing.T) {
 }
 
 func TestTaskHandler_AlreadyExists_Idempotent(t *testing.T) {
-	handler := announcekey.NewTaskHandler(&taskCreateOverride{createErr: store.ErrKeyAlreadyExists})
+	handler := announcekey.NewTaskHandler(&taskCreateOverride{createErr: store.ErrKeyInsertConflict})
 
 	data := announcekey.TaskData{
 		KeyID:    uuid.New().String(),

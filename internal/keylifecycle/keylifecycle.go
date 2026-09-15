@@ -61,6 +61,12 @@ var defaultLifecycle = lifecycle{
 	},
 }
 
+// IsKnown reports whether s is one of the defined lifecycle states.
+func IsKnown(s model.KeyLifeCycleState) bool {
+	_, ok := defaultLifecycle.transitions[s]
+	return ok
+}
+
 // ValidateTransition checks whether transitioning from one state to another is allowed.
 func ValidateTransition(from, to model.KeyLifeCycleState) error {
 	ts, ok := defaultLifecycle.transitions[from]

@@ -8,16 +8,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lib/pq"
-
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
-
-// pgErrCodeUniqueViolation is the SQLSTATE value returned by Postgres on a
-// unique-constraint violation (23505).
-const pgErrCodeUniqueViolation = "23505"
 
 type KeyStore struct {
 	db DBTX
@@ -33,6 +27,8 @@ func (ks *KeyStore) CreateKey(ctx context.Context, key model.Key) error {
 	stmt := `
 		INSERT INTO keys (id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		-- keeps the enclosing transaction alive on conflict so callers can reconcile
+		ON CONFLICT DO NOTHING
 	`
 
 	labelsJSON, err := json.Marshal(key.Labels)
@@ -40,7 +36,7 @@ func (ks *KeyStore) CreateKey(ctx context.Context, key model.Key) error {
 		return err
 	}
 
-	_, err = ks.db.ExecContext(
+	res, err := ks.db.ExecContext(
 		ctx, stmt,
 		key.ID,
 		key.TenantID,
@@ -56,11 +52,14 @@ func (ks *KeyStore) CreateKey(ctx context.Context, key model.Key) error {
 		key.UpdatedAt,
 	)
 	if err != nil {
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && string(pqErr.Code) == pgErrCodeUniqueViolation {
-			return store.ErrKeyAlreadyExists
-		}
 		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return store.ErrKeyInsertConflict
 	}
 	return nil
 }

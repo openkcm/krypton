@@ -60,7 +60,7 @@ func NewTaskHandler(keyStore store.Key) orbital.HandlerFunc {
 		}
 
 		// Idempotent re-delivery: agent already has the key.
-		if errors.Is(err, store.ErrKeyAlreadyExists) {
+		if errors.Is(err, store.ErrKeyInsertConflict) {
 			slogctx.Info(ctx, "key already announced (idempotent)", "keyID", key.ID)
 			resp.Complete()
 			return
@@ -76,7 +76,7 @@ func NewTaskHandler(keyStore store.Key) orbital.HandlerFunc {
 				return
 			case pgCodeUniqueViolation:
 				// Belt-and-suspenders: should already be caught above as
-				// ErrKeyAlreadyExists, but be defensive.
+				// ErrKeyInsertConflict, but be defensive.
 				resp.Complete()
 				return
 			}

@@ -43,8 +43,7 @@ CREATE TABLE IF NOT EXISTS keys (
 	updated_at BIGINT NOT NULL,
 
 	UNIQUE (tenant_id, name),
-	UNIQUE (tenant_id, id),
-	FOREIGN KEY (tenant_id, parent_id) REFERENCES keys(tenant_id, id)
+	UNIQUE (tenant_id, id)
 );
 `
 
