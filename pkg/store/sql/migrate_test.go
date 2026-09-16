@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
-
 	"uuid"
 
 	"github.com/stretchr/testify/assert"

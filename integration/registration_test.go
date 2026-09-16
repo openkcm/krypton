@@ -15,7 +15,6 @@ import (
 	"github.com/openkcm/krypton/internal/clock"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/pkg/store"
-	"github.com/openkcm/krypton/pkg/store/sql"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -35,7 +34,7 @@ func TestRegistration(t *testing.T) {
 	_, agentDBConnStr := createDatabase(t, storesql.Agent)
 
 	// Create agent store
-	rootAgentStore := sql.NewAgentStore(db)
+	rootAgentStore := storesql.NewAgentStore(db)
 
 	// Build binaries for root server and agent
 	rootBinary := buildBinary(t, "root", "../cmd/root")
