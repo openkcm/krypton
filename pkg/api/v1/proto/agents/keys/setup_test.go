@@ -71,7 +71,7 @@ func setupServerAndClient(t *testing.T) *serviceSetup {
 	ctx := t.Context()
 
 	db := createDatabase(t)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Agent))
 
 	setup := &serviceSetup{
 		transactor:  storesql.NewTransactor(db),

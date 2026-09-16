@@ -86,7 +86,7 @@ func createDatabase(t *testing.T) *sql.DB {
 		}
 	})
 
-	require.NoError(t, storesql.Migrate(ctx, sqlDB))
+	require.NoError(t, storesql.Migrate(ctx, sqlDB, storesql.Root))
 
 	return sqlDB
 }

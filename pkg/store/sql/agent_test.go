@@ -44,7 +44,7 @@ func TestRegister(t *testing.T) {
 		db.Close()
 	})
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	subj := storesql.NewAgentStore(db)
 
 	t.Run("should insert new agent registration", func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestUpdateStatus(t *testing.T) {
 		db.Close()
 	})
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	subj := storesql.NewAgentStore(db)
 
 	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
@@ -711,7 +711,7 @@ func TestDelete(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	subj := storesql.NewAgentStore(db)
 
 	t.Run("should return error if the query does not have required fields", func(t *testing.T) {
@@ -909,7 +909,7 @@ func TestList(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	subj := storesql.NewAgentStore(db)
 
 	name1 := uuid.New().String()

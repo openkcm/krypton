@@ -21,7 +21,7 @@ func TestCreateTenant(t *testing.T) {
 
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("creates tenant successfully", func(t *testing.T) {
@@ -56,7 +56,7 @@ func TestCreateTenant(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error
@@ -86,7 +86,7 @@ func TestGetTenant(t *testing.T) {
 
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("should get tenant successfully", func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestGetTenant(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error
@@ -161,7 +161,7 @@ func TestListTenants(t *testing.T) {
 
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	tenantStore := storesql.NewTenantStore(db)
 
 	t.Run("should list tenants successfully", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestListTenants(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 		tenantStore := storesql.NewTenantStore(tmpDB)
 
 		// Drop the tenants table to simulate a database error

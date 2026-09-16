@@ -23,7 +23,7 @@ func TestSendHeartbeat(t *testing.T) {
 
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	agentStore := storesql.NewAgentStore(db)
 
 	t.Run("should update the status of the registered to healthy", func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestSendHeartbeat(t *testing.T) {
 		expInstanceID := uuid.New().String()
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 		agentStore := storesql.NewAgentStore(tmpDB)
 
 		// drop the table to cause an error in the agent store during heartbeat processing

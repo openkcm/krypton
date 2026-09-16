@@ -24,7 +24,7 @@ func TestRegister(t *testing.T) {
 
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	agentStore := storesql.NewAgentStore(db)
 
 	t.Run("should register agent successfully", func(t *testing.T) {
@@ -208,7 +208,7 @@ func TestRegister(t *testing.T) {
 		expInstanceID := uuid.New().String()
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 		agentStore := storesql.NewAgentStore(tmpDB)
 
 		// drop the table to cause an error in the agent store during register processing

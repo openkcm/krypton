@@ -13,6 +13,7 @@ import (
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 type activatedKeyRow struct {
@@ -22,8 +23,8 @@ type activatedKeyRow struct {
 func TestActivateKey(t *testing.T) {
 	// K0(root) -> K1(kek) -> K2(dek)
 	env := setupRootEnvWithKMIP(t)
-	rootKVStore := newKeyVersionStore(t, env.RootDB)
-	rootKStore := newKeyStore(t, env.RootDB)
+	rootKVStore := newKeyVersionStore(t, env.RootDB, storesql.Root)
+	rootKStore := newKeyStore(t, env.RootDB, storesql.Root)
 	tenantID := env.PreConfiguredTenant.ID
 	keyCli := keypb.NewKeyServiceClient(env.Conn)
 

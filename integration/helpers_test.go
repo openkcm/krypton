@@ -22,6 +22,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 const localHost = "127.0.0.1"
@@ -62,8 +63,8 @@ var testKeyBase64 = base64.StdEncoding.EncodeToString(testKey)
 func setupEnvironment(t *testing.T) *testEnvironment {
 	t.Helper()
 
-	rootDB, rootConnStr := createDatabase(t)
-	agentDB, agentConnStr := createDatabase(t)
+	rootDB, rootConnStr := createDatabase(t, storesql.Root)
+	agentDB, agentConnStr := createDatabase(t, storesql.Agent)
 	rootPort := freePort(t)
 	agentPort := freePort(t)
 
@@ -111,7 +112,7 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 	t.Helper()
 
-	_, rootConnStr := createDatabase(t)
+	_, rootConnStr := createDatabase(t, storesql.Root)
 	rootPort := freePort(t)
 
 	allowedAgent := "allowed-agent" + uuid.New().String()
@@ -142,12 +143,12 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 	t.Helper()
 
-	rootDB, rootConnStr := createDatabase(t)
+	rootDB, rootConnStr := createDatabase(t, storesql.Root)
 	rootPort := freePort(t)
 	kmipRootPort := freePort(t)
 
 	// preconfiguring a tenant
-	ctr, err := newTenantStore(t, rootDB).CreateTenant(t.Context(), store.CreateTenantQuery{
+	ctr, err := newTenantStore(t, rootDB, storesql.Root).CreateTenant(t.Context(), store.CreateTenantQuery{
 		Tenant: model.NewTenant("preconfigured-tenant-"+uuid.New().String(), nil),
 	})
 	require.NoError(t, err)

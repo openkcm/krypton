@@ -22,7 +22,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	tenantStore := storesql.NewTenantStore(db)
 	keyStore := storesql.NewKeyStore(db)

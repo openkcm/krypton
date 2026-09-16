@@ -52,7 +52,7 @@ func TestActivateKey(t *testing.T) {
 	rootTopology := rootTestTopology()
 
 	db := createDatabase(t)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	t.Run("should activate root key version", func(t *testing.T) {
 		// given

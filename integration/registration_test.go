@@ -16,6 +16,7 @@ import (
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/store/sql"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 const allowedAgentName = "agent-k1"
@@ -30,8 +31,8 @@ func TestRegistration(t *testing.T) {
 	require.True(t, ok, "client certificate for agent not found in PKI")
 
 	// Setup test database and store
-	db, dbConnStr := createDatabase(t)
-	_, agentDBConnStr := createDatabase(t)
+	db, dbConnStr := createDatabase(t, storesql.Root)
+	_, agentDBConnStr := createDatabase(t, storesql.Agent)
 
 	// Create agent store
 	rootAgentStore := sql.NewAgentStore(db)

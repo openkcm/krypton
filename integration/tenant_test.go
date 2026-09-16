@@ -13,6 +13,7 @@ import (
 
 	"github.com/openkcm/krypton/cli/state"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 // expTenant represents the JSON structure returned by the CLI's tenant commands.
@@ -25,7 +26,7 @@ type expTenant struct {
 }
 
 func TestCreateTenant(t *testing.T) {
-	tenantStore := newTenantStore(t, nil)
+	tenantStore := newTenantStore(t, nil, storesql.Root)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
@@ -107,7 +108,7 @@ func TestCreateTenant(t *testing.T) {
 }
 
 func TestGetTenant(t *testing.T) {
-	tenantStore := newTenantStore(t, nil)
+	tenantStore := newTenantStore(t, nil, storesql.Root)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})
@@ -175,7 +176,7 @@ func TestListTenants(t *testing.T) {
 
 	t.Run("returns empty list when no tenants exist", func(t *testing.T) {
 		// given
-		tenantStore := newTenantStore(t, nil)
+		tenantStore := newTenantStore(t, nil, storesql.Root)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
@@ -192,7 +193,7 @@ func TestListTenants(t *testing.T) {
 
 	t.Run("lists created tenants", func(t *testing.T) {
 		// given
-		tenantStore := newTenantStore(t, nil)
+		tenantStore := newTenantStore(t, nil, storesql.Root)
 		serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 			admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 		})
@@ -235,7 +236,7 @@ func TestListTenants(t *testing.T) {
 // Integration tests use exec.Command which provides piped stdin, not a real TTY.
 // Interactive selection is covered by unit tests in cli/output/terminal/.
 func TestSelectTenant(t *testing.T) {
-	tenantStore := newTenantStore(t, nil)
+	tenantStore := newTenantStore(t, nil, storesql.Root)
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
 	})

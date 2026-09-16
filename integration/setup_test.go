@@ -120,43 +120,43 @@ func newCLICommand(ctx context.Context, homeDir string, args ...string) *exec.Cm
 }
 
 // newTenantStore creates a tenant store.
-func newTenantStore(t *testing.T, db *sql.DB) store.Tenant {
+func newTenantStore(t *testing.T, db *sql.DB, n storesql.Node) store.Tenant {
 	t.Helper()
 	if db == nil {
-		db, _ = createDatabase(t)
+		db, _ = createDatabase(t, n)
 	}
 	return storesql.NewTenantStore(db)
 }
 
 // newKeyStore creates a key store.
-func newKeyStore(t *testing.T, db *sql.DB) store.Key {
+func newKeyStore(t *testing.T, db *sql.DB, n storesql.Node) store.Key {
 	t.Helper()
 	if db == nil {
-		db, _ = createDatabase(t)
+		db, _ = createDatabase(t, n)
 	}
 	return storesql.NewKeyStore(db)
 }
 
 // newKeyVersionStore creates a keyversion store.
-func newKeyVersionStore(t *testing.T, db *sql.DB) store.KeyVersion {
+func newKeyVersionStore(t *testing.T, db *sql.DB, n storesql.Node) store.KeyVersion {
 	t.Helper()
 	if db == nil {
-		db, _ = createDatabase(t)
+		db, _ = createDatabase(t, n)
 	}
 	return storesql.NewKeyVersionStore(db)
 }
 
 // newTransactor creates a transactor.
-func newTransactor(t *testing.T, db *sql.DB) store.Transactor {
+func newTransactor(t *testing.T, db *sql.DB, n storesql.Node) store.Transactor {
 	t.Helper()
 	if db == nil {
-		db, _ = createDatabase(t)
+		db, _ = createDatabase(t, n)
 	}
 	return storesql.NewTransactor(db)
 }
 
 // createDatabase creates a new PostgreSQL database for testing and returns a connection to it.
-func createDatabase(t *testing.T) (*sql.DB, string) {
+func createDatabase(t *testing.T, n storesql.Node) (*sql.DB, string) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -167,7 +167,7 @@ func createDatabase(t *testing.T) (*sql.DB, string) {
 	require.NoError(t, err, "failed to connect to PostgreSQL")
 
 	// migrate
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, n))
 
 	return db, pgConnStr
 }

@@ -68,7 +68,7 @@ func TestAnnounceKey(t *testing.T) {
 	ctx := t.Context()
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	t.Run("should create key successfully", func(t *testing.T) {
 		// given
@@ -523,7 +523,7 @@ func TestAnnounceKey(t *testing.T) {
 	t.Run("should return internal error on database failure", func(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 
 		setup := setupKeyServerAndClient(t, tmpDB)
 		cli := setup.cli
@@ -595,7 +595,7 @@ func TestGetKeyService(t *testing.T) {
 	ctx := t.Context()
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	t.Run("should get key successfully", func(t *testing.T) {
 		// given
@@ -649,7 +649,7 @@ func TestGetKeyService(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
@@ -676,7 +676,7 @@ func TestGetParentKeys(t *testing.T) {
 	ctx := t.Context()
 	db := createDatabase(t)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	setup := setupKeyServerAndClient(t, db)
 	cli := setup.cli
@@ -734,7 +734,7 @@ func TestGetParentKeys(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
@@ -760,7 +760,7 @@ func TestGetDescendantKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db := createDatabase(t)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	setup := setupKeyServerAndClient(t, db)
 	cli := setup.cli
@@ -851,7 +851,7 @@ func TestGetDescendantKeys(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)
@@ -877,7 +877,7 @@ func TestListKeys(t *testing.T) {
 	// given
 	ctx := t.Context()
 	db := createDatabase(t)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	setup := setupKeyServerAndClient(t, db)
 	cli := setup.cli
@@ -1028,7 +1028,7 @@ func TestListKeys(t *testing.T) {
 		// given
 		tmpDB := createDatabase(t)
 
-		require.NoError(t, storesql.Migrate(ctx, tmpDB))
+		require.NoError(t, storesql.Migrate(ctx, tmpDB, storesql.Root))
 
 		_, err := tmpDB.ExecContext(ctx, "DROP TABLE keys CASCADE")
 		require.NoError(t, err)

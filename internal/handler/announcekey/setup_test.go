@@ -69,7 +69,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	testDB, err := sql.Open("postgres", connStr)
 	require.NoError(t, err)
 
-	require.NoError(t, storesql.Migrate(ctx, testDB))
+	require.NoError(t, storesql.Migrate(ctx, testDB, storesql.Agent))
 
 	t.Cleanup(func() {
 		testDB.Close()
