@@ -282,6 +282,97 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 	}
 }
 
+func TestValidator_ValidateKeyUpsert(t *testing.T) {
+	baseValid := validator.UpsertKeyInput{
+		TenantID:       validUUID,
+		KeyID:          uuid.New().String(),
+		Kind:           "K1",
+		Name:           "some-name",
+		ManagedBy:      "agent-aws",
+		ParentID:       uuid.New().String(),
+		LifecycleState: string(model.KeyLifeCyclePreActivation),
+	}
+
+	withField := func(mut func(*validator.UpsertKeyInput)) validator.UpsertKeyInput {
+		in := baseValid
+		mut(&in)
+		return in
+	}
+
+	tests := []struct {
+		name    string
+		input   validator.UpsertKeyInput
+		wantErr error
+	}{
+		{
+			name:    "invalid tenantID",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.TenantID = invalidUUID }),
+			wantErr: validator.ErrInvalidTenantID,
+		},
+		{
+			name:    "invalid keyID",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.KeyID = invalidUUID }),
+			wantErr: validator.ErrInvalidKeyID,
+		},
+		{
+			name:    "empty kind",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.Kind = "" }),
+			wantErr: validator.ErrEmptyKeyKind,
+		},
+		{
+			name:    "empty name",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.Name = "" }),
+			wantErr: validator.ErrEmptyName,
+		},
+		{
+			name:    "empty managed_by",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.ManagedBy = "" }),
+			wantErr: validator.ErrEmptyManagedBy,
+		},
+		{
+			name:    "invalid parent_id",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.ParentID = invalidUUID }),
+			wantErr: validator.ErrInvalidParentID,
+		},
+		{
+			name:    "empty parent_id",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.ParentID = "" }),
+			wantErr: validator.ErrInvalidParentID,
+		},
+		{
+			name:    "empty lifecycle_state",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.LifecycleState = "" }),
+			wantErr: validator.ErrEmptyLifecycleState,
+		},
+		{
+			name:    "unknown lifecycle_state",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.LifecycleState = "bogus" }),
+			wantErr: validator.ErrUnknownLifecycleState,
+		},
+		{
+			name:    "valid with pre-activation",
+			input:   baseValid,
+			wantErr: nil,
+		},
+		{
+			name:    "valid with active",
+			input:   withField(func(in *validator.UpsertKeyInput) { in.LifecycleState = string(model.KeyLifeCycleActive) }),
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validator.ValidateKeyUpsert(tc.input)
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
 func TestValidator_ValidateActivateRequest(t *testing.T) {
 	tests := []struct {
 		name    string

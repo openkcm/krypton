@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package krypton.v1.agents.keys;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys";
+
+service KeyService {
+  rpc UpsertKey(UpsertKeyRequest) returns (UpsertKeyResponse) {}
+}
+
+message UpsertKeyRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  string kind = 3;
+  string name = 4;
+  string parent_id = 5;
+  string lifecycle_state = 6;
+  string managed_by = 7;
+  map<string, string> labels = 8;
+}
+
+message UpsertKeyResponse {}

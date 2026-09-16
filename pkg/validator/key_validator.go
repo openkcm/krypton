@@ -40,6 +40,11 @@ var (
 	ErrParentKeyTransientState = errors.New("parent key is in a transient state, please wait for the parent key to be completed")
 	ErrKeyTransientState       = errors.New("key is in a transient state, please wait for the key to be completed")
 	ErrNoParentKeyRelation     = errors.New("key has no parent key relation")
+
+	ErrEmptyManagedBy        = errors.New("managed_by cannot be empty")
+	ErrEmptyLifecycleState   = errors.New("lifecycle_state cannot be empty")
+	ErrInvalidParentID       = errors.New("parent_id is invalid")
+	ErrUnknownLifecycleState = errors.New("lifecycle_state is not a known state")
 )
 
 func NewValidator(rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
@@ -58,6 +63,41 @@ type AnnounceInput struct {
 	Name       string
 	ParentID   string
 	TargetName string
+}
+
+type UpsertKeyInput struct {
+	TenantID       string
+	KeyID          string
+	Kind           string
+	Name           string
+	ManagedBy      string
+	ParentID       string
+	LifecycleState string
+}
+
+// ValidateKeyUpsert verifies the shape of an agent-side UpsertKey
+// request. All fields are required.
+func ValidateKeyUpsert(input UpsertKeyInput) error {
+	switch {
+	case !isValidUUID(input.TenantID):
+		return ErrInvalidTenantID
+	case !isValidUUID(input.KeyID):
+		return ErrInvalidKeyID
+	case input.Kind == "":
+		return ErrEmptyKeyKind
+	case input.Name == "":
+		return ErrEmptyName
+	case input.ManagedBy == "":
+		return ErrEmptyManagedBy
+	case !isValidUUID(input.ParentID):
+		return ErrInvalidParentID
+	case input.LifecycleState == "":
+		return ErrEmptyLifecycleState
+	}
+	if !keylifecycle.IsKnown(model.KeyLifeCycleState(input.LifecycleState)) {
+		return ErrUnknownLifecycleState
+	}
+	return nil
 }
 
 func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceInput) *ValidationError {

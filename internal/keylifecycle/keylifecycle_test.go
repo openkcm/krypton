@@ -206,3 +206,28 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 		}
 	})
 }
+
+func TestIsKnown(t *testing.T) {
+	t.Parallel()
+
+	tts := []struct {
+		state model.KeyLifeCycleState
+		want  bool
+	}{
+		{state: "", want: false},
+		{state: "bogus", want: false},
+		{state: model.KeyLifeCyclePreActivation, want: true},
+		{state: model.KeyLifeCycleActive, want: true},
+		{state: model.KeyLifeCycleSuspended, want: true},
+		{state: model.KeyLifeCycleDeactivated, want: true},
+		{state: model.KeyLifeCycleCompromised, want: true},
+		{state: model.KeyLifeCycleDestroyed, want: true},
+	}
+
+	for _, tt := range tts {
+		t.Run(fmt.Sprintf("[%s]=%t", tt.state, tt.want), func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, keylifecycle.IsKnown(tt.state))
+		})
+	}
+}

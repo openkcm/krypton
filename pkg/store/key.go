@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	ErrKeyNotFound      = errors.New("key not found")
-	ErrKeyAlreadyExists = errors.New("key already exists")
+	ErrKeyNotFound       = errors.New("key not found")
+	ErrKeyInsertConflict = errors.New("key insert skipped due to conflict")
 )
 
 type Key interface {

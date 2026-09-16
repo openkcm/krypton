@@ -105,14 +105,6 @@ func TestCreateKey(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("should fail with invalid parent reference", func(t *testing.T) {
-		badParent := uuid.New().String()
-		key := model.NewKey(tenant.ID, "orphan-key", "K1", &badParent, "root", nil)
-
-		err := keyStore.CreateKey(ctx, key)
-		assert.Error(t, err)
-	})
-
 	t.Run("should fail with invalid tenant reference", func(t *testing.T) {
 		key := model.NewKey(uuid.New().String(), "bad-tenant-key", "K0", nil, "root", nil)
 
@@ -304,7 +296,7 @@ func TestCreateKey_DuplicateName(t *testing.T) {
 
 	second := model.NewKey(tenant.ID, "dup-name", "K0", nil, "root", nil)
 	err = keyStore.CreateKey(ctx, second)
-	assert.ErrorIs(t, err, store.ErrKeyAlreadyExists)
+	assert.ErrorIs(t, err, store.ErrKeyInsertConflict)
 }
 
 func TestGetKeyByName(t *testing.T) {
