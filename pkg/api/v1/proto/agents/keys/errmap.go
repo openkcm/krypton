@@ -27,7 +27,7 @@ func mapToProtoErr(err error) error {
 	}
 
 	return proto.ErrDetailsWithCode(
-		status.New(codes.Internal, err.Error()),
+		status.New(codes.Internal, "internal error"),
 		proto.Code_ERROR_CODE_RETRY,
 	)
 }
