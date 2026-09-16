@@ -40,6 +40,12 @@ type KeyBinding struct {
 	ParentKeyProvider *ParentKeyProviderRef `yaml:"parent_key_provider,omitempty"` // Where to get parent keys for sealing/unsealing
 }
 
+// HasRemoteParent reports whether this binding delegates to a remote agent
+// for parent key operations.
+func (kb *KeyBinding) HasRemoteParent() bool {
+	return kb.ParentKeyProvider != nil && kb.ParentKeyProvider.AgentName != ""
+}
+
 // TopologySegment defines an agent's portion of the hierarchy
 type TopologySegment struct {
 	Name           string                `yaml:"name"`         // Agent name (must match cert CN)

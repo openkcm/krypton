@@ -5,6 +5,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/vault"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -58,4 +59,8 @@ func NewTestManagerWithAlgorithms(s store.Key, kvs store.KeyVersion, processors 
 
 func NewTestRootManager(s store.Key, sealer cryptor.Sealer) *rootManager {
 	return &rootManager{store: s, sealer: sealer}
+}
+
+func NewTestRPCManager(client sealer.ServiceClient) *RPCManager {
+	return &RPCManager{sealer: client}
 }
