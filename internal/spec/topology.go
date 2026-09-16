@@ -142,7 +142,7 @@ func (t *Topology) ParentName(agentName string) (string, bool) {
 			continue
 		}
 		for _, binding := range seg.KeyBindings {
-			if binding.ParentKeyProvider != nil && binding.ParentKeyProvider.AgentName != "" {
+			if binding.HasRemoteParent() {
 				return binding.ParentKeyProvider.AgentName, true
 			}
 		}
