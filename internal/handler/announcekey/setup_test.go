@@ -89,7 +89,7 @@ func seedTenantAndKey(t *testing.T, db *sql.DB) model.Key {
 
 	tenantStore := storesql.NewTenantStore(db)
 	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
-	tenantRes, err := tenantStore.CreateTenant(ctx, store.CreateTenantQuery{Tenant: tenant})
+	tenantRes, err := tenantStore.UpsertTenant(ctx, store.UpsertTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 
 	keyStore := storesql.NewKeyStore(db)

@@ -25,7 +25,7 @@ func NewTenantService(s store.Tenant) *TenantService {
 func (s *TenantService) CreateTenant(ctx context.Context, req *CreateTenantRequest) (*CreateTenantResponse, error) {
 	tenant := model.NewTenant(req.GetName(), req.GetLabels())
 
-	result, err := s.store.CreateTenant(ctx, store.CreateTenantQuery{
+	result, err := s.store.UpsertTenant(ctx, store.UpsertTenantQuery{
 		Tenant: tenant,
 	})
 	if err != nil {

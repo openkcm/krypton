@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package krypton.v1.agents.tenants;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants";
+
+service TenantService {
+  rpc UpsertTenant(UpsertTenantRequest) returns (UpsertTenantResponse) {}
+}
+
+message UpsertTenantRequest {
+  string id = 1;
+  string name = 2;
+  map<string, string> labels = 3;
+}
+
+message UpsertTenantResponse {}

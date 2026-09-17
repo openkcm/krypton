@@ -10,16 +10,16 @@ import (
 var ErrTenantNotFound = errors.New("tenant not found")
 
 type Tenant interface {
-	CreateTenant(ctx context.Context, query CreateTenantQuery) (CreateTenantResult, error)
+	UpsertTenant(ctx context.Context, query UpsertTenantQuery) (UpsertTenantResult, error)
 	GetTenant(ctx context.Context, query GetTenantQuery) (GetTenantResult, error)
 	ListTenants(ctx context.Context, query ListTenantsQuery) (ListTenantsResult, error)
 }
 
-type CreateTenantQuery struct {
+type UpsertTenantQuery struct {
 	Tenant model.Tenant
 }
 
-type CreateTenantResult struct {
+type UpsertTenantResult struct {
 	Tenant model.Tenant
 }
 

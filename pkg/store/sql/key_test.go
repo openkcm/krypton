@@ -1184,7 +1184,7 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 func createTenant(t *testing.T, s *storesql.TenantStore) model.Tenant {
 	t.Helper()
 	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
-	result, err := s.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
+	result, err := s.UpsertTenant(t.Context(), store.UpsertTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant
 }

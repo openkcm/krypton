@@ -19,16 +19,20 @@ func NewTenantStore(db DBTX) *TenantStore {
 	return &TenantStore{db: db}
 }
 
-func (ps *TenantStore) CreateTenant(ctx context.Context, query store.CreateTenantQuery) (store.CreateTenantResult, error) {
+func (ps *TenantStore) UpsertTenant(ctx context.Context, query store.UpsertTenantQuery) (store.UpsertTenantResult, error) {
 	stmt := `
 		INSERT INTO tenants (id, name, labels, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (id) DO UPDATE
+		  SET name       = EXCLUDED.name,
+		      labels     = EXCLUDED.labels,
+		      updated_at = EXCLUDED.updated_at
 	`
 	tenant := query.Tenant
 
 	labelsJSON, err := json.Marshal(tenant.Labels)
 	if err != nil {
-		return store.CreateTenantResult{}, err
+		return store.UpsertTenantResult{}, err
 	}
 
 	_, err = ps.db.ExecContext(ctx, stmt,
@@ -39,10 +43,10 @@ func (ps *TenantStore) CreateTenant(ctx context.Context, query store.CreateTenan
 		tenant.UpdatedAt,
 	)
 	if err != nil {
-		return store.CreateTenantResult{}, err
+		return store.UpsertTenantResult{}, err
 	}
 
-	return store.CreateTenantResult{
+	return store.UpsertTenantResult{
 		Tenant: tenant,
 	}, nil
 }
