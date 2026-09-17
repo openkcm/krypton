@@ -158,7 +158,7 @@ func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator
 	db, err := sql.Open("postgres", dsn)
 	handleErr(err, "failed to connect to agent database")
 
-	err = storesql.Migrate(ctx, db)
+	err = storesql.Migrate(ctx, db, storesql.Agent)
 	handleErr(err, "failed to run agent migrations")
 
 	keyStore := storesql.NewKeyStore(db)

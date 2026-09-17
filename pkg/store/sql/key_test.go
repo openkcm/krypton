@@ -54,7 +54,7 @@ func TestCreateKey(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -121,7 +121,7 @@ func TestGetKey(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -182,7 +182,7 @@ func TestUpdateKeyLifeCycleState(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -228,7 +228,7 @@ func TestUpdateKeyProcessingState(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -286,7 +286,7 @@ func TestCreateKey_DuplicateName(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -307,7 +307,7 @@ func TestGetKeyByName(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)
@@ -344,7 +344,7 @@ func TestGetParentKeys(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	tenantStore := storesql.NewTenantStore(db)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	h := createKeyHierarchy(t, keyStore, tenantStore)
@@ -437,7 +437,7 @@ func TestGetDescendantKeys(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	tenantStore := storesql.NewTenantStore(db)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	k := createKeyHierarchy(t, keyStore, tenantStore)
@@ -557,7 +557,7 @@ func TestListKeys(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	tenantStore := storesql.NewTenantStore(db)
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	h := createKeyHierarchy(t, keyStore, tenantStore)
@@ -947,7 +947,7 @@ func TestUpdateKeyStates(t *testing.T) {
 
 	tenantStore := storesql.NewTenantStore(db)
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	keyStore := storesql.NewKeyStore(db)
 
 	tenant := createTenant(t, tenantStore)

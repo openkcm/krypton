@@ -64,7 +64,7 @@ func main() {
 	defer db.Close()
 
 	// run migrations
-	err = storesql.Migrate(context.Background(), db)
+	err = storesql.Migrate(context.Background(), db, storesql.Root)
 	handleErr(err, "failed to run migrations")
 
 	// load root configuration

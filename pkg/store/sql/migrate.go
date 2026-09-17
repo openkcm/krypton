@@ -3,7 +3,22 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 )
+
+type Node string
+
+const (
+	Root  Node = "root"
+	Agent Node = "agent"
+)
+
+const createSchemaMetaTable = `
+CREATE TABLE IF NOT EXISTS schema_meta (
+	node TEXT PRIMARY KEY
+);
+`
 
 const createTenantsTable = `
 CREATE TABLE IF NOT EXISTS tenants (
@@ -27,7 +42,7 @@ CREATE TABLE IF NOT EXISTS agent_registrations (
 );
 `
 
-const createKeysTable = `
+const keyTable = `
 CREATE TABLE IF NOT EXISTS keys (
 	id UUID PRIMARY KEY,
 	tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -43,11 +58,17 @@ CREATE TABLE IF NOT EXISTS keys (
 	updated_at BIGINT NOT NULL,
 
 	UNIQUE (tenant_id, name),
-	UNIQUE (tenant_id, id)
+	UNIQUE (tenant_id, id)%s
 );
 `
 
-const createKeyVersionsTable = `
+const keysRootConstraints = `,
+	FOREIGN KEY (tenant_id, parent_id) REFERENCES keys(tenant_id, id)`
+
+var createKeysTable = fmt.Sprintf(keyTable, keysRootConstraints)
+var createAgentsKeysTable = fmt.Sprintf(keyTable, "")
+
+const keyVersionTable = `
 CREATE TABLE IF NOT EXISTS key_versions (
 	tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 	key_id UUID NOT NULL,
@@ -61,21 +82,59 @@ CREATE TABLE IF NOT EXISTS key_versions (
 	updated_at BIGINT NOT NULL,
 
 	PRIMARY KEY (tenant_id, key_id, version, revision),
-	FOREIGN KEY (tenant_id, key_id) REFERENCES keys(tenant_id, id)
+	FOREIGN KEY (tenant_id, key_id) REFERENCES keys(tenant_id, id)%s
 );
 `
 
-func Migrate(ctx context.Context, db *sql.DB) error {
-	stmts := []string{
-		createTenantsTable,
-		createAgentRegistrationsTable,
-		createKeysTable,
-		createKeyVersionsTable,
+const keyVersionsRootConstraints = `,
+	FOREIGN KEY (tenant_id, parent_key_id, parent_key_version, revision)
+		REFERENCES key_versions(tenant_id, key_id, version, revision)`
+
+var createKeyVersionsTable = fmt.Sprintf(keyVersionTable, keyVersionsRootConstraints)
+var createAgentsKeyVersionsTable = fmt.Sprintf(keyVersionTable, "")
+
+func Migrate(ctx context.Context, db *sql.DB, n Node) error {
+	switch n {
+	case Root, Agent:
+	default:
+		return fmt.Errorf("migrate: unknown node %q", n)
 	}
 
-	for _, stmt := range stmts {
+	if _, err := db.ExecContext(ctx, createSchemaMetaTable); err != nil {
+		return fmt.Errorf("migrate: create schema_meta: %w", err)
+	}
+
+	var existing Node
+	err := db.QueryRowContext(ctx, `SELECT node FROM schema_meta LIMIT 1`).Scan(&existing)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if _, err := db.ExecContext(ctx, `INSERT INTO schema_meta (node) VALUES ($1)`, n); err != nil {
+			return fmt.Errorf("migrate: record node: %w", err)
+		}
+	case err != nil:
+		return fmt.Errorf("migrate: read schema_meta: %w", err)
+	case existing != n:
+		return fmt.Errorf("migrate: database already initialized as %q, refusing to migrate as %q", existing, n)
+	}
+
+	stmts := []string{createTenantsTable}
+	switch n {
+	case Root:
+		stmts = append(stmts,
+			createAgentRegistrationsTable,
+			createKeysTable,
+			createKeyVersionsTable,
+		)
+	case Agent:
+		stmts = append(stmts,
+			createAgentsKeysTable,
+			createAgentsKeyVersionsTable,
+		)
+	}
+
+	for i, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return err
+			return fmt.Errorf("migrate: statement %d: %w", i, err)
 		}
 	}
 

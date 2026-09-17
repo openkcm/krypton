@@ -22,7 +22,7 @@ func TestCreateKeyVersion(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	kvStore := storesql.NewKeyVersionStore(db)
 	keyStore := storesql.NewKeyStore(db)
 	tenantStore := storesql.NewTenantStore(db)
@@ -54,9 +54,23 @@ func TestCreateKeyVersion(t *testing.T) {
 	})
 
 	t.Run("should create key version with parent references", func(t *testing.T) {
-		// given
-		parentKeyID := uuid.New().String()
-		parentKeyVersion := 2
+		// given: create a parent key_version first so the FK is satisfied
+		parentKeyID := key.ID
+		parentKeyVersion := 10
+		parentNow := clock.Now()
+		parent := model.KeyVersion{
+			TenantID:        tenant.ID,
+			KeyID:           parentKeyID,
+			Version:         parentKeyVersion,
+			Revision:        0,
+			LifeCycleState:  model.KeyLifeCycleActive,
+			ProcessingState: model.KeyVersionUsable,
+			CreatedAt:       parentNow,
+			UpdatedAt:       parentNow,
+		}
+		_, err := kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: parent})
+		require.NoError(t, err)
+
 		now := clock.Now()
 		kv := model.KeyVersion{
 			TenantID:         tenant.ID,
@@ -131,7 +145,7 @@ func TestListKeyVersions(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	kvStore := storesql.NewKeyVersionStore(db)
 	keyStore := storesql.NewKeyStore(db)
 	tenantStore := storesql.NewTenantStore(db)
@@ -368,7 +382,7 @@ func TestUpdateKeyVersionStates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	require.NoError(t, storesql.Migrate(ctx, db))
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 	kvStore := storesql.NewKeyVersionStore(db)
 	keyStore := storesql.NewKeyStore(db)
 	tenantStore := storesql.NewTenantStore(db)

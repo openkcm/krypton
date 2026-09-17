@@ -14,15 +14,16 @@ import (
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
 func TestGetKeys(t *testing.T) {
 	// given
-	testDB, _ := createDatabase(t)
-	tenantStore := newTenantStore(t, testDB)
-	keyStore := newKeyStore(t, testDB)
-	keyVersionStore := newKeyVersionStore(t, testDB)
+	testDB, _ := createDatabase(t, storesql.Root)
+	tenantStore := newTenantStore(t, testDB, storesql.Root)
+	keyStore := newKeyStore(t, testDB, storesql.Root)
+	keyVersionStore := newKeyVersionStore(t, testDB, storesql.Root)
 
 	hierarchySpec := defaultTestHierarchy()
 	topology := spec.Topology{
@@ -36,7 +37,7 @@ func TestGetKeys(t *testing.T) {
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", newTransactor(t, testDB), keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", newTransactor(t, testDB, storesql.Root), keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
 	})
 
 	// login with no auth
