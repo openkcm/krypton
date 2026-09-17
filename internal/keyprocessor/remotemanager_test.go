@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -289,6 +290,45 @@ func TestRPCManagerSeal(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, plaintext.SecureBytes())
 	})
+
+	t.Run("should not panic when plaintext is nil", func(t *testing.T) {
+		// given
+		subj := keyprocessor.NewTestRPCManager(&mockServiceClient{})
+
+		// when
+		res, err := subj.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: 1,
+			Plaintext:  nil,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, keyprocessor.ErrNilSecureBytes)
+		assert.Equal(t, cryptor.SealResponse{}, res)
+	})
+
+	t.Run("should zero gRPC response ciphertext after copy", func(t *testing.T) {
+		ciphertextPayload := []byte("encrypted-payload")
+		client := &mockServiceClient{
+			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
+				return &sealer.SealResponse{Ciphertext: ciphertextPayload}, nil
+			},
+		}
+		subj := keyprocessor.NewTestRPCManager(client)
+
+		_, err := subj.Seal(t.Context(), cryptor.SealRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: 1,
+			Plaintext:  newTestData(t, []byte("secret")),
+		})
+
+		assert.NoError(t, err)
+		// The original slice returned by the mock should be zeroed by securemem.Zero
+		assert.Equal(t, make([]byte, len(ciphertextPayload)), ciphertextPayload)
+	})
 }
 
 func TestRPCManagerUnseal(t *testing.T) {
@@ -463,6 +503,91 @@ func TestRPCManagerUnseal(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.Nil(t, ciphertext.SecureBytes())
+	})
+
+	t.Run("should not panic when ciphertext is nil", func(t *testing.T) {
+		// given
+		subj := keyprocessor.NewTestRPCManager(&mockServiceClient{})
+
+		// when
+		res, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: 1,
+			Ciphertext: nil,
+		})
+
+		// then
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, keyprocessor.ErrNilSecureBytes)
+		assert.Equal(t, cryptor.UnsealResponse{}, res)
+	})
+
+	t.Run("should zero gRPC response plaintext after copy", func(t *testing.T) {
+		plaintextPayload := []byte("decrypted-payload")
+		client := &mockServiceClient{
+			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+				return &sealer.UnsealResponse{Plaintext: plaintextPayload}, nil
+			},
+		}
+		subj := keyprocessor.NewTestRPCManager(client)
+
+		_, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+			TenantID:   "tenant-1",
+			KeyID:      "key-1",
+			KeyVersion: 1,
+			Ciphertext: newTestData(t, []byte("sealed")),
+		})
+
+		assert.NoError(t, err)
+		// The original slice returned by the mock should be zeroed by securemem.Zero
+		assert.Equal(t, make([]byte, len(plaintextPayload)), plaintextPayload)
+	})
+}
+
+func TestConcurrentSealUnseal(t *testing.T) {
+	t.Run("should handle concurrent seal and unseal calls", func(t *testing.T) {
+		client := &mockServiceClient{
+			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
+				return &sealer.SealResponse{Ciphertext: []byte("ciphertext")}, nil
+			},
+			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+				return &sealer.UnsealResponse{Plaintext: []byte("plaintext")}, nil
+			},
+		}
+		subj := keyprocessor.NewTestRPCManager(client)
+
+		const goroutines = 10
+		var wg sync.WaitGroup
+		errs := make([]error, goroutines*2)
+
+		for i := range goroutines {
+			wg.Go(func() {
+				_, errs[i] = subj.Seal(t.Context(), cryptor.SealRequest{
+					TenantID:   "tenant-1",
+					KeyID:      "key-1",
+					KeyVersion: 1,
+					Plaintext:  newTestData(t, []byte("secret")),
+				})
+			})
+		}
+
+		for i := range goroutines {
+			wg.Go(func() {
+				_, errs[goroutines+i] = subj.Unseal(t.Context(), cryptor.UnsealRequest{
+					TenantID:   "tenant-1",
+					KeyID:      "key-1",
+					KeyVersion: 1,
+					Ciphertext: newTestData(t, []byte("sealed")),
+				})
+			})
+		}
+
+		wg.Wait()
+
+		for i, err := range errs {
+			assert.NoError(t, err, "goroutine %d failed", i)
+		}
 	})
 }
 

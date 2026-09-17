@@ -2,6 +2,8 @@ package keyprocessor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 
 	"google.golang.org/grpc"
@@ -17,6 +19,8 @@ import (
 const (
 	handlerKey = "handlerKey"
 )
+
+var ErrNilSecureBytes = errors.New("securemem.Data is nil or has no bytes")
 
 // RPCManager is a [cryptor.Sealer] that delegates seal and unseal operations
 // to a remote agent over gRPC.
@@ -60,6 +64,10 @@ func NewRPCManager(target string, tls config.AuthConfig) (*RPCManager, error) {
 
 // Seal implements [cryptor.Sealer].
 func (r *RPCManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
+		return cryptor.SealResponse{}, fmt.Errorf("%w: plaintext is nil or empty", ErrNilSecureBytes)
+	}
+
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		defer req.Plaintext.Destroy()
 
@@ -112,6 +120,9 @@ func (r *RPCManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor
 
 // Unseal implements [cryptor.Sealer].
 func (r *RPCManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
+		return cryptor.UnsealResponse{}, fmt.Errorf("%w: ciphertext is nil or empty", ErrNilSecureBytes)
+	}
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		defer req.Ciphertext.Destroy()
 
