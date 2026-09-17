@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
@@ -892,6 +893,96 @@ func TestNewManager(t *testing.T) {
 			// then
 			assert.NoError(t, err)
 			assert.NotNil(t, mgr)
+		})
+
+		t.Run("with agent bindings and ParentKeyProvider", func(t *testing.T) {
+			// given
+			cfg := keyprocessor.ManagerConfig{
+				KeyStore:        &keyStoreWrapper{},
+				KeyVersionStore: &keyVersionStoreWrapper{},
+				Hierarchy: spec.KeyHierarchy{
+					Name: "test",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot},
+						{Kind: "K1", Role: spec.KeyRoleDek},
+						{Kind: "K2", Role: spec.KeyRoleTek},
+						{Kind: "K3", Role: spec.KeyRoleDek},
+					},
+				},
+				Bindings: map[model.KeyKind]spec.KeyBinding{
+					"K2": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+						SealerSpec:  newTestSealerSpec(t),
+						ParentKeyProvider: &spec.ParentKeyProviderRef{
+							AgentName: "root-agent",
+						},
+					},
+					"K3": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+					},
+				},
+				ParentConnection: config.ConnectionConfig{
+					Name: "root-agent",
+					Address: config.Address{
+						URL:  "localhost",
+						Type: config.AddressTypeGRPC,
+					},
+				},
+			}
+
+			// when
+			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+			// then
+			assert.NoError(t, err)
+			assert.NotNil(t, mgr)
+		})
+
+		t.Run("should return error when ParentKeyProvider is specified but no connection config", func(t *testing.T) {
+			// given
+			cfg := keyprocessor.ManagerConfig{
+				KeyStore:        &keyStoreWrapper{},
+				KeyVersionStore: &keyVersionStoreWrapper{},
+				Hierarchy: spec.KeyHierarchy{
+					Name: "test",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot},
+						{Kind: "K1", Role: spec.KeyRoleDek},
+						{Kind: "K2", Role: spec.KeyRoleTek},
+						{Kind: "K3", Role: spec.KeyRoleDek},
+					},
+				},
+				Bindings: map[model.KeyKind]spec.KeyBinding{
+					"K2": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+						SealerSpec:  newTestSealerSpec(t),
+						ParentKeyProvider: &spec.ParentKeyProviderRef{
+							AgentName: "root-agent",
+						},
+					},
+					"K3": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+					},
+				},
+				ParentConnection: config.ConnectionConfig{
+					Name: "unknown-agent",
+					Address: config.Address{
+						URL:  "localhost",
+						Type: config.AddressTypeGRPC,
+					},
+				},
+			}
+
+			// when
+			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+			// then
+			assert.Error(t, err)
+			assert.Nil(t, mgr)
 		})
 	})
 }

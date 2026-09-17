@@ -776,3 +776,48 @@ func TestTopology_ParentName(t *testing.T) {
 		})
 	}
 }
+
+func TestHasRemoteParent(t *testing.T) {
+	// given
+	tts := []struct {
+		name   string
+		subj   spec.KeyBinding
+		expRes bool
+	}{
+		{
+			name: "non empty agent name",
+			subj: spec.KeyBinding{
+				ParentKeyProvider: &spec.ParentKeyProviderRef{
+					AgentName: "name",
+				},
+			},
+			expRes: true,
+		},
+		{
+			name: "empty agent name",
+			subj: spec.KeyBinding{
+				ParentKeyProvider: &spec.ParentKeyProviderRef{
+					AgentName: "",
+				},
+			},
+			expRes: false,
+		},
+		{
+			name: "nil parent key provider",
+			subj: spec.KeyBinding{
+				ParentKeyProvider: nil,
+			},
+			expRes: false,
+		},
+	}
+
+	for _, tt := range tts {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			ok := tt.subj.HasRemoteParent()
+
+			// then
+			assert.Equal(t, tt.expRes, ok)
+		})
+	}
+}

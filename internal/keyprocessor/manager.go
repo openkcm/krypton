@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/spec"
@@ -31,10 +32,12 @@ var (
 
 // ManagerConfig holds the dependencies needed to construct a Manager.
 type ManagerConfig struct {
-	KeyStore        store.Key
-	KeyVersionStore store.KeyVersion
-	Bindings        map[model.KeyKind]spec.KeyBinding
-	Hierarchy       spec.KeyHierarchy
+	KeyStore         store.Key
+	KeyVersionStore  store.KeyVersion
+	Bindings         map[model.KeyKind]spec.KeyBinding
+	Hierarchy        spec.KeyHierarchy
+	Auth             config.AuthConfig
+	ParentConnection config.ConnectionConfig
 }
 
 // Manager validates the key lifecycle, resolves key versions, and delegates to processors.
@@ -53,8 +56,7 @@ type GenerateAndSealSecretRequest struct {
 	KeyKind    model.KeyKind
 }
 
-type GenerateAndSealSecretResponse struct {
-}
+type GenerateAndSealSecretResponse struct{}
 
 // NewManager constructs a Manager by resolving the root sealer and building
 // a processor for each non-root key kind defined in the hierarchy.
@@ -82,7 +84,7 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 			continue
 		}
 
-		parent, err := resolveParent(ctx, cfg, mgr, kind)
+		parent, err := resolveParent(ctx, cfg, mgr, kind, binding)
 		if err != nil {
 			return nil, err
 		}
@@ -271,19 +273,45 @@ func (rm *rootManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (c
 	return rm.sealer.Unseal(ctx, req)
 }
 
-func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind) (cryptor.Sealer, error) {
+func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind, binding spec.KeyBinding) (cryptor.Sealer, error) {
+	if binding.HasRemoteParent() {
+		return resolveRemoteParent(cfg, binding)
+	}
+	return resolveLocalParent(ctx, cfg, mgr, kind)
+}
+
+func resolveRemoteParent(cfg ManagerConfig, binding spec.KeyBinding) (cryptor.Sealer, error) {
+	name := binding.ParentKeyProvider.AgentName
+	if name != cfg.ParentConnection.Name {
+		return nil, fmt.Errorf(
+			"parent key provider agent name %q does not match parent connection name %q",
+			name, cfg.ParentConnection.Name,
+		)
+	}
+
+	mgr, err := NewRPCManager(cfg.ParentConnection.Address.URL, cfg.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("creating RPC manager for parent key provider %q: %w", name, err)
+	}
+	return mgr, nil
+}
+
+func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind) (cryptor.Sealer, error) {
 	parentSpec, ok := cfg.Hierarchy.FindParentKeySpec(kind)
 	if !ok {
 		return nil, fmt.Errorf("no parent key spec found for key kind %s", kind)
 	}
+
 	if parentSpec.Role != spec.KeyRoleRoot {
 		return mgr, nil
 	}
-	rootBinding, ok := cfg.Bindings[parentSpec.Kind]
+
+	parentBinding, ok := cfg.Bindings[parentSpec.Kind]
 	if !ok {
 		return nil, fmt.Errorf("no binding found for root key kind %s", parentSpec.Kind)
 	}
-	return buildRootManager(ctx, cfg.KeyStore, rootBinding)
+
+	return buildRootManager(ctx, cfg.KeyStore, parentBinding)
 }
 
 func buildRootManager(ctx context.Context, s store.Key, binding spec.KeyBinding) (*rootManager, error) {
