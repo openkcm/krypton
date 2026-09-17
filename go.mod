@@ -6,7 +6,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/lib/pq v1.12.3
 	github.com/moby/moby/api v1.55.0
-	github.com/openbao/openbao/api/v2 v2.6.0
+	github.com/openbao/openbao/api/v2 v2.7.0
 	github.com/openkcm/orbital v0.6.2
 	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4
 	github.com/spf13/cobra v1.10.2
