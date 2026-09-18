@@ -20,18 +20,18 @@ type keyValidator struct {
 
 var (
 	ErrEmptyTenantID              = errors.New("tenantId cannot be empty")
-	ErrEmptyKeyKind               = errors.New("key kind canot be empty")
+	ErrEmptyKeyKind               = errors.New("key kind cannot be empty")
 	ErrInvalidKeyID               = errors.New("keyId is invalid")
-	ErrEmptyName                  = errors.New("name canot be empty")
+	ErrEmptyName                  = errors.New("name cannot be empty")
 	ErrInvalidTenantID            = errors.New("tenantId is invalid")
 	ErrInvalidKeyKind             = errors.New("key kind is invalid")
 	ErrInvalidParentKey           = errors.New("parent key is invalid")
-	ErrTargetNotInTopolgy         = errors.New("target not present in topology")
+	ErrTargetNotInTopology        = errors.New("target not present in topology")
 	ErrTargetDoesNotManageKeyKind = errors.New("target does not manage the given key kind")
 	ErrNonRootKey                 = errors.New("non root key must have a parent")
 	ErrRootKeyParent              = errors.New("root key cannot have a parent")
 	ErrParentInvalidState         = errors.New("parent key is not in a valid state")
-	ErrParentKeyAdjecency         = errors.New("key is not adjecent to parent key")
+	ErrParentKeyAdjacency         = errors.New("key is not adjacent to parent key")
 
 	ErrFailedToGetTenant       = errors.New("failed to get tenant")
 	ErrFailedToGetParentKeys   = errors.New("failed to get parent keys")
@@ -136,7 +136,7 @@ func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceIn
 	if input.TargetName != "" {
 		topologySegment := v.topology.GetSegmentByName(input.TargetName)
 		if topologySegment == nil {
-			ve.code, ve.err = FailedCondition, ErrTargetNotInTopolgy
+			ve.code, ve.err = FailedCondition, ErrTargetNotInTopology
 			return ve
 		}
 
@@ -248,7 +248,7 @@ func (v *keyValidator) isValidParent(ctx context.Context, parentID string, tenan
 	childIdx := v.hierarchy.IndexOf(keySpec.Kind)
 	parentIdx := v.hierarchy.IndexOf(parent.Kind)
 	if parentIdx < 0 || childIdx != parentIdx+1 {
-		ve.code, ve.err = Invalid, ErrParentKeyAdjecency
+		ve.code, ve.err = Invalid, ErrParentKeyAdjacency
 		return false
 	}
 

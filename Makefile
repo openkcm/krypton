@@ -83,6 +83,7 @@ dev: postgres root
 proto-gen:
 	./scripts/proto-gen.sh "api-specs/v1/proto/agents"
 	./scripts/proto-gen.sh "api-specs/v1/proto/agents/keys"
+	./scripts/proto-gen.sh "api-specs/v1/proto/agents/tenants"
 	./scripts/proto-gen.sh "api-specs/v1/proto/sealer"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/keys"

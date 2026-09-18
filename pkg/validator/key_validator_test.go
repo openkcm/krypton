@@ -16,8 +16,10 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
-var validUUID = uuid.New().String()
-var invalidUUID = "invalid-uuid"
+var (
+	validUUID   = uuid.New().String()
+	invalidUUID = "invalid-uuid"
+)
 
 type stubTenantStore struct {
 	store.Tenant
@@ -172,7 +174,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "missing-agent", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     &stubKeyStore{},
-			wantErr:  validator.ErrTargetNotInTopolgy,
+			wantErr:  validator.ErrTargetNotInTopology,
 			wantCode: codes.FailedPrecondition,
 		},
 		{
@@ -228,7 +230,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K2", Name: "k2", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(activeRootParent, nil),
-			wantErr:  validator.ErrParentKeyAdjecency,
+			wantErr:  validator.ErrParentKeyAdjacency,
 			wantCode: codes.InvalidArgument,
 		},
 		{
@@ -236,7 +238,7 @@ func TestValidator_ValidateKeyAnnounce(t *testing.T) {
 			input:    validator.AnnounceInput{TenantID: validUUID, KeyKind: "K1", Name: "k1", TargetName: "agent-derived", ParentID: "parent-id"},
 			tenants:  tenantFound(),
 			keys:     keyStoreReturning(activeUnknownKindParent, nil),
-			wantErr:  validator.ErrParentKeyAdjecency,
+			wantErr:  validator.ErrParentKeyAdjacency,
 			wantCode: codes.InvalidArgument,
 		},
 		{

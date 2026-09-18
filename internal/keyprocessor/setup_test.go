@@ -95,7 +95,7 @@ func createTenant(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	tenantStore := storesql.NewTenantStore(db)
 	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
-	result, err := tenantStore.CreateTenant(t.Context(), store.CreateTenantQuery{Tenant: tenant})
+	result, err := tenantStore.UpsertTenant(t.Context(), store.UpsertTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return result.Tenant.ID
 }

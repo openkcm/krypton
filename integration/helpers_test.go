@@ -148,7 +148,7 @@ func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 	kmipRootPort := freePort(t)
 
 	// preconfiguring a tenant
-	ctr, err := newTenantStore(t, rootDB, storesql.Root).CreateTenant(t.Context(), store.CreateTenantQuery{
+	ctr, err := newTenantStore(t, rootDB, storesql.Root).UpsertTenant(t.Context(), store.UpsertTenantQuery{
 		Tenant: model.NewTenant("preconfigured-tenant-"+uuid.New().String(), nil),
 	})
 	require.NoError(t, err)
@@ -735,9 +735,9 @@ func writeTempFile(t *testing.T, pattern, content string) string {
 func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
 	t.Helper()
 	dir := filepath.Join(homeDir, ".krypton")
-	require.NoError(t, os.MkdirAll(dir, 0700))
+	require.NoError(t, os.MkdirAll(dir, 0o700))
 	payload := fmt.Appendf(nil, `{"tenant":{"id":%q,"name":%q}}`, tenantID, tenantName)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0o600))
 }
 
 // waitTCPReady polls the given address until a TCP connection succeeds or 2s timeout is exceeded.
