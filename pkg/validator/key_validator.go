@@ -177,18 +177,17 @@ func ValidateTenant(tenantID string) store.TransactionFunc {
 }
 
 // ValidateTransition returns a transaction step that verifies the target
-// key exists, has completed processing, and can transition to the
-// requested life cycle state.
+// key exists and can transition to the requested life cycle state.
 func ValidateTransition(tenantID, keyID string, to model.KeyLifeCycleState) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
 		key, err := stores.Keys.GetKeyByID(ctx, keyID, tenantID)
 		if err != nil {
 			return err
 		}
-		if key.KeyProcessingState.Status != model.KeyProcessingCompleted {
-			return ErrKeyTransientState
+		if key.LifeCycleState != to {
+			return keylifecycle.ValidateTransition(key.LifeCycleState, to)
 		}
-		return keylifecycle.ValidateTransition(key.LifeCycleState, to)
+		return nil
 	}
 }
 
