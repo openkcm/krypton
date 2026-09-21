@@ -65,12 +65,14 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 			result = r
 			return err
 		},
-		keyoperator.UpdateKeyState(key.TenantID, key.ID, keyoperator.Transition{
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycle:    model.KeyLifeCyclePreActivation,
-			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
-			ToProcessing:   result.procState,
-		}),
+		func(ctx context.Context, stores store.Stores) error {
+			return keyoperator.UpdateKeyState(key.TenantID, key.ID, keyoperator.Transition{
+				FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+				ToLifeCycle:    model.KeyLifeCyclePreActivation,
+				FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
+				ToProcessing:   result.procState,
+			})(ctx, stores)
+		},
 	)
 
 	switch {

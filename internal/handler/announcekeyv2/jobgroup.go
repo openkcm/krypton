@@ -3,10 +3,11 @@ package announcekeyv2
 import (
 	"context"
 
-	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/orbital"
 
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
 const JobGroupType = "announce-key"

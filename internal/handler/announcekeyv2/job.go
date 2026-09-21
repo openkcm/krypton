@@ -1,3 +1,6 @@
+// Package announcekeyv2 hosts the handlers for the newly introduced
+// orchestrator.Orchestrator. It replaces announcekey once key_service.go
+// is adjusted.
 package announcekeyv2
 
 import (
