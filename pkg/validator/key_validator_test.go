@@ -483,29 +483,26 @@ func TestValidator_ValidateTransition(t *testing.T) {
 			wantErrIsNot: []error{store.ErrKeyNotFound},
 		},
 		{
-			name: "key still processing",
-			key: &model.Key{
-				ID:                 validUUID,
-				LifeCycleState:     model.KeyLifeCyclePreActivation,
-				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingInProgress},
-			},
-			wantErrIs: []error{validator.ErrKeyTransientState},
-		},
-		{
 			name: "invalid transition",
 			key: &model.Key{
-				ID:                 validUUID,
-				LifeCycleState:     model.KeyLifeCycleDestroyed,
-				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+				ID:             validUUID,
+				LifeCycleState: model.KeyLifeCycleDestroyed,
 			},
 			wantErrIs: []error{keylifecycle.ErrInvalidKeyStateTransition},
 		},
 		{
 			name: "valid transition",
 			key: &model.Key{
-				ID:                 validUUID,
-				LifeCycleState:     model.KeyLifeCyclePreActivation,
-				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+				ID:             validUUID,
+				LifeCycleState: model.KeyLifeCyclePreActivation,
+			},
+			wantNil: true,
+		},
+		{
+			name: "no-op due to unchanged lifecycle state",
+			key: &model.Key{
+				ID:             validUUID,
+				LifeCycleState: model.KeyLifeCycleActive,
 			},
 			wantNil: true,
 		},
