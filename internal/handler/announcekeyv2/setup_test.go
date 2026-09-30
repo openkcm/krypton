@@ -23,6 +23,7 @@ import (
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/handler/announcekeyv2"
 	agentkeys "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -105,10 +106,7 @@ func seedRootTenantAndKey(t *testing.T, db *sql.DB, managedBy string) model.Key 
 	t.Helper()
 	ctx := t.Context()
 
-	tenantStore := storesql.NewTenantStore(db)
-	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
-	tenantRes, err := tenantStore.UpsertTenant(ctx, store.UpsertTenantQuery{Tenant: tenant})
-	require.NoError(t, err)
+	tenantRes := createTenant(t, db)
 
 	keyStore := storesql.NewKeyStore(db)
 
@@ -133,6 +131,28 @@ func seedRootTenantAndKey(t *testing.T, db *sql.DB, managedBy string) model.Key 
 	return key
 }
 
+func createTenant(t *testing.T, db *sql.DB) store.UpsertTenantResult {
+	t.Helper()
+	ctx := t.Context()
+	tenantStore := storesql.NewTenantStore(db)
+	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
+	tenantRes, err := tenantStore.UpsertTenant(ctx, store.UpsertTenantQuery{Tenant: tenant})
+	require.NoError(t, err)
+	return tenantRes
+}
+
+func dropTenantTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	// Drop in FK dependency order to simulate the tenants table being unavailable.
+	_, err := db.ExecContext(t.Context(), `DROP TABLE key_versions`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), `DROP TABLE keys`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), `DROP TABLE tenants`)
+	require.NoError(t, err)
+}
+
 func seedAgentTenant(t *testing.T, db *sql.DB, tenantID string) {
 	t.Helper()
 	_, err := db.ExecContext(t.Context(),
@@ -143,10 +163,11 @@ func seedAgentTenant(t *testing.T, db *sql.DB, tenantID string) {
 }
 
 type agentServer struct {
-	listener *bufconn.Listener
-	grpcSrv  *grpc.Server
-	db       *sql.DB
-	keyStore store.Key
+	listener    *bufconn.Listener
+	grpcSrv     *grpc.Server
+	db          *sql.DB
+	keyStore    store.Key
+	tenantStore store.Tenant
 }
 
 func startAgentServer(t *testing.T) *agentServer {
@@ -160,14 +181,16 @@ func startAgentServer(t *testing.T) *agentServer {
 
 	srv := grpc.NewServer()
 	agentkeys.RegisterKeyServiceServer(srv, agentkeys.NewKeyService(transactor))
+	tenants.RegisterTenantServiceServer(srv, tenants.NewTenantService(transactor))
 
 	go func() { _ = srv.Serve(lis) }()
 
 	s := &agentServer{
-		listener: lis,
-		grpcSrv:  srv,
-		db:       db,
-		keyStore: storesql.NewKeyStore(db),
+		listener:    lis,
+		grpcSrv:     srv,
+		db:          db,
+		keyStore:    storesql.NewKeyStore(db),
+		tenantStore: storesql.NewTenantStore(db),
 	}
 	t.Cleanup(s.stop)
 	return s
