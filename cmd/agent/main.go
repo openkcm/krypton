@@ -23,9 +23,14 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/interceptor"
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
+	"github.com/openkcm/krypton/pkg/model"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -93,6 +98,10 @@ func main() {
 	agentDB, rpcServer, operator := setupOperator(ctx)
 	defer agentDB.Close()
 
+	// agent-side key gRPC server: serves ActivateKey (and UpsertKey) for the
+	// root embedded orchestrator over mTLS, backed by the same database.
+	keyServer := startKeyServer(ctx, agentDB, cfg, agentCfg)
+
 	log.Println("Starting operator listener")
 	go func() {
 		if err := operator.ListenAndRespond(ctx); err != nil {
@@ -107,6 +116,9 @@ func main() {
 	<-signalChan
 	fmt.Println("Received termination signal, shutting down...")
 	wrkr.Stop()
+	if keyServer != nil {
+		keyServer.GracefulStop()
+	}
 	if err := rpcServer.Close(context.Background()); err != nil {
 		log.Printf("failed to close rpc server: %v", err)
 	}
@@ -129,6 +141,86 @@ func handleErr(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %v", msg, err)
 	}
+}
+
+// startKeyServer stands up the agent's key gRPC server (ActivateKey /
+// UpsertKey) on AGENT_GRPC_PORT, backed by db. It reuses the mTLS
+// material from the bootstrap config and the key bindings, hierarchy and
+// parent connection delivered by root at registration. Returns the server
+// so the caller can GracefulStop it on shutdown, or nil when no listener
+// could be established.
+func startKeyServer(ctx context.Context, db *sql.DB, cfg *config.AgentBootstrapConfig, agentCfg *config.AgentConfig) *grpc.Server {
+	bindings := make(map[model.KeyKind]spec.KeyBinding, len(agentCfg.KeyBindings))
+	for kind, binding := range agentCfg.KeyBindings {
+		bindings[model.KeyKind(kind)] = binding
+	}
+
+	mgrCfg := keyprocessor.ManagerConfig{
+		KeyStore:        storesql.NewKeyStore(db),
+		KeyVersionStore: storesql.NewKeyVersionStore(db),
+		Bindings:        bindings,
+		Hierarchy:       agentCfg.Hierarchy,
+	}
+
+	// Resolve the remote parent (root) connection used to seal agent-managed
+	// key material against root's sealer service.
+	if name, ok := remoteParentAgentName(bindings); ok {
+		conns, err := agentCfg.Connections.ByNames(name)
+		handleErr(err, "failed to resolve parent connection for key server")
+		mgrCfg.ParentConnection = conns[0]
+		if cfg.Auth != nil {
+			mgrCfg.Auth = cfg.Auth.Config
+		}
+	}
+
+	kpMgr, err := keyprocessor.NewManager(ctx, mgrCfg)
+	handleErr(err, "failed to create agent key processor manager")
+
+	var grpcOpts []grpc.ServerOption
+	if cfg.Auth != nil {
+		mtlsConfig, err := config.GetAuthConfig(cfg.Auth.Config)
+		handleErr(err, "failed to get auth config for key gRPC server")
+
+		authn, err := interceptor.NewAuthenticator(agentCfg.IdentityConfigs.URIs())
+		handleErr(err, "failed to create authenticator for key gRPC server")
+		grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(authn.UnaryInterceptor))
+
+		tlsConfig, err := mtlsConfig.Server.BuildTLSConfig()
+		handleErr(err, "failed to build TLS config for key gRPC server")
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+	}
+
+	grpcServer := grpc.NewServer(grpcOpts...)
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(storesql.NewTransactor(db), kpMgr))
+
+	grpcPort := os.Getenv("AGENT_GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "9092"
+	}
+
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+grpcPort)
+	handleErr(err, "failed to listen on agent key gRPC port")
+
+	go func() {
+		log.Printf("agent key gRPC server listening on :%s", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Printf("agent key gRPC server stopped: %v", err)
+		}
+	}()
+
+	return grpcServer
+}
+
+// remoteParentAgentName returns the parent agent name shared by the
+// remote-parent key bindings, if any binding delegates parent operations
+// to a remote agent.
+func remoteParentAgentName(bindings map[model.KeyKind]spec.KeyBinding) (string, bool) {
+	for _, binding := range bindings {
+		if binding.HasRemoteParent() {
+			return binding.ParentKeyProvider.AgentName, true
+		}
+	}
+	return "", false
 }
 
 func loadConfig() *config.AgentBootstrapConfig {

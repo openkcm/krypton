@@ -99,6 +99,36 @@ func InitKeyVersion(tenantID, keyID string) KeyVersionResolver {
 	}
 }
 
+// InitAgentKeyVersion returns a memoized resolver for the first key
+// version (v=1, r=1) of the target key on an agent. Unlike InitKeyVersion
+// it does NOT resolve the parent's usable version locally: the parent
+// linkage (parentKeyVersion) is supplied by the caller (root) and
+// persisted as-is, and the parent need not have a usable version present
+// on this agent. The returned value is preconfigured with
+// LifeCyclePreActivation and ProcessingActivating.
+func InitAgentKeyVersion(tenantID, keyID string, parentKeyVersion *int) KeyVersionResolver {
+	var (
+		once sync.Once
+		kv   model.KeyVersion
+		err  error
+	)
+	return func(ctx context.Context, stores store.Stores) (model.KeyVersion, error) {
+		once.Do(func() {
+			var key *model.Key
+			key, err = stores.Keys.GetKeyByID(ctx, keyID, tenantID)
+			if err != nil {
+				err = fmt.Errorf("%w: %w", ErrGetKey, err)
+				return
+			}
+
+			kv = model.NewKeyVersion(key.TenantID, key.ID, 1, key.ParentID, parentKeyVersion)
+			kv.LifeCycleState = model.KeyLifeCyclePreActivation
+			kv.ProcessingState = model.KeyVersionActivating
+		})
+		return kv, err
+	}
+}
+
 // CreateKeyVersion returns a transaction step that persists the resolved
 // key version.
 func CreateKeyVersion(tenantID, keyID string, resolve KeyVersionResolver) store.TransactionFunc {

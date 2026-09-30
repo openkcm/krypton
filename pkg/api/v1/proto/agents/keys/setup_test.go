@@ -2,9 +2,12 @@ package keys_test
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"uuid"
@@ -19,6 +22,17 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
 	"github.com/openkcm/krypton/pkg/model"
@@ -60,10 +74,25 @@ func setupPostgres() (func(), error) {
 }
 
 type serviceSetup struct {
-	transactor  store.Transactor
-	tenantStore store.Tenant
-	keyStore    store.Key
-	cli         keys.KeyServiceClient
+	transactor      store.Transactor
+	tenantStore     store.Tenant
+	keyStore        store.Key
+	keyVersionStore store.KeyVersion
+	cli             keys.KeyServiceClient
+}
+
+// defaultTestHierarchy mirrors the K0(root) → K1(kek) → K2(tek) → K3(dek)
+// hierarchy used to build the sealing manager for activation tests.
+func defaultTestHierarchy() spec.KeyHierarchy {
+	return spec.KeyHierarchy{
+		Name: "test-hierarchy",
+		KeySpecs: []spec.KeySpec{
+			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
+		},
+	}
 }
 
 func setupServerAndClient(t *testing.T) *serviceSetup {
@@ -74,13 +103,79 @@ func setupServerAndClient(t *testing.T) *serviceSetup {
 	require.NoError(t, storesql.Migrate(ctx, db, storesql.Agent))
 
 	setup := &serviceSetup{
-		transactor:  storesql.NewTransactor(db),
-		tenantStore: storesql.NewTenantStore(db),
-		keyStore:    storesql.NewKeyStore(db),
+		transactor:      storesql.NewTransactor(db),
+		tenantStore:     storesql.NewTenantStore(db),
+		keyStore:        storesql.NewKeyStore(db),
+		keyVersionStore: storesql.NewKeyVersionStore(db),
 	}
 
+	// Root sealer secret used to seal agent-managed (K1) key material
+	// locally in tests, standing in for the remote root sealer.
+	sealerKey := make([]byte, 32)
+	_, err := rand.Read(sealerKey)
+	require.NoError(t, err)
+	envName := "TEST_AGENT_SEALER_KEY"
+	t.Setenv(envName, base64.StdEncoding.EncodeToString(sealerKey))
+
+	mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
+		KeyStore:        setup.keyStore,
+		KeyVersionStore: setup.keyVersionStore,
+		Bindings: map[model.KeyKind]spec.KeyBinding{
+			"K0": {
+				SealerSpec: &sealerprovider.Spec{
+					Name: "test-sealer",
+					Type: staticsecret.TypeStaticSecret,
+					Config: &staticsecret.Config{
+						Secret: secretprovider.Spec{
+							Type:   envvar.Type,
+							Config: &envvar.Config{Name: envName},
+						},
+					},
+				},
+			},
+			"K1": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k1",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k1",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k1.db")},
+				},
+			},
+			"K2": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k2",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k2",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k2.db")},
+				},
+			},
+			"K3": {
+				CryptorSpec: &cryptorprovider.Spec{
+					Name:   "cryptor-k3",
+					Type:   aes256gcm.TypeAES256GCM,
+					Config: &aes256gcm.Config{},
+				},
+				VaultSpec: &vaultprovider.Spec{
+					Name:   "vault-k3",
+					Type:   sqlitevault.TypeUnsafe,
+					Config: &sqlitevault.FileConfig{Path: filepath.Join(t.TempDir(), "vault-k3.db")},
+				},
+			},
+		},
+		Hierarchy: defaultTestHierarchy(),
+	})
+	require.NoError(t, err)
+
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(setup.transactor))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(setup.transactor, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
