@@ -105,6 +105,14 @@ func TestUpdateKeyState(t *testing.T) {
 	}
 }
 
+func TestUpsertKey_NilKey(t *testing.T) {
+	step := keyoperator.UpsertKey(nil)
+	err := step(t.Context(), store.Stores{Keys: &stubKeyStore{}})
+
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, keyoperator.ErrNilKey)
+}
+
 func TestUpsertKey(t *testing.T) {
 	errBoom := errors.New("boom")
 

@@ -42,12 +42,19 @@ var (
 	// (tenant + id or tenant + name) does not match the upsert request:
 	// one of Name, TenantID, ManagedBy, Kind, or ParentID differs.
 	ErrKeyConflict = errors.New("existing key does not match upsert request")
+
+	// ErrNilKey signals that the given key is nil
+	ErrNilKey = errors.New("key must not be nil")
 )
 
 // UpsertKey inserts or reconciles newKey by (tenant, name), updating
 // newKey in place with the persisted identity.
 func UpsertKey(newKey *model.Key) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
+		if newKey == nil {
+			return ErrNilKey
+		}
+
 		err := stores.Keys.CreateKey(ctx, *newKey)
 		if err == nil {
 			return nil
