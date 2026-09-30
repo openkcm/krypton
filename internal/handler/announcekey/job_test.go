@@ -23,7 +23,7 @@ func TestJobHandler_OnJobFailed(t *testing.T) {
 		key := seedTenantAndKey(t, db)
 		keyStore := storesql.NewKeyStore(db)
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 		jobID := uuid.NewV7()
 
 		data := announcekey.TaskData{
@@ -55,7 +55,7 @@ func TestJobHandler_OnJobFailed(t *testing.T) {
 		db := newTestDB(t)
 		keyStore := storesql.NewKeyStore(db)
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 		err := handler.OnJobFailed(t.Context(), orbital.Job{
 			ID:   uuid.NewV7(),
 			Data: []byte("not-json"),
@@ -71,7 +71,7 @@ func TestJobHandler_OnJobFailed(t *testing.T) {
 		realStore := storesql.NewKeyStore(db)
 		injected := errors.New("db error")
 
-		handler := announcekey.NewJobHandler(&stubProcessingStateUpdater{Key: realStore, err: injected}, passingValidator())
+		handler := announcekey.NewJobHandler(&stubProcessingStateUpdater{Key: realStore, err: injected}, passingValidator(), "")
 
 		data := announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID, Kind: string(key.Kind), Name: key.Name, Target: key.ManagedBy}
 		jobData, err := json.Marshal(data)
@@ -87,7 +87,7 @@ func TestJobHandler_OnJobCanceled(t *testing.T) {
 	key := seedTenantAndKey(t, db)
 	keyStore := storesql.NewKeyStore(db)
 
-	handler := announcekey.NewJobHandler(keyStore, passingValidator())
+	handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 	jobID := uuid.NewV7()
 
 	data := announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID, Kind: string(key.Kind), Name: key.Name, Target: key.ManagedBy}
@@ -112,7 +112,7 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 		key := seedTenantAndKey(t, db)
 		keyStore := storesql.NewKeyStore(db)
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 		jobID := uuid.NewV7()
 
 		data := announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID, Kind: string(key.Kind), Name: key.Name, Target: key.ManagedBy}
@@ -133,7 +133,7 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 		db := newTestDB(t)
 		keyStore := storesql.NewKeyStore(db)
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 		err := handler.OnJobDone(t.Context(), orbital.Job{
 			ID:   uuid.NewV7(),
 			Data: []byte("not-json"),
@@ -149,7 +149,7 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 		realStore := storesql.NewKeyStore(db)
 		injected := errors.New("db error")
 
-		handler := announcekey.NewJobHandler(&stubProcessingStateUpdater{Key: realStore, err: injected}, passingValidator())
+		handler := announcekey.NewJobHandler(&stubProcessingStateUpdater{Key: realStore, err: injected}, passingValidator(), "")
 
 		data := announcekey.TaskData{KeyID: key.ID, TenantID: key.TenantID, Kind: string(key.Kind), Name: key.Name, Target: key.ManagedBy}
 		jobData, err := json.Marshal(data)
@@ -190,7 +190,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 			NewJobID:  jobID.String(),
 		}))
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 
 		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: taskDataFor(key)})
 		require.NoError(t, err)
@@ -205,7 +205,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 	t.Run("continues when key is missing — may not be committed yet", func(t *testing.T) {
 		db := newTestDB(t)
 		keyStore := storesql.NewKeyStore(db)
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 
 		jobData, _ := json.Marshal(announcekey.TaskData{KeyID: uuid.New().String(), TenantID: uuid.New().String()})
 
@@ -232,7 +232,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 			NewState: model.KeyLifeCycleActive,
 		}))
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 
 		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: taskDataFor(key)})
 		require.NoError(t, err)
@@ -257,7 +257,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 			NewJobID:  linkedJobID.String(),
 		}))
 
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 
 		// Different job ID than the one linked on the key.
 		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: uuid.NewV7(), Data: taskDataFor(key)})
@@ -284,7 +284,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 		}))
 
 		failingV := &stubValidator{err: validator.NewValidationError(validator.FailedCondition, errors.New("parent gone"))}
-		handler := announcekey.NewJobHandler(keyStore, failingV)
+		handler := announcekey.NewJobHandler(keyStore, failingV, "")
 
 		res, err := handler.ConfirmJob(t.Context(), orbital.Job{ID: jobID, Data: taskDataFor(key)})
 		require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 	t.Run("cancels on invalid job data", func(t *testing.T) {
 		db := newTestDB(t)
 		keyStore := storesql.NewKeyStore(db)
-		handler := announcekey.NewJobHandler(keyStore, passingValidator())
+		handler := announcekey.NewJobHandler(keyStore, passingValidator(), "")
 
 		res, err := handler.ConfirmJob(t.Context(), orbital.Job{Data: []byte("not-json")})
 		require.NoError(t, err)
@@ -308,6 +308,6 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 }
 
 func TestJobHandler_JobType(t *testing.T) {
-	h := announcekey.NewJobHandler(nil, nil)
+	h := announcekey.NewJobHandler(nil, nil, "")
 	assert.Equal(t, announcekey.JobType, h.JobType())
 }

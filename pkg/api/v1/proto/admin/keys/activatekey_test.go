@@ -1,511 +1,118 @@
 package keys_test
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/vault"
-	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-// stubKeyVersionStateUpdater wraps a real key version store and fails only
-// UpdateKeyVersionStates, so key activation reaches its final step before
-// erroring.
-type stubKeyVersionStateUpdater struct {
-	store.KeyVersion
-
-	err error
+// seedKey inserts a key directly into the root store, bypassing announce
+// validation, so tests can build a hierarchy without activating each layer.
+func seedKey(t *testing.T, keyStore store.Key, tenantID, name, kind string, parentID *string) string {
+	t.Helper()
+	key := model.NewKey(tenantID, name+"-"+uuid.New().String(), kind, parentID, "root", nil)
+	key.LifeCycleState = model.KeyLifeCyclePreActivation
+	require.NoError(t, keyStore.CreateKey(t.Context(), key))
+	return key.ID
 }
 
-func (s *stubKeyVersionStateUpdater) UpdateKeyVersionStates(context.Context, store.UpdateKeyVersionStatesQuery) error {
-	return s.err
-}
-
-// failingKeyVersionTx wraps a real transactor and swaps the transaction's
-// key version store for a failing one, so the injected error hits inside
-// the transaction.
-type failingKeyVersionTx struct {
-	store.Transactor
-
-	err error
-}
-
-func (f *failingKeyVersionTx) Transaction(ctx context.Context, fn store.TransactionFunc) error {
-	return f.Transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
-		stores.KeyVersions = &stubKeyVersionStateUpdater{KeyVersion: stores.KeyVersions, err: f.err}
-		return fn(ctx, stores)
-	})
-}
-
+// TestActivateKey covers the admin ActivateKey RPC's new contract: it builds a
+// cascading activation job group (one job per hierarchy layer, root to leaf) and
+// hands it to the orchestrator, returning the group ID. The per-key sealing is
+// exercised in the activate-key task handler tests, not here.
 func TestActivateKey(t *testing.T) {
-	// given
 	ctx := t.Context()
 	rootTopology := rootTestTopology()
 
 	db := createDatabase(t)
 	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
-	t.Run("should activate root key version", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
-		keyStore := setup.keyStore
-		keyVersionStore := setup.keyVersionStore
+	t.Run("enqueues a single-layer group for a leaf root key", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, &rootTopology)
 		tenant := createTenant(t, setup.tenantStore)
 
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
+		rootID := seedKey(t, setup.keyStore, tenant.ID, "root-key", "K0", nil)
 
-		rootID := announceRes.GetKey().GetId()
-
-		// when
-		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+		res, err := setup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
 			TenantId: tenant.ID,
 			Id:       rootID,
 		})
 		require.NoError(t, err)
-		assert.NotNil(t, activateRes)
 
-		// then
-		// Verify that the key is activated
-		key, err := keyStore.GetKeyByID(ctx, rootID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleActive, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
-
-		// Verify that the keyversion is also created and activated
-		keyVersion, err := keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:        tenant.ID,
-			KeyID:           rootID,
-			Version:         1,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionUsable,
-			Limit:           100,
-		})
-
-		require.NoError(t, err)
-		assert.Len(t, keyVersion.KeyVersions, 1)
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, spy.groups[0].ID.String(), res.GetJobGroupId())
+		assert.Len(t, spy.groups[0].Jobs, 1, "a lone key is one layer")
 	})
 
-	t.Run("should not activate root key version twice", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
+	t.Run("enqueues one job per hierarchy layer, root to leaf", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, &rootTopology)
 		tenant := createTenant(t, setup.tenantStore)
 
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
+		k0 := seedKey(t, setup.keyStore, tenant.ID, "k0", "K0", nil)
+		k1 := seedKey(t, setup.keyStore, tenant.ID, "k1", "K1", &k0)
+		_ = seedKey(t, setup.keyStore, tenant.ID, "k2", "K2", &k1)
+
+		res, err := setup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       k0,
 		})
 		require.NoError(t, err)
 
-		rootID := announceRes.GetKey().GetId()
-
-		// when
-		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootID,
-		})
-		require.NoError(t, err)
-		assert.NotNil(t, activateRes)
-
-		activateRes, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootID,
-		})
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, activateRes)
+		require.Len(t, spy.groups, 1)
+		assert.NotEmpty(t, res.GetJobGroupId())
+		assert.Len(t, spy.groups[0].Jobs, 3, "k0 -> k1 -> k2 is three layers")
 	})
 
-	t.Run("should activate a intermediate key", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
-		keyStore := setup.keyStore
-		keyVersionStore := setup.keyVersionStore
+	t.Run("group anchored at an intermediate key excludes ancestors", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, &rootTopology)
 		tenant := createTenant(t, setup.tenantStore)
 
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		rootKeyID := announceRes.GetKey().GetId()
+		k0 := seedKey(t, setup.keyStore, tenant.ID, "k0", "K0", nil)
+		k1 := seedKey(t, setup.keyStore, tenant.ID, "k1", "K1", &k0)
+		_ = seedKey(t, setup.keyStore, tenant.ID, "k2", "K2", &k1)
 
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+		_, err := setup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
 			TenantId: tenant.ID,
-			Id:       rootKeyID,
+			Id:       k1,
 		})
 		require.NoError(t, err)
 
-		// announcing k1 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			ParentId:   rootKeyID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		keyID := announceRes.GetKey().GetId()
-
-		// when
-		// activating k1 key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       keyID,
-		})
-		require.NoError(t, err)
-
-		// then
-		// Verify that the key is activated
-		key, err := keyStore.GetKeyByID(ctx, keyID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleActive, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
-
-		// Verify that the keyversion is also created and activated
-		keyVersion, err := keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:        tenant.ID,
-			KeyID:           keyID,
-			Version:         1,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionUsable,
-			Limit:           100,
-		})
-
-		require.NoError(t, err)
-		assert.Len(t, keyVersion.KeyVersions, 1)
-
-		// check if the secret is store in the vault
-		kv := keyVersion.KeyVersions[0]
-		vaultK1, err := vaultprovider.GetVault(ctx, *setup.vaultK1)
-		require.NoError(t, err)
-		vaultResp, err := vaultK1.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:    kv.TenantID,
-			KeyID:       keyID,
-			KeyVersion:  kv.Version,
-			KeyRevision: kv.Revision,
-		})
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, vaultResp.KeyMaterial)
+		require.Len(t, spy.groups, 1)
+		assert.Len(t, spy.groups[0].Jobs, 2, "anchored at k1: k1 -> k2 is two layers")
 	})
 
-	t.Run("should not activate a intermediate key twice", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
-		tenant := createTenant(t, setup.tenantStore)
+	t.Run("returns ABORT on an invalid request", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, &rootTopology)
 
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		rootKeyID := announceRes.GetKey().GetId()
-
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootKeyID,
-		})
-		require.NoError(t, err)
-
-		// announcing k1 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			ParentId:   rootKeyID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		keyID := announceRes.GetKey().GetId()
-
-		// when
-		// activating k1 key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       keyID,
-		})
-		require.NoError(t, err)
-
-		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       keyID,
-		})
-		assert.Error(t, err)
-		assert.Nil(t, activateRes)
-	})
-
-	t.Run("should activate all keys in a chain", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
-		keyVersionStore := setup.keyVersionStore
-		tenant := createTenant(t, setup.tenantStore)
-
-		// given
-		// announcing root key
-		var k0ID, k1ID, k2ID, k3ID string
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		k0ID = announceRes.GetKey().GetId()
-
-		// when
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       k0ID,
-		})
-		// then
-		require.NoError(t, err)
-
-		// given
-		// announcing k1 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			ParentId:   k0ID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		k1ID = announceRes.GetKey().GetId()
-
-		// when
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       k1ID,
-		})
-		// then
-		require.NoError(t, err)
-
-		// given
-		// announcing k2 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K2",
-			Name:       "k2-key-" + uuid.New().String(),
-			ParentId:   k1ID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		k2ID = announceRes.GetKey().GetId()
-
-		// when
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       k2ID,
-		})
-		// then
-		require.NoError(t, err)
-
-		// given
-		// announcing k3 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K3",
-			Name:       "k3-key-" + uuid.New().String(),
-			ParentId:   k2ID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		k3ID = announceRes.GetKey().GetId()
-
-		// when
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       k3ID,
-		})
-		// then
-		require.NoError(t, err)
-
-		// Verify that the keyversion is also created and activated
-		keyVersion, err := keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID:        tenant.ID,
-			KeyID:           k3ID,
-			Version:         1,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionUsable,
-			Limit:           100,
-		})
-
-		require.NoError(t, err)
-		assert.Len(t, keyVersion.KeyVersions, 1)
-
-		// check if the secret is store in the vault
-		kv := keyVersion.KeyVersions[0]
-		vaultK3, err := vaultprovider.GetVault(ctx, *setup.vaultK3)
-		require.NoError(t, err)
-		vaultResp, err := vaultK3.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:    kv.TenantID,
-			KeyID:       k3ID,
-			KeyVersion:  kv.Version,
-			KeyRevision: kv.Revision,
-		})
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, vaultResp.KeyMaterial)
-	})
-
-	t.Run("should roll back all writes when a late store call fails", func(t *testing.T) {
-		// given
-		errInjected := errors.New("injected update failure")
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology, func(s *testSetup) {
-			s.transactor = &failingKeyVersionTx{Transactor: s.transactor, err: errInjected}
-		})
-		cli := setup.cli
-		tenant := createTenant(t, setup.tenantStore)
-
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		rootID := announceRes.GetKey().GetId()
-
-		// when
-		// activation fails at its last step, UpdateKeyVersionStates
-		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootID,
-		})
-
-		// then
-		require.Error(t, err)
-		assert.Nil(t, activateRes)
-
-		// the earlier writes of the flow must have rolled back
-		key, err := setup.keyStore.GetKeyByID(ctx, rootID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCyclePreActivation, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
-
-		versions, err := setup.keyVersionStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: tenant.ID,
-			KeyID:    rootID,
-			Limit:    100,
-		})
-		require.NoError(t, err)
-		assert.Empty(t, versions.KeyVersions)
-
-		// retrying against a healthy service succeeds: the key is not stuck
-		// in a transient state
-		retrySetup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		_, err = retrySetup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootID,
-		})
-		require.NoError(t, err)
-	})
-
-	t.Run("should return error if there is no parent keyversion", func(t *testing.T) {
-		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
-		cli := setup.cli
-		keyVersionStore := setup.keyVersionStore
-		tenant := createTenant(t, setup.tenantStore)
-
-		// announcing root key
-		announceRes, err := cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		rootKeyID := announceRes.GetKey().GetId()
-
-		// activating root key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       rootKeyID,
-		})
-		require.NoError(t, err)
-
-		// making the keyversion to pending to simulate that the parent keyversion is not usable
-		err = keyVersionStore.UpdateKeyVersionStates(ctx, store.UpdateKeyVersionStatesQuery{
-			TenantID:            tenant.ID,
-			KeyID:               rootKeyID,
-			Version:             1,
-			Revision:            1,
-			FromProcessingState: []model.KeyVersionProcessingState{model.KeyVersionUsable},
-			ToProcessingState:   model.KeyVersionActivating,
-			FromLifeCycleState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-			ToLifeCycleState:    model.KeyLifeCycleCompromised,
-		})
-		require.NoError(t, err)
-
-		// announcing k1 key
-		announceRes, err = cli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenant.ID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			ParentId:   rootKeyID,
-			TargetName: testRootName,
-			Labels:     map[string]string{"env": "prod"},
-		})
-		require.NoError(t, err)
-		keyID := announceRes.GetKey().GetId()
-
-		// when
-		// activating k1 key
-		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId: tenant.ID,
-			Id:       keyID,
+		_, err := setup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+			TenantId: "",
+			Id:       "",
 		})
 		require.Error(t, err)
+		assert.Empty(t, spy.groups, "invalid requests must not enqueue")
+	})
+
+	t.Run("returns NotFound when the key does not exist", func(t *testing.T) {
+		spy := &spyJobPreparer{}
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), spy, &rootTopology)
+		tenant := createTenant(t, setup.tenantStore)
+
+		_, err := setup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       uuid.New().String(),
+		})
+		require.Error(t, err)
+		assert.Empty(t, spy.groups, "an empty hierarchy must not enqueue")
 	})
 }

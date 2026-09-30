@@ -228,6 +228,13 @@ func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.
 	return job, nil
 }
 
+func (*noopJobPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	if group.ID == uuid.Nil() {
+		group.ID = uuid.NewV7()
+	}
+	return group, nil
+}
+
 // testPKI is a self-contained CA + server cert + client cert(s) suitable for
 // exercising mTLS in tests without touching the network.
 type testPKI struct {

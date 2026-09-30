@@ -326,3 +326,95 @@ func TestInitKeyVersion(t *testing.T) {
 		assert.Equal(t, 1, listCalls, "ListKeyVersions should be called once")
 	})
 }
+
+func TestInitAgentKeyVersion(t *testing.T) {
+	errBoom := errors.New("boom")
+	parentID := "parent-1"
+
+	nonRootKey := &model.Key{ID: testKeyID, TenantID: testTenantID, Kind: "K1", ParentID: &parentID}
+
+	// panicKeyVersionStore fails the test if any key version query runs: the
+	// agent resolver must never touch the parent's versions.
+	newPanicKVStore := func(t *testing.T) *stubKeyVersionStore {
+		t.Helper()
+		return &stubKeyVersionStore{
+			listKeyVersions: func(_ context.Context, _ store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
+				t.Fatal("InitAgentKeyVersion must not call ListKeyVersions")
+				return store.ListKeyVersionsResult{}, nil
+			},
+		}
+	}
+
+	t.Run("uses supplied parent version without a local lookup", func(t *testing.T) {
+		keys := &stubKeyStore{
+			getKeyByID: func(_ context.Context, _, _ string) (*model.Key, error) {
+				return nonRootKey, nil
+			},
+		}
+		parentKeyVersion := 7
+		resolve := keyoperator.InitAgentKeyVersion(testTenantID, testKeyID, &parentKeyVersion)
+		kv, err := resolve(t.Context(), store.Stores{Keys: keys, KeyVersions: newPanicKVStore(t)})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, kv.Version)
+		assert.Equal(t, 1, kv.Revision)
+		if assert.NotNil(t, kv.ParentKeyID) {
+			assert.Equal(t, parentID, *kv.ParentKeyID)
+		}
+		if assert.NotNil(t, kv.ParentKeyVersion) {
+			assert.Equal(t, 7, *kv.ParentKeyVersion)
+		}
+		assert.Equal(t, model.KeyLifeCyclePreActivation, kv.LifeCycleState)
+		assert.Equal(t, model.KeyVersionActivating, kv.ProcessingState)
+	})
+
+	t.Run("never returns ErrParentNoUsableVersion when parent version is nil", func(t *testing.T) {
+		keys := &stubKeyStore{
+			getKeyByID: func(_ context.Context, _, _ string) (*model.Key, error) {
+				return nonRootKey, nil
+			},
+		}
+		resolve := keyoperator.InitAgentKeyVersion(testTenantID, testKeyID, nil)
+		kv, err := resolve(t.Context(), store.Stores{Keys: keys, KeyVersions: newPanicKVStore(t)})
+
+		assert.NoError(t, err)
+		assert.Nil(t, kv.ParentKeyVersion)
+		if assert.NotNil(t, kv.ParentKeyID) {
+			assert.Equal(t, parentID, *kv.ParentKeyID)
+		}
+	})
+
+	t.Run("GetKeyByID fails", func(t *testing.T) {
+		keys := &stubKeyStore{
+			getKeyByID: func(_ context.Context, _, _ string) (*model.Key, error) {
+				return nil, errBoom
+			},
+		}
+		resolve := keyoperator.InitAgentKeyVersion(testTenantID, testKeyID, nil)
+		_, err := resolve(t.Context(), store.Stores{Keys: keys})
+
+		assert.ErrorIs(t, err, keyoperator.ErrGetKey)
+		assert.ErrorIs(t, err, errBoom)
+	})
+
+	t.Run("memoizes across calls", func(t *testing.T) {
+		var getKeyCalls int
+		keys := &stubKeyStore{
+			getKeyByID: func(_ context.Context, _, _ string) (*model.Key, error) {
+				getKeyCalls++
+				return nonRootKey, nil
+			},
+		}
+		parentKeyVersion := 2
+		resolve := keyoperator.InitAgentKeyVersion(testTenantID, testKeyID, &parentKeyVersion)
+		stores := store.Stores{Keys: keys}
+
+		kv1, err1 := resolve(t.Context(), stores)
+		kv2, err2 := resolve(t.Context(), stores)
+
+		assert.NoError(t, err1)
+		assert.NoError(t, err2)
+		assert.Equal(t, kv1, kv2)
+		assert.Equal(t, 1, getKeyCalls, "GetKeyByID should be called once")
+	})
+}

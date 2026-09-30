@@ -325,10 +325,18 @@ func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.
 	return job, nil
 }
 
+func (*noopJobPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	if group.ID == uuid.Nil() {
+		group.ID = uuid.NewV7()
+	}
+	return group, nil
+}
+
 // spyJobPreparer records each orbital.Job it sees and behaves like
 // noopJobPreparer otherwise.
 type spyJobPreparer struct {
-	jobs []orbital.Job
+	jobs   []orbital.Job
+	groups []orbital.JobGroup
 }
 
 func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
@@ -337,4 +345,12 @@ func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital
 	}
 	s.jobs = append(s.jobs, job)
 	return job, nil
+}
+
+func (s *spyJobPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	if group.ID == uuid.Nil() {
+		group.ID = uuid.NewV7()
+	}
+	s.groups = append(s.groups, group)
+	return group, nil
 }

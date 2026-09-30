@@ -24,6 +24,16 @@ func mapToProtoErr(err error) error {
 			status.New(codes.FailedPrecondition, keyoperator.ErrKeyConflict.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
+	case errors.Is(err, keyoperator.ErrKeyTransitionRejected):
+		return proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, keyoperator.ErrKeyTransitionRejected.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	case errors.Is(err, keyoperator.ErrKeyVersionTransitionRejected):
+		return proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, keyoperator.ErrKeyVersionTransitionRejected.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	}
 
 	return proto.ErrDetailsWithCode(

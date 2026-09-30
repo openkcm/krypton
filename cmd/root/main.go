@@ -13,28 +13,30 @@ import (
 	"time"
 
 	"github.com/openkcm/orbital"
-	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 
 	_ "github.com/lib/pq"
 
 	orbitalstore "github.com/openkcm/orbital/store/sql"
 
+	"github.com/openkcm/krypton/internal/agentclient"
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
+	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
-	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	jobspb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/jobs"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -79,39 +81,19 @@ func main() {
 
 	keyValidator := validator.NewValidator(cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
 
-	// orbital reconciler setup
+	// orbital repository, shared by root's single embedded orchestrator.
 	orbitalStore, err := orbitalstore.New(context.Background(), db)
 	handleErr(err, "failed to create orbital store")
 	repo := orbital.NewRepository(orbitalStore)
 
-	targetProvider := reconciler.TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
-		conn, err := grpc.NewClient(target.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, err
-		}
-		return rpc.NewClient(conn)
-	})
-
-	var reconcilerOpts []reconciler.Option
-	if cfg.Reconciler.ExecInterval > 0 {
-		reconcilerOpts = append(reconcilerOpts, reconciler.WithExecInterval(cfg.Reconciler.ExecInterval))
+	// mTLS clients to agents, keyed by name — used by the embedded announce and
+	// activate task handlers to reach agents over gRPC.
+	var authConfig config.AuthConfig
+	if cfg.Auth != nil {
+		authConfig = cfg.Auth.Config
 	}
-
-	reconcilerMgr, err := reconciler.NewManager(
-		context.Background(),
-		&cfg.Reconciler,
-		repo,
-		targetProvider,
-		[]reconciler.JobHandler{announcekey.NewJobHandler(keyStore, keyValidator)},
-		reconcilerOpts...,
-	)
-	handleErr(err, "failed to create reconciler manager")
-
-	go func() {
-		if err := reconcilerMgr.Start(context.Background()); err != nil {
-			log.Printf("reconciler manager stopped: %v", err)
-		}
-	}()
+	agentClients, err := agentclient.New(cfg.Connections, authConfig)
+	handleErr(err, "failed to create agent client registry")
 
 	// initialization of keyprocessor manager
 	bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
@@ -125,6 +107,40 @@ func main() {
 		Hierarchy:       cfg.Hierarchy,
 	})
 	handleErr(err, "failed to create key processor manager")
+
+	// Root's single embedded orbital orchestrator. All tasks run in-process on
+	// root (the local target); announce and activate reach agents over gRPC.
+	localTarget := orchestrator.DefaultLocalTargetName
+	orchHandlers := orchestrator.Handlers{
+		Jobs: []orchestrator.JobHandler{
+			announcekey.NewJobHandler(keyStore, keyValidator, localTarget),
+			activatekey.NewJobHandler(keyStore, localTarget),
+		},
+		Groups: []orchestrator.JobGroupHandler{
+			activatekey.NewJobGroupHandler(),
+		},
+		Tasks: []orchestrator.TaskHandler{
+			announcekey.NewTaskHandler(agentClients),
+			activatekey.NewTaskHandler(cfg.Name, transactor, keyStore, keyVersionStore, kpMgr, agentClients),
+		},
+	}
+
+	var orchOpts []orchestrator.Option
+	if cfg.Reconciler.ExecInterval > 0 {
+		orchOpts = append(orchOpts, orchestrator.WithExecInterval(cfg.Reconciler.ExecInterval))
+	}
+	if cfg.Reconciler.MaxReconcileCount > 0 {
+		orchOpts = append(orchOpts, orchestrator.WithMaxPendingReconciles(cfg.Reconciler.MaxReconcileCount))
+	}
+
+	orch, err := orchestrator.New(context.Background(), repo, orchHandlers, orchOpts...)
+	handleErr(err, "failed to create orchestrator")
+
+	go func() {
+		if err := orch.Start(context.Background()); err != nil {
+			log.Printf("orchestrator stopped: %v", err)
+		}
+	}()
 
 	var grpcOpts []grpc.ServerOption
 	if cfg.Auth != nil {
@@ -148,7 +164,14 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, transactor, keyStore, keyVersionStore, keyValidator, reconcilerMgr, kpMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, transactor, keyStore, keyVersionStore, keyValidator, orch, kpMgr))
+
+	// gRPC server setup for job status API
+	jobspb.RegisterJobServiceServer(grpcServer, jobspb.NewJobService(orch))
+
+	// gRPC sealer service — lets agent-managed keys seal their material against
+	// root's key processor over the RPCManager transport.
+	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -190,7 +213,7 @@ func main() {
 		}
 	}
 	wrkr.Stop()
-	_ = reconcilerMgr.Stop(context.Background())
+	_ = orch.Stop(context.Background())
 	log.Println("Shutdown complete.")
 }
 

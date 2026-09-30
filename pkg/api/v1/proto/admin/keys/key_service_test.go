@@ -29,6 +29,10 @@ func (e errJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.
 	return job, e.err
 }
 
+func (e errJobPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	return group, e.err
+}
+
 // keyHierarchy holds a test key tree with the following structure:
 //
 //	A(K0)

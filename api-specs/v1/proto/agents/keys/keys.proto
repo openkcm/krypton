@@ -6,6 +6,7 @@ option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys";
 
 service KeyService {
   rpc UpsertKey(UpsertKeyRequest) returns (UpsertKeyResponse) {}
+  rpc ActivateKey(ActivateKeyRequest) returns (ActivateKeyResponse) {}
 }
 
 message UpsertKeyRequest {
@@ -20,3 +21,14 @@ message UpsertKeyRequest {
 }
 
 message UpsertKeyResponse {}
+
+message ActivateKeyRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  // parent_key_version is the parent's key version this key links to,
+  // computed by root and persisted by the agent as-is. Unset for keys
+  // whose parent linkage is not applicable.
+  optional int32 parent_key_version = 3;
+}
+
+message ActivateKeyResponse {}

@@ -68,7 +68,7 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 	rootPort := freePort(t)
 	agentPort := freePort(t)
 
-	rootCfgPath := writeRootConfig(t, "agent-k1", agentPort)
+	rootCfgPath := writeRootConfig(t, "agent-k1", rootPort, agentPort)
 	agentCfgPath := writeAgentConfig(t, "agent-k1", "localhost:"+rootPort)
 
 	rootBinary := buildBinary(t, "root", "../cmd/root")
@@ -86,7 +86,8 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 	agentCmd := createCmd(t, agentBinary, []string{
 		"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 		"AGENT_DATABASE_URL=" + agentConnStr,
-		"AGENT_PORT=" + agentPort,
+		"AGENT_GRPC_PORT=" + agentPort,
+		"KRYPTON_TEK_KEY=" + testKeyBase64,
 	})
 	require.NoError(t, agentCmd.Start(), "failed to start agent")
 	waitForPort(t, agentPort)
@@ -190,7 +191,7 @@ func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 }
 
 // writeRootConfig writes a root config YAML to a temp file and returns the path.
-func writeRootConfig(t *testing.T, agentName, agentPort string) string {
+func writeRootConfig(t *testing.T, agentName, rootPort, agentPort string) string {
 	t.Helper()
 
 	content := fmt.Sprintf(`name: root
@@ -275,19 +276,16 @@ topology:
         cloud: aws
 reconciler:
   execInterval: 500ms
-  targets:
-    - name: %s
-      address: localhost:%s
 connections:
   - name: root
     address:
       type: grpc
-      url: localhost:50051
+      url: localhost:%s
   - name: %s
     address:
       type: grpc
-      url: localhost:50051
-`, agentName, agentName, agentPort, agentName)
+      url: localhost:%s
+`, agentName, rootPort, agentName, agentPort)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -353,6 +351,8 @@ kmip:
     cert_path: %s
     key_path: %s
     ca_path: %s
+reconciler:
+  execInterval: 500ms
 connections:
   - name: root
     address:
@@ -589,10 +589,10 @@ auth:
       key_path: %s
       ca_path: %s
     server:
-      cert_path: dummy
-      key_path: dummy
-      ca_path: dummy
-`, agentName, rootAddress, clientCertPath, clientKeyPath, serverCAPath)
+      cert_path: %s
+      key_path: %s
+      ca_path: %s
+`, agentName, rootAddress, clientCertPath, clientKeyPath, serverCAPath, clientCertPath, clientKeyPath, serverCAPath)
 
 	return writeTempFile(t, "agent-config-*.yaml", content)
 }

@@ -26,4 +26,5 @@ func init() {
 	rootCmd.AddCommand(announceCmd())
 	rootCmd.AddCommand(activateCmd())
 	rootCmd.AddCommand(actionCmd())
+	rootCmd.AddCommand(jobCmd())
 }

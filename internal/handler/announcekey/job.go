@@ -18,10 +18,14 @@ import (
 type JobHandler struct {
 	keyValidator validator.KeyValidator
 	keyStore     store.Key
+	localTarget  string
 }
 
-func NewJobHandler(keyStore store.Key, keyValidator validator.KeyValidator) *JobHandler {
-	return &JobHandler{keyStore: keyStore, keyValidator: keyValidator}
+// NewJobHandler builds the announce-key job handler. localTarget is the
+// embedded operator's target name (orchestrator.LocalTarget()) so the announce
+// task runs in-process on root and reaches the agent over gRPC.
+func NewJobHandler(keyStore store.Key, keyValidator validator.KeyValidator, localTarget string) *JobHandler {
+	return &JobHandler{keyStore: keyStore, keyValidator: keyValidator, localTarget: localTarget}
 }
 
 func (h *JobHandler) JobType() string {
@@ -83,7 +87,7 @@ func (h *JobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.
 	return orbital.CompleteTaskResolver().WithTaskInfo([]orbital.TaskInfo{{
 		Data:   job.Data,
 		Type:   TaskType,
-		Target: data.Target,
+		Target: h.localTarget,
 	}}), nil
 }
 
