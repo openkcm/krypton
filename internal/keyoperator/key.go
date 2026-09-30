@@ -42,12 +42,20 @@ var (
 	// (tenant + id or tenant + name) does not match the upsert request:
 	// one of Name, TenantID, ManagedBy, Kind, or ParentID differs.
 	ErrKeyConflict = errors.New("existing key does not match upsert request")
+
+	// ErrNilKey signals that the given key is nil
+	ErrNilKey = errors.New("key must not be nil")
 )
 
-// UpsertKey inserts newKey; on conflict it reconciles the existing row.
-func UpsertKey(newKey model.Key) store.TransactionFunc {
+// UpsertKey inserts or reconciles newKey by (tenant, name), updating
+// newKey in place with the persisted identity.
+func UpsertKey(newKey *model.Key) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
-		err := stores.Keys.CreateKey(ctx, newKey)
+		if newKey == nil {
+			return ErrNilKey
+		}
+
+		err := stores.Keys.CreateKey(ctx, *newKey)
 		if err == nil {
 			return nil
 		}
@@ -55,13 +63,22 @@ func UpsertKey(newKey model.Key) store.TransactionFunc {
 			return fmt.Errorf("%w: %w", ErrCreateKey, err)
 		}
 
-		existing, err := stores.Keys.GetKeyByID(ctx, newKey.ID, newKey.TenantID)
+		existing, err := stores.Keys.GetKeyByName(ctx, store.GetKeyByNameQuery{
+			TenantID: newKey.TenantID,
+			Name:     newKey.Name,
+		})
+		if errors.Is(err, store.ErrKeyNotFound) {
+			existing, err = stores.Keys.GetKeyByID(ctx, newKey.ID, newKey.TenantID)
+		}
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrGetKey, err)
 		}
-		if !existing.IsSame(&newKey) {
+		if !existing.IsSame(newKey) {
 			return ErrKeyConflict
 		}
+
+		// conflict: adopt the existing row's identity.
+		newKey.ID = existing.ID
 
 		err = stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 			ID:         existing.ID,

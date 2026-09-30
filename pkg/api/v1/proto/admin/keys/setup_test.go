@@ -23,6 +23,7 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
@@ -39,7 +40,6 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
-	"github.com/openkcm/krypton/pkg/validator"
 )
 
 type testSetup struct {
@@ -129,17 +129,17 @@ const (
 )
 
 // setupKeyServerAndClient wires KeyService against the given DB using the
-// default test hierarchy and a noop job preparer that assigns deterministic
-// job IDs.
+// default test hierarchy and a noop job-group preparer that assigns
+// deterministic job IDs.
 func setupKeyServerAndClient(t *testing.T, db *sql.DB) *testSetup {
 	t.Helper()
-	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, nil)
+	return setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, nil)
 }
 
 // setupKeyServerAndClientWith wires a KeyService against db. opts run after
 // the stores are created and before anything consumes them, so tests can
 // swap in failure-injecting store wrappers.
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobPreparer, topology *spec.Topology, opts ...func(*testSetup)) *testSetup {
+func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobGroupPreparer, topology *spec.Topology, opts ...func(*testSetup)) *testSetup {
 	t.Helper()
 
 	setup := &testSetup{
@@ -173,7 +173,12 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 		topology = &top
 	}
 
-	v := validator.NewValidator(testRootSegment, *topology, hierarchy, setup.tenantStore, setup.keyStore)
+	rootCfg := config.RootConfig{
+		Name:      testRootName,
+		Segment:   testRootSegment,
+		Topology:  *topology,
+		Hierarchy: hierarchy,
+	}
 
 	// create root secret
 	sealerKey := make([]byte, 32)
@@ -229,7 +234,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(testRootName, setup.transactor, setup.keyStore, setup.keyVersionStore, v, preparer, mgr))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(rootCfg, setup.transactor, setup.keyStore, setup.keyVersionStore, preparer, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -316,25 +321,38 @@ func createTenant(t *testing.T, s store.Tenant) model.Tenant {
 	return result.Tenant
 }
 
-type noopJobPreparer struct{}
+// noopJobGroupPreparer assigns deterministic IDs to the group and its jobs
+// but performs no real orchestration.
+type noopJobGroupPreparer struct{}
 
-func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil() {
-		job.ID = uuid.NewV7()
+func (*noopJobGroupPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	if group.ID == uuid.Nil() {
+		group.ID = uuid.NewV7()
 	}
-	return job, nil
+	for i := range group.Jobs {
+		if group.Jobs[i].ID == uuid.Nil() {
+			group.Jobs[i].ID = uuid.NewV7()
+		}
+	}
+	return group, nil
 }
 
-// spyJobPreparer records each orbital.Job it sees and behaves like
-// noopJobPreparer otherwise.
-type spyJobPreparer struct {
-	jobs []orbital.Job
+// spyJobGroupPreparer records each job group it sees and can inject an error.
+// It assigns IDs like noopJobGroupPreparer when no error is configured.
+type spyJobGroupPreparer struct {
+	groups []orbital.JobGroup
+	err    error
 }
 
-func (s *spyJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil() {
-		job.ID = uuid.NewV7()
+func (s *spyJobGroupPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) (orbital.JobGroup, error) {
+	if group.ID == uuid.Nil() {
+		group.ID = uuid.NewV7()
 	}
-	s.jobs = append(s.jobs, job)
-	return job, nil
+	for i := range group.Jobs {
+		if group.Jobs[i].ID == uuid.Nil() {
+			group.Jobs[i].ID = uuid.NewV7()
+		}
+	}
+	s.groups = append(s.groups, group)
+	return group, s.err
 }

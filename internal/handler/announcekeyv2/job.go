@@ -21,14 +21,14 @@ import (
 const JobType = "announce-key"
 
 type JobHandler struct {
-	keyStore store.Key
+	transactor store.Transactor
 }
 
 var _ orchestrator.JobHandler = &JobHandler{}
 
-func NewJobHandler(keyStore store.Key) *JobHandler {
+func NewJobHandler(transactor store.Transactor) *JobHandler {
 	return &JobHandler{
-		keyStore: keyStore,
+		transactor: transactor,
 	}
 }
 
@@ -42,15 +42,37 @@ func (h *JobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.J
 		return orbital.CancelJobConfirmer(fmt.Sprintf("invalid job data: %v", err)), nil
 	}
 
-	_, err := h.keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
-	if err != nil {
-		if errors.Is(err, store.ErrKeyNotFound) {
-			return orbital.CancelJobConfirmer(fmt.Sprintf("key %s:%s not found", key.TenantID, key.ID)), nil
+	err := h.transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
+		existing, err := stores.Keys.GetKeyByID(ctx, key.ID, key.TenantID)
+		if err != nil {
+			return err
 		}
-		return orbital.ContinueJobConfirmer(), nil
-	}
 
-	return orbital.CompleteJobConfirmer(), nil
+		if existing.KeyProcessingState.Status == model.KeyProcessingPending {
+			err = stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
+				ID:         key.ID,
+				TenantID:   key.TenantID,
+				ToState:    existing.LifeCycleState,
+				ToStatus:   model.KeyProcessingInProgress,
+				FromState:  []model.KeyLifeCycleState{existing.LifeCycleState},
+				FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending},
+			})
+			if err != nil && !errors.Is(err, store.ErrKeyNotFound) {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	switch {
+	case errors.Is(err, store.ErrKeyNotFound):
+		return orbital.CancelJobConfirmer(fmt.Sprintf("key %s:%s not found", key.TenantID, key.ID)), nil
+	case err != nil:
+		return orbital.ContinueJobConfirmer(), nil
+	default:
+		return orbital.CompleteJobConfirmer(), nil
+	}
 }
 
 func (h *JobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {

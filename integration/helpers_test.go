@@ -286,8 +286,8 @@ connections:
   - name: %s
     address:
       type: grpc
-      url: localhost:50051
-`, agentName, agentName, agentPort, agentName)
+      url: localhost:%s
+`, agentName, agentName, agentPort, agentName, agentPort)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }

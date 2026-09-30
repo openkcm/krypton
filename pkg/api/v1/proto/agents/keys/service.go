@@ -49,7 +49,7 @@ func (s *Service) UpsertKey(ctx context.Context, req *UpsertKeyRequest) (*Upsert
 	newKey := newKey(req)
 	err = store.ChainTransaction(ctx, s.transactor,
 		validator.ValidateTenant(newKey.TenantID),
-		keyoperator.UpsertKey(newKey),
+		keyoperator.UpsertKey(&newKey),
 	)
 	if err != nil {
 		return nil, mapToProtoErr(err)

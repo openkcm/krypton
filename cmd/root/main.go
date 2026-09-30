@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/openkcm/orbital"
-	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,11 +23,12 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
-	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/grpcconn"
+	"github.com/openkcm/krypton/internal/handler/announcekeyv2"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
-	"github.com/openkcm/krypton/internal/reconciler"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
@@ -38,7 +38,6 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
-	"github.com/openkcm/krypton/pkg/validator"
 )
 
 // Simple krypton server for manual testing and development.
@@ -77,39 +76,27 @@ func main() {
 	keyVersionStore := storesql.NewKeyVersionStore(db)
 	transactor := storesql.NewTransactor(db)
 
-	keyValidator := validator.NewValidator(cfg.Segment, cfg.Topology, cfg.Hierarchy, tenantStore, keyStore)
-
-	// orbital reconciler setup
+	// orbital orchestrator setup
 	orbitalStore, err := orbitalstore.New(context.Background(), db)
 	handleErr(err, "failed to create orbital store")
 	repo := orbital.NewRepository(orbitalStore)
 
-	targetProvider := reconciler.TargetProvider(func(_ context.Context, target config.ReconcilerTarget) (orbital.Initiator, error) {
-		conn, err := grpc.NewClient(target.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, err
-		}
-		return rpc.NewClient(conn)
-	})
+	registry, err := grpcconn.NewRegistry(cfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	handleErr(err, "failed to create grpc connection registry")
 
-	var reconcilerOpts []reconciler.Option
-	if cfg.Reconciler.ExecInterval > 0 {
-		reconcilerOpts = append(reconcilerOpts, reconciler.WithExecInterval(cfg.Reconciler.ExecInterval))
-	}
+	orchestratorOpts := make([]orchestrator.Option, 0, 1)
+	orchestratorOpts = append(orchestratorOpts, orchestrator.WithExecInterval(10*time.Millisecond))
 
-	reconcilerMgr, err := reconciler.NewManager(
-		context.Background(),
-		&cfg.Reconciler,
-		repo,
-		targetProvider,
-		[]reconciler.JobHandler{announcekey.NewJobHandler(keyStore, keyValidator)},
-		reconcilerOpts...,
-	)
-	handleErr(err, "failed to create reconciler manager")
+	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
+		Jobs:   []orchestrator.JobHandler{announcekeyv2.NewJobHandler(transactor)},
+		Groups: []orchestrator.JobGroupHandler{announcekeyv2.NewJobGroupHandler()},
+		Tasks:  []orchestrator.TaskHandler{announcekeyv2.NewTaskHandler(transactor, registry, cfg.Name)},
+	}, orchestratorOpts...)
+	handleErr(err, "failed to create orchestrator")
 
 	go func() {
-		if err := reconcilerMgr.Start(context.Background()); err != nil {
-			log.Printf("reconciler manager stopped: %v", err)
+		if err := orch.Start(context.Background()); err != nil {
+			log.Printf("orchestrator stopped: %v", err)
 		}
 	}()
 
@@ -148,7 +135,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(cfg.Name, transactor, keyStore, keyVersionStore, keyValidator, reconcilerMgr, kpMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(*cfg, transactor, keyStore, keyVersionStore, orch, kpMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -190,7 +177,7 @@ func main() {
 		}
 	}
 	wrkr.Stop()
-	_ = reconcilerMgr.Stop(context.Background())
+	_ = orch.Stop(context.Background())
 	log.Println("Shutdown complete.")
 }
 

@@ -24,6 +24,7 @@ type stubKeyStore struct {
 
 	createKey       func(ctx context.Context, key model.Key) error
 	getKeyByID      func(ctx context.Context, id, tenantID string) (*model.Key, error)
+	getKeyByName    func(ctx context.Context, q store.GetKeyByNameQuery) (*model.Key, error)
 	updateKeyStates func(ctx context.Context, q store.UpdateKeyStatesQuery) error
 }
 
@@ -33,6 +34,10 @@ func (s *stubKeyStore) CreateKey(ctx context.Context, key model.Key) error {
 
 func (s *stubKeyStore) GetKeyByID(ctx context.Context, id, tenantID string) (*model.Key, error) {
 	return s.getKeyByID(ctx, id, tenantID)
+}
+
+func (s *stubKeyStore) GetKeyByName(ctx context.Context, q store.GetKeyByNameQuery) (*model.Key, error) {
+	return s.getKeyByName(ctx, q)
 }
 
 func (s *stubKeyStore) UpdateKeyStates(ctx context.Context, q store.UpdateKeyStatesQuery) error {
@@ -100,6 +105,14 @@ func TestUpdateKeyState(t *testing.T) {
 	}
 }
 
+func TestUpsertKey_NilKey(t *testing.T) {
+	step := keyoperator.UpsertKey(nil)
+	err := step(t.Context(), store.Stores{Keys: &stubKeyStore{}})
+
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, keyoperator.ErrNilKey)
+}
+
 func TestUpsertKey(t *testing.T) {
 	errBoom := errors.New("boom")
 
@@ -136,7 +149,7 @@ func TestUpsertKey(t *testing.T) {
 			wantErrIsNot: []error{keyoperator.ErrKeyConflict, store.ErrKeyInsertConflict},
 		},
 		{
-			name:      "conflict then GetKeyByID fails",
+			name:      "conflict then GetKeyByName fails",
 			createErr: store.ErrKeyInsertConflict,
 			getKeyErr: errBoom,
 			wantErrIs: []error{keyoperator.ErrGetKey, errBoom},
@@ -248,7 +261,7 @@ func TestUpsertKey(t *testing.T) {
 				createKey: func(_ context.Context, _ model.Key) error {
 					return tc.createErr
 				},
-				getKeyByID: func(_ context.Context, _, _ string) (*model.Key, error) {
+				getKeyByName: func(_ context.Context, _ store.GetKeyByNameQuery) (*model.Key, error) {
 					if tc.getKeyErr != nil {
 						return nil, tc.getKeyErr
 					}
@@ -259,7 +272,7 @@ func TestUpsertKey(t *testing.T) {
 				},
 			}
 
-			step := keyoperator.UpsertKey(newKey)
+			step := keyoperator.UpsertKey(&newKey)
 			err := step(t.Context(), store.Stores{Keys: keys})
 
 			if tc.wantNil {

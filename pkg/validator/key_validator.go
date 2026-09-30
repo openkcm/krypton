@@ -4,19 +4,12 @@ import (
 	"context"
 	"errors"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
-
-type keyValidator struct {
-	rootSegment spec.HierarchySegment
-	tenants     store.Tenant
-	keys        store.Key
-	topology    spec.Topology
-	hierarchy   spec.KeyHierarchy
-}
 
 var (
 	ErrEmptyTenantID              = errors.New("tenantId cannot be empty")
@@ -46,16 +39,6 @@ var (
 	ErrInvalidParentID       = errors.New("parent_id is invalid")
 	ErrUnknownLifecycleState = errors.New("lifecycle_state is not a known state")
 )
-
-func NewValidator(rootSegment spec.HierarchySegment, topology spec.Topology, hierarchy spec.KeyHierarchy, tenants store.Tenant, keys store.Key) KeyValidator {
-	return &keyValidator{
-		rootSegment: rootSegment,
-		topology:    topology,
-		hierarchy:   hierarchy,
-		tenants:     tenants,
-		keys:        keys,
-	}
-}
 
 type AnnounceInput struct {
 	TenantID   string
@@ -100,56 +83,30 @@ func ValidateKeyUpsert(input UpsertKeyInput) error {
 	return nil
 }
 
-func (v *keyValidator) ValidateKeyAnnounce(ctx context.Context, input AnnounceInput) *ValidationError {
-	ve := &ValidationError{
-		code: Invalid,
-	}
-
+// ValidateKeyAnnounceRequest verifies an announce request has valid IDs and
+// that the resolved segment manages the requested key kind.
+func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) error {
 	switch {
 	case !isValidUUID(input.TenantID):
-		ve.err = ErrEmptyTenantID
-		return ve
-	case input.KeyKind == "":
-		ve.err = ErrEmptyKeyKind
-		return ve
+		return ErrInvalidTenantID
 	case input.Name == "":
-		ve.err = ErrEmptyName
-		return ve
+		return ErrEmptyName
+	case input.KeyKind == "":
+		return ErrEmptyKeyKind
 	}
 
-	if _, err := v.tenants.GetTenant(ctx, store.GetTenantQuery{ID: input.TenantID}); err != nil {
-		if errors.Is(err, store.ErrTenantNotFound) {
-			ve.code, ve.err = FailedCondition, ErrInvalidTenantID
-			return ve
-		}
-		ve.code, ve.err = Internal, err
-		return ve
-	}
-
-	keySpec, ok := v.hierarchy.FindKeySpec(model.KeyKind(input.KeyKind))
-	if !ok {
-		ve.code, ve.err = Invalid, ErrInvalidKeyKind
-		return ve
-	}
-
-	segment := v.rootSegment
+	segment := cfg.Segment
 	if input.TargetName != "" {
-		topologySegment := v.topology.GetSegmentByName(input.TargetName)
+		topologySegment := cfg.Topology.GetSegmentByName(input.TargetName)
 		if topologySegment == nil {
-			ve.code, ve.err = FailedCondition, ErrTargetNotInTopology
-			return ve
+			return ErrTargetNotInTopology
 		}
 
 		segment = topologySegment.Segment
 	}
 
-	if !v.hierarchy.SegmentContains(segment, keySpec.Kind) {
-		ve.code, ve.err = FailedCondition, ErrTargetDoesNotManageKeyKind
-		return ve
-	}
-
-	if ok := v.isValidParent(ctx, input.ParentID, input.TenantID, keySpec, ve); !ok {
-		return ve
+	if !cfg.Hierarchy.SegmentContains(segment, model.KeyKind(input.KeyKind)) {
+		return ErrTargetDoesNotManageKeyKind
 	}
 
 	return nil
@@ -216,41 +173,41 @@ func ValidateKeyParents(tenantID, keyID string) store.TransactionFunc {
 	}
 }
 
-func (v *keyValidator) isValidParent(ctx context.Context, parentID string, tenantID string, keySpec spec.KeySpec, ve *ValidationError) bool {
-	if parentID == "" {
-		if keySpec.Role != spec.KeyRoleRoot {
-			ve.code, ve.err = Invalid, ErrNonRootKey
-			return false
+// ValidateKeyHierarchy returns a transaction step that verifies the key's role
+// and parent are consistent with the key hierarchy.
+func ValidateKeyHierarchy(k model.Key, h spec.KeyHierarchy) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		keySpec, ok := h.FindKeySpec(k.Kind)
+		if !ok {
+			return ErrInvalidKeyKind
 		}
-		return true
-	}
 
-	if keySpec.Role == spec.KeyRoleRoot {
-		ve.code, ve.err = Invalid, ErrRootKeyParent
-		return false
-	}
+		isRoot := keySpec.Role == spec.KeyRoleRoot
+		hasParent := k.ParentID != nil
 
-	parent, err := v.keys.GetKeyByID(ctx, parentID, tenantID)
-	if err != nil {
+		switch {
+		case isRoot && !hasParent:
+			return nil
+		case isRoot && hasParent:
+			return ErrRootKeyParent
+		case !isRoot && !hasParent:
+			return ErrNonRootKey
+		}
+
+		parent, err := stores.Keys.GetKeyByID(ctx, *k.ParentID, k.TenantID)
 		if errors.Is(err, store.ErrKeyNotFound) {
-			ve.code, ve.err = FailedCondition, ErrInvalidParentKey
-			return false
+			return ErrInvalidParentKey
 		}
-		ve.code, ve.err = Internal, err
-		return false
-	}
+		if err != nil {
+			return err
+		}
 
-	if parent.LifeCycleState != model.KeyLifeCycleActive {
-		ve.code, ve.err = FailedCondition, ErrParentInvalidState
-		return false
-	}
+		childIdx := h.IndexOf(k.Kind)
+		parentIdx := h.IndexOf(parent.Kind)
+		if parentIdx < 0 || childIdx != parentIdx+1 {
+			return ErrParentKeyAdjacency
+		}
 
-	childIdx := v.hierarchy.IndexOf(keySpec.Kind)
-	parentIdx := v.hierarchy.IndexOf(parent.Kind)
-	if parentIdx < 0 || childIdx != parentIdx+1 {
-		ve.code, ve.err = Invalid, ErrParentKeyAdjacency
-		return false
+		return nil
 	}
-
-	return true
 }
