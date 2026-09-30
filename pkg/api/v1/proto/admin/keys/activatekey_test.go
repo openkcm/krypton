@@ -56,7 +56,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should activate root key version", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		keyStore := setup.keyStore
 		keyVersionStore := setup.keyVersionStore
@@ -73,6 +73,7 @@ func TestActivateKey(t *testing.T) {
 		require.NoError(t, err)
 
 		rootID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootID, tenant.ID)
 
 		// when
 		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -105,7 +106,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should not activate root key version twice", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		tenant := createTenant(t, setup.tenantStore)
 
@@ -120,6 +121,7 @@ func TestActivateKey(t *testing.T) {
 		require.NoError(t, err)
 
 		rootID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootID, tenant.ID)
 
 		// when
 		activateRes, err := cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -141,7 +143,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should activate a intermediate key", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		keyStore := setup.keyStore
 		keyVersionStore := setup.keyVersionStore
@@ -157,6 +159,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootKeyID, tenant.ID)
 
 		// activating root key
 		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -176,6 +179,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		keyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, keyID, tenant.ID)
 
 		// when
 		// activating k1 key
@@ -222,7 +226,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should not activate a intermediate key twice", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		tenant := createTenant(t, setup.tenantStore)
 
@@ -236,6 +240,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootKeyID, tenant.ID)
 
 		// activating root key
 		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -255,6 +260,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		keyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, keyID, tenant.ID)
 
 		// when
 		// activating k1 key
@@ -274,7 +280,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should activate all keys in a chain", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		keyVersionStore := setup.keyVersionStore
 		tenant := createTenant(t, setup.tenantStore)
@@ -291,6 +297,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k0ID = announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, k0ID, tenant.ID)
 
 		// when
 		// activating root key
@@ -313,6 +320,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k1ID = announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, k1ID, tenant.ID)
 
 		// when
 		// activating root key
@@ -335,6 +343,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k2ID = announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, k2ID, tenant.ID)
 
 		// when
 		// activating root key
@@ -357,6 +366,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k3ID = announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, k3ID, tenant.ID)
 
 		// when
 		// activating root key
@@ -398,7 +408,7 @@ func TestActivateKey(t *testing.T) {
 	t.Run("should roll back all writes when a late store call fails", func(t *testing.T) {
 		// given
 		errInjected := errors.New("injected update failure")
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology, func(s *testSetup) {
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology, func(s *testSetup) {
 			s.transactor = &failingKeyVersionTx{Transactor: s.transactor, err: errInjected}
 		})
 		cli := setup.cli
@@ -414,6 +424,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootID, tenant.ID)
 
 		// when
 		// activation fails at its last step, UpdateKeyVersionStates
@@ -442,7 +453,7 @@ func TestActivateKey(t *testing.T) {
 
 		// retrying against a healthy service succeeds: the key is not stuck
 		// in a transient state
-		retrySetup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		retrySetup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		_, err = retrySetup.cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
 			TenantId: tenant.ID,
 			Id:       rootID,
@@ -452,7 +463,7 @@ func TestActivateKey(t *testing.T) {
 
 	t.Run("should return error if there is no parent keyversion", func(t *testing.T) {
 		// given
-		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobPreparer{}, &rootTopology)
+		setup := setupKeyServerAndClientWith(t, db, defaultTestHierarchy(), &noopJobGroupPreparer{}, &rootTopology)
 		cli := setup.cli
 		keyVersionStore := setup.keyVersionStore
 		tenant := createTenant(t, setup.tenantStore)
@@ -467,6 +478,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, rootKeyID, tenant.ID)
 
 		// activating root key
 		_, err = cli.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -499,6 +511,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		keyID := announceRes.GetKey().GetId()
+		completeKeyProcessing(t, setup.keyStore, keyID, tenant.ID)
 
 		// when
 		// activating k1 key

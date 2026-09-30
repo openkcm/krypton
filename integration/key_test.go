@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
-	"github.com/openkcm/krypton/pkg/validator"
 )
 
 func TestGetKeys(t *testing.T) {
@@ -33,11 +33,17 @@ func TestGetKeys(t *testing.T) {
 		},
 	}
 	rootSegment := spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
-	keyValidator := validator.NewValidator(rootSegment, topology, hierarchySpec, tenantStore, keyStore)
+	rootCfg := config.RootConfig{
+		Name:      "root",
+		Segment:   rootSegment,
+		Topology:  topology,
+		Hierarchy: hierarchySpec,
+	}
+	transactor := newTransactor(t, testDB, storesql.Root)
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService("root", newTransactor(t, testDB, storesql.Root), keyStore, keyVersionStore, keyValidator, &noopJobPreparer{}, nil))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService(rootCfg, transactor, keyStore, keyVersionStore, nil, nil))
 	})
 
 	// login with no auth

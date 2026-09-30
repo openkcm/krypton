@@ -222,12 +222,10 @@ func runTask(t *testing.T, h *announcekeyv2.TaskHandler, payload []byte) orbital
 	})
 }
 
-type stubKeyGetFailer struct {
-	store.Key
-
+type failingTransactor struct {
 	err error
 }
 
-func (s *stubKeyGetFailer) GetKeyByID(context.Context, string, string) (*model.Key, error) {
-	return nil, s.err
+func (f *failingTransactor) Transaction(context.Context, store.TransactionFunc) error {
+	return f.err
 }

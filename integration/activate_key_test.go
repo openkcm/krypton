@@ -3,6 +3,7 @@ package integration
 import (
 	"encoding/json/v2"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, rootKeyID, tenantID, "completed", 30*time.Second)
 
 		// when
 		cmd := newCLICommand(
@@ -109,6 +111,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, rootKeyID, tenantID, "completed", 30*time.Second)
 
 		// activate root key
 		cmd := newCLICommand(
@@ -135,6 +138,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k1KeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, k1KeyID, tenantID, "completed", 30*time.Second)
 
 		// when
 		// activate k1 key
@@ -190,6 +194,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		rootKeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, rootKeyID, tenantID, "completed", 30*time.Second)
 
 		// activate root key
 		cmd := newCLICommand(
@@ -216,6 +221,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k1KeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, k1KeyID, tenantID, "completed", 30*time.Second)
 
 		// activate k1 key
 		cmd = newCLICommand(
@@ -242,6 +248,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		k2KeyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, k2KeyID, tenantID, "completed", 30*time.Second)
 
 		// when
 		// activate k2 key
@@ -297,6 +304,7 @@ func TestActivateKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		keyID := resp.GetKey().GetId()
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 30*time.Second)
 
 		// activate root key
 		cmd := newCLICommand(

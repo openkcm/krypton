@@ -67,10 +67,11 @@ postgres-stop:
 	docker rm -f $(POSTGRES_CONTAINER) 2>/dev/null || true
 
 ROOT_SERVER_PORT := 8080
+AGENT_SERVER_PORT := 8081
 
 .PHONY: agent
 agent:
-	ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" AGENT_BOOTSTRAP_CONFIG_PATH="./examples/agent.config.yaml" AGENT_DATABASE_URL="$(AGENT_DATABASE_URL)" go run ./cmd/agent
+	AGENT_PORT="$(AGENT_SERVER_PORT)" ROOT_SERVER_PORT="$(ROOT_SERVER_PORT)" AGENT_BOOTSTRAP_CONFIG_PATH="./examples/agent.config.yaml" AGENT_DATABASE_URL="$(AGENT_DATABASE_URL)" go run ./cmd/agent
 
 .PHONY: root
 root:

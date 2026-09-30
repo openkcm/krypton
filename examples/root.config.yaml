@@ -78,7 +78,12 @@ topology:
             type: unsafe-sqlite-memory
       selector_labels:
         cloud: aws
-reconciler:
-  targets:
-    - name: agent-k1
-      address: localhost:9091
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:8080
+  - name: agent-k1
+    address:
+      type: grpc
+      url: localhost:8081

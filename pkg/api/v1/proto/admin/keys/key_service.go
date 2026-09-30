@@ -1,16 +1,17 @@
 package keys
 
 import (
+	"cmp"
 	"context"
 	"encoding/json/v2"
 	"errors"
-	"fmt"
 
 	"github.com/openkcm/orbital"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/handler/announcekeyv2"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
@@ -19,36 +20,60 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
-const (
-	conflictingKeyErrMsg = "a similar key already exists with conflicting values"
-)
-
-type JobPreparer interface {
-	PrepareJob(ctx context.Context, job orbital.Job) (orbital.Job, error)
+type JobGroupPreparer interface {
+	PrepareJobGroup(ctx context.Context, group orbital.JobGroup) (orbital.JobGroup, error)
 }
 
 type KeyService struct {
 	UnimplementedKeyServiceServer
 
-	rootName        string
 	transactor      store.Transactor
 	keyStore        store.Key
 	keyVersionStore store.KeyVersion
-	jobPreparer     JobPreparer
-	validator       validator.KeyValidator
+	preparer        JobGroupPreparer
 	manager         *keyprocessor.Manager
+
+	config config.RootConfig
 }
 
-func NewKeyService(rootName string, transactor store.Transactor, keyStore store.Key, keyVersionStore store.KeyVersion, validator validator.KeyValidator, jobPreparer JobPreparer, manager *keyprocessor.Manager) *KeyService {
+func NewKeyService(cfg config.RootConfig, transactor store.Transactor, keyStore store.Key, keyVersionStore store.KeyVersion, preparer JobGroupPreparer, manager *keyprocessor.Manager) *KeyService {
 	return &KeyService{
-		rootName:        rootName,
 		transactor:      transactor,
 		keyStore:        keyStore,
 		keyVersionStore: keyVersionStore,
-		validator:       validator,
-		jobPreparer:     jobPreparer,
+		preparer:        preparer,
 		manager:         manager,
+		config:          cfg,
 	}
+}
+
+func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
+	err := validator.ValidateKeyAnnounceRequest(validator.AnnounceInput{
+		TenantID:   req.GetTenantId(),
+		KeyKind:    req.GetKind(),
+		Name:       req.GetName(),
+		ParentID:   req.GetParentId(),
+		TargetName: req.GetTargetName(),
+	}, s.config)
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
+
+	newKey := s.newKey(req)
+	err = store.ChainTransaction(ctx, s.transactor,
+		validator.ValidateTenant(newKey.TenantID),
+		validator.ValidateKeyHierarchy(newKey.TenantID, newKey.ParentID, newKey.Kind, s.config.Hierarchy),
+		keyoperator.UpsertKey(&newKey),
+		s.prepareAnnounceJobGroup(&newKey),
+	)
+	if err != nil {
+		return nil, mappedOrInternal(err)
+	}
+
+	return &AnnounceKeyResponse{Key: KeyToProto(newKey)}, nil
 }
 
 func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (*ActivateKeyResponse, error) {
@@ -96,180 +121,10 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		}),
 	)
 	if err != nil {
-		if mapped := mapToProtoErr(err); mapped != nil {
-			return nil, mapped
-		}
-		return nil, proto.ErrDetailsWithCode(
-			status.New(codes.Internal, "transaction failed"),
-			proto.Code_ERROR_CODE_RETRY,
-		)
+		return nil, mappedOrInternal(err)
 	}
 
 	return &ActivateKeyResponse{}, nil
-}
-
-// AnnounceKey validates the request and checks for an already esisting key with the same name.
-// If the announce operation is for the root we just create it and return it otherwise it creates a job and a new key.
-// If there's a key with the same name we return that key or if the key is in a failed or pending state we retry the job.
-func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
-	vErr := s.validator.ValidateKeyAnnounce(ctx, validator.AnnounceInput{
-		TenantID:   req.GetTenantId(),
-		KeyKind:    req.GetKind(),
-		Name:       req.GetName(),
-		ParentID:   req.GetParentId(),
-		TargetName: req.GetTargetName(),
-	})
-	if vErr != nil {
-		return nil, proto.ErrDetailsWithCode(
-			status.New(vErr.ToProtoErrCode(), vErr.Error()),
-			vErr.ToProtoDetailCode(),
-		)
-	}
-
-	// @TODO: Do all this in a database transaction
-	existing, err := s.keyStore.GetKeyByName(ctx, store.GetKeyByNameQuery{
-		TenantID: req.GetTenantId(),
-		Name:     req.GetName(),
-	})
-	if err != nil && !errors.Is(err, store.ErrKeyNotFound) {
-		return nil, proto.ErrDetailsWithCode(
-			status.New(codes.Internal, fmt.Sprintf("failed to look up key: %v", err)),
-			proto.Code_ERROR_CODE_RETRY,
-		)
-	}
-
-	var parentID *string
-	if req.GetParentId() != "" {
-		p := req.GetParentId()
-		parentID = &p
-	}
-
-	target := s.rootName
-	if req.GetTargetName() != "" {
-		target = req.GetTargetName()
-	}
-
-	newKey := model.NewKey(
-		req.GetTenantId(),
-		req.GetName(),
-		req.GetKind(),
-		parentID,
-		target,
-		req.GetLabels(),
-	)
-	newKey.KeyProcessingState = model.KeyProcessingState{
-		Status: model.KeyProcessingCompleted,
-	}
-
-	// case we are announcing a new key
-	if errors.Is(err, store.ErrKeyNotFound) {
-		// non root case
-		if target != s.rootName {
-			job, err := s.prepareJob(ctx, &newKey)
-			if err != nil {
-				return nil, proto.ErrDetailsWithCode(
-					status.New(codes.Internal, fmt.Sprintf("failed to create job, err: %v", err)),
-					proto.Code_ERROR_CODE_RETRY,
-				)
-			}
-
-			newKey.KeyProcessingState = model.KeyProcessingState{
-				JobID:  job.ID.String(),
-				Status: model.KeyProcessingPending,
-			}
-		}
-
-		// root key or we are announcing a root managed key
-		if err := s.keyStore.CreateKey(ctx, newKey); err != nil {
-			return nil, proto.ErrDetailsWithCode(
-				status.New(codes.Internal, fmt.Sprintf("failed to create key, err : %v", err)),
-				proto.Code_ERROR_CODE_RETRY,
-			)
-		}
-
-		return &AnnounceKeyResponse{Key: KeyToProto(newKey)}, nil
-	}
-
-	// key already exists so we retry
-	if err := s.retryAnnounce(ctx, existing, &newKey); err != nil {
-		return nil, err
-	}
-
-	return &AnnounceKeyResponse{Key: KeyToProto(*existing)}, nil
-}
-
-func (s *KeyService) retryAnnounce(ctx context.Context, existing, newKey *model.Key) error {
-	if !existing.IsSame(newKey) {
-		return proto.ErrDetailsWithCode(
-			status.New(codes.FailedPrecondition, conflictingKeyErrMsg),
-			proto.Code_ERROR_CODE_ABORT,
-		)
-	}
-
-	// idempotent if key is was already announced successfully or still being processed
-	if existing.KeyProcessingState.Status.IsOneOf(model.KeyProcessingInProgress, model.KeyProcessingCompleted) {
-		return nil
-	}
-
-	// we are only here when we had a non root managed key whose job is still pending/failed
-	job, err := s.prepareJob(ctx, existing)
-	if err != nil {
-		// Concurrent retry: another caller already created a job with the same
-		// ExternalID (= existing.ID). Return the current key state so the caller
-		// can poll; the in-flight retry will update processing state on completion.
-		// @TODO: drop this branch once transactions land and Pending is moved
-		// into the idempotent short-circuit above.
-		if errors.Is(err, orbital.ErrJobAlreadyExists) {
-			return nil
-		}
-
-		return proto.ErrDetailsWithCode(
-			status.New(codes.Internal, fmt.Sprintf("failed to create job, err: %v", err)),
-			proto.Code_ERROR_CODE_RETRY,
-		)
-	}
-
-	if err := s.keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
-		ID:        existing.ID,
-		TenantID:  existing.TenantID,
-		NewStatus: model.KeyProcessingPending,
-		NewJobID:  job.ID.String(),
-	}); err != nil {
-		return proto.ErrDetailsWithCode(
-			status.New(codes.Internal, fmt.Sprintf("failed to update key with job id, err: %v", err)),
-			proto.Code_ERROR_CODE_RETRY,
-		)
-	}
-
-	existing.KeyProcessingState = model.KeyProcessingState{
-		Status: model.KeyProcessingPending,
-		JobID:  job.ID.String(),
-	}
-
-	return nil
-}
-
-func (s *KeyService) prepareJob(ctx context.Context, key *model.Key) (orbital.Job, error) {
-	taskData := announcekey.TaskData{
-		KeyID:    key.ID,
-		TenantID: key.TenantID,
-		Kind:     string(key.Kind),
-		Name:     key.Name,
-		Target:   key.ManagedBy,
-		Labels:   map[string]string(key.Labels),
-	}
-	if key.ParentID != nil {
-		taskData.ParentID = *key.ParentID
-	}
-
-	data, err := json.Marshal(taskData)
-	if err != nil {
-		return orbital.Job{}, err
-	}
-
-	job := orbital.NewJob(announcekey.JobType, data).WithExternalID(key.ID)
-
-	return s.jobPreparer.PrepareJob(ctx, job)
 }
 
 func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
@@ -366,4 +221,47 @@ func (s *KeyService) ListKeys(ctx context.Context, req *ListKeysRequest) (*ListK
 		Keys:   KeysToProto(res.Keys),
 		Cursor: res.Cursor,
 	}, nil
+}
+
+func (s *KeyService) newKey(req *AnnounceKeyRequest) model.Key {
+	var parentID *string
+	if req.GetParentId() != "" {
+		parentID = new(req.GetParentId())
+	}
+
+	target := cmp.Or(req.GetTargetName(), s.config.Name)
+
+	return model.NewKey(
+		req.GetTenantId(),
+		req.GetName(),
+		req.GetKind(),
+		parentID,
+		target,
+		req.GetLabels(),
+	)
+}
+
+func (s *KeyService) prepareAnnounceJobGroup(newKey *model.Key) func(ctx context.Context, _ store.Stores) error {
+	return func(ctx context.Context, _ store.Stores) error {
+		data, err := json.Marshal(newKey)
+		if err != nil {
+			return err
+		}
+
+		job := orbital.NewJob(announcekeyv2.JobType, data).WithExternalID(newKey.Name)
+		jobGroup := orbital.NewJobGroup(announcekeyv2.JobGroupType, job)
+
+		_, err = s.preparer.PrepareJobGroup(ctx, jobGroup)
+		return err
+	}
+}
+
+func mappedOrInternal(err error) error {
+	if mapped := mapToProtoErr(err); mapped != nil {
+		return mapped
+	}
+	return proto.ErrDetailsWithCode(
+		status.New(codes.Internal, "transaction failed"),
+		proto.Code_ERROR_CODE_RETRY,
+	)
 }

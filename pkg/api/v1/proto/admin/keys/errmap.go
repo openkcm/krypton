@@ -19,7 +19,6 @@ func mapToProtoErr(err error) error {
 	switch {
 	case err == nil:
 		return nil
-
 	case errors.Is(err, store.ErrTenantNotFound):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, validator.ErrInvalidTenantID.Error()),
@@ -40,12 +39,29 @@ func mapToProtoErr(err error) error {
 			status.New(codes.FailedPrecondition, validator.ErrParentKeyTransientState.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
+	case errors.Is(err, validator.ErrInvalidKeyKind),
+		errors.Is(err, validator.ErrNonRootKey),
+		errors.Is(err, validator.ErrRootKeyParent),
+		errors.Is(err, validator.ErrParentKeyAdjacency):
+		return proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	case errors.Is(err, validator.ErrInvalidParentKey):
+		return proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, validator.ErrInvalidParentKey.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	case errors.Is(err, keylifecycle.ErrInvalidKeyStateTransition):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, err.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-
+	case errors.Is(err, keyoperator.ErrKeyConflict):
+		return proto.ErrDetailsWithCode(
+			status.New(codes.FailedPrecondition, keyoperator.ErrKeyConflict.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
 	case errors.Is(err, keyoperator.ErrKeyTransitionRejected):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, keyoperator.ErrKeyTransitionRejected.Error()),
@@ -61,13 +77,11 @@ func mapToProtoErr(err error) error {
 			status.New(codes.FailedPrecondition, keyoperator.ErrParentNoUsableVersion.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-
 	case errors.Is(err, keyoperator.ErrGenerateAndSealKeyMaterial):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.Internal, keyoperator.ErrGenerateAndSealKeyMaterial.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-
 	case errors.Is(err, keyoperator.ErrUpdateKeyState),
 		errors.Is(err, keyoperator.ErrCreateKeyVersion),
 		errors.Is(err, keyoperator.ErrUpdateKeyVersionState),

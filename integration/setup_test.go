@@ -18,9 +18,7 @@ import (
 	"slices"
 	"testing"
 	"time"
-	"uuid"
 
-	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
@@ -216,16 +214,6 @@ func defaultTestHierarchy() spec.KeyHierarchy {
 			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 		},
 	}
-}
-
-// noopJobPreparer is a job preparer that only assigns a UUID if missing.
-type noopJobPreparer struct{}
-
-func (*noopJobPreparer) PrepareJob(_ context.Context, job orbital.Job) (orbital.Job, error) {
-	if job.ID == uuid.Nil() {
-		job.ID = uuid.NewV7()
-	}
-	return job, nil
 }
 
 // testPKI is a self-contained CA + server cert + client cert(s) suitable for

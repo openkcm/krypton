@@ -18,7 +18,7 @@ func TestJobHandler_ConfirmJob_KeyExists_Completes(t *testing.T) {
 	rootDB := newRootDB(t)
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
-	handler := announcekeyv2.NewJobHandler(storesql.NewKeyStore(rootDB))
+	handler := announcekeyv2.NewJobHandler(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ConfirmJob(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
@@ -31,7 +31,7 @@ func TestJobHandler_ConfirmJob_KeyExists_Completes(t *testing.T) {
 func TestJobHandler_ConfirmJob_KeyMissing_Cancels(t *testing.T) {
 	rootDB := newRootDB(t)
 
-	handler := announcekeyv2.NewJobHandler(storesql.NewKeyStore(rootDB))
+	handler := announcekeyv2.NewJobHandler(storesql.NewTransactor(rootDB))
 
 	ghost := model.NewKey(uuid.New().String(), "ghost", "K0", nil, "agent", nil)
 	ghost.ID = uuid.New().String()
@@ -45,9 +45,7 @@ func TestJobHandler_ConfirmJob_KeyMissing_Cancels(t *testing.T) {
 }
 
 func TestJobHandler_ConfirmJob_StoreError_Continues(t *testing.T) {
-	rootDB := newRootDB(t)
-	keyStore := storesql.NewKeyStore(rootDB)
-	failing := &stubKeyGetFailer{Key: keyStore, err: errors.New("db down")}
+	failing := &failingTransactor{err: errors.New("db down")}
 
 	handler := announcekeyv2.NewJobHandler(failing)
 
@@ -64,7 +62,7 @@ func TestJobHandler_ConfirmJob_StoreError_Continues(t *testing.T) {
 
 func TestJobHandler_ConfirmJob_InvalidPayload_Cancels(t *testing.T) {
 	rootDB := newRootDB(t)
-	handler := announcekeyv2.NewJobHandler(storesql.NewKeyStore(rootDB))
+	handler := announcekeyv2.NewJobHandler(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ConfirmJob(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
@@ -76,7 +74,7 @@ func TestJobHandler_ConfirmJob_InvalidPayload_Cancels(t *testing.T) {
 
 func TestJobHandler_ResolveTasks(t *testing.T) {
 	rootDB := newRootDB(t)
-	handler := announcekeyv2.NewJobHandler(storesql.NewKeyStore(rootDB))
+	handler := announcekeyv2.NewJobHandler(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ResolveTasks(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
