@@ -81,12 +81,12 @@ func TestTaskHandler_RegistryMiss_TerminalFail(t *testing.T) {
 	assert.Equal(t, model.KeyProcessingFailed, got.KeyProcessingState.Status)
 }
 
-func TestTaskHandler_RPCTerminal_TenantMissingOnAgent_Fail(t *testing.T) {
+func TestTaskHandler_TenantAutoUpsertedOnAgent_Success(t *testing.T) {
 	rootDB := newRootDB(t)
 	agent := startAgentServer(t)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
-	// intentionally do NOT seed the tenant on the agent DB
+	// tenant is not pre-seeded on the agent; validateAndUpsertTenant will create it
 
 	handler := announcekeyv2.NewTaskHandler(
 		storesql.NewTransactor(rootDB),
@@ -95,12 +95,11 @@ func TestTaskHandler_RPCTerminal_TenantMissingOnAgent_Fail(t *testing.T) {
 	)
 
 	resp := runTask(t, handler, taskPayload(t, key))
-	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-	assert.Contains(t, resp.ErrorMessage, `upsert rejected by agent "agent"`)
+	assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
 
 	got, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
 	require.NoError(t, err)
-	assert.Equal(t, model.KeyProcessingFailed, got.KeyProcessingState.Status)
+	assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
 }
 
 func TestTaskHandler_RPCTransient_AgentDown_Retries(t *testing.T) {
@@ -136,12 +135,117 @@ func TestTaskHandler_ValidateTransition_KeyNotFound_TerminalFail(t *testing.T) {
 		rootName,
 	)
 
-	ghost := model.NewKey(uuid.New().String(), "ghost", "K0", nil, rootName, nil)
+	ghost := model.NewKey(createTenant(t, rootDB).Tenant.ID, "ghost", "K0", nil, rootName, nil)
 	ghost.ID = uuid.New().String()
 
 	resp := runTask(t, handler, taskPayload(t, ghost))
 	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
 	assert.Contains(t, resp.ErrorMessage, "not found")
+}
+
+func TestTaskHandler_TenantNotFound_TerminalFail(t *testing.T) {
+	rootDB := newRootDB(t)
+
+	handler := announcekeyv2.NewTaskHandler(
+		storesql.NewTransactor(rootDB),
+		emptyRegistry(t),
+		rootName,
+	)
+
+	key := model.NewKey(uuid.New().String(), "k0", "K0", nil, rootName, nil)
+
+	resp := runTask(t, handler, taskPayload(t, key))
+	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
+	assert.Contains(t, resp.ErrorMessage, "not found")
+}
+
+func TestTaskHandler_TenantFetching_Error_Continue(t *testing.T) {
+	rootDB := newRootDB(t)
+	agent := startAgentServer(t)
+
+	key := seedRootTenantAndKey(t, rootDB, "agent")
+
+	dropTenantTable(t, rootDB) // simulate transient error on root
+
+	handler := announcekeyv2.NewTaskHandler(
+		storesql.NewTransactor(rootDB),
+		newRegistry(t, "agent", agent),
+		rootName,
+	)
+
+	resp := runTask(t, handler, taskPayload(t, key))
+	assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status, "got %q: %s", resp.Status, resp.ErrorMessage)
+	assert.Positive(t, resp.ReconcileAfterSec)
+
+	_, err := agent.keyStore.GetKeyByID(t.Context(), key.ID, key.TenantID)
+	assert.ErrorIs(t, err, store.ErrKeyNotFound)
+}
+
+func TestTaskHandler_TenantUpsert_ReturnTerminalUpsert_Fail(t *testing.T) {
+	rootDB := newRootDB(t)
+	agent := startAgentServer(t)
+
+	key := seedRootTenantAndKey(t, rootDB, "agent")
+
+	// making tenant name as empty string will cause the agent to return a terminal error on UpsertTenant
+	_, err := storesql.NewTenantStore(rootDB).UpsertTenant(t.Context(), store.UpsertTenantQuery{
+		Tenant: model.Tenant{
+			ID:   key.TenantID,
+			Name: "",
+		},
+	})
+	require.NoError(t, err)
+
+	handler := announcekeyv2.NewTaskHandler(
+		storesql.NewTransactor(rootDB),
+		newRegistry(t, "agent", agent),
+		rootName,
+	)
+
+	resp := runTask(t, handler, taskPayload(t, key))
+	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status, "got %q: %s", resp.Status, resp.ErrorMessage)
+
+	got, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
+	require.NoError(t, err)
+	assert.Equal(t, model.KeyProcessingFailed, got.KeyProcessingState.Status)
+	assert.NotEqual(t, key.KeyProcessingState.Status, got.KeyProcessingState.Status)
+
+	_, err = agent.keyStore.GetKeyByID(t.Context(), key.ID, key.TenantID)
+	assert.ErrorIs(t, err, store.ErrKeyNotFound)
+}
+
+func TestTaskHandler_TenantUpsert_In_Agent(t *testing.T) {
+	rootDB := newRootDB(t)
+	agent := startAgentServer(t)
+
+	key := seedRootTenantAndKey(t, rootDB, "agent")
+
+	handler := announcekeyv2.NewTaskHandler(
+		storesql.NewTransactor(rootDB),
+		newRegistry(t, "agent", agent),
+		rootName,
+	)
+
+	// before the task runs, the tenant should not exist on the agent
+	_, err := agent.tenantStore.GetTenant(t.Context(), store.GetTenantQuery{ID: key.TenantID})
+	assert.ErrorIs(t, err, store.ErrTenantNotFound)
+
+	resp := runTask(t, handler, taskPayload(t, key))
+	assert.Equal(t, string(orbital.TaskStatusDone), resp.Status, "got %q: %s", resp.Status, resp.ErrorMessage)
+
+	got, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
+	require.NoError(t, err)
+	assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
+	assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+
+	agentKey, err := agent.keyStore.GetKeyByID(t.Context(), key.ID, key.TenantID)
+	require.NoError(t, err)
+	assert.Equal(t, model.KeyLifeCyclePreActivation, agentKey.LifeCycleState)
+
+	// after the task runs, the tenant should exist on the agent
+	tenant, err := agent.tenantStore.GetTenant(t.Context(), store.GetTenantQuery{ID: key.TenantID})
+	require.NoError(t, err)
+	assert.Equal(t, key.TenantID, tenant.Tenant.ID)
 }
 
 func TestTaskHandler_ValidateTransition_InvalidTransition_TerminalFail(t *testing.T) {
