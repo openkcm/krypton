@@ -83,6 +83,8 @@ func ValidateKeyUpsert(input UpsertKeyInput) error {
 	return nil
 }
 
+// ValidateKeyAnnounceRequest verifies an announce request has valid IDs and
+// that the resolved segment manages the requested key kind.
 func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) error {
 	switch {
 	case !isValidUUID(input.TenantID):
@@ -171,15 +173,17 @@ func ValidateKeyParents(tenantID, keyID string) store.TransactionFunc {
 	}
 }
 
-func ValidateKeyHierarchy(tenantID string, parentID *string, kind model.KeyKind, hierarchy spec.KeyHierarchy) store.TransactionFunc {
+// ValidateKeyHierarchy returns a transaction step that verifies the key's role
+// and parent are consistent with the key hierarchy.
+func ValidateKeyHierarchy(k model.Key, h spec.KeyHierarchy) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
-		keySpec, ok := hierarchy.FindKeySpec(kind)
+		keySpec, ok := h.FindKeySpec(k.Kind)
 		if !ok {
 			return ErrInvalidKeyKind
 		}
 
 		isRoot := keySpec.Role == spec.KeyRoleRoot
-		hasParent := parentID != nil
+		hasParent := k.ParentID != nil
 
 		switch {
 		case isRoot && !hasParent:
@@ -190,7 +194,7 @@ func ValidateKeyHierarchy(tenantID string, parentID *string, kind model.KeyKind,
 			return ErrNonRootKey
 		}
 
-		parent, err := stores.Keys.GetKeyByID(ctx, *parentID, tenantID)
+		parent, err := stores.Keys.GetKeyByID(ctx, *k.ParentID, k.TenantID)
 		if errors.Is(err, store.ErrKeyNotFound) {
 			return ErrInvalidParentKey
 		}
@@ -198,8 +202,8 @@ func ValidateKeyHierarchy(tenantID string, parentID *string, kind model.KeyKind,
 			return err
 		}
 
-		childIdx := hierarchy.IndexOf(kind)
-		parentIdx := hierarchy.IndexOf(parent.Kind)
+		childIdx := h.IndexOf(k.Kind)
+		parentIdx := h.IndexOf(parent.Kind)
 		if parentIdx < 0 || childIdx != parentIdx+1 {
 			return ErrParentKeyAdjacency
 		}

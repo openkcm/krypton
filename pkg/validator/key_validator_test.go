@@ -8,7 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/keylifecycle"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/validator"
@@ -190,6 +192,190 @@ func TestValidator_ValidateActivateRequest(t *testing.T) {
 				return
 			}
 			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestValidator_ValidateKeyAnnounceRequest(t *testing.T) {
+	cfg := config.RootConfig{
+		Segment: spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
+		Hierarchy: spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot},
+				{Kind: "K1", Role: spec.KeyRoleKek},
+				{Kind: "K2", Role: spec.KeyRoleDek},
+			},
+		},
+		Topology: spec.Topology{
+			Segments: []spec.TopologySegment{
+				{
+					Name:    "agent-aws",
+					Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"},
+				},
+			},
+		},
+	}
+
+	baseValid := validator.AnnounceInput{
+		TenantID: validUUID,
+		KeyKind:  "K0",
+		Name:     "some-name",
+	}
+
+	withField := func(mut func(*validator.AnnounceInput)) validator.AnnounceInput {
+		in := baseValid
+		mut(&in)
+		return in
+	}
+
+	tests := []struct {
+		name    string
+		input   validator.AnnounceInput
+		wantErr error
+	}{
+		{
+			name:    "invalid tenantID",
+			input:   withField(func(in *validator.AnnounceInput) { in.TenantID = invalidUUID }),
+			wantErr: validator.ErrInvalidTenantID,
+		},
+		{
+			name:    "empty name",
+			input:   withField(func(in *validator.AnnounceInput) { in.Name = "" }),
+			wantErr: validator.ErrEmptyName,
+		},
+		{
+			name:    "empty key kind",
+			input:   withField(func(in *validator.AnnounceInput) { in.KeyKind = "" }),
+			wantErr: validator.ErrEmptyKeyKind,
+		},
+		{
+			name:    "target not in topology",
+			input:   withField(func(in *validator.AnnounceInput) { in.TargetName = "unknown" }),
+			wantErr: validator.ErrTargetNotInTopology,
+		},
+		{
+			name: "target does not manage key kind",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-aws"
+				in.KeyKind = "K0"
+			}),
+			wantErr: validator.ErrTargetDoesNotManageKeyKind,
+		},
+		{
+			name:    "key kind outside default segment",
+			input:   withField(func(in *validator.AnnounceInput) { in.KeyKind = "K2" }),
+			wantErr: validator.ErrTargetDoesNotManageKeyKind,
+		},
+		{
+			name:    "valid in default segment",
+			input:   baseValid,
+			wantErr: nil,
+		},
+		{
+			name: "valid via target",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-aws"
+				in.KeyKind = "K2"
+			}),
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validator.ValidateKeyAnnounceRequest(tc.input, cfg)
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestValidator_ValidateKeyHierarchy(t *testing.T) {
+	errBoom := errors.New("boom")
+
+	hierarchy := spec.KeyHierarchy{
+		Name: "test-hierarchy",
+		KeySpecs: []spec.KeySpec{
+			{Kind: "K0", Role: spec.KeyRoleRoot},
+			{Kind: "K1", Role: spec.KeyRoleKek},
+			{Kind: "K2", Role: spec.KeyRoleDek},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		key       model.Key
+		parent    *model.Key
+		getKeyErr error
+		wantNil   bool
+		wantErrIs []error
+	}{
+		{
+			name:      "unknown key kind",
+			key:       model.Key{TenantID: validUUID, Kind: "ZZ"},
+			wantErrIs: []error{validator.ErrInvalidKeyKind},
+		},
+		{
+			name:    "root without parent",
+			key:     model.Key{TenantID: validUUID, Kind: "K0"},
+			wantNil: true,
+		},
+		{
+			name:      "root with parent",
+			key:       model.Key{TenantID: validUUID, Kind: "K0", ParentID: new("parent-id")},
+			wantErrIs: []error{validator.ErrRootKeyParent},
+		},
+		{
+			name:      "non-root without parent",
+			key:       model.Key{TenantID: validUUID, Kind: "K1"},
+			wantErrIs: []error{validator.ErrNonRootKey},
+		},
+		{
+			name:      "parent not found",
+			key:       model.Key{TenantID: validUUID, Kind: "K1", ParentID: new("parent-id")},
+			getKeyErr: store.ErrKeyNotFound,
+			wantErrIs: []error{validator.ErrInvalidParentKey},
+		},
+		{
+			name:      "generic store error",
+			key:       model.Key{TenantID: validUUID, Kind: "K1", ParentID: new("parent-id")},
+			getKeyErr: errBoom,
+			wantErrIs: []error{errBoom},
+		},
+		{
+			name:      "non-adjacent parent",
+			key:       model.Key{TenantID: validUUID, Kind: "K2", ParentID: new("parent-id")},
+			parent:    &model.Key{ID: "parent-id", Kind: "K0"},
+			wantErrIs: []error{validator.ErrParentKeyAdjacency},
+		},
+		{
+			name:    "valid adjacency",
+			key:     model.Key{TenantID: validUUID, Kind: "K1", ParentID: new("parent-id")},
+			parent:  &model.Key{ID: "parent-id", Kind: "K0"},
+			wantNil: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keys := keyStoreReturning(tc.parent, tc.getKeyErr)
+			step := validator.ValidateKeyHierarchy(tc.key, hierarchy)
+			err := step(t.Context(), store.Stores{Tenants: tenantFound(), Keys: keys})
+
+			if tc.wantNil {
+				assert.NoError(t, err)
+				return
+			}
+			if !assert.Error(t, err) {
+				return
+			}
+			for _, s := range tc.wantErrIs {
+				assert.ErrorIs(t, err, s)
+			}
 		})
 	}
 }

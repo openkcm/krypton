@@ -65,7 +65,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 	newKey := s.newKey(req)
 	err = store.ChainTransaction(ctx, s.transactor,
 		validator.ValidateTenant(newKey.TenantID),
-		validator.ValidateKeyHierarchy(newKey.TenantID, newKey.ParentID, newKey.Kind, s.config.Hierarchy),
+		validator.ValidateKeyHierarchy(newKey, s.config.Hierarchy),
 		keyoperator.UpsertKey(&newKey),
 		s.prepareAnnounceJobGroup(&newKey),
 	)
