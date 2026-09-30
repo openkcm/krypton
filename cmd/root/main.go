@@ -24,7 +24,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/grpcconn"
-	"github.com/openkcm/krypton/internal/handler/announcekeyv2"
+	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
@@ -88,9 +88,9 @@ func main() {
 	orchestratorOpts = append(orchestratorOpts, orchestrator.WithExecInterval(10*time.Millisecond))
 
 	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
-		Jobs:   []orchestrator.JobHandler{announcekeyv2.NewJobHandler(transactor)},
-		Groups: []orchestrator.JobGroupHandler{announcekeyv2.NewJobGroupHandler()},
-		Tasks:  []orchestrator.TaskHandler{announcekeyv2.NewTaskHandler(transactor, registry, cfg.Name)},
+		Jobs:   []orchestrator.JobHandler{announcekey.NewJobHandler(transactor)},
+		Groups: []orchestrator.JobGroupHandler{announcekey.NewJobGroupHandler()},
+		Tasks:  []orchestrator.TaskHandler{announcekey.NewTaskHandler(transactor, registry, cfg.Name)},
 	}, orchestratorOpts...)
 	handleErr(err, "failed to create orchestrator")
 

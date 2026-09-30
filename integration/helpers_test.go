@@ -273,11 +273,6 @@ topology:
             type: unsafe-sqlite-memory
       selector_labels:
         cloud: aws
-reconciler:
-  execInterval: 500ms
-  targets:
-    - name: %s
-      address: localhost:%s
 connections:
   - name: root
     address:
@@ -287,7 +282,7 @@ connections:
     address:
       type: grpc
       url: localhost:%s
-`, agentName, agentName, agentPort, agentName, agentPort)
+`, agentName, agentName, agentPort)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }

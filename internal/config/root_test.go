@@ -481,11 +481,6 @@ topology:
             type: "unsafe-sqlite-memory"
       selector_labels:
         cloud: "aws"
-reconciler:
-  maxReconcileCount: 7
-  targets:
-    - name: agent-aws
-      address: localhost:9091
 connections:
   - name: root
     address:
@@ -531,9 +526,6 @@ connections:
 
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
-
-				assert.Equal(t, uint64(7), cfg.Reconciler.MaxReconcileCount)
-				assert.Equal(t, "localhost:9091", cfg.Reconciler.Targets[0].Address)
 
 				assert.Len(t, cfg.Connections, 2)
 				assert.Equal(t, "root", cfg.Connections[0].Name)

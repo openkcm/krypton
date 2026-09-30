@@ -135,4 +135,3 @@ config:
         labels_spec:
           allow_user_labels: true
   topology: {}
-  reconciler: {}

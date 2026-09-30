@@ -1,4 +1,4 @@
-package announcekeyv2
+package announcekey
 
 import (
 	"github.com/openkcm/krypton/pkg/model"

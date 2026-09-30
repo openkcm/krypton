@@ -1,4 +1,4 @@
-package announcekeyv2
+package announcekey
 
 import (
 	"context"
