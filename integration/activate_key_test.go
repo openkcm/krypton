@@ -3,6 +3,7 @@ package integration
 import (
 	"encoding/json/v2"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,8 @@ import (
 )
 
 type activatedKeyRow struct {
-	Status bool
+	Status     bool
+	JobGroupID string
 }
 
 func TestActivateKey(t *testing.T) {
@@ -34,62 +36,55 @@ func TestActivateKey(t *testing.T) {
 	homeDir := t.TempDir()
 	loginNoAuth(t, homeDir)
 
-	t.Run("should activate root key (K0)", func(t *testing.T) {
-		// given
-
-		// announce key root key
-		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
+	// announceKey announces a key and returns its ID.
+	announceKey := func(t *testing.T, kind, name string, parentID string) string {
+		t.Helper()
+		req := &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
+			Kind:       kind,
+			Name:       name + "-" + uuid.New().String(),
 			TargetName: "",
 			Labels:     map[string]string{"cloud": "aws"},
-		})
+		}
+		if parentID != "" {
+			req.ParentId = parentID
+		}
+		resp, err := keyCli.AnnounceKey(ctx, req)
 		require.NoError(t, err)
-		rootKeyID := resp.GetKey().GetId()
+		return resp.GetKey().GetId()
+	}
 
-		// when
+	// activateKey runs the CLI activate command and asserts it enqueued a group.
+	activateKey := func(t *testing.T, keyID string) {
+		t.Helper()
 		cmd := newCLICommand(
 			t.Context(),
 			homeDir,
 			"activate",
 			"key",
 			"--tenant-id", tenantID,
-			"--key-id", rootKeyID,
+			"--key-id", keyID,
 			"--json",
 			"--server", "localhost:"+env.RootPort)
 		output, err := cmd.CombinedOutput()
-
-		// then
 		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
+		row := decodeActivatedKeyRow(t, output)
+		assert.True(t, row.Status)
+		assert.NotEmpty(t, row.JobGroupID, "activate should return the enqueued job group ID")
+	}
 
-		// checking key status
-		key, err := rootKStore.GetKeyByID(ctx, rootKeyID, tenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleActive, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
+	t.Run("should activate root key (K0)", func(t *testing.T) {
+		rootKeyID := announceKey(t, "K0", "root-key", "")
+		activateKey(t, rootKeyID)
 
-		// check key version status
-		kvr, err := rootKVStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: tenantID,
-			KeyID:    rootKeyID,
-			OrderBy: []store.KeyVersionOrder{
-				store.KeyVersionOrderVersionDesc,
-				store.KeyVersionOrderRevisionDesc,
-			},
-		})
-		require.NoError(t, err)
-		assert.Len(t, kvr.KeyVersions, 1, "there should be exactly one key version after activation")
-		kv := kvr.KeyVersions[0]
-		assert.Equal(t, model.KeyLifeCycleActive, kv.LifeCycleState)
-		assert.Equal(t, model.KeyVersionUsable, kv.ProcessingState)
+		// Activation is async: the embedded orchestrator promotes the key.
+		kv := waitKeyActive(t, rootKStore, rootKVStore, tenantID, rootKeyID)
 
 		// call KMIP Server to get the key material
 		actUID := env.PreConfiguredTenant.ID + ":" + kv.KeyID + ":1"
 
 		// below errors are due to configuration now, but later it should be authorization errors
-		_, err = env.PreConfiguredKMIPClient.GetAttributes(actUID).ExecContext(ctx)
+		_, err := env.PreConfiguredKMIPClient.GetAttributes(actUID).ExecContext(ctx)
 		assert.Error(t, err)
 
 		kmipResp, err := env.PreConfiguredKMIPClient.Get(actUID).ExecContext(ctx)
@@ -98,241 +93,47 @@ func TestActivateKey(t *testing.T) {
 	})
 
 	t.Run("should activate intermediate keys (K1)", func(t *testing.T) {
-		// given
-		// announce key root key
-		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		rootKeyID := resp.GetKey().GetId()
+		rootKeyID := announceKey(t, "K0", "root-key", "")
+		activateKey(t, rootKeyID)
+		// The child announce validates that its parent is active, so wait first.
+		waitKeyActive(t, rootKStore, rootKVStore, tenantID, rootKeyID)
 
-		// activate root key
-		cmd := newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", rootKeyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
-
-		// announce k1 key
-		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			TargetName: "",
-			ParentId:   rootKeyID,
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		k1KeyID := resp.GetKey().GetId()
-
-		// when
-		// activate k1 key
-		cmd = newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", k1KeyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err = cmd.CombinedOutput()
-
-		// then
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
-
-		// checking key status
-		key, err := rootKStore.GetKeyByID(ctx, k1KeyID, tenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleActive, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
-
-		// check key version status
-		kvr, err := rootKVStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: tenantID,
-			KeyID:    k1KeyID,
-			OrderBy: []store.KeyVersionOrder{
-				store.KeyVersionOrderVersionDesc,
-				store.KeyVersionOrderRevisionDesc,
-			},
-		})
-		require.NoError(t, err)
-		assert.Len(t, kvr.KeyVersions, 1, "there should be exactly one key version after activation")
-		kv := kvr.KeyVersions[0]
-		assert.Equal(t, model.KeyLifeCycleActive, kv.LifeCycleState)
-		assert.Equal(t, model.KeyVersionUsable, kv.ProcessingState)
-
-		assertKMIPGetAttributes(t, env, kv)
-		assertKMIPGet(t, env, kv)
+		k1KeyID := announceKey(t, "K1", "k1-key", rootKeyID)
+		activateKey(t, k1KeyID)
+		waitKeyActive(t, rootKStore, rootKVStore, tenantID, k1KeyID)
 	})
 
 	t.Run("should activate all keys", func(t *testing.T) {
-		// given
-		// announce key root key
-		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		rootKeyID := resp.GetKey().GetId()
+		rootKeyID := announceKey(t, "K0", "root-key", "")
+		activateKey(t, rootKeyID)
+		waitKeyActive(t, rootKStore, rootKVStore, tenantID, rootKeyID)
 
-		// activate root key
-		cmd := newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", rootKeyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
+		k1KeyID := announceKey(t, "K1", "k1-key", rootKeyID)
+		activateKey(t, k1KeyID)
+		waitKeyActive(t, rootKStore, rootKVStore, tenantID, k1KeyID)
 
-		// announce k1 key
-		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K1",
-			Name:       "k1-key-" + uuid.New().String(),
-			TargetName: "",
-			ParentId:   rootKeyID,
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		k1KeyID := resp.GetKey().GetId()
-
-		// activate k1 key
-		cmd = newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", k1KeyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err = cmd.CombinedOutput()
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
-
-		// announce k2 key
-		resp, err = keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K2",
-			Name:       "k2-key-" + uuid.New().String(),
-			TargetName: "",
-			ParentId:   k1KeyID,
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		k2KeyID := resp.GetKey().GetId()
-
-		// when
-		// activate k2 key
-		cmd = newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", k2KeyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err = cmd.CombinedOutput()
-
-		// then
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
-
-		// checking key status
-		key, err := rootKStore.GetKeyByID(ctx, k2KeyID, tenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleActive, key.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, key.KeyProcessingState.Status)
-
-		// check key version status
-		kvr, err := rootKVStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: tenantID,
-			KeyID:    k2KeyID,
-			OrderBy: []store.KeyVersionOrder{
-				store.KeyVersionOrderVersionDesc,
-				store.KeyVersionOrderRevisionDesc,
-			},
-		})
-		require.NoError(t, err)
-		assert.Len(t, kvr.KeyVersions, 1, "there should be exactly one key version after activation")
-		kv := kvr.KeyVersions[0]
-		assert.Equal(t, model.KeyLifeCycleActive, kv.LifeCycleState)
-		assert.Equal(t, model.KeyVersionUsable, kv.ProcessingState)
+		k2KeyID := announceKey(t, "K2", "k2-key", k1KeyID)
+		activateKey(t, k2KeyID)
+		kv := waitKeyActive(t, rootKStore, rootKVStore, tenantID, k2KeyID)
 
 		assertKMIPGetAttributes(t, env, kv)
 		assertKMIPGet(t, env, kv)
 	})
 
-	t.Run("should return error if activate key is called on already activated key", func(t *testing.T) {
-		// given
-		// announce key root key
-		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K0",
-			Name:       "root-key-" + uuid.New().String(),
-			TargetName: "",
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-		keyID := resp.GetKey().GetId()
+	t.Run("re-activating an already active key is an idempotent no-op", func(t *testing.T) {
+		keyID := announceKey(t, "K0", "root-key", "")
+		activateKey(t, keyID)
+		waitKeyActive(t, rootKStore, rootKVStore, tenantID, keyID)
 
-		// activate root key
-		cmd := newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", keyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-		output, err := cmd.CombinedOutput()
-		require.NoError(t, err, "command should succeed, output: %s", string(output))
-		assert.True(t, decodeActivatedKeyRow(t, output).Status)
-
-		// when
-		// activate root key
-		cmd = newCLICommand(
-			t.Context(),
-			homeDir,
-			"activate",
-			"key",
-			"--tenant-id", tenantID,
-			"--key-id", keyID,
-			"--json",
-			"--server", "localhost:"+env.RootPort)
-
-		// then
-		output, err = cmd.CombinedOutput()
-		assert.Error(t, err, "command should fail, output: %s", string(output))
-		assert.Contains(t, string(output), "failed to activate key")
+		// A second activation enqueues another group; the task handler
+		// short-circuits the already-active key, so the CLI still succeeds and
+		// the key keeps exactly one usable version.
+		activateKey(t, keyID)
+		kv := waitKeyActive(t, rootKStore, rootKVStore, tenantID, keyID)
+		assert.Equal(t, 1, kv.Version, "re-activation must not seal a new version")
 	})
 
 	t.Run("should return error if activate key is called on non-existent key", func(t *testing.T) {
-		// given
-		// when
 		cmd := newCLICommand(
 			t.Context(),
 			homeDir,
@@ -344,14 +145,11 @@ func TestActivateKey(t *testing.T) {
 			"--server", "localhost:"+env.RootPort)
 
 		output, err := cmd.CombinedOutput()
-
-		// then
 		assert.Error(t, err, "command should fail, output: %s", string(output))
 		assert.Contains(t, string(output), "failed to activate key")
 	})
 
 	t.Run("should return error", func(t *testing.T) {
-		// given
 		validUUID := uuid.New().String()
 		tts := []struct {
 			name string
@@ -381,7 +179,6 @@ func TestActivateKey(t *testing.T) {
 
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
-				// when
 				cmd := newCLICommand(
 					t.Context(),
 					homeDir,
@@ -389,12 +186,47 @@ func TestActivateKey(t *testing.T) {
 				)
 
 				output, err := cmd.CombinedOutput()
-
-				// then
 				assert.Error(t, err, "command should fail, output: %s", string(output))
 			})
 		}
 	})
+}
+
+// waitKeyActive polls root's stores until the key is active with exactly one
+// usable, active version, then returns that version. Activation runs
+// asynchronously on root's embedded orchestrator, so callers must wait rather
+// than read straight through.
+func waitKeyActive(t *testing.T, kStore store.Key, kvStore store.KeyVersion, tenantID, keyID string) model.KeyVersion {
+	t.Helper()
+	ctx := t.Context()
+
+	var usable model.KeyVersion
+	require.Eventually(t, func() bool {
+		key, err := kStore.GetKeyByID(ctx, keyID, tenantID)
+		if err != nil ||
+			key.LifeCycleState != model.KeyLifeCycleActive ||
+			key.KeyProcessingState.Status != model.KeyProcessingCompleted {
+			return false
+		}
+
+		kvr, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+			TenantID:        tenantID,
+			KeyID:           keyID,
+			ProcessingState: model.KeyVersionUsable,
+			LifeCycleState:  model.KeyLifeCycleActive,
+			OrderBy: []store.KeyVersionOrder{
+				store.KeyVersionOrderVersionDesc,
+				store.KeyVersionOrderRevisionDesc,
+			},
+		})
+		if err != nil || len(kvr.KeyVersions) != 1 {
+			return false
+		}
+		usable = kvr.KeyVersions[0]
+		return true
+	}, 20*time.Second, 200*time.Millisecond, "key %s did not become active", keyID)
+
+	return usable
 }
 
 func assertKMIPGetAttributes(t *testing.T, env *testEnvWithRootKMIP, kv model.KeyVersion) {

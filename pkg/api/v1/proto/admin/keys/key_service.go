@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
-	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/model"
@@ -25,6 +25,7 @@ const (
 
 type JobPreparer interface {
 	PrepareJob(ctx context.Context, job orbital.Job) (orbital.Job, error)
+	PrepareJobGroup(ctx context.Context, group orbital.JobGroup) (orbital.JobGroup, error)
 }
 
 type KeyService struct {
@@ -64,48 +65,33 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		)
 	}
 
-	resolve := keyoperator.InitKeyVersion(tenantID, keyID)
-
-	err := store.ChainTransaction(ctx, s.transactor,
-		validator.ValidateTenant(tenantID),
-		validator.ValidateTransition(tenantID, keyID, model.KeyLifeCycleActive),
-		validator.ValidateKeyParents(tenantID, keyID),
-
-		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingCompleted},
-			ToProcessing:   model.KeyProcessingInProgress,
-		}),
-
-		keyoperator.CreateKeyVersion(tenantID, keyID, resolve),
-		keyoperator.GenerateAndSealKeyMaterial(s.manager, tenantID, keyID, resolve),
-
-		keyoperator.UpdateKeyVersionState(tenantID, keyID, resolve, keyoperator.VersionTransition{
-			FromProcessing: []model.KeyVersionProcessingState{model.KeyVersionActivating},
-			ToProcessing:   model.KeyVersionUsable,
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-		}),
-
-		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
-			ToProcessing:   model.KeyProcessingCompleted,
-		}),
-	)
+	// Cascading activation: build one job group that activates this key and all
+	// its descendants layer by layer (root to leaf), then hand it to the
+	// orchestrator. The per-key sealing chain that used to run in-process here
+	// now runs in the activate-key task handler's root-managed branch.
+	group, err := activatekey.BuildJobGroup(ctx, s.keyStore, tenantID, keyID)
 	if err != nil {
-		if mapped := mapToProtoErr(err); mapped != nil {
-			return nil, mapped
+		if errors.Is(err, activatekey.ErrNoKeys) {
+			return nil, proto.ErrDetailsWithCode(
+				status.New(codes.NotFound, "key not found"),
+				proto.Code_ERROR_CODE_ABORT,
+			)
 		}
 		return nil, proto.ErrDetailsWithCode(
-			status.New(codes.Internal, "transaction failed"),
+			status.New(codes.Internal, fmt.Sprintf("failed to build activation job group: %v", err)),
 			proto.Code_ERROR_CODE_RETRY,
 		)
 	}
 
-	return &ActivateKeyResponse{}, nil
+	prepared, err := s.jobPreparer.PrepareJobGroup(ctx, group)
+	if err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.Internal, fmt.Sprintf("failed to enqueue activation job group: %v", err)),
+			proto.Code_ERROR_CODE_RETRY,
+		)
+	}
+
+	return &ActivateKeyResponse{JobGroupId: prepared.ID.String()}, nil
 }
 
 // AnnounceKey validates the request and checks for an already esisting key with the same name.

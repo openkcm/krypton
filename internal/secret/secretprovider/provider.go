@@ -15,7 +15,10 @@ import (
 var ErrUnknownType = errors.New("unknown secret source type")
 
 // Spec describes which secret source implementation to use and how to configure it.
-type Spec struct {
+//
+// The value/pointer receiver split on its YAML methods is intentional (see
+// MarshalYAML), so recvcheck is silenced on the type.
+type Spec struct { //nolint:recvcheck
 	Type secret.Type `yaml:"type"`
 	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
 	Config secret.Config `yaml:"-"`
@@ -27,14 +30,20 @@ var (
 )
 
 // MarshalYAML implements [yaml.Marshaler].
-func (s *Spec) MarshalYAML() (any, error) {
+//
+// The receiver is a value (not a pointer) on purpose: this Spec is used as a
+// value field (staticsecret.Config.Secret), and yaml.v3 only invokes a
+// Marshaler it finds via the field's own interface — a pointer-receiver method
+// is not in a non-addressable value's method set, so it would be silently
+// skipped and the yaml:"-" Config (the secret name) dropped.
+func (s Spec) MarshalYAML() (any, error) {
 	type alias Spec
 	return struct {
 		alias `yaml:",inline"`
 
 		Config secret.Config `yaml:"config"`
 	}{
-		alias:  alias(*s),
+		alias:  alias(s),
 		Config: s.Config,
 	}, nil
 }

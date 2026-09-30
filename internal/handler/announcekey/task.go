@@ -3,88 +3,80 @@ package announcekey
 import (
 	"context"
 	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/openkcm/orbital"
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/krypton/internal/agentclient"
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
+	agentkeys "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
 	"github.com/openkcm/krypton/pkg/model"
-	"github.com/openkcm/krypton/pkg/store"
 )
 
-// retryBackoff is how long the agent waits before orbital re-delivers a task
-// that hit a transient error. Hot-looping on transient infra issues is the
-// failure mode this guards against.
+// retryBackoff is how long root waits before orbital re-delivers a task that
+// hit a transient error. Hot-looping on transient infra issues is the failure
+// mode this guards against.
 const retryBackoff = 30 * time.Second
 
-// Postgres SQLSTATE codes used to classify CreateKey errors.
-const (
-	pgCodeUniqueViolation     = "23505"
-	pgCodeForeignKeyViolation = "23503"
-)
-
-// NewTaskHandler returns the agent-side orbital handler for an announce-key
-// task. It persists the announced key in the agent's local key store.
+// TaskHandler runs on root's embedded operator. It announces a key to its
+// owning agent by calling the agent's UpsertKey gRPC (an idempotent upsert),
+// replacing the legacy agent-local persistence over an insecure rpc push.
 //
-// Error classification follows the principle that retry should be the
-// default — only known-terminal failures call resp.Fail(). Per orbital's
-// HandlerResponse semantics, omitting Fail/Complete keeps the task in
-// processing state and orbital re-delivers it.
-func NewTaskHandler(keyStore store.Key) orbital.HandlerFunc {
-	return func(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
-		var data TaskData
-		if err := json.Unmarshal(req.TaskData, &data); err != nil {
-			// Terminal: payload is corrupt, retrying won't help.
-			resp.Fail(fmt.Sprintf("unmarshal task data: %v", err))
-			return
-		}
+// Error classification follows the principle that retry is the default: only a
+// terminal gRPC error (ABORT — bad request the agent will keep rejecting) calls
+// resp.Fail(); anything else backs off and is re-delivered.
+type TaskHandler struct {
+	agents agentclient.Provider
+}
 
-		var parentID *string
-		if data.ParentID != "" {
-			parentID = &data.ParentID
-		}
+// NewTaskHandler returns the embedded announce-key task handler. agents
+// provides the mTLS client to the owning agent.
+func NewTaskHandler(agents agentclient.Provider) *TaskHandler {
+	return &TaskHandler{agents: agents}
+}
 
-		key := model.NewKey(data.TenantID, data.Name, data.Kind, parentID, data.Target, data.Labels)
-		key.ID = data.KeyID
-		key.LifeCycleState = model.KeyLifeCyclePreActivation
+func (h *TaskHandler) TaskType() string {
+	return TaskType
+}
 
-		err := keyStore.CreateKey(ctx, key)
-		if err == nil {
-			slogctx.Info(ctx, "key announced", "keyID", key.ID, "tenant", key.TenantID)
-			resp.Complete()
-			return
-		}
-
-		// Idempotent re-delivery: agent already has the key.
-		if errors.Is(err, store.ErrKeyInsertConflict) {
-			slogctx.Info(ctx, "key already announced (idempotent)", "keyID", key.ID)
-			resp.Complete()
-			return
-		}
-
-		// Classify the underlying postgres error for terminal vs retryable.
-		if pqErr, ok := errors.AsType[*pq.Error](err); ok {
-			switch string(pqErr.Code) {
-			case pgCodeForeignKeyViolation:
-				// Tenant missing on agent (or other FK violation) — retrying
-				// won't help until upstream fixes the data.
-				resp.Fail(fmt.Sprintf("foreign key violation while storing key: %v", err))
-				return
-			case pgCodeUniqueViolation:
-				// Belt-and-suspenders: should already be caught above as
-				// ErrKeyInsertConflict, but be defensive.
-				resp.Complete()
-				return
-			}
-		}
-
-		// Unknown error → leave in processing state with a backoff so orbital
-		// re-delivers without hot-looping.
-		slogctx.Warn(ctx, "transient error storing key, will retry", "err", err, "keyID", key.ID)
-		resp.ContinueAndWaitFor(retryBackoff)
+func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
+	var data TaskData
+	if err := json.Unmarshal(req.TaskData, &data); err != nil {
+		// Terminal: payload is corrupt, retrying won't help.
+		resp.Fail(fmt.Sprintf("unmarshal task data: %v", err))
+		return
 	}
+
+	cli, err := h.agents.Client(data.Target)
+	if err != nil {
+		// No connection configured for the owning agent is a terminal misconfig.
+		resp.Fail(fmt.Sprintf("resolve agent client for %q: %v", data.Target, err))
+		return
+	}
+
+	_, err = cli.UpsertKey(ctx, &agentkeys.UpsertKeyRequest{
+		TenantId:       data.TenantID,
+		KeyId:          data.KeyID,
+		Kind:           data.Kind,
+		Name:           data.Name,
+		ParentId:       data.ParentID,
+		ManagedBy:      data.Target,
+		LifecycleState: string(model.KeyLifeCyclePreActivation),
+		Labels:         data.Labels,
+	})
+	if err != nil {
+		if proto.CodeFromError(err) == proto.Code_ERROR_CODE_ABORT {
+			resp.Fail(fmt.Sprintf("agent %q rejected upsert: %v", data.Target, err))
+			return
+		}
+		slogctx.Warn(ctx, "transient error announcing key, will retry", "err", err, "keyID", data.KeyID, "agent", data.Target)
+		resp.ContinueAndWaitFor(retryBackoff)
+		return
+	}
+
+	slogctx.Info(ctx, "key announced", "keyID", data.KeyID, "tenant", data.TenantID, "agent", data.Target)
+	resp.Complete()
 }

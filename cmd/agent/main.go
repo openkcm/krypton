@@ -13,8 +13,6 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/openkcm/orbital"
-	"github.com/openkcm/orbital/client/rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -22,7 +20,6 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
@@ -94,20 +91,13 @@ func main() {
 	handleErr(err, "failed to create heartbeat worker")
 	go wrkr.Start(ctx)
 
-	// agent-side operator: own database, rpc.Server, handler registration
-	agentDB, rpcServer, operator := setupOperator(ctx)
+	// agent-side database: own store, migrated on startup.
+	agentDB := openAgentDB(ctx)
 	defer agentDB.Close()
 
 	// agent-side key gRPC server: serves ActivateKey (and UpsertKey) for the
 	// root embedded orchestrator over mTLS, backed by the same database.
 	keyServer := startKeyServer(ctx, agentDB, cfg, agentCfg)
-
-	log.Println("Starting operator listener")
-	go func() {
-		if err := operator.ListenAndRespond(ctx); err != nil {
-			log.Printf("operator stopped: %v", err)
-		}
-	}()
 
 	// graceful shutdown on SIGINT/SIGTERM
 	signalChan := make(chan os.Signal, 1)
@@ -118,9 +108,6 @@ func main() {
 	wrkr.Stop()
 	if keyServer != nil {
 		keyServer.GracefulStop()
-	}
-	if err := rpcServer.Close(context.Background()); err != nil {
-		log.Printf("failed to close rpc server: %v", err)
 	}
 
 	log.Println("Deregistering agent...")
@@ -241,7 +228,10 @@ func loadConfig() *config.AgentBootstrapConfig {
 	return cfg
 }
 
-func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator) {
+// openAgentDB opens the agent's database and runs migrations. The agent stores
+// mirrored keys (via UpsertKey) and their activated versions (via ActivateKey)
+// here.
+func openAgentDB(ctx context.Context) *sql.DB {
 	dsn := os.Getenv("AGENT_DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("AGENT_DATABASE_URL environment variable is required")
@@ -253,25 +243,5 @@ func setupOperator(ctx context.Context) (*sql.DB, *rpc.Server, *orbital.Operator
 	err = storesql.Migrate(ctx, db, storesql.Agent)
 	handleErr(err, "failed to run agent migrations")
 
-	keyStore := storesql.NewKeyStore(db)
-
-	agentPort := os.Getenv("AGENT_PORT")
-	if agentPort == "" {
-		agentPort = "9091"
-	}
-
-	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+agentPort)
-	handleErr(err, "failed to listen on agent port")
-
-	rpcServer, err := rpc.NewServer(lis)
-	handleErr(err, "failed to create rpc server")
-
-	op, err := orbital.NewOperator(orbital.TargetOperator{Client: rpcServer})
-	handleErr(err, "failed to create operator")
-
-	err = op.RegisterHandler(announcekey.TaskType, announcekey.NewTaskHandler(keyStore))
-	handleErr(err, "failed to register announce-key handler")
-
-	log.Printf("agent operator listening on :%s", agentPort)
-	return db, rpcServer, op
+	return db
 }

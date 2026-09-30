@@ -68,7 +68,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -147,7 +148,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -192,7 +194,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -225,7 +228,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -268,7 +272,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -304,14 +309,16 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID1,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath1,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort1,
+			"AGENT_GRPC_PORT=" + agentPort1,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		agentCmd2 := createCmd(t, agentBinary, []string{
 			"AGENT_ID=" + agentID2,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath2,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort2,
+			"AGENT_GRPC_PORT=" + agentPort2,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -361,7 +368,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		// when
@@ -403,7 +411,8 @@ func TestRegistration(t *testing.T) {
 			"AGENT_ID=" + agentID,
 			"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 			"AGENT_DATABASE_URL=" + agentDBConnStr,
-			"AGENT_PORT=" + agentPort,
+			"AGENT_GRPC_PORT=" + agentPort,
+			"KRYPTON_TEK_KEY=" + testKeyBase64,
 		})
 
 		err := agentCmd.Start()

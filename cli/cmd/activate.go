@@ -19,7 +19,8 @@ func activateCmd() *cobra.Command {
 }
 
 type activatedKeyRow struct {
-	Status bool
+	Status     bool
+	JobGroupID string
 }
 
 func activateKeyCmd() *cobra.Command {
@@ -47,7 +48,7 @@ func activateKeyCmd() *cobra.Command {
 
 			client := keys.NewKeyServiceClient(conn)
 
-			_, err = client.ActivateKey(cmd.Context(), &keys.ActivateKeyRequest{
+			resp, err := client.ActivateKey(cmd.Context(), &keys.ActivateKeyRequest{
 				TenantId: tenantID,
 				Id:       keyID,
 			})
@@ -55,7 +56,7 @@ func activateKeyCmd() *cobra.Command {
 				return fmt.Errorf("failed to activate key: %w", err)
 			}
 
-			builder, err := output.From(activatedKeyRow{Status: true})
+			builder, err := output.From(activatedKeyRow{Status: true, JobGroupID: resp.GetJobGroupId()})
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
