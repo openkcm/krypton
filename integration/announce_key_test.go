@@ -11,6 +11,7 @@ import (
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 func TestAnnounceKey(t *testing.T) {
@@ -84,37 +85,6 @@ func TestAnnounceKey(t *testing.T) {
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)
 	})
 
-	t.Run("should mark key processing as failed when agent rejects", func(t *testing.T) {
-		ctx := t.Context()
-
-		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
-			Name: "announce-fail-test-" + uuid.New().String(),
-		})
-		require.NoError(t, err)
-
-		tenantID := tenantResp.GetTenant().GetId()
-		// Intentionally NOT inserting tenant in agent DB
-		// → agent UpsertKey fails with FK violation
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
-
-		keyName := "test-key-fail-" + uuid.New().String()
-		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
-			TenantId:   tenantID,
-			Kind:       "K2",
-			Name:       keyName,
-			ParentId:   parentID,
-			TargetName: "agent-k1",
-			Labels:     map[string]string{"cloud": "aws"},
-		})
-		require.NoError(t, err)
-
-		keyID := resp.GetKey().GetId()
-		assert.Equal(t, "pre-activation", resp.GetKey().GetLifeCycleState())
-
-		awaitJobStatus(t, env.RootDB, keyName, "FAILED", 30*time.Second)
-		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "failed", 30*time.Second)
-	})
-
 	t.Run("should be idempotent on duplicate (tenant, name)", func(t *testing.T) {
 		ctx := t.Context()
 
@@ -154,7 +124,7 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, first.GetKey().GetKeyProcessingState().GetJobId(), second.GetKey().GetKeyProcessingState().GetJobId())
 	})
 
-	t.Run("failed retry recovers once agent can accept the key", func(t *testing.T) {
+	t.Run("failed retry recovers once conflicting key is removed", func(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
@@ -163,12 +133,16 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, err)
 
 		tenantID := tenantResp.GetTenant().GetId()
-		tenantName := tenantResp.GetTenant().GetName()
-		// First announce: tenant is missing from the agent DB → agent UpsertKey
-		// hits the tenant FK violation → job FAILED → key processing Failed.
+		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "recover-key-" + uuid.New().String()
+		// A key with the same (tenant, name) but a different kind already lives
+		// on the agent → the announce's UpsertKey is rejected with a terminal
+		// ErrKeyConflict → job FAILED → key processing Failed.
+		insertKey(t, env.AgentDB, model.NewKey(tenantID, keyName, "K3", &parentID, "agent-k1", nil))
+
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
@@ -182,9 +156,8 @@ func TestAnnounceKey(t *testing.T) {
 		awaitJobStatus(t, env.RootDB, keyName, "FAILED", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "failed", 15*time.Second)
 
-		// Now seed the missing prerequisites on the agent and retry.
-		insertTenant(t, env.AgentDB, tenantID, tenantName)
-		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
+		// Remove the conflicting key so the retry can create the announced key.
+		deleteKey(t, env.AgentDB, tenantID, keyName)
 
 		retry, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
@@ -195,7 +168,6 @@ func TestAnnounceKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, keyID, retry.GetKey().GetId(), "retry must reuse the existing key.ID")
-		assert.Equal(t, "pending", retry.GetKey().GetKeyProcessingState().GetStatus())
 
 		awaitKeyExists(t, env.AgentDB, keyID, tenantID, 10*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)

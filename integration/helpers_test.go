@@ -273,11 +273,6 @@ topology:
             type: unsafe-sqlite-memory
       selector_labels:
         cloud: aws
-reconciler:
-  execInterval: 500ms
-  targets:
-    - name: %s
-      address: localhost:%s
 connections:
   - name: root
     address:
@@ -287,7 +282,7 @@ connections:
     address:
       type: grpc
       url: localhost:%s
-`, agentName, agentName, agentPort, agentName, agentPort)
+`, agentName, agentName, agentPort)
 
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
@@ -634,6 +629,18 @@ func insertActiveParentKeyWithID(t *testing.T, db *sql.DB, tenantID, kind, keyID
 		keyID, tenantID, kind, "parent-"+keyID, "root", "active", "completed", now, now,
 	)
 	require.NoError(t, err, "failed to insert active parent key")
+}
+
+func insertKey(t *testing.T, db *sql.DB, key model.Key) {
+	t.Helper()
+	require.NoError(t, storesql.NewKeyStore(db).CreateKey(t.Context(), key))
+}
+
+func deleteKey(t *testing.T, db *sql.DB, tenantID, name string) {
+	t.Helper()
+	_, err := db.ExecContext(t.Context(),
+		`DELETE FROM keys WHERE tenant_id = $1 AND name = $2`, tenantID, name)
+	require.NoError(t, err)
 }
 
 // awaitJobStatus polls the jobs table until the job with the given external ID

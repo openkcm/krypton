@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/handler/announcekeyv2"
+	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
@@ -248,8 +248,8 @@ func (s *KeyService) prepareAnnounceJobGroup(newKey *model.Key) func(ctx context
 			return err
 		}
 
-		job := orbital.NewJob(announcekeyv2.JobType, data).WithExternalID(newKey.Name)
-		jobGroup := orbital.NewJobGroup(announcekeyv2.JobGroupType, job)
+		job := orbital.NewJob(announcekey.JobType, data).WithExternalID(newKey.Name)
+		jobGroup := orbital.NewJobGroup(announcekey.JobGroupType, job)
 
 		_, err = s.preparer.PrepareJobGroup(ctx, jobGroup)
 		return err

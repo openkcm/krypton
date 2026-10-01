@@ -31,7 +31,6 @@ type RootConfig struct {
 	KeyBindings    map[string]spec.KeyBinding `yaml:"key_bindings"`
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
-	Reconciler     ReconcilerConfig           `yaml:"reconciler"`
 	Connections    ConnectionConfigs          `yaml:"connections"`
 	KMIP           *KMIP                      `yaml:"kmip,omitempty"`
 }
@@ -40,9 +39,6 @@ type RootConfig struct {
 func (cfg *RootConfig) Validate() error {
 	if cfg.Name == "" {
 		return ErrConfigNameEmpty
-	}
-	if err := cfg.Reconciler.Validate(); err != nil {
-		return fmt.Errorf("reconciler: %w", err)
 	}
 	if cfg.Role != RootRole {
 		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, RootRole)

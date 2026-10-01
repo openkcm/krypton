@@ -24,6 +24,7 @@ import (
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -168,6 +169,7 @@ func setupKeyServiceServer(ctx context.Context) (*sql.DB, *grpc.Server, net.List
 
 	grpcServer := grpc.NewServer()
 	keys.RegisterKeyServiceServer(grpcServer, keys.NewKeyService(transactor))
+	tenants.RegisterTenantServiceServer(grpcServer, tenants.NewTenantService(transactor))
 
 	log.Printf("agent key service listening on :%s", agentPort)
 	return db, grpcServer, lis
