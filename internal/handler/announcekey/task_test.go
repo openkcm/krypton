@@ -1,6 +1,7 @@
 package announcekey_test
 
 import (
+	"context"
 	"testing"
 	"uuid"
 
@@ -86,7 +87,6 @@ func TestTaskHandler_TenantAutoUpsertedOnAgent_Success(t *testing.T) {
 	agent := startAgentServer(t)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
-	// tenant is not pre-seeded on the agent; validateAndUpsertTenant will create it
 
 	handler := announcekey.NewTaskHandler(
 		storesql.NewTransactor(rootDB),
@@ -268,6 +268,35 @@ func TestTaskHandler_ValidateTransition_InvalidTransition_TerminalFail(t *testin
 	resp := runTask(t, handler, taskPayload(t, key))
 	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
 	assert.Contains(t, resp.ErrorMessage, "invalid key state transition")
+}
+
+func TestTaskHandler_UpdateKeyState_Fail_ForEmptyState(t *testing.T) {
+	ctx := t.Context()
+	rootDB := newRootDB(t)
+
+	key := seedRootTenantAndKey(t, rootDB, "agent")
+	assert.Equal(t, model.KeyProcessingInProgress, key.KeyProcessingState.Status)
+
+	transactor := storesql.NewTransactor(rootDB)
+
+	subj := announcekey.NewTaskHandler(
+		transactor,
+		nil,
+		rootName,
+	)
+
+	state := announcekey.NewSharedState() // empty state, no status or lifecycle set
+	transactionErr := transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
+		return subj.UpdateKeyState(ctx, state, stores, key)
+	})
+
+	assert.NoError(t, transactionErr, "UpdateKeyState should not return an error for empty state")
+	assert.Equal(t, model.KeyProcessingFailed, state.State())
+	assert.Equal(t, "internal error: state not set before updating key state", state.ErrorMessage())
+
+	gotKey, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
+	require.NoError(t, err)
+	assert.Equal(t, model.KeyProcessingFailed, gotKey.KeyProcessingState.Status)
 }
 
 func TestTaskHandler_CorruptPayload_TerminalFail(t *testing.T) {

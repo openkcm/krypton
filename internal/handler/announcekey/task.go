@@ -57,19 +57,17 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 
 	err := store.ChainTransaction(ctx, h.transactor,
 		func(ctx context.Context, stores store.Stores) error {
-			return h.validateAndUpsertTenant(ctx, state, stores, key)
+			return h.validateTenant(ctx, state, stores, key)
+		},
+		func(ctx context.Context, stores store.Stores) error {
+			return h.upsertTenant(ctx, state, stores, key)
 		},
 		validator.ValidateTransition(key.TenantID, key.ID, model.KeyLifeCyclePreActivation),
 		func(ctx context.Context, _ store.Stores) error {
 			return h.upsertKey(ctx, state, &key)
 		},
 		func(ctx context.Context, stores store.Stores) error {
-			return keyoperator.UpdateKeyState(key.TenantID, key.ID, keyoperator.Transition{
-				FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-				ToLifeCycle:    model.KeyLifeCyclePreActivation,
-				FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
-				ToProcessing:   state.state,
-			})(ctx, stores)
+			return h.updateKeyState(ctx, state, stores, key)
 		},
 	)
 
@@ -85,8 +83,35 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 	}
 }
 
-func (h *TaskHandler) validateAndUpsertTenant(ctx context.Context, result *sharedState, stores store.Stores, key model.Key) error {
-	if result.isTerminalState() {
+func (h *TaskHandler) validateTenant(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+	err := validator.ValidateTenant(key.TenantID)(ctx, stores)
+	if err != nil {
+		if errors.Is(err, store.ErrTenantNotFound) {
+			sharedState.withState(model.KeyProcessingFailed).
+				withErrorMessage(fmt.Sprintf("tenant %q not found", key.TenantID))
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (h *TaskHandler) updateKeyState(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+	if sharedState.state == "" {
+		sharedState.withState(model.KeyProcessingFailed).
+			withErrorMessage("internal error: state not set before updating key state")
+	}
+
+	return keyoperator.UpdateKeyState(key.TenantID, key.ID, keyoperator.Transition{
+		FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+		ToLifeCycle:    model.KeyLifeCyclePreActivation,
+		FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
+		ToProcessing:   sharedState.state,
+	})(ctx, stores)
+}
+
+func (h *TaskHandler) upsertTenant(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+	if sharedState.isTerminalState() {
 		return nil
 	}
 
@@ -95,7 +120,7 @@ func (h *TaskHandler) validateAndUpsertTenant(ctx context.Context, result *share
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
-			result.withState(model.KeyProcessingFailed).
+			sharedState.withState(model.KeyProcessingFailed).
 				withErrorMessage(fmt.Sprintf("tenant %q not found", key.TenantID))
 			return nil
 		}
@@ -108,7 +133,7 @@ func (h *TaskHandler) validateAndUpsertTenant(ctx context.Context, result *share
 
 	c, ok := h.registry.Get(key.ManagedBy)
 	if !ok {
-		result.withState(model.KeyProcessingFailed).
+		sharedState.withState(model.KeyProcessingFailed).
 			withErrorMessage(fmt.Sprintf("no connection registered for target %q", key.ManagedBy))
 		return nil
 	}
@@ -122,7 +147,7 @@ func (h *TaskHandler) validateAndUpsertTenant(ctx context.Context, result *share
 		if !isTerminalUpsertErr(err) {
 			return err
 		}
-		result.withState(model.KeyProcessingFailed).
+		sharedState.withState(model.KeyProcessingFailed).
 			withErrorMessage(fmt.Sprintf("upsert rejected by agent %q: %v", key.ManagedBy, err))
 		return nil
 	}
@@ -130,19 +155,19 @@ func (h *TaskHandler) validateAndUpsertTenant(ctx context.Context, result *share
 	return nil
 }
 
-func (h *TaskHandler) upsertKey(ctx context.Context, result *sharedState, key *model.Key) error {
-	if result.isTerminalState() {
+func (h *TaskHandler) upsertKey(ctx context.Context, sharedState *sharedState, key *model.Key) error {
+	if sharedState.isTerminalState() {
 		return nil
 	}
 
 	if key.ManagedBy == h.rootName {
-		result.withState(model.KeyProcessingCompleted)
+		sharedState.withState(model.KeyProcessingCompleted)
 		return nil
 	}
 
 	c, ok := h.registry.Get(key.ManagedBy)
 	if !ok {
-		result.withState(model.KeyProcessingFailed).
+		sharedState.withState(model.KeyProcessingFailed).
 			withErrorMessage(fmt.Sprintf("no connection registered for target %q", key.ManagedBy))
 		return nil
 	}
@@ -153,12 +178,12 @@ func (h *TaskHandler) upsertKey(ctx context.Context, result *sharedState, key *m
 			return err
 		}
 
-		result.withState(model.KeyProcessingFailed).
+		sharedState.withState(model.KeyProcessingFailed).
 			withErrorMessage(fmt.Sprintf("upsert rejected by agent %q: %v", key.ManagedBy, err))
 		return nil
 	}
 
-	result.withState(model.KeyProcessingCompleted)
+	sharedState.withState(model.KeyProcessingCompleted)
 	return nil
 }
 
