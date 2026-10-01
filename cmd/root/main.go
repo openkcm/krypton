@@ -33,6 +33,7 @@ import (
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/model"
@@ -136,6 +137,9 @@ func main() {
 
 	// gRPC server setup for keys API
 	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(*cfg, transactor, keyStore, keyVersionStore, orch, kpMgr))
+
+	// gRPC server setup for actions API
+	actions.RegisterActionServiceServer(grpcServer, actions.NewService(orch))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
