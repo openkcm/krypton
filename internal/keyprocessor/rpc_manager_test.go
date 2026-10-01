@@ -10,9 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
@@ -55,6 +57,16 @@ func TestRPCManager(t *testing.T) {
 		tenantID := createTenant(t, db)
 		kStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
+
+		parentConfig := config.ConnectionConfig{
+			Name: "root",
+			Address: config.Address{
+				Type: config.AddressTypeGRPC,
+				URL:  remoteManager.address,
+			},
+		}
+
+		registry := grpcRegistryFromConnectionCfg(t, parentConfig)
 
 		// creating a key processor manager with a remote parent key provider
 		mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
@@ -100,14 +112,7 @@ func TestRPCManager(t *testing.T) {
 					},
 				},
 			},
-			Auth: nil,
-			ParentConnection: config.ConnectionConfig{
-				Name: "root",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  remoteManager.address,
-				},
-			},
+			Registry: registry,
 		})
 		require.NoError(t, err)
 
@@ -205,6 +210,16 @@ func TestRPCManager(t *testing.T) {
 		kStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
+		middleParentCfg := config.ConnectionConfig{
+			Name: "root",
+			Address: config.Address{
+				Type: config.AddressTypeGRPC,
+				URL:  rootRemote.address,
+			},
+		}
+
+		middleRegistry := grpcRegistryFromConnectionCfg(t, middleParentCfg)
+
 		// --- middle agent (real Manager exposed via gRPC) ---
 		middleMgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 			KeyStore:        kStore,
@@ -233,14 +248,7 @@ func TestRPCManager(t *testing.T) {
 					{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 				},
 			},
-			Auth: nil,
-			ParentConnection: config.ConnectionConfig{
-				Name: "root",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  rootRemote.address,
-				},
-			},
+			Registry: middleRegistry,
 		})
 		require.NoError(t, err)
 
@@ -256,7 +264,18 @@ func TestRPCManager(t *testing.T) {
 				return middleMgr.Unseal(ctx, req)
 			},
 		}
-		middlMgr := setupRemoteSealer(t, middleMock)
+
+		middleSealer := setupRemoteSealer(t, middleMock)
+
+		leafParentCfg := config.ConnectionConfig{
+			Name: "middle",
+			Address: config.Address{
+				Type: config.AddressTypeGRPC,
+				URL:  middleSealer.address,
+			},
+		}
+
+		leafRegistry := grpcRegistryFromConnectionCfg(t, leafParentCfg)
 
 		// --- leaf agent (Manager under test) ---
 		leafMgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
@@ -288,14 +307,7 @@ func TestRPCManager(t *testing.T) {
 					{Kind: "K5", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 				},
 			},
-			Auth: nil,
-			ParentConnection: config.ConnectionConfig{
-				Name: "middle",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  middlMgr.address,
-				},
-			},
+			Registry: leafRegistry,
 		})
 		require.NoError(t, err)
 
@@ -439,6 +451,16 @@ func TestRPCManager(t *testing.T) {
 		kStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
+		parentConfig := config.ConnectionConfig{
+			Name: "root",
+			Address: config.Address{
+				Type: config.AddressTypeGRPC,
+				URL:  remoteManager.address,
+			},
+		}
+
+		registry := grpcRegistryFromConnectionCfg(t, parentConfig)
+
 		// creating a key processor manager with a remote parent key provider
 		mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 			KeyStore:        kStore,
@@ -483,14 +505,7 @@ func TestRPCManager(t *testing.T) {
 					},
 				},
 			},
-			Auth: nil,
-			ParentConnection: config.ConnectionConfig{
-				Name: "root",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  remoteManager.address,
-				},
-			},
+			Registry: registry,
 		})
 		require.NoError(t, err)
 
@@ -655,4 +670,15 @@ func activate(t *testing.T, s store.Key, key model.Key) {
 		TenantID: key.TenantID,
 		NewState: model.KeyLifeCycleActive,
 	}))
+}
+
+func grpcRegistryFromConnectionCfg(t *testing.T, cfg config.ConnectionConfig) *grpcconn.Registry {
+	t.Helper()
+	registry, err := grpcconn.NewRegistry(
+		config.ConnectionConfigs{cfg},
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = registry.Close() })
+	return registry
 }

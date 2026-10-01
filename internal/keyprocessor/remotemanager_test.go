@@ -2,25 +2,15 @@ package keyprocessor_test
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"errors"
-	"math/big"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
@@ -28,87 +18,29 @@ import (
 )
 
 func TestNewRPCManager(t *testing.T) {
-	t.Run("should succeed with nil TLS config (insecure)", func(t *testing.T) {
+	t.Run("should return error when grpc connection is nil", func(t *testing.T) {
 		// given
-		target := "localhost:50051"
 
 		// when
-		mgr, err := keyprocessor.NewRPCManager(target, nil)
+		mgr, err := keyprocessor.NewRPCManager(nil)
 
 		// then
-		assert.NoError(t, err)
-		assert.NotNil(t, mgr)
-	})
-
-	t.Run("should return error for unsupported auth config type", func(t *testing.T) {
-		// given
-		target := "localhost:50051"
-		tlsCfg := &unsupportedAuthConfig{}
-
-		// when
-		mgr, err := keyprocessor.NewRPCManager(target, tlsCfg)
-
-		// then
-		assert.ErrorIs(t, err, config.ErrUnknownAuthType)
+		assert.ErrorIs(t, err, keyprocessor.ErrNilGRPCConn)
 		assert.Nil(t, mgr)
 	})
 
-	t.Run("should return error when client cert file does not exist", func(t *testing.T) {
+	t.Run("should create a rpc manager from a valid grpc connection", func(t *testing.T) {
 		// given
 		target := "localhost:50051"
-		tlsCfg := &config.MTLSConfig{
-			Client: config.TLSClient{
-				CertPath: "/nonexistent/client-cert.pem",
-				KeyPath:  "/nonexistent/client-key.pem",
-				CAPath:   "/nonexistent/ca.pem",
-			},
-		}
+		conn, err := grpc.NewClient(
+			target,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
 
 		// when
-		mgr, err := keyprocessor.NewRPCManager(target, tlsCfg)
-
-		// then
-		assert.Error(t, err)
-		assert.Nil(t, mgr)
-	})
-
-	t.Run("should return error when CA file contains invalid PEM", func(t *testing.T) {
-		// given
-		target := "localhost:50051"
-		dir := t.TempDir()
-
-		certPEM, keyPEM := generateSelfSignedCert(t)
-		certPath := filepath.Join(dir, "client-cert.pem")
-		keyPath := filepath.Join(dir, "client-key.pem")
-		caPath := filepath.Join(dir, "ca.pem")
-
-		require.NoError(t, os.WriteFile(certPath, certPEM, 0o600))
-		require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600))
-		require.NoError(t, os.WriteFile(caPath, []byte("not a certificate"), 0o600))
-
-		tlsCfg := &config.MTLSConfig{
-			Client: config.TLSClient{
-				CertPath: certPath,
-				KeyPath:  keyPath,
-				CAPath:   caPath,
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewRPCManager(target, tlsCfg)
-
-		// then
-		assert.ErrorIs(t, err, config.ErrCAInvalid)
-		assert.Nil(t, mgr)
-	})
-
-	t.Run("should succeed with valid mTLS config", func(t *testing.T) {
-		// given
-		target := "localhost:50051"
-		tlsCfg := newTestMTLSConfig(t)
-
-		// when
-		mgr, err := keyprocessor.NewRPCManager(target, tlsCfg)
+		mgr, err := keyprocessor.NewRPCManager(conn)
 
 		// then
 		assert.NoError(t, err)
@@ -591,13 +523,6 @@ func TestConcurrentSealUnseal(t *testing.T) {
 	})
 }
 
-// unsupportedAuthConfig is a config.AuthConfig that is not *config.MTLSConfig,
-// causing config.GetAuthConfig to return config.ErrUnknownAuthType.
-type unsupportedAuthConfig struct{}
-
-func (u *unsupportedAuthConfig) AuthType() config.AuthType { return "unsupported" }
-func (u *unsupportedAuthConfig) Validate() error           { return nil }
-
 // mockServiceClient implements sealer.ServiceClient for testing RPCManager
 // without a real gRPC connection.
 type mockServiceClient struct {
@@ -611,102 +536,4 @@ func (m *mockServiceClient) Seal(ctx context.Context, in *sealer.SealRequest, op
 
 func (m *mockServiceClient) Unseal(ctx context.Context, in *sealer.UnsealRequest, opts ...grpc.CallOption) (*sealer.UnsealResponse, error) {
 	return m.unsealFn(ctx, in, opts...)
-}
-
-// ---------------------------------------------------------------------------
-// TLS helpers
-// ---------------------------------------------------------------------------
-
-// newTestMTLSConfig generates a self-signed CA, a client keypair signed by that
-// CA, and writes them to a temp directory. It returns a valid *config.MTLSConfig
-// that will pass BuildTLSConfig.
-func newTestMTLSConfig(t *testing.T) *config.MTLSConfig {
-	t.Helper()
-	dir := t.TempDir()
-
-	// Generate CA.
-	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	caTmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "test-ca"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
-	require.NoError(t, err)
-	caCert, err := x509.ParseCertificate(caDER)
-	require.NoError(t, err)
-	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
-
-	// Generate client cert signed by CA.
-	clientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	require.NoError(t, err)
-	clientTmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "test-client"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	}
-	clientDER, err := x509.CreateCertificate(rand.Reader, clientTmpl, caCert, &clientKey.PublicKey, caKey)
-	require.NoError(t, err)
-	clientCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: clientDER})
-
-	clientKeyDER, err := x509.MarshalPKCS8PrivateKey(clientKey)
-	require.NoError(t, err)
-	clientKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: clientKeyDER})
-
-	// Write files.
-	certPath := filepath.Join(dir, "client-cert.pem")
-	keyPath := filepath.Join(dir, "client-key.pem")
-	caPath := filepath.Join(dir, "ca.pem")
-
-	require.NoError(t, os.WriteFile(certPath, clientCertPEM, 0o600))
-	require.NoError(t, os.WriteFile(keyPath, clientKeyPEM, 0o600))
-	require.NoError(t, os.WriteFile(caPath, caPEM, 0o600))
-
-	return &config.MTLSConfig{
-		Client: config.TLSClient{
-			CertPath: certPath,
-			KeyPath:  keyPath,
-			CAPath:   caPath,
-		},
-	}
-}
-
-// generateSelfSignedCert generates a self-signed certificate and private key
-// for use in tests that need valid cert+key files but an invalid CA.
-func generateSelfSignedCert(t *testing.T) (certPEM, keyPEM []byte) {
-	t.Helper()
-
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	tmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "self-signed"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		BasicConstraintsValid: true,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	require.NoError(t, err)
-
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	require.NoError(t, err)
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-
-	return certPEM, keyPEM
 }

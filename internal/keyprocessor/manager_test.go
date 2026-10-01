@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
@@ -17,6 +19,7 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
@@ -897,6 +900,20 @@ func TestNewManager(t *testing.T) {
 
 		t.Run("with agent bindings and ParentKeyProvider", func(t *testing.T) {
 			// given
+			parentConfig := config.ConnectionConfig{
+				Name: "root-agent",
+				Address: config.Address{
+					URL:  "localhost",
+					Type: config.AddressTypeGRPC,
+				},
+			}
+
+			registry, err := grpcconn.NewRegistry(
+				config.ConnectionConfigs{parentConfig},
+				grpc.WithTransportCredentials(insecure.NewCredentials()))
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = registry.Close() })
+
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
@@ -923,13 +940,7 @@ func TestNewManager(t *testing.T) {
 						VaultSpec:   newTestVaultSpec(),
 					},
 				},
-				ParentConnection: config.ConnectionConfig{
-					Name: "root-agent",
-					Address: config.Address{
-						URL:  "localhost",
-						Type: config.AddressTypeGRPC,
-					},
-				},
+				Registry: registry,
 			}
 
 			// when
@@ -940,7 +951,60 @@ func TestNewManager(t *testing.T) {
 			assert.NotNil(t, mgr)
 		})
 
-		t.Run("should return error when ParentKeyProvider is specified but no connection config", func(t *testing.T) {
+		t.Run("should return error when ParentKeyProvider is specified but no matching agent", func(t *testing.T) {
+			// given
+			unknownParent := config.ConnectionConfig{
+				Name: "unknown-agent",
+				Address: config.Address{
+					URL:  "localhost",
+					Type: config.AddressTypeGRPC,
+				},
+			}
+
+			registry, err := grpcconn.NewRegistry(
+				config.ConnectionConfigs{unknownParent},
+				grpc.WithTransportCredentials(insecure.NewCredentials()))
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = registry.Close() })
+
+			cfg := keyprocessor.ManagerConfig{
+				KeyStore:        &keyStoreWrapper{},
+				KeyVersionStore: &keyVersionStoreWrapper{},
+				Hierarchy: spec.KeyHierarchy{
+					Name: "test",
+					KeySpecs: []spec.KeySpec{
+						{Kind: "K0", Role: spec.KeyRoleRoot},
+						{Kind: "K1", Role: spec.KeyRoleDek},
+						{Kind: "K2", Role: spec.KeyRoleTek},
+						{Kind: "K3", Role: spec.KeyRoleDek},
+					},
+				},
+				Bindings: map[model.KeyKind]spec.KeyBinding{
+					"K2": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+						SealerSpec:  newTestSealerSpec(t),
+						ParentKeyProvider: &spec.ParentKeyProviderRef{
+							AgentName: "root-agent",
+						},
+					},
+					"K3": {
+						CryptorSpec: newTestCryptorSpec(),
+						VaultSpec:   newTestVaultSpec(),
+					},
+				},
+				Registry: registry,
+			}
+
+			// when
+			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+			// then
+			assert.ErrorIs(t, err, keyprocessor.ErrParentNotRegistered)
+			assert.Nil(t, mgr)
+		})
+
+		t.Run("should return error when ParentKeyProvider is specified but nil registry", func(t *testing.T) {
 			// given
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
@@ -968,20 +1032,14 @@ func TestNewManager(t *testing.T) {
 						VaultSpec:   newTestVaultSpec(),
 					},
 				},
-				ParentConnection: config.ConnectionConfig{
-					Name: "unknown-agent",
-					Address: config.Address{
-						URL:  "localhost",
-						Type: config.AddressTypeGRPC,
-					},
-				},
+				Registry: nil,
 			}
 
 			// when
 			mgr, err := keyprocessor.NewManager(t.Context(), cfg)
 
 			// then
-			assert.Error(t, err)
+			assert.ErrorIs(t, err, keyprocessor.ErrRegistryRequired)
 			assert.Nil(t, mgr)
 		})
 	})

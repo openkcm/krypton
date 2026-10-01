@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -28,16 +28,19 @@ var (
 	ErrKeyStoreMissing = errors.New("key store is required")
 	// ErrKeyVersionStoreMissing is returned when the key version store is nil.
 	ErrKeyVersionStoreMissing = errors.New("key version store is required")
+	// ErrRegistryRequired is returned when a remote parent key provider is configured but no registry is set.
+	ErrRegistryRequired = errors.New("no registry provided for parent key provider")
+	// ErrParentNotRegistered is returned when the registry has no connection for the requested parent agent.
+	ErrParentNotRegistered = errors.New("no connection registered for parent key provider")
 )
 
 // ManagerConfig holds the dependencies needed to construct a Manager.
 type ManagerConfig struct {
-	KeyStore         store.Key
-	KeyVersionStore  store.KeyVersion
-	Bindings         map[model.KeyKind]spec.KeyBinding
-	Hierarchy        spec.KeyHierarchy
-	Auth             config.AuthConfig
-	ParentConnection config.ConnectionConfig
+	KeyStore        store.Key
+	KeyVersionStore store.KeyVersion
+	Bindings        map[model.KeyKind]spec.KeyBinding
+	Hierarchy       spec.KeyHierarchy
+	Registry        *grpcconn.Registry
 }
 
 // Manager validates the key lifecycle, resolves key versions, and delegates to processors.
@@ -282,14 +285,16 @@ func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind mo
 
 func resolveRemoteParent(cfg ManagerConfig, binding spec.KeyBinding) (cryptor.Sealer, error) {
 	name := binding.ParentKeyProvider.AgentName
-	if name != cfg.ParentConnection.Name {
-		return nil, fmt.Errorf(
-			"parent key provider agent name %q does not match parent connection name %q",
-			name, cfg.ParentConnection.Name,
-		)
+	if cfg.Registry == nil {
+		return nil, fmt.Errorf("%w: %q", ErrRegistryRequired, name)
 	}
 
-	mgr, err := NewRPCManager(cfg.ParentConnection.Address.URL, cfg.Auth)
+	conn, ok := cfg.Registry.Get(name)
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrParentNotRegistered, name)
+	}
+
+	mgr, err := NewRPCManager(conn)
 	if err != nil {
 		return nil, fmt.Errorf("creating RPC manager for parent key provider %q: %w", name, err)
 	}
