@@ -631,6 +631,18 @@ func insertActiveParentKeyWithID(t *testing.T, db *sql.DB, tenantID, kind, keyID
 	require.NoError(t, err, "failed to insert active parent key")
 }
 
+func insertKey(t *testing.T, db *sql.DB, key model.Key) {
+	t.Helper()
+	require.NoError(t, storesql.NewKeyStore(db).CreateKey(t.Context(), key))
+}
+
+func deleteKey(t *testing.T, db *sql.DB, tenantID, name string) {
+	t.Helper()
+	_, err := db.ExecContext(t.Context(),
+		`DELETE FROM keys WHERE tenant_id = $1 AND name = $2`, tenantID, name)
+	require.NoError(t, err)
+}
+
 // awaitJobStatus polls the jobs table until the job with the given external ID
 // reaches the expected status. Fails the test if the timeout is exceeded.
 func awaitJobStatus(t *testing.T, db *sql.DB, externalID, expectedStatus string, timeout time.Duration) {
