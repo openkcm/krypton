@@ -15,6 +15,7 @@ import (
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/validator"
@@ -249,7 +250,11 @@ func (s *KeyService) prepareAnnounceJobGroup(newKey *model.Key) func(ctx context
 		}
 
 		job := orbital.NewJob(announcekey.JobType, data).WithExternalID(newKey.Name)
-		jobGroup := orbital.NewJobGroup(announcekey.JobGroupType, job)
+		jobGroup := orbital.NewJobGroup(announcekey.JobGroupType, job).WithLabels(orbital.Labels{
+			actions.LabelKeyTargetType: actions.TargetType_TARGET_TYPE_KEY.String(),
+			actions.LabelKeyTargetID:   newKey.TenantID + ":" + newKey.ID,
+			actions.LabelKeyCascading:  "false",
+		})
 
 		_, err = s.preparer.PrepareJobGroup(ctx, jobGroup)
 		return err

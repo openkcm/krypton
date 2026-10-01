@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -131,6 +132,11 @@ func TestAnnounceKey(t *testing.T) {
 		require.Len(t, spy.groups[0].Jobs, 1)
 		assert.Equal(t, name, spy.groups[0].Jobs[0].ExternalID,
 			"ExternalID is the key name for admin-friendly tracing")
+
+		labels := spy.groups[0].Labels
+		assert.Equal(t, actions.TargetType_TARGET_TYPE_KEY.String(), labels[actions.LabelKeyTargetType])
+		assert.Equal(t, resp.GetKey().GetTenantId()+":"+resp.GetKey().GetId(), labels[actions.LabelKeyTargetID])
+		assert.Equal(t, "false", labels[actions.LabelKeyCascading])
 	})
 
 	t.Run("should surface RETRY when PrepareJobGroup fails", func(t *testing.T) {
