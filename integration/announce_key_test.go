@@ -12,6 +12,8 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
+	"github.com/openkcm/krypton/pkg/store/sql"
 )
 
 func TestAnnounceKey(t *testing.T) {
@@ -60,7 +62,6 @@ func TestAnnounceKey(t *testing.T) {
 
 		insertTenant(t, env.AgentDB, tenantID, tenantName)
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
-		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "test-key-" + uuid.New().String()
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -95,7 +96,6 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
-		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "idempotent-key-" + uuid.New().String()
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -135,7 +135,6 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
-		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		keyName := "recover-key-" + uuid.New().String()
 		// A key with the same (tenant, name) but a different kind already lives
@@ -173,7 +172,7 @@ func TestAnnounceKey(t *testing.T) {
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)
 	})
 
-	t.Run("should announce agent-managed key via CLI and complete job", func(t *testing.T) {
+	t.Run("should announce agent-managed key via CLI and complete job for an existing tenant in agent", func(t *testing.T) {
 		ctx := t.Context()
 
 		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
@@ -186,7 +185,6 @@ func TestAnnounceKey(t *testing.T) {
 
 		insertTenant(t, env.AgentDB, tenantID, tenantName)
 		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
-		insertActiveParentKeyWithID(t, env.AgentDB, tenantID, "K1", parentID)
 
 		homeDir := t.TempDir()
 		// login with no auth
@@ -221,6 +219,144 @@ func TestAnnounceKey(t *testing.T) {
 		awaitKeyExists(t, env.AgentDB, key.ID, tenantID, 10*time.Second)
 		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, key.ID, tenantID, "completed", 15*time.Second)
+	})
+
+	t.Run("should announce agent-managed key via CLI and complete job for a non existing tenant in agent", func(t *testing.T) {
+		ctx := t.Context()
+
+		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
+			Name: "announce-cli-test-" + uuid.New().String(),
+		})
+		require.NoError(t, err)
+
+		tenantID := tenantResp.GetTenant().GetId()
+		tenantName := tenantResp.GetTenant().GetName()
+
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+
+		homeDir := t.TempDir()
+		// login with no auth
+		loginNoAuth(t, homeDir)
+
+		seedSelectedTenant(t, homeDir, tenantID, tenantName)
+
+		// check if tenant is not present in agent db
+		agentTenantStore := sql.NewTenantStore(env.AgentDB)
+		_, err = agentTenantStore.GetTenant(ctx, store.GetTenantQuery{
+			ID: tenantID,
+		})
+		assert.ErrorIs(t, err, store.ErrTenantNotFound, "tenant should not be present in agent db")
+
+		keyName := "cli-key-" + uuid.New().String()
+		cmd := newCLICommand(ctx, homeDir, "announce", "key",
+			"--kind", "K2",
+			"--name", keyName,
+			"--parent", parentID,
+			"--target-name", "agent-k1",
+			"--label", "cloud=aws",
+			"--json",
+			"--server", "localhost:"+env.RootPort,
+		)
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "command should succeed, output: %s", string(output))
+
+		rows := decodeAnnouncedKey(t, output)
+		require.Len(t, rows, 1)
+		key := rows[0]
+
+		assert.Equal(t, "K2", key.Kind)
+		assert.Equal(t, keyName, key.Name)
+		assert.Equal(t, parentID, key.ParentID)
+		assert.Equal(t, "agent-k1", key.ManagedBy)
+		assert.Equal(t, "pending", key.Status)
+		assert.NotEmpty(t, key.ID)
+
+		awaitKeyExists(t, env.AgentDB, key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, key.ID, tenantID, "completed", 15*time.Second)
+
+		aTenantRes, err := agentTenantStore.GetTenant(ctx, store.GetTenantQuery{
+			ID: tenantID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, tenantName, aTenantRes.Tenant.Name, "tenant name should match in agent db")
+		assert.Equal(t, tenantID, aTenantRes.Tenant.ID, "tenant ID should match in agent db")
+	})
+
+	t.Run("should announce multiple keys and complete jobs", func(t *testing.T) {
+		ctx := t.Context()
+
+		tenantResp, err := tenantCli.CreateTenant(ctx, &admin.CreateTenantRequest{
+			Name: "announce-cli-test-" + uuid.New().String(),
+		})
+		require.NoError(t, err)
+
+		tenantID := tenantResp.GetTenant().GetId()
+		tenantName := tenantResp.GetTenant().GetName()
+
+		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+
+		homeDir := t.TempDir()
+		// login with no auth
+		loginNoAuth(t, homeDir)
+
+		seedSelectedTenant(t, homeDir, tenantID, tenantName)
+
+		k2Name := "cli-key-" + uuid.New().String()
+		cmd := newCLICommand(ctx, homeDir, "announce", "key",
+			"--kind", "K2",
+			"--name", k2Name,
+			"--parent", parentID,
+			"--target-name", "agent-k1",
+			"--label", "cloud=aws",
+			"--json",
+			"--server", "localhost:"+env.RootPort,
+		)
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "command should succeed, output: %s", string(output))
+
+		rows := decodeAnnouncedKey(t, output)
+		require.Len(t, rows, 1)
+		k2key := rows[0]
+
+		assert.Equal(t, "K2", k2key.Kind)
+		assert.Equal(t, k2Name, k2key.Name)
+		assert.Equal(t, parentID, k2key.ParentID)
+		assert.Equal(t, "agent-k1", k2key.ManagedBy)
+		assert.Equal(t, "pending", k2key.Status)
+		assert.NotEmpty(t, k2key.ID)
+
+		awaitKeyExists(t, env.AgentDB, k2key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, env.RootDB, k2Name, "DONE", 15*time.Second)
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, k2key.ID, tenantID, "completed", 15*time.Second)
+
+		k3Name := "cli-key-" + uuid.New().String()
+		cmd = newCLICommand(ctx, homeDir, "announce", "key",
+			"--kind", "K3",
+			"--name", k3Name,
+			"--parent", k2key.ID,
+			"--target-name", "agent-k1",
+			"--label", "cloud=aws",
+			"--json",
+			"--server", "localhost:"+env.RootPort,
+		)
+		output, err = cmd.CombinedOutput()
+		require.NoError(t, err, "command should succeed, output: %s", string(output))
+
+		rows = decodeAnnouncedKey(t, output)
+		require.Len(t, rows, 1)
+		k3key := rows[0]
+
+		assert.Equal(t, "K3", k3key.Kind)
+		assert.Equal(t, k3Name, k3key.Name)
+		assert.Equal(t, k2key.ID, k3key.ParentID)
+		assert.Equal(t, "agent-k1", k3key.ManagedBy)
+		assert.Equal(t, "pending", k3key.Status)
+		assert.NotEmpty(t, k3key.ID)
+
+		awaitKeyExists(t, env.AgentDB, k3key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, env.RootDB, k3Name, "DONE", 15*time.Second)
+		awaitKeyProcessingStatusViaGRPC(t, keyCli, k3key.ID, tenantID, "completed", 15*time.Second)
 	})
 }
 
