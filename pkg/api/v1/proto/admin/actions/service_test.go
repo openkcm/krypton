@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"testing"
+	"uuid"
 
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
-	"uuid"
 
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
