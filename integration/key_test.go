@@ -94,14 +94,11 @@ func TestGetKeys(t *testing.T) {
 			actKeys := decodeKeys(t, output)
 			require.Len(t, actKeys, 1)
 			assert.Equal(t, hierarchy.e.Name, actKeys[0].Name)
-			assert.Equal(t, tenantID, actKeys[0].TenantID)
 			assert.Equal(t, hierarchy.e.Kind, actKeys[0].Kind)
 			assert.Equal(t, hierarchy.e.ParentID, actKeys[0].ParentID)
 			assert.Equal(t, "agent-azure", actKeys[0].ManagedBy)
 			assert.Empty(t, actKeys[0].Labels)
 			assert.Equal(t, model.KeyLifeCycleActive, actKeys[0].LifeCycleState)
-			assert.Equal(t, model.KeyProcessingPending, actKeys[0].KeyProcessingState.Status)
-			assert.Empty(t, actKeys[0].KeyProcessingState.JobID)
 			assert.NotEmpty(t, actKeys[0].UpdatedAt)
 			assert.NotEmpty(t, actKeys[0].CreatedAt)
 		})
@@ -186,7 +183,6 @@ func TestGetKeys(t *testing.T) {
 			actKeys := decodeKeys(t, output)
 			require.Len(t, actKeys, 1)
 			assert.Equal(t, hierarchy.h.Name, actKeys[0].Name)
-			assert.Equal(t, tenantID, actKeys[0].TenantID)
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {

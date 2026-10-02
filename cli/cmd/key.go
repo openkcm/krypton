@@ -20,20 +20,6 @@ type keyRows struct {
 	Cursor string
 }
 
-type key struct {
-	ID                 string
-	Name               string
-	TenantID           string
-	Kind               model.KeyKind
-	ParentID           *string
-	ManagedBy          string
-	Labels             model.Labels
-	LifeCycleState     model.KeyLifeCycleState
-	KeyProcessingState model.KeyProcessingState
-	CreatedAt          clock.UnixNano
-	UpdatedAt          clock.UnixNano
-}
-
 type keyRow struct {
 	Kind           model.KeyKind
 	ID             string
@@ -42,6 +28,8 @@ type keyRow struct {
 	LifeCycleState model.KeyLifeCycleState
 	Status         model.KeyProcessingStatus
 	ManagedBy      string
+	CreatedAt      clock.UnixNano
+	UpdatedAt      clock.UnixNano
 	Labels         model.Labels
 }
 
@@ -55,23 +43,8 @@ func newKeyRow(k *keys.Key) keyRow {
 		Labels:         k.GetLabels(),
 		ManagedBy:      k.GetManagedBy(),
 		Status:         model.KeyProcessingStatus(k.GetKeyProcessingState().GetStatus()),
-	}
-}
-
-func newKey(k *keys.Key) key {
-	mk := keys.KeyFromProto(k)
-	return key{
-		ID:                 mk.ID,
-		Name:               mk.Name,
-		TenantID:           mk.TenantID,
-		Kind:               mk.Kind,
-		ParentID:           mk.ParentID,
-		ManagedBy:          mk.ManagedBy,
-		Labels:             mk.Labels,
-		LifeCycleState:     mk.LifeCycleState,
-		KeyProcessingState: mk.KeyProcessingState,
-		CreatedAt:          mk.CreatedAt,
-		UpdatedAt:          mk.UpdatedAt,
+		CreatedAt:      clock.UnixNano(k.GetCreatedAt()),
+		UpdatedAt:      clock.UnixNano(k.GetUpdatedAt()),
 	}
 }
 
@@ -111,7 +84,7 @@ func getKeyCmd() *cobra.Command {
 				return fmt.Errorf("failed to get key: %w", err)
 			}
 
-			builder, err := output.From(newKey(resp.GetKey()))
+			builder, err := output.From(newKeyRow(resp.GetKey()))
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
