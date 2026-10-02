@@ -9,6 +9,9 @@ import (
 )
 
 var timeFormatter = output.ForType(func(t clock.UnixNano) any {
+	if t == 0 {
+		return ""
+	}
 	return t.Time().Format(time.RFC3339)
 })
 
