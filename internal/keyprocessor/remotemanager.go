@@ -7,10 +7,7 @@ import (
 	"log/slog"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
@@ -20,7 +17,10 @@ const (
 	handlerKey = "handlerKey"
 )
 
-var ErrNilSecureBytes = errors.New("securemem.Data is nil or has no bytes")
+var (
+	ErrNilSecureBytes = errors.New("securemem.Data is nil or has no bytes")
+	ErrNilGRPCConn    = errors.New("gRPC connection is nil")
+)
 
 // RPCManager is a [cryptor.Sealer] that delegates seal and unseal operations
 // to a remote agent over gRPC.
@@ -30,31 +30,9 @@ type RPCManager struct {
 
 var _ cryptor.Sealer = (*RPCManager)(nil)
 
-func NewRPCManager(target string, tls config.AuthConfig) (*RPCManager, error) {
-	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-
-	if tls != nil {
-		mtlsCfg, err := config.GetAuthConfig(tls)
-		if err != nil {
-			return nil, err
-		}
-
-		tlsCfg, err := mtlsCfg.Client.BuildTLSConfig()
-		if err != nil {
-			return nil, err
-		}
-
-		opts[0] = grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg))
-	}
-
-	conn, err := grpc.NewClient(
-		target,
-		opts...,
-	)
-	if err != nil {
-		return nil, err
+func NewRPCManager(conn *grpc.ClientConn) (*RPCManager, error) {
+	if conn == nil {
+		return nil, ErrNilGRPCConn
 	}
 
 	return &RPCManager{
