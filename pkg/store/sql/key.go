@@ -134,25 +134,54 @@ func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeys
 // GetDescendantKeys returns all descendants of the given key (including itself)
 // by traversing parent_id down to the leaves.
 // The result is grouped by depth level.
+//
+// When LifeCycleState or Status filters are provided, the filters are applied
+// inside the recursive CTE so that any key that does not match the criteria is
+// excluded together with its entire subtree.
 func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
-	stmt := `
-		WITH RECURSIVE key_tree AS (
-			SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, 0 AS depth
-			FROM keys
-			WHERE id = $1 AND tenant_id = $2
+	args := []any{query.KeyID, query.TenantID}
+	argIdx := 3
 
-			UNION ALL
+	// Build optional filter clauses for both the anchor (no table alias) and
+	// the recursive branch (prefixed with "k.").  Applying the filters inside
+	// the CTE ensures that when a key does not match the criteria its entire
+	// subtree is excluded from the result.
+	var anchorFilter, recursiveFilter strings.Builder
+	if len(query.LifeCycleState) > 0 {
+		fmt.Fprintf(&anchorFilter, " AND life_cycle_state = ANY($%d)", argIdx)
+		fmt.Fprintf(&recursiveFilter, " AND k.life_cycle_state = ANY($%d)", argIdx)
+		args = append(args, query.LifeCycleState)
+		argIdx++
+	}
+	if len(query.Status) > 0 {
+		fmt.Fprintf(&anchorFilter, " AND processing_status = ANY($%d)", argIdx)
+		fmt.Fprintf(&recursiveFilter, " AND k.processing_status = ANY($%d)", argIdx)
+		args = append(args, query.Status)
+	}
 
-			SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, kt.depth + 1
-			FROM keys k
-			INNER JOIN key_tree kt ON k.parent_id = kt.id AND k.tenant_id = kt.tenant_id
-		)
-		SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, depth
-		FROM key_tree
-		ORDER BY depth ASC, created_at ASC
-	`
+	var sb strings.Builder
+	sb.WriteString(`WITH RECURSIVE key_tree AS (`)
 
-	rows, err := ks.db.QueryContext(ctx, stmt, query.KeyID, query.TenantID)
+	// Anchor: select the root key.
+	sb.WriteString(`SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, 0 AS depth 
+		FROM keys 
+		WHERE id = $1 AND tenant_id = $2`)
+	sb.WriteString(anchorFilter.String())
+
+	sb.WriteString(` UNION ALL `)
+
+	// Recursive: join children whose parent is already in key_tree.
+	sb.WriteString(`SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, kt.depth + 1 
+		FROM keys k 
+		INNER JOIN key_tree kt ON k.parent_id = kt.id AND k.tenant_id = kt.tenant_id WHERE 1=1`)
+	sb.WriteString(recursiveFilter.String())
+	sb.WriteString(`) `)
+
+	sb.WriteString(`SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, depth 
+		FROM key_tree 
+		ORDER BY depth ASC, created_at ASC`)
+
+	rows, err := ks.db.QueryContext(ctx, sb.String(), args...)
 	if err != nil {
 		return store.GetDescendantKeysResult{}, err
 	}

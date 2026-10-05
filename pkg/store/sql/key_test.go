@@ -17,26 +17,27 @@ import (
 )
 
 // keyHierarchy holds a test key tree with 10 keys across 4 levels (K0-K3).
-// Each key has a distinct lifecycle state, managing agent, and labels to enable
-// targeted filtering, lifecycle transition, and hierarchy traversal tests.
+// Each key has a distinct lifecycle state, processing status, managing agent,
+// and labels to enable targeted filtering, lifecycle transition, and hierarchy
+// traversal tests.
 //
-// Tree structure:
+// Tree structure (lifecycle state, processing status):
 //
-//	A (K0, root, active, cloud=gcp)
-//	├── aB (K1, root, pre-activation, cloud=gcp)
-//	├── BA (K1, root, pre-activation, cloud=aws1)
-//	├── B (K1, root, active, cloud=gcp)
-//	│   ├── D (K2, agent-aws, suspended, cloud=aws)
-//	│   └── E (K2, agent-azure, pre-activation, cloud=azure, environment=prod)
-//	└── C (K1, root, pre-activation, cloud=azure)
-//	    ├── F (K2, agent-gcp, pre-activation, cloud=aws, environment=prod)
-//	    └── G (K2, agent-onprem, pre-activation, cloud=azure)
-//	        └── H (K3, agent-onprem-2, pre-activation, cloud=aws)
+//	A (K0, root, active, pending, cloud=gcp)
+//	├── Z1 (K1, root, pre-activation, pending, cloud=gcp)
+//	├── Z2 (K1, root, pre-activation, completed, cloud=aws1)
+//	├── B (K1, root, active, pending, cloud=gcp)
+//	│   ├── D (K2, agent-aws, suspended, pending, cloud=aws)
+//	│   └── E (K2, agent-azure, pre-activation, in-progress, cloud=azure, environment=prod)
+//	└── C (K1, root, pre-activation, completed, cloud=azure)
+//	    ├── F (K2, agent-gcp, pre-activation, pending, cloud=aws, environment=prod)
+//	    └── G (K2, agent-onprem, pre-activation, pending, cloud=azure)
+//	        └── H (K3, agent-onprem-2, pre-activation, pending, cloud=aws)
 type keyHierarchy struct {
 	tenant model.Tenant
 	root   model.Key // A
-	ab     model.Key // aB
-	ba     model.Key // BA
+	z1     model.Key // Z1
+	z2     model.Key // Z2
 	b      model.Key
 	c      model.Key
 	d      model.Key
@@ -430,6 +431,7 @@ func TestGetParentKeys(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
 func TestGetDescendantKeys(t *testing.T) {
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
@@ -458,9 +460,9 @@ func TestGetDescendantKeys(t *testing.T) {
 				require.Len(t, layer, 1)                // depth 0: A
 				assert.Equal(t, k.root.ID, layer[0].ID) // A
 			case 1:
-				require.Len(t, layer, 4)              // depth 1: AB,BA, B, C
-				assert.Equal(t, k.ab.ID, layer[0].ID) // AB
-				assert.Equal(t, k.ba.ID, layer[1].ID) // BA
+				require.Len(t, layer, 4)              // depth 1: Z1, Z2, B, C
+				assert.Equal(t, k.z1.ID, layer[0].ID) // Z1
+				assert.Equal(t, k.z2.ID, layer[1].ID) // Z2
 				assert.Equal(t, k.b.ID, layer[2].ID)  // B
 				assert.Equal(t, k.c.ID, layer[3].ID)  // C
 			case 2:
@@ -548,6 +550,308 @@ func TestGetDescendantKeys(t *testing.T) {
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
 	})
+
+	t.Run("should filter by lifecycle state active and exclude non-matching subtrees", func(t *testing.T) {
+		// given – only "active" keys pass: A (active) → B (active).
+		// Z1, Z2, C are pre-activation so they and their subtrees are excluded.
+		// D (suspended) and E (pre-activation) under B are also excluded.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 1)             // depth 1: B only
+				assert.Equal(t, k.b.ID, layer[0].ID) // B
+			}
+			depth++
+		}
+		assert.Equal(t, 2, depth) // 2 levels: A, B
+	})
+
+	t.Run("should return not found when root does not match lifecycle filter", func(t *testing.T) {
+		// given – root A is "active", filter requires "pre-activation" → root excluded → empty result.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+		}
+
+		// when
+		_, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+
+	t.Run("should filter by multiple lifecycle states and exclude suspended subtree", func(t *testing.T) {
+		// given – allow "active" and "pre-activation".
+		// All keys pass except D (suspended). D has no children so only D is excluded.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive, model.KeyLifeCyclePreActivation},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 4)              // depth 1: Z1, Z2, B, C
+				assert.Equal(t, k.z1.ID, layer[0].ID) // Z1
+				assert.Equal(t, k.z2.ID, layer[1].ID) // Z2
+				assert.Equal(t, k.b.ID, layer[2].ID)  // B
+				assert.Equal(t, k.c.ID, layer[3].ID)  // C
+			case 2:
+				require.Len(t, layer, 3)             // depth 2: E, F, G (D excluded)
+				assert.Equal(t, k.e.ID, layer[0].ID) // E
+				assert.Equal(t, k.f.ID, layer[1].ID) // F
+				assert.Equal(t, k.g.ID, layer[2].ID) // G
+			case 3:
+				require.Len(t, layer, 1)             // depth 3: H
+				assert.Equal(t, k.h.ID, layer[0].ID) // H
+			}
+			depth++
+		}
+		assert.Equal(t, 4, depth) // 4 levels total
+	})
+
+	t.Run("should filter by status pending and exclude non-matching subtrees", func(t *testing.T) {
+		// given – filter by "pending". Z2 (completed) excluded. C (completed) excluded
+		// together with its entire subtree (F, G, H). E (in-progress) excluded.
+		// Remaining: A → {Z1, B} → {D}.
+		query := store.GetDescendantKeysQuery{
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Status:   []model.KeyProcessingStatus{model.KeyProcessingPending},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 2)              // depth 1: Z1, B (Z2 excluded)
+				assert.Equal(t, k.z1.ID, layer[0].ID) // Z1
+				assert.Equal(t, k.b.ID, layer[1].ID)  // B
+			case 2:
+				require.Len(t, layer, 1)             // depth 2: D only (E excluded)
+				assert.Equal(t, k.d.ID, layer[0].ID) // D
+			}
+			depth++
+		}
+		assert.Equal(t, 3, depth) // 3 levels: A, {Z1, B}, {D}
+	})
+
+	t.Run("should return not found when no key matches status filter", func(t *testing.T) {
+		// given – root A has status "pending", filter requires "completed" → root excluded → empty.
+		query := store.GetDescendantKeysQuery{
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Status:   []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+		}
+
+		// when
+		_, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+
+	t.Run("should filter by both lifecycle state and status together", func(t *testing.T) {
+		// given – filter: active + pending. A (active, pending) ✓, B (active, pending) ✓.
+		// Z1, Z2, C are pre-activation → excluded with subtrees. D suspended → excluded. E pre-activation → excluded.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			Status:         []model.KeyProcessingStatus{model.KeyProcessingPending},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 1)             // depth 1: B only
+				assert.Equal(t, k.b.ID, layer[0].ID) // B
+			}
+			depth++
+		}
+		assert.Equal(t, 2, depth) // 2 levels: A, B
+	})
+
+	t.Run("should exclude intermediate node and its entire subtree", func(t *testing.T) {
+		// given – filter by "active" starting from B.
+		// B (active) ✓. D (suspended) ✗ → excluded. E (pre-activation) ✗ → excluded.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.b.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)             // depth 0: B
+				assert.Equal(t, k.b.ID, layer[0].ID) // B
+			}
+			depth++
+		}
+		assert.Equal(t, 1, depth) // only B itself
+	})
+
+	t.Run("should return full tree when filter slices are empty", func(t *testing.T) {
+		// given – empty slices behave the same as nil (no filter applied).
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{},
+			Status:         []model.KeyProcessingStatus{},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for range result.KeyTree.IterKeysByLayerAsc() {
+			depth++
+		}
+		assert.Equal(t, 4, depth) // all 4 levels present
+	})
+
+	t.Run("should filter by multiple statuses and exclude only in-progress subtree", func(t *testing.T) {
+		// given – allow "pending" and "completed". Only E (in-progress) is excluded.
+		// All other keys match: A(pending), Z1(pending), Z2(completed), B(pending),
+		// C(completed), D(pending), F(pending), G(pending), H(pending).
+		query := store.GetDescendantKeysQuery{
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Status:   []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingCompleted},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 4)              // depth 1: Z1, Z2, B, C
+				assert.Equal(t, k.z1.ID, layer[0].ID) // Z1
+				assert.Equal(t, k.z2.ID, layer[1].ID) // Z2
+				assert.Equal(t, k.b.ID, layer[2].ID)  // B
+				assert.Equal(t, k.c.ID, layer[3].ID)  // C
+			case 2:
+				require.Len(t, layer, 3)             // depth 2: D, F, G (E excluded)
+				assert.Equal(t, k.d.ID, layer[0].ID) // D
+				assert.Equal(t, k.f.ID, layer[1].ID) // F
+				assert.Equal(t, k.g.ID, layer[2].ID) // G
+			case 3:
+				require.Len(t, layer, 1)             // depth 3: H
+				assert.Equal(t, k.h.ID, layer[0].ID) // H
+			}
+			depth++
+		}
+		assert.Equal(t, 4, depth) // 4 levels total
+	})
+
+	t.Run("should filter by both lifecycle and status excluding keys for different reasons", func(t *testing.T) {
+		// given – LifeCycleState=[active, pre-activation], Status=[pending].
+		// Z2 excluded by status (completed). C excluded by status (completed) → F, G, H cascading.
+		// D excluded by lifecycle (suspended). E excluded by status (in-progress).
+		// Remaining: A(active,pending), Z1(pre-act,pending), B(active,pending).
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive, model.KeyLifeCyclePreActivation},
+			Status:         []model.KeyProcessingStatus{model.KeyProcessingPending},
+		}
+
+		// when
+		result, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		require.NoError(t, err)
+		depth := 0
+		for layer := range result.KeyTree.IterKeysByLayerAsc() {
+			switch depth {
+			case 0:
+				require.Len(t, layer, 1)                // depth 0: A
+				assert.Equal(t, k.root.ID, layer[0].ID) // A
+			case 1:
+				require.Len(t, layer, 2)              // depth 1: Z1, B (Z2 excluded by status, C excluded by status)
+				assert.Equal(t, k.z1.ID, layer[0].ID) // Z1
+				assert.Equal(t, k.b.ID, layer[1].ID)  // B
+			}
+			depth++
+		}
+		assert.Equal(t, 2, depth) // 2 levels: A, {Z1, B}
+	})
+
+	t.Run("should return not found when root matches lifecycle but not status", func(t *testing.T) {
+		// given – A is (active, pending). Filter requires active + completed.
+		// Root matches lifecycle but not status → anchor returns nothing → ErrKeyNotFound.
+		query := store.GetDescendantKeysQuery{
+			KeyID:          k.root.ID,
+			TenantID:       k.tenant.ID,
+			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			Status:         []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+		}
+
+		// when
+		_, err := keyStore.GetDescendantKeys(ctx, query)
+
+		// then
+		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
 }
 
 func TestListKeys(t *testing.T) {
@@ -579,8 +883,8 @@ func TestListKeys(t *testing.T) {
 		assert.Equal(t, h.d.ID, result.Keys[4].ID)    // D
 		assert.Equal(t, h.c.ID, result.Keys[5].ID)    // C
 		assert.Equal(t, h.b.ID, result.Keys[6].ID)    // B
-		assert.Equal(t, h.ba.ID, result.Keys[7].ID)   // BA
-		assert.Equal(t, h.ab.ID, result.Keys[8].ID)   // AB
+		assert.Equal(t, h.z2.ID, result.Keys[7].ID)   // Z2
+		assert.Equal(t, h.z1.ID, result.Keys[8].ID)   // Z1
 		assert.Equal(t, h.root.ID, result.Keys[9].ID) // A
 	})
 
@@ -595,8 +899,8 @@ func TestListKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 10)
 		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
-		assert.Equal(t, h.ab.ID, result.Keys[1].ID)   // AB
-		assert.Equal(t, h.ba.ID, result.Keys[2].ID)   // BA
+		assert.Equal(t, h.z1.ID, result.Keys[1].ID)   // Z1
+		assert.Equal(t, h.z2.ID, result.Keys[2].ID)   // Z2
 		assert.Equal(t, h.b.ID, result.Keys[3].ID)    // B
 		assert.Equal(t, h.c.ID, result.Keys[4].ID)    // C
 		assert.Equal(t, h.d.ID, result.Keys[5].ID)    // D
@@ -637,8 +941,8 @@ func TestListKeys(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, result.Keys, 3)
 			assert.Equal(t, h.b.ID, result.Keys[0].ID)  // B
-			assert.Equal(t, h.ba.ID, result.Keys[1].ID) // BA
-			assert.Equal(t, h.ab.ID, result.Keys[2].ID) // AB
+			assert.Equal(t, h.z2.ID, result.Keys[1].ID) // Z2
+			assert.Equal(t, h.z1.ID, result.Keys[2].ID) // Z1
 			assert.NotEmpty(t, result.Cursor)
 
 			query.Cursor = result.Cursor
@@ -741,8 +1045,8 @@ func TestListKeys(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.Len(t, result.Keys, 4)
-		assert.Equal(t, h.ab.ID, result.Keys[3].ID) // AB
-		assert.Equal(t, h.ba.ID, result.Keys[2].ID) // BA
+		assert.Equal(t, h.z1.ID, result.Keys[3].ID) // Z1
+		assert.Equal(t, h.z2.ID, result.Keys[2].ID) // Z2
 		assert.Equal(t, h.b.ID, result.Keys[1].ID)  // B
 		assert.Equal(t, h.c.ID, result.Keys[0].ID)  // C
 	})
@@ -810,10 +1114,8 @@ func TestListKeys(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		require.Len(t, result.Keys, 3)
-		assert.Equal(t, h.root.ID, result.Keys[2].ID) // A
-		assert.Equal(t, h.ab.ID, result.Keys[1].ID)   // AB
-		assert.Equal(t, h.ba.ID, result.Keys[0].ID)   // BA
+		require.Len(t, result.Keys, 1)
+		assert.Equal(t, h.root.ID, result.Keys[0].ID) // A
 	})
 
 	t.Run("should treat % as a literal character in name filter", func(t *testing.T) {
@@ -1102,9 +1404,10 @@ func TestUpdateKeyStates(t *testing.T) {
 }
 
 // createKeyHierarchy creates a tenant and inserts 10 keys forming the tree documented on [keyHierarchy].
-// Keys are created with varying lifecycle states (active, suspended, pre-activation), managing agents
-// (root, agent-aws, agent-azure, agent-gcp, agent-onprem, agent-onprem-2), and labels (cloud, environment)
-// to support filtering, lifecycle transition, and hierarchy traversal tests.
+// Keys are created with varying lifecycle states (active, suspended, pre-activation), processing statuses
+// (pending, completed, in-progress), managing agents (root, agent-aws, agent-azure, agent-gcp, agent-onprem,
+// agent-onprem-2), and labels (cloud, environment) to support filtering, lifecycle transition, and hierarchy
+// traversal tests.
 func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *storesql.TenantStore) keyHierarchy {
 	t.Helper()
 	ctx := t.Context()
@@ -1117,15 +1420,16 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 	root.LifeCycleState = model.KeyLifeCycleActive
 	require.NoError(t, keyStore.CreateKey(ctx, root))
 
-	ab := model.NewKey(tenant.ID, "aB", "K1", &root.ID, "root", model.Labels{
+	z1 := model.NewKey(tenant.ID, "Z1", "K1", &root.ID, "root", model.Labels{
 		"cloud": "gcp",
 	})
-	require.NoError(t, keyStore.CreateKey(ctx, ab))
+	require.NoError(t, keyStore.CreateKey(ctx, z1))
 
-	ba := model.NewKey(tenant.ID, "BA", "K1", &root.ID, "root", model.Labels{
+	z2 := model.NewKey(tenant.ID, "Z2", "K1", &root.ID, "root", model.Labels{
 		"cloud": "aws1",
 	})
-	require.NoError(t, keyStore.CreateKey(ctx, ba))
+	z2.KeyProcessingState.Status = model.KeyProcessingCompleted
+	require.NoError(t, keyStore.CreateKey(ctx, z2))
 
 	b := model.NewKey(tenant.ID, "B", "K1", &root.ID, "root", model.Labels{
 		"cloud": "gcp",
@@ -1136,6 +1440,7 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 	c := model.NewKey(tenant.ID, "C", "K1", &root.ID, "root", model.Labels{
 		"cloud": "azure",
 	})
+	c.KeyProcessingState.Status = model.KeyProcessingCompleted
 	require.NoError(t, keyStore.CreateKey(ctx, c))
 
 	d := model.NewKey(tenant.ID, "D", "K2", &b.ID, "agent-aws", model.Labels{
@@ -1148,6 +1453,7 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 		"cloud":       "azure",
 		"environment": "prod",
 	})
+	e.KeyProcessingState.Status = model.KeyProcessingInProgress
 	require.NoError(t, keyStore.CreateKey(ctx, e))
 
 	f := model.NewKey(tenant.ID, "F", "K2", &c.ID, "agent-gcp", model.Labels{
@@ -1169,8 +1475,8 @@ func createKeyHierarchy(t *testing.T, keyStore *storesql.KeyStore, tenantStore *
 	return keyHierarchy{
 		tenant: tenant,
 		root:   root,
-		ab:     ab,
-		ba:     ba,
+		z1:     z1,
+		z2:     z2,
 		b:      b,
 		c:      c,
 		d:      d,

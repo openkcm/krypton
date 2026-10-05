@@ -39,8 +39,10 @@ type GetParentKeysResult struct {
 }
 
 type GetDescendantKeysQuery struct {
-	KeyID    string
-	TenantID string
+	KeyID          string
+	TenantID       string
+	LifeCycleState []model.KeyLifeCycleState
+	Status         []model.KeyProcessingStatus
 }
 
 type GetDescendantKeysResult struct {
