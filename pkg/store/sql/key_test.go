@@ -431,7 +431,6 @@ func TestGetParentKeys(t *testing.T) {
 	})
 }
 
-//nolint:gocyclo
 func TestGetDescendantKeys(t *testing.T) {
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)
