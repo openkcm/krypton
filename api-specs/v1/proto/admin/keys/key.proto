@@ -53,6 +53,7 @@ message ActivateKeyRequest {
 }
 
 message ActivateKeyResponse {
+  string job_group_id = 1;
 }
 
 message GetKeyRequest {

@@ -380,6 +380,7 @@ func (x *ActivateKeyRequest) GetTenantId() string {
 
 type ActivateKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobGroupId    string                 `protobuf:"bytes,1,opt,name=job_group_id,json=jobGroupId,proto3" json:"job_group_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -412,6 +413,13 @@ func (x *ActivateKeyResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ActivateKeyResponse.ProtoReflect.Descriptor instead.
 func (*ActivateKeyResponse) Descriptor() ([]byte, []int) {
 	return file_key_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ActivateKeyResponse) GetJobGroupId() string {
+	if x != nil {
+		return x.JobGroupId
+	}
+	return ""
 }
 
 type GetKeyRequest struct {
@@ -948,8 +956,10 @@ const file_key_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\v2\x1a.krypton.v1.admin.keys.KeyR\x03key\"A\n" +
 	"\x12ActivateKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\x15\n" +
-	"\x13ActivateKeyResponse\"<\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"7\n" +
+	"\x13ActivateKeyResponse\x12 \n" +
+	"\fjob_group_id\x18\x01 \x01(\tR\n" +
+	"jobGroupId\"<\n" +
 	"\rGetKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\">\n" +

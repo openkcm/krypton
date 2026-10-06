@@ -136,7 +136,7 @@ func main() {
 	agents.RegisterServiceServer(grpcServer, agents.NewAgentService(agentStore, *cfg))
 
 	// gRPC server setup for keys API
-	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(*cfg, transactor, keyStore, keyVersionStore, orch, kpMgr))
+	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(*cfg, transactor, keyStore, orch, kpMgr))
 
 	// gRPC server setup for actions API
 	actions.RegisterActionServiceServer(grpcServer, actions.NewService(orch))
