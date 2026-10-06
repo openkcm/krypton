@@ -29,6 +29,7 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
@@ -113,14 +114,6 @@ func defaultTestTopology() spec.Topology {
 	}
 }
 
-func rootTestTopology() spec.Topology {
-	return spec.Topology{
-		Segments: []spec.TopologySegment{
-			{Name: testRootName, Segment: spec.HierarchySegment{StartKind: "K1", EndKind: "K3"}},
-		},
-	}
-}
-
 var testRootSegment = spec.HierarchySegment{StartKind: "K0", EndKind: "K0"}
 
 const (
@@ -139,7 +132,7 @@ func setupKeyServerAndClient(t *testing.T, db *sql.DB) *testSetup {
 // setupKeyServerAndClientWith wires a KeyService against db. opts run after
 // the stores are created and before anything consumes them, so tests can
 // swap in failure-injecting store wrappers.
-func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keys.JobGroupPreparer, topology *spec.Topology, opts ...func(*testSetup)) *testSetup {
+func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHierarchy, preparer keyoperator.JobGroupPreparer, topology *spec.Topology, opts ...func(*testSetup)) *testSetup {
 	t.Helper()
 
 	setup := &testSetup{
@@ -234,7 +227,7 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 	require.NoError(t, err)
 
 	srv := grpc.NewServer()
-	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(rootCfg, setup.transactor, setup.keyStore, setup.keyVersionStore, preparer, mgr))
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(rootCfg, setup.transactor, setup.keyStore, preparer, mgr))
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)

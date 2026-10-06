@@ -22,10 +22,11 @@ const (
 type stubKeyStore struct {
 	store.Key
 
-	createKey       func(ctx context.Context, key model.Key) error
-	getKeyByID      func(ctx context.Context, id, tenantID string) (*model.Key, error)
-	getKeyByName    func(ctx context.Context, q store.GetKeyByNameQuery) (*model.Key, error)
-	updateKeyStates func(ctx context.Context, q store.UpdateKeyStatesQuery) error
+	createKey         func(ctx context.Context, key model.Key) error
+	getKeyByID        func(ctx context.Context, id, tenantID string) (*model.Key, error)
+	getKeyByName      func(ctx context.Context, q store.GetKeyByNameQuery) (*model.Key, error)
+	updateKeyStates   func(ctx context.Context, q store.UpdateKeyStatesQuery) error
+	getDescendantKeys func(ctx context.Context, q store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error)
 }
 
 func (s *stubKeyStore) CreateKey(ctx context.Context, key model.Key) error {
@@ -42,6 +43,10 @@ func (s *stubKeyStore) GetKeyByName(ctx context.Context, q store.GetKeyByNameQue
 
 func (s *stubKeyStore) UpdateKeyStates(ctx context.Context, q store.UpdateKeyStatesQuery) error {
 	return s.updateKeyStates(ctx, q)
+}
+
+func (s *stubKeyStore) GetDescendantKeys(ctx context.Context, q store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
+	return s.getDescendantKeys(ctx, q)
 }
 
 func TestUpdateKeyState(t *testing.T) {

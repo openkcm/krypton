@@ -5,12 +5,25 @@ package keyoperator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/orbital"
+
+	"github.com/openkcm/krypton/internal/handler/activatekey"
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
+
+type JobGroupPreparer interface {
+	PrepareJobGroup(ctx context.Context, group orbital.JobGroup) (orbital.JobGroup, error)
+}
+
+type KeyTreeRetriever interface {
+	KeyTree() (model.KeyTree, error)
+}
 
 // Transition holds the state transition inputs for UpdateKeyState.
 type Transition struct {
@@ -18,6 +31,25 @@ type Transition struct {
 	ToLifeCycle    model.KeyLifeCycleState
 	FromProcessing []model.KeyProcessingStatus
 	ToProcessing   model.KeyProcessingStatus
+}
+
+type FilterKeyTreeState struct {
+	IsChildrenExcluded bool
+	Tree               model.KeyTree
+}
+
+var _ KeyTreeRetriever = (*FilterKeyTreeState)(nil)
+
+// KeyTree implements [KeyTreeRetriever].
+func (f *FilterKeyTreeState) KeyTree() (model.KeyTree, error) {
+	if f == nil || len(f.Tree) == 0 {
+		return nil, ErrKeyTreeNotFound
+	}
+	return f.Tree, nil
+}
+
+type PrepareKeyTreeJobsState struct {
+	JobGroup orbital.JobGroup
 }
 
 // Class sentinels raised by key-level operations. The transport layer
@@ -45,6 +77,12 @@ var (
 
 	// ErrNilKey signals that the given key is nil
 	ErrNilKey = errors.New("key must not be nil")
+
+	// ErrKeyTreeNotFound signals that no keys were found in the key tree.
+	ErrKeyTreeNotFound = errors.New("keyTree not found")
+
+	// ErrInternal signals an internal error.
+	ErrInternal = errors.New("internal error")
 )
 
 // UpsertKey inserts or reconciles newKey by (tenant, name), updating
@@ -119,4 +157,133 @@ func UpdateKeyState(tenantID, keyID string, transition Transition) store.Transac
 		}
 		return nil
 	}
+}
+
+func NewFilterKeyTreeState() *FilterKeyTreeState {
+	return &FilterKeyTreeState{}
+}
+
+func FilterKeyTree(tenantID, keyID string, toState model.KeyLifeCycleState, forStatus model.KeyProcessingStatus, ktstate *FilterKeyTreeState) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		if ktstate == nil {
+			return fmt.Errorf("%w: filter key tree state must not be nil", ErrInternal)
+		}
+		// get all descendant keys and create kt for each layer
+		kt, isExcluded, err := filterKeyTree(ctx, stores.Keys, tenantID, keyID, toState, forStatus)
+		if err != nil {
+			return err
+		}
+
+		if len(kt) == 0 {
+			return ErrKeyTreeNotFound
+		}
+
+		ktstate.IsChildrenExcluded = isExcluded
+		ktstate.Tree = kt
+
+		return nil
+	}
+}
+
+func UpdateKeyTree(ret KeyTreeRetriever, toState model.KeyLifeCycleState, toStatus model.KeyProcessingStatus) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		if ret == nil {
+			return fmt.Errorf("%w: key tree retriever is nil", ErrKeyTreeNotFound)
+		}
+		keytree, err := ret.KeyTree()
+		if err != nil {
+			return err
+		}
+		for _, layer := range keytree {
+			for _, key := range layer {
+				err := UpdateKeyState(key.TenantID, key.ID, Transition{
+					FromLifeCycle:  []model.KeyLifeCycleState{key.LifeCycleState},
+					ToLifeCycle:    toState,
+					FromProcessing: []model.KeyProcessingStatus{key.KeyProcessingState.Status},
+					ToProcessing:   toStatus,
+				})(ctx, stores)
+				if err != nil {
+					return fmt.Errorf("updating key %s state: %w", key.ID, err)
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func NewPrepareKeyTreeJobsState() *PrepareKeyTreeJobsState {
+	return &PrepareKeyTreeJobsState{}
+}
+
+func PrepareKeyTreeJobGroup(preparer JobGroupPreparer, ret KeyTreeRetriever, state *PrepareKeyTreeJobsState) store.TransactionFunc {
+	return func(ctx context.Context, _ store.Stores) error {
+		if ret == nil || preparer == nil || state == nil {
+			return ErrInternal
+		}
+		keytree, err := ret.KeyTree()
+		if err != nil {
+			return err
+		}
+		jobs := make([]orbital.Job, 0, len(keytree))
+		for _, layer := range keytree {
+			data, err := json.Marshal(layer)
+			if err != nil {
+				return fmt.Errorf("%w: marshaling keys for job data: %w", ErrInternal, err)
+			}
+			jobs = append(jobs, orbital.NewJob(activatekey.JobType, data))
+		}
+
+		grp, err := preparer.PrepareJobGroup(ctx, orbital.NewJobGroup(activatekey.JobGroupType, jobs...))
+		if err != nil {
+			return fmt.Errorf("preparing job group: %w", err)
+		}
+
+		state.JobGroup = grp
+		return nil
+	}
+}
+
+func filterKeyTree(ctx context.Context, keyStore store.Key, tenantID, keyID string, toState model.KeyLifeCycleState, forStatus model.KeyProcessingStatus) (model.KeyTree, bool, error) {
+	kt, err := keyStore.GetDescendantKeys(ctx, store.GetDescendantKeysQuery{
+		KeyID:    keyID,
+		TenantID: tenantID,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	keyTree := model.KeyTree{}
+
+	isExcludedKeyIDs := make(map[string]struct{})
+
+	for layer := range kt.KeyTree.IterKeysByLayerAsc() {
+		includedKeys := make([]model.Key, 0, len(layer))
+
+		for _, key := range layer {
+			if key.ParentID != nil {
+				if _, ok := isExcludedKeyIDs[*key.ParentID]; ok {
+					isExcludedKeyIDs[key.ID] = struct{}{}
+					continue
+				}
+			}
+			if key.KeyProcessingState.Status != forStatus {
+				isExcludedKeyIDs[key.ID] = struct{}{}
+				continue
+			}
+			if keylifecycle.ValidateTransition(key.LifeCycleState, toState) != nil {
+				if key.LifeCycleState != toState {
+					isExcludedKeyIDs[key.ID] = struct{}{}
+					continue
+				}
+			}
+			includedKeys = append(includedKeys, key)
+		}
+
+		if len(includedKeys) == 0 {
+			continue
+		}
+
+		keyTree = append(keyTree, includedKeys)
+	}
+	return keyTree, len(isExcludedKeyIDs) != 0, nil
 }

@@ -40,15 +40,6 @@ type keyHierarchy struct {
 	h      model.Key
 }
 
-func completeKeyProcessing(t *testing.T, ks store.Key, id, tenantID string) {
-	t.Helper()
-	require.NoError(t, ks.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
-		ID:        id,
-		TenantID:  tenantID,
-		NewStatus: model.KeyProcessingCompleted,
-	}))
-}
-
 func TestAnnounceKey(t *testing.T) {
 	// given
 	ctx := t.Context()

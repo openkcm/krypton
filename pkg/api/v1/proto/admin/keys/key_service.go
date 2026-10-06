@@ -21,30 +21,24 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
-type JobGroupPreparer interface {
-	PrepareJobGroup(ctx context.Context, group orbital.JobGroup) (orbital.JobGroup, error)
-}
-
 type KeyService struct {
 	UnimplementedKeyServiceServer
 
-	transactor      store.Transactor
-	keyStore        store.Key
-	keyVersionStore store.KeyVersion
-	preparer        JobGroupPreparer
-	manager         *keyprocessor.Manager
+	transactor store.Transactor
+	keyStore   store.Key
+	preparer   keyoperator.JobGroupPreparer
+	manager    *keyprocessor.Manager
 
 	config config.RootConfig
 }
 
-func NewKeyService(cfg config.RootConfig, transactor store.Transactor, keyStore store.Key, keyVersionStore store.KeyVersion, preparer JobGroupPreparer, manager *keyprocessor.Manager) *KeyService {
+func NewKeyService(cfg config.RootConfig, transactor store.Transactor, keyStore store.Key, preparer keyoperator.JobGroupPreparer, manager *keyprocessor.Manager) *KeyService {
 	return &KeyService{
-		transactor:      transactor,
-		keyStore:        keyStore,
-		keyVersionStore: keyVersionStore,
-		preparer:        preparer,
-		manager:         manager,
-		config:          cfg,
+		transactor: transactor,
+		keyStore:   keyStore,
+		preparer:   preparer,
+		manager:    manager,
+		config:     cfg,
 	}
 }
 
@@ -90,42 +84,21 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		)
 	}
 
-	resolve := keyoperator.InitKeyVersion(tenantID, keyID)
-
+	filterKeyState := keyoperator.NewFilterKeyTreeState()
+	prepareJobState := keyoperator.NewPrepareKeyTreeJobsState()
 	err := store.ChainTransaction(ctx, s.transactor,
 		validator.ValidateTenant(tenantID),
 		validator.ValidateTransition(tenantID, keyID, model.KeyLifeCycleActive),
 		validator.ValidateKeyParents(tenantID, keyID),
-
-		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingCompleted},
-			ToProcessing:   model.KeyProcessingInProgress,
-		}),
-
-		keyoperator.CreateKeyVersion(tenantID, keyID, resolve),
-		keyoperator.GenerateAndSealKeyMaterial(s.manager, tenantID, keyID, resolve),
-
-		keyoperator.UpdateKeyVersionState(tenantID, keyID, resolve, keyoperator.VersionTransition{
-			FromProcessing: []model.KeyVersionProcessingState{model.KeyVersionActivating},
-			ToProcessing:   model.KeyVersionUsable,
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-		}),
-
-		keyoperator.UpdateKeyState(tenantID, keyID, keyoperator.Transition{
-			FromLifeCycle:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-			ToLifeCycle:    model.KeyLifeCycleActive,
-			FromProcessing: []model.KeyProcessingStatus{model.KeyProcessingInProgress},
-			ToProcessing:   model.KeyProcessingCompleted,
-		}),
+		keyoperator.FilterKeyTree(tenantID, keyID, model.KeyLifeCycleActive, model.KeyProcessingCompleted, filterKeyState),
+		keyoperator.UpdateKeyTree(filterKeyState, model.KeyLifeCycleActive, model.KeyProcessingPending),
+		keyoperator.PrepareKeyTreeJobGroup(s.preparer, filterKeyState, prepareJobState),
 	)
 	if err != nil {
 		return nil, mappedOrInternal(err)
 	}
 
-	return &ActivateKeyResponse{}, nil
+	return &ActivateKeyResponse{JobGroupId: prepareJobState.JobGroup.ID.String()}, nil
 }
 
 func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
@@ -204,7 +177,6 @@ func (s *KeyService) ListKeys(ctx context.Context, req *ListKeysRequest) (*ListK
 		Cursor:                req.GetCursor(),
 		Limit:                 int(req.GetLimit()),
 	})
-
 	if err != nil {
 		if errors.Is(err, store.ErrKeyNotFound) {
 			return nil, proto.ErrDetailsWithCode(
