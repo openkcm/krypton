@@ -131,23 +131,18 @@ type UnimplementedKeyServiceServer struct{}
 func (UnimplementedKeyServiceServer) AnnounceKey(context.Context, *AnnounceKeyRequest) (*AnnounceKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AnnounceKey not implemented")
 }
-
 func (UnimplementedKeyServiceServer) ActivateKey(context.Context, *ActivateKeyRequest) (*ActivateKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ActivateKey not implemented")
 }
-
 func (UnimplementedKeyServiceServer) GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetKey not implemented")
 }
-
 func (UnimplementedKeyServiceServer) GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetParentKeys not implemented")
 }
-
 func (UnimplementedKeyServiceServer) GetDescendantKeys(context.Context, *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDescendantKeys not implemented")
 }
-
 func (UnimplementedKeyServiceServer) ListKeys(context.Context, *ListKeysRequest) (*ListKeysResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListKeys not implemented")
 }

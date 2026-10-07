@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
@@ -84,21 +85,46 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		)
 	}
 
-	filterKeyState := keyoperator.NewFilterKeyTreeState()
-	prepareJobState := keyoperator.NewPrepareKeyTreeJobsState()
+	var group orbital.JobGroup
 	err := store.ChainTransaction(ctx, s.transactor,
 		validator.ValidateTenant(tenantID),
-		validator.ValidateTransition(tenantID, keyID, model.KeyLifeCycleActive),
 		validator.ValidateKeyParents(tenantID, keyID),
-		keyoperator.FilterKeyTree(tenantID, keyID, model.KeyLifeCycleActive, model.KeyProcessingCompleted, filterKeyState),
-		keyoperator.UpdateKeyTree(filterKeyState, model.KeyLifeCycleActive, model.KeyProcessingPending),
-		keyoperator.PrepareKeyTreeJobGroup(s.preparer, filterKeyState, prepareJobState),
+		func(ctx context.Context, stores store.Stores) error {
+			grp, err := keyoperator.ApplyKeyAction(ctx, stores, s.preparer, keyoperator.ApplyKeyActionRequest{
+				TenantID:     tenantID,
+				KeyID:        keyID,
+				ToState:      model.KeyLifeCycleActive,
+				Cascading:    req.GetCascading(),
+				AllowPartial: req.GetAllowPartial(),
+				JobType:      activatekey.JobType,
+				JobGroupType: activatekey.JobGroupType,
+				Selector: keyoperator.KeyWithKeySelector(
+					keyoperator.KeySelector{
+						State:  model.KeyLifeCycleActive,
+						Status: model.KeyProcessingFailed,
+					},
+					keyoperator.KeySelector{
+						State:  model.KeyLifeCycleSuspended,
+						Status: model.KeyProcessingCompleted,
+					},
+					keyoperator.KeySelector{
+						State:  model.KeyLifeCyclePreActivation,
+						Status: model.KeyProcessingCompleted,
+					},
+				),
+			})
+			if err != nil {
+				return err
+			}
+			group = grp
+			return nil
+		},
 	)
 	if err != nil {
 		return nil, mappedOrInternal(err)
 	}
 
-	return &ActivateKeyResponse{JobGroupId: prepareJobState.JobGroup.ID.String()}, nil
+	return &ActivateKeyResponse{JobGroupId: group.ID.String()}, nil
 }
 
 func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
