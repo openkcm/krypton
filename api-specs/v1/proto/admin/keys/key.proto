@@ -50,6 +50,8 @@ message AnnounceKeyResponse {
 message ActivateKeyRequest {
   string id = 1;
   string tenant_id = 2;
+  bool cascading = 3;
+  bool allow_partial = 4;
 }
 
 message ActivateKeyResponse {

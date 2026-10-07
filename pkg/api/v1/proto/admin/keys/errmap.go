@@ -83,7 +83,7 @@ func mapToProtoErr(err error) error {
 			status.New(codes.Internal, keyoperator.ErrGenerateAndSealKeyMaterial.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-	case errors.Is(err, keyoperator.ErrKeyTreeNotFound):
+	case errors.Is(err, keyoperator.ErrNoKeysFound):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, err.Error()),
 			proto.Code_ERROR_CODE_ABORT,
