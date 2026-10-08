@@ -30,16 +30,12 @@ type Transition struct {
 }
 
 type (
-	keySelectorFn func(key model.Key) bool
-	KeySelector   struct {
-		State  model.KeyLifeCycleState
-		Status model.KeyProcessingStatus
-	}
+	keySelector           func(key model.Key) bool
 	ApplyKeyActionRequest struct {
 		TenantID     string
 		KeyID        string
 		ToState      model.KeyLifeCycleState
-		Selector     keySelectorFn
+		Selector     keySelector // nil means accept all keys
 		Cascading    bool
 		AllowPartial bool
 		JobType      string
@@ -160,10 +156,18 @@ func UpdateKeyState(tenantID, keyID string, transition Transition) store.Transac
 	}
 }
 
-func KeyWithKeySelector(selectors ...KeySelector) keySelectorFn {
+// SelectByKeyStates returns a selector that matches a specific lifecycle + processing pair.
+func SelectByKeyStates(ls model.KeyLifeCycleState, ps model.KeyProcessingStatus) keySelector {
 	return func(key model.Key) bool {
-		for _, selector := range selectors {
-			if key.LifeCycleState == selector.State && key.KeyProcessingState.Status == selector.Status {
+		return key.LifeCycleState == ls && key.KeyProcessingState.Status == ps
+	}
+}
+
+// AnySelectorMatches returns a selector that accepts a key if any sub-selector matches.
+func AnySelectorMatches(s ...keySelector) keySelector {
+	return func(k model.Key) bool {
+		for _, sel := range s {
+			if sel(k) {
 				return true
 			}
 		}
@@ -184,10 +188,6 @@ func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupP
 	}
 
 	exc := newKeyExclusion(action.AllowPartial)
-
-	if action.Selector == nil {
-		action.Selector = func(model.Key) bool { return true }
-	}
 
 	var jobs []orbital.Job
 
@@ -225,7 +225,7 @@ func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupP
 			}
 
 			// filtering keys that do not match the selector criteria
-			if !action.Selector(key) {
+			if action.Selector != nil && !action.Selector(key) {
 				err := exc.exclude(key.ID)
 				if err != nil {
 					return orbital.JobGroup{}, err
@@ -233,7 +233,7 @@ func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupP
 				continue
 			}
 
-			// updating the key state to the target state and setting processing status to in progress
+			// updating the key state to the target state and setting processing status to pending
 			err := UpdateKeyState(key.TenantID, key.ID, Transition{
 				FromLifeCycle:  []model.KeyLifeCycleState{key.LifeCycleState},
 				ToLifeCycle:    action.ToState,

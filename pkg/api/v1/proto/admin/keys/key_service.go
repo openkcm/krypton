@@ -98,19 +98,19 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 				AllowPartial: req.GetAllowPartial(),
 				JobType:      activatekey.JobType,
 				JobGroupType: activatekey.JobGroupType,
-				Selector: keyoperator.KeyWithKeySelector(
-					keyoperator.KeySelector{
-						State:  model.KeyLifeCycleActive,
-						Status: model.KeyProcessingFailed,
-					},
-					keyoperator.KeySelector{
-						State:  model.KeyLifeCycleSuspended,
-						Status: model.KeyProcessingCompleted,
-					},
-					keyoperator.KeySelector{
-						State:  model.KeyLifeCyclePreActivation,
-						Status: model.KeyProcessingCompleted,
-					},
+				Selector: keyoperator.AnySelectorMatches(
+					keyoperator.SelectByKeyStates(
+						model.KeyLifeCycleActive,
+						model.KeyProcessingFailed,
+					),
+					keyoperator.SelectByKeyStates(
+						model.KeyLifeCycleSuspended,
+						model.KeyProcessingCompleted,
+					),
+					keyoperator.SelectByKeyStates(
+						model.KeyLifeCyclePreActivation,
+						model.KeyProcessingCompleted,
+					),
 				),
 			})
 			if err != nil {

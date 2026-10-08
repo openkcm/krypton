@@ -25,10 +25,10 @@ func (*stubPreparer) PrepareJobGroup(_ context.Context, group orbital.JobGroup) 
 }
 
 // activateSelector is the standard selector used by the activate-key action.
-var activateSelector = keyoperator.KeyWithKeySelector(
-	keyoperator.KeySelector{State: model.KeyLifeCycleActive, Status: model.KeyProcessingFailed},
-	keyoperator.KeySelector{State: model.KeyLifeCycleSuspended, Status: model.KeyProcessingCompleted},
-	keyoperator.KeySelector{State: model.KeyLifeCyclePreActivation, Status: model.KeyProcessingCompleted},
+var activateSelector = keyoperator.AnySelectorMatches(
+	keyoperator.SelectByKeyStates(model.KeyLifeCycleActive, model.KeyProcessingFailed),
+	keyoperator.SelectByKeyStates(model.KeyLifeCycleSuspended, model.KeyProcessingCompleted),
+	keyoperator.SelectByKeyStates(model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted),
 )
 
 func TestApplyKeyAction(t *testing.T) {
@@ -89,7 +89,7 @@ func TestApplyKeyAction(t *testing.T) {
 			key  model.Key
 		}{
 			{
-				name: "invalid transition: destroyed has no outgoing transitions",
+				name: "non-transitionable: destroyed has no outgoing transitions",
 				key: model.Key{
 					ID:                 testKeyID,
 					TenantID:           testTenantID,
@@ -98,7 +98,7 @@ func TestApplyKeyAction(t *testing.T) {
 				},
 			},
 			{
-				name: "invalid transition: deactivated cannot transition to active",
+				name: "non-transitionable: deactivated cannot transition to active",
 				key: model.Key{
 					ID:                 testKeyID,
 					TenantID:           testTenantID,
@@ -301,11 +301,11 @@ func TestApplyKeyAction(t *testing.T) {
 		// This exposes a bug if the selector runs before the already-completed
 		// skip: the root would be excluded instead of skipped, cascading to
 		// all children.
-		narrowSelector := keyoperator.KeyWithKeySelector(
-			keyoperator.KeySelector{
-				State:  model.KeyLifeCyclePreActivation,
-				Status: model.KeyProcessingCompleted,
-			},
+		narrowSelector := keyoperator.AnySelectorMatches(
+			keyoperator.SelectByKeyStates(
+				model.KeyLifeCyclePreActivation,
+				model.KeyProcessingCompleted,
+			),
 		)
 
 		rootID := "root-key"

@@ -235,7 +235,7 @@ func TestActivateKey(t *testing.T) {
 				tenant := createTenant(t, tenantStore)
 
 				// create a key in pre-activation (passes ValidateTransition) but
-				// with non-completed processing so FilterKeys excludes it
+				// with non-completed processing so the selector excludes it
 				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCyclePreActivation, tt.processingStatus)
 
 				// when
@@ -271,7 +271,7 @@ func TestActivateKey(t *testing.T) {
 		tenant := createTenant(t, tenantStore)
 
 		// create a root key in pre-activation + completed so it passes
-		// all validators and FilterKeys, reaching UpdateKeyStates
+		// all validators and the selector, reaching UpdateKeyStates
 		key := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		// when
@@ -301,7 +301,7 @@ func TestActivateKey(t *testing.T) {
 		tenant := createTenant(t, tenantStore)
 
 		// create a root key in pre-activation + completed so it passes
-		// all validators, FilterKeys, and UpdateKeyStates, reaching PrepareJobGroup
+		// all validators, the selector, and UpdateKeyStates, reaching PrepareJobGroup
 		key := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		// when
