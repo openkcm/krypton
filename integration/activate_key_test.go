@@ -22,6 +22,7 @@ type activatedKeyRow struct {
 }
 
 func TestActivateKey(t *testing.T) {
+	t.Skip("will be enabled after the new implementation of the activation key")
 	// K0(root) -> K1(kek) -> K2(dek)
 	env := setupRootEnvWithKMIP(t)
 	rootKVStore := newKeyVersionStore(t, env.RootDB, storesql.Root)

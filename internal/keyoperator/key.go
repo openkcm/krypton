@@ -5,12 +5,21 @@ package keyoperator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/orbital"
+
+	"github.com/openkcm/krypton/internal/handler"
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
+
+type JobGroupPreparer interface {
+	PrepareJobGroup(ctx context.Context, group orbital.JobGroup) (orbital.JobGroup, error)
+}
 
 // Transition holds the state transition inputs for UpdateKeyState.
 type Transition struct {
@@ -18,6 +27,26 @@ type Transition struct {
 	ToLifeCycle    model.KeyLifeCycleState
 	FromProcessing []model.KeyProcessingStatus
 	ToProcessing   model.KeyProcessingStatus
+}
+
+type (
+	keySelector           func(key model.Key) bool
+	ApplyKeyActionRequest struct {
+		TenantID     string
+		KeyID        string
+		ToState      model.KeyLifeCycleState
+		Selector     keySelector // nil means accept all keys
+		Cascading    bool
+		AllowPartial bool
+		JobType      string
+		JobGroupType string
+	}
+)
+
+type keyExclusion struct {
+	excluded        map[string]struct{}
+	excludedInLayer int
+	allowPartial    bool
 }
 
 // Class sentinels raised by key-level operations. The transport layer
@@ -45,6 +74,12 @@ var (
 
 	// ErrNilKey signals that the given key is nil
 	ErrNilKey = errors.New("key must not be nil")
+
+	// ErrNoKeysFound signals that no keys were found in the key tree.
+	ErrNoKeysFound = errors.New("keys not found")
+
+	// ErrInternal signals an internal error.
+	ErrInternal = errors.New("internal error")
 )
 
 // UpsertKey inserts or reconciles newKey by (tenant, name), updating
@@ -119,4 +154,176 @@ func UpdateKeyState(tenantID, keyID string, transition Transition) store.Transac
 		}
 		return nil
 	}
+}
+
+// SelectByKeyStates returns a selector that matches a specific lifecycle + processing pair.
+func SelectByKeyStates(ls model.KeyLifeCycleState, ps model.KeyProcessingStatus) keySelector {
+	return func(key model.Key) bool {
+		return key.LifeCycleState == ls && key.KeyProcessingState.Status == ps
+	}
+}
+
+// AnySelectorMatches returns a selector that accepts a key if any sub-selector matches.
+func AnySelectorMatches(s ...keySelector) keySelector {
+	return func(k model.Key) bool {
+		for _, sel := range s {
+			if sel(k) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// ApplyKeyAction traverses a key tree top-down and builds a job group for
+// keys that need a lifecycle transition. Each key is checked in order:
+// parent excluded → transition invalid → already completed → selector rejects.
+// Completed keys are skipped (children remain reachable); all other failures
+// exclude the key and its descendants. When AllowPartial is false, the first
+// exclusion aborts the operation.
+func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupPreparer, action ApplyKeyActionRequest) (orbital.JobGroup, error) {
+	kt, err := fetchKeytree(ctx, stores.Keys, action)
+	if err != nil {
+		return orbital.JobGroup{}, err
+	}
+
+	exc := newKeyExclusion(action.AllowPartial)
+
+	var jobs []orbital.Job
+
+	for layer := range kt.IterKeysByLayerAsc() {
+		ids := make([]handler.KeyIdentifier, 0, len(layer))
+
+		exc.resetLayerCount()
+
+		for _, key := range layer {
+			// checking if the parent key is excluded, if so, exclude the child key as well
+			if key.ParentID != nil {
+				if exc.isExcluded(*key.ParentID) {
+					err := exc.exclude(key.ID)
+					if err != nil {
+						return orbital.JobGroup{}, err
+					}
+					continue
+				}
+			}
+
+			// excluding keys that cannot transition to the target state
+			if key.LifeCycleState != action.ToState {
+				if keylifecycle.ValidateTransition(key.LifeCycleState, action.ToState) != nil {
+					err := exc.exclude(key.ID)
+					if err != nil {
+						return orbital.JobGroup{}, err
+					}
+					continue
+				}
+			}
+
+			// skipping keys that are already in the target state and have completed processing
+			if key.LifeCycleState == action.ToState && key.KeyProcessingState.Status == model.KeyProcessingCompleted {
+				continue
+			}
+
+			// filtering keys that do not match the selector criteria
+			if action.Selector != nil && !action.Selector(key) {
+				err := exc.exclude(key.ID)
+				if err != nil {
+					return orbital.JobGroup{}, err
+				}
+				continue
+			}
+
+			// updating the key state to the target state and setting processing status to pending
+			err := UpdateKeyState(key.TenantID, key.ID, Transition{
+				FromLifeCycle:  []model.KeyLifeCycleState{key.LifeCycleState},
+				ToLifeCycle:    action.ToState,
+				FromProcessing: []model.KeyProcessingStatus{key.KeyProcessingState.Status},
+				ToProcessing:   model.KeyProcessingPending,
+			})(ctx, stores)
+			if err != nil {
+				return orbital.JobGroup{}, fmt.Errorf("updating key %s state: %w", key.ID, err)
+			}
+
+			ids = append(ids, handler.KeyIdentifier{
+				ID:       key.ID,
+				TenantID: key.TenantID,
+			})
+		}
+
+		// If every key in this layer was excluded, all descendants will
+		// cascade-exclude too — skip remaining layers.
+		// (Only reachable when AllowPartial is true; otherwise exclude()
+		// returns an error before the counter is incremented.)
+		if exc.allExcluded(len(layer)) {
+			break
+		}
+
+		if len(ids) == 0 {
+			continue
+		}
+
+		data, err := json.Marshal(handler.KeyLayer{Identifiers: ids})
+		if err != nil {
+			return orbital.JobGroup{}, fmt.Errorf("%w: marshaling keys for job data: %w", ErrInternal, err)
+		}
+
+		jobs = append(jobs, orbital.NewJob(action.JobType, data))
+	}
+
+	if len(jobs) == 0 {
+		return orbital.JobGroup{}, ErrNoKeysFound
+	}
+
+	return preparer.PrepareJobGroup(ctx, orbital.NewJobGroup(action.JobGroupType, jobs...))
+}
+
+func newKeyExclusion(allowPartial bool) *keyExclusion {
+	return &keyExclusion{
+		allowPartial: allowPartial,
+		excluded:     make(map[string]struct{}),
+	}
+}
+
+func (e *keyExclusion) exclude(id string) error {
+	if !e.allowPartial {
+		return fmt.Errorf("%w: some keys were excluded from the action due to state or selector mismatch", ErrNoKeysFound)
+	}
+	e.excluded[id] = struct{}{}
+	e.excludedInLayer++
+	return nil
+}
+
+func (e *keyExclusion) isExcluded(id string) bool {
+	_, ok := e.excluded[id]
+	return ok
+}
+
+// allExcluded reports whether every key in a layer of the given size was excluded.
+func (e *keyExclusion) allExcluded(layerSize int) bool {
+	return e.excludedInLayer == layerSize
+}
+
+func (e *keyExclusion) resetLayerCount() {
+	e.excludedInLayer = 0
+}
+
+func fetchKeytree(ctx context.Context, keyStore store.Key, action ApplyKeyActionRequest) (model.KeyTreeTraverser, error) {
+	// cascading is true, get all descendant keys and return the key tree
+	if action.Cascading {
+		kt, err := keyStore.GetDescendantKeys(ctx, store.GetDescendantKeysQuery{
+			KeyID:    action.KeyID,
+			TenantID: action.TenantID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return kt.KeyTree, nil
+	}
+
+	// getting the key by ID and returning it as a single-layer key tree
+	key, err := keyStore.GetKeyByID(ctx, action.KeyID, action.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return model.KeyTree{[]model.Key{*key}}, nil
 }

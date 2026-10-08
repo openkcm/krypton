@@ -330,6 +330,8 @@ type ActivateKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Cascading     bool                   `protobuf:"varint,3,opt,name=cascading,proto3" json:"cascading,omitempty"`
+	AllowPartial  bool                   `protobuf:"varint,4,opt,name=allow_partial,json=allowPartial,proto3" json:"allow_partial,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -378,8 +380,23 @@ func (x *ActivateKeyRequest) GetTenantId() string {
 	return ""
 }
 
+func (x *ActivateKeyRequest) GetCascading() bool {
+	if x != nil {
+		return x.Cascading
+	}
+	return false
+}
+
+func (x *ActivateKeyRequest) GetAllowPartial() bool {
+	if x != nil {
+		return x.AllowPartial
+	}
+	return false
+}
+
 type ActivateKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobGroupId    string                 `protobuf:"bytes,1,opt,name=job_group_id,json=jobGroupId,proto3" json:"job_group_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -412,6 +429,13 @@ func (x *ActivateKeyResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ActivateKeyResponse.ProtoReflect.Descriptor instead.
 func (*ActivateKeyResponse) Descriptor() ([]byte, []int) {
 	return file_key_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ActivateKeyResponse) GetJobGroupId() string {
+	if x != nil {
+		return x.JobGroupId
+	}
+	return ""
 }
 
 type GetKeyRequest struct {
@@ -945,11 +969,15 @@ const file_key_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x13AnnounceKeyResponse\x12,\n" +
-	"\x03key\x18\x01 \x01(\v2\x1a.krypton.v1.admin.keys.KeyR\x03key\"A\n" +
+	"\x03key\x18\x01 \x01(\v2\x1a.krypton.v1.admin.keys.KeyR\x03key\"\x84\x01\n" +
 	"\x12ActivateKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\x15\n" +
-	"\x13ActivateKeyResponse\"<\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x1c\n" +
+	"\tcascading\x18\x03 \x01(\bR\tcascading\x12#\n" +
+	"\rallow_partial\x18\x04 \x01(\bR\fallowPartial\"7\n" +
+	"\x13ActivateKeyResponse\x12 \n" +
+	"\fjob_group_id\x18\x01 \x01(\tR\n" +
+	"jobGroupId\"<\n" +
 	"\rGetKeyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\">\n" +
