@@ -390,6 +390,7 @@ func TestActivateKey(t *testing.T) {
 		require.Len(t, spy.groups[0].Jobs, 1)
 		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, child.ID)
+		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
 
 	t.Run("should exclude root with invalid transition and cascade exclude children", func(t *testing.T) {
@@ -516,6 +517,9 @@ func TestActivateKey(t *testing.T) {
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1a.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k2a.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
 	})
 
 	t.Run("should activate key and create job group", func(t *testing.T) {
@@ -556,6 +560,7 @@ func TestActivateKey(t *testing.T) {
 		require.Len(t, spy.groups[0].Jobs, 1)
 		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
+		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
 
 	t.Run("should activate 2 layers out of 3 and create 2 jobs", func(t *testing.T) {
@@ -623,6 +628,9 @@ func TestActivateKey(t *testing.T) {
 		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[1].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
 	})
 
 	t.Run("should reject cascading activation when AllowPartial is false and layer has mixed valid and excluded siblings", func(t *testing.T) {
@@ -753,6 +761,9 @@ func TestActivateKey(t *testing.T) {
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k2.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
 	})
 }
 
@@ -779,6 +790,16 @@ func assertJobDataContainsKeys(t *testing.T, jobData []byte, expectedKeyIDs ...s
 		actualIDs = append(actualIDs, k.ID)
 	}
 	assert.ElementsMatch(t, expectedKeyIDs, actualIDs)
+}
+
+// assertJobDataTenantID verifies every identifier in the job data carries the expected tenant ID.
+func assertJobDataTenantID(t *testing.T, jobData []byte, expectedTenantID string) {
+	t.Helper()
+	var layer handler.KeyLayer
+	require.NoError(t, json.Unmarshal(jobData, &layer))
+	for _, ki := range layer.Identifiers {
+		assert.Equal(t, expectedTenantID, ki.TenantID, "key %s has wrong tenant ID", ki.ID)
+	}
 }
 
 // stubKeyStateUpdater wraps a real key store and fails only
