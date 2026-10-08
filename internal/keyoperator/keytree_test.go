@@ -841,6 +841,79 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		}
 	})
 
+	t.Run("wide and deep tree: destroyed grandchild excluded, rest activated", func(t *testing.T) {
+		// given — same shape as above but child-B is pre-activation + completed
+		// and grand-A1 is destroyed + completed (cannot transition to active).
+		// grand-A1 is excluded; its child great-A1 is cascade-excluded too.
+		//
+		//                         root (pre-activation + completed)
+		//                        /                                  \
+		//       child-A (pre-activation + completed)         child-B (pre-activation + completed)
+		//          /                    \                          |
+		//   grand-A1 (destroyed + comp)  grand-A2 (suspended + comp)  grand-B1 (pre-act + comp)
+		//        |
+		//   great-A1 (pre-act + comp) ← cascade-excluded (parent grand-A1 excluded)
+		rootID := "root"
+		childAID := "child-A"
+		childBID := "child-B"
+		grandA1ID := "grand-A1"
+		grandA2ID := "grand-A2"
+		grandB1ID := "grand-B1"
+		greatA1ID := "great-A1"
+
+		keyStore := &stubKeyStore{
+			getDescendantKeys: func(_ context.Context, _ store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
+				return store.GetDescendantKeysResult{
+					KeyTree: model.KeyTree{
+						{
+							{ID: rootID, TenantID: testTenantID, LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+						},
+						{
+							{ID: childAID, TenantID: testTenantID, ParentID: &rootID, LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+							{ID: childBID, TenantID: testTenantID, ParentID: &rootID, LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+						},
+						{
+							{ID: grandA1ID, TenantID: testTenantID, ParentID: &childAID, LifeCycleState: model.KeyLifeCycleDestroyed, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+							{ID: grandA2ID, TenantID: testTenantID, ParentID: &childAID, LifeCycleState: model.KeyLifeCycleSuspended, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+							{ID: grandB1ID, TenantID: testTenantID, ParentID: &childBID, LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+						},
+						{
+							{ID: greatA1ID, TenantID: testTenantID, ParentID: &grandA1ID, LifeCycleState: model.KeyLifeCyclePreActivation, KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted}},
+						},
+					},
+				}, nil
+			},
+			updateKeyStates: func(_ context.Context, _ store.UpdateKeyStatesQuery) error { return nil },
+		}
+
+		got, err := keyoperator.ApplyKeyAction(
+			t.Context(),
+			store.Stores{Keys: keyStore},
+			&stubPreparer{},
+			keyoperator.ApplyKeyActionRequest{
+				TenantID:     testTenantID,
+				KeyID:        rootID,
+				ToState:      model.KeyLifeCycleActive,
+				Selector:     activateSelector,
+				Cascading:    true,
+				AllowPartial: true,
+				JobType:      activatekey.JobType,
+				JobGroupType: activatekey.JobGroupType,
+			},
+		)
+
+		// grand-A1 excluded (destroyed), great-A1 cascade-excluded (parent excluded)
+		// remaining 5 keys: root, child-A, child-B, grand-A2, grand-B1
+		require.NoError(t, err)
+		require.Len(t, got.Jobs, 3, "3 jobs: layers 0, 1, 2 (layer 3 all excluded)")
+		assertJobDataContainsKeys(t, got.Jobs[0].Data, rootID)
+		assertJobDataContainsKeys(t, got.Jobs[1].Data, childAID, childBID)
+		assertJobDataContainsKeys(t, got.Jobs[2].Data, grandA2ID, grandB1ID)
+		for _, job := range got.Jobs {
+			assertJobDataTenantID(t, job.Data, testTenantID)
+		}
+	})
+
 	t.Run("already-completed root skipped, both branches still fully activated", func(t *testing.T) {
 		// given — root already at target state, two child branches both activatable.
 		//
