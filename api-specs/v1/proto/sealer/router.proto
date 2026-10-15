@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package krypton.v1.sealer;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/sealer";
 
 service RouterService {
@@ -15,9 +13,7 @@ message LinkKeyRequest {
   string tenant_id = 1;
   string key_id = 2;
   string external_id = 3;
-  string provider_type = 4;
-  google.protobuf.Struct provider_config = 5;
-  bytes provider_secret = 6;
+  Provider provider = 4;
 }
 
 message LinkKeyResponse {}
@@ -28,3 +24,14 @@ message UnlinkKeyRequest {
 }
 
 message UnlinkKeyResponse {}
+
+message Provider {
+  oneof provider {
+    StaticSecretProvider static_secret = 1;
+  }
+}
+
+message StaticSecretProvider {
+  string name = 1;
+  bytes key_material = 2;
+}
