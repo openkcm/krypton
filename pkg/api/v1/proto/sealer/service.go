@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 )
@@ -19,17 +19,17 @@ const (
 )
 
 // SealerService implements the gRPC [ServiceServer] for seal and unseal operations.
-// It delegates cryptographic work to the underlying [cryptor.Sealer] and uses
+// It delegates cryptographic work to the underlying [sealer.Sealer] and uses
 // secure memory to protect sensitive data (plaintext, ciphertext) from leaking
 // into swap or core dumps.
 type SealerService struct {
 	UnimplementedServiceServer
 
-	sealer cryptor.Sealer
+	sealer sealer.Sealer
 }
 
-// NewSealerService creates a new [SealerService] backed by the given [cryptor.Sealer].
-func NewSealerService(sealer cryptor.Sealer) *SealerService {
+// NewSealerService creates a new [SealerService] backed by the given [sealer.Sealer].
+func NewSealerService(sealer sealer.Sealer) *SealerService {
 	return &SealerService{
 		sealer: sealer,
 	}
@@ -66,7 +66,7 @@ func (s *SealerService) Seal(ctx context.Context, req *SealRequest) (*SealRespon
 
 		securemem.Zero(req.GetPlaintext())
 
-		resp, err := s.sealer.Seal(ctx, cryptor.SealRequest{
+		resp, err := s.sealer.Seal(ctx, sealer.SealRequest{
 			TenantID:   req.GetTenantId(),
 			KeyID:      req.GetKeyId(),
 			KeyVersion: int(req.GetKeyVersion()),
@@ -142,7 +142,7 @@ func (s *SealerService) Unseal(ctx context.Context, req *UnsealRequest) (*Unseal
 
 		securemem.Zero(req.GetCiphertext())
 
-		resp, err := s.sealer.Unseal(ctx, cryptor.UnsealRequest{
+		resp, err := s.sealer.Unseal(ctx, sealer.UnsealRequest{
 			TenantID:   req.GetTenantId(),
 			KeyID:      req.GetKeyId(),
 			KeyVersion: int(req.GetKeyVersion()),

@@ -12,39 +12,39 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 )
 
 type mockManager struct {
-	FnSeal   func(context.Context, cryptor.SealRequest) (cryptor.SealResponse, error)
-	FnUnseal func(context.Context, cryptor.UnsealRequest) (cryptor.UnsealResponse, error)
+	FnSeal   func(context.Context, sealer.SealRequest) (sealer.SealResponse, error)
+	FnUnseal func(context.Context, sealer.UnsealRequest) (sealer.UnsealResponse, error)
 }
 
-var _ cryptor.Sealer = &mockManager{}
+var _ sealer.Sealer = &mockManager{}
 
-// Seal implements [cryptor.Sealer].
-func (m *mockManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+// Seal implements [sealer.Sealer].
+func (m *mockManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	return m.FnSeal(ctx, req)
 }
 
-// Unseal implements [cryptor.Sealer].
-func (m *mockManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+// Unseal implements [sealer.Sealer].
+func (m *mockManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	return m.FnUnseal(ctx, req)
 }
 
 func newMockManager(t *testing.T) *mockManager {
 	t.Helper()
 	return &mockManager{
-		FnSeal: func(context.Context, cryptor.SealRequest) (cryptor.SealResponse, error) {
+		FnSeal: func(context.Context, sealer.SealRequest) (sealer.SealResponse, error) {
 			assert.Fail(t, "unexpected call to Seal")
-			return cryptor.SealResponse{}, nil
+			return sealer.SealResponse{}, nil
 		},
-		FnUnseal: func(context.Context, cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		FnUnseal: func(context.Context, sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			assert.Fail(t, "unexpected call to Unseal")
-			return cryptor.UnsealResponse{}, nil
+			return sealer.UnsealResponse{}, nil
 		},
 	}
 }
@@ -61,25 +61,25 @@ func assertErrorDetails(t *testing.T, expCode proto.Code, actErr error) {
 	assert.Equal(t, expCode, dt.GetCode())
 }
 
-func newSealerClient(t *testing.T, mgr cryptor.Sealer) sealer.ServiceClient {
+func newSealerClient(t *testing.T, mgr sealer.Sealer) sealergrpc.ServiceClient {
 	t.Helper()
 
 	return newSealerClientInternal(t, mgr)
 }
 
-func newSealerClientWithRPCHandler(t *testing.T, mgr cryptor.Sealer) sealer.ServiceClient {
+func newSealerClientWithRPCHandler(t *testing.T, mgr sealer.Sealer) sealergrpc.ServiceClient {
 	t.Helper()
 
 	return newSealerClientInternal(t, mgr, grpc.StatsHandler(securemem.NewRPCHandler()))
 }
 
-func newSealerClientInternal(t *testing.T, mgr cryptor.Sealer, opts ...grpc.ServerOption) sealer.ServiceClient {
+func newSealerClientInternal(t *testing.T, mgr sealer.Sealer, opts ...grpc.ServerOption) sealergrpc.ServiceClient {
 	t.Helper()
 
 	srv := grpc.NewServer(opts...)
-	sealerSrv := sealer.NewSealerService(mgr)
+	sealerSrv := sealergrpc.NewSealerService(mgr)
 
-	sealer.RegisterServiceServer(srv, sealerSrv)
+	sealergrpc.RegisterServiceServer(srv, sealerSrv)
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
@@ -108,6 +108,6 @@ func newSealerClientInternal(t *testing.T, mgr cryptor.Sealer, opts ...grpc.Serv
 		conn.Close()
 	})
 
-	client := sealer.NewServiceClient(conn)
+	client := sealergrpc.NewServiceClient(conn)
 	return client
 }

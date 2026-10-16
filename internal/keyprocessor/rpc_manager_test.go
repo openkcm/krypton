@@ -16,9 +16,10 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -43,12 +44,12 @@ func TestRPCManager(t *testing.T) {
 
 		var remoteSealCalled, remoteUnsealCalled int
 
-		rs.fnSeal = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		rs.fnSeal = func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			remoteSealCalled++
 			return staticSealer.Seal(ctx, req)
 		}
 
-		rs.fnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		rs.fnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			remoteUnsealCalled++
 			return staticSealer.Unseal(ctx, req)
 		}
@@ -195,11 +196,11 @@ func TestRPCManager(t *testing.T) {
 		rootStaticSealer := newTestSealer(t)
 
 		var rootSealCalled, rootUnsealCalled int
-		rootMock.fnSeal = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		rootMock.fnSeal = func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			rootSealCalled++
 			return rootStaticSealer.Seal(ctx, req)
 		}
-		rootMock.fnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		rootMock.fnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			rootUnsealCalled++
 			return rootStaticSealer.Unseal(ctx, req)
 		}
@@ -255,11 +256,11 @@ func TestRPCManager(t *testing.T) {
 		// expose the middle Manager via gRPC, wrapped with call counters
 		var middleSealCalled, middleUnsealCalled int
 		middleMock := &mockmgr{
-			fnSeal: func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+			fnSeal: func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 				middleSealCalled++
 				return middleMgr.Seal(ctx, req)
 			},
-			fnUnseal: func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+			fnUnseal: func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 				middleUnsealCalled++
 				return middleMgr.Unseal(ctx, req)
 			},
@@ -436,12 +437,12 @@ func TestRPCManager(t *testing.T) {
 
 		var remoteSealCalled, remoteUnsealCalled int
 
-		rs.fnSeal = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		rs.fnSeal = func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			remoteSealCalled++
 			return staticSealer.Seal(ctx, req)
 		}
 
-		rs.fnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		rs.fnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			remoteUnsealCalled++
 			return staticSealer.Unseal(ctx, req)
 		}
@@ -556,12 +557,12 @@ func TestRPCManager(t *testing.T) {
 
 		// swapping the remote sealer with a new one to simulate a root key change
 		newStaticSealer := newTestSealer(t)
-		rs.fnSeal = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		rs.fnSeal = func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			remoteSealCalled++
 			return newStaticSealer.Seal(ctx, req)
 		}
 
-		rs.fnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		rs.fnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			remoteUnsealCalled++
 			return newStaticSealer.Unseal(ctx, req)
 		}
@@ -589,19 +590,19 @@ type remoteManager struct {
 }
 
 type mockmgr struct {
-	fnUnseal func(context.Context, cryptor.UnsealRequest) (cryptor.UnsealResponse, error)
-	fnSeal   func(context.Context, cryptor.SealRequest) (cryptor.SealResponse, error)
+	fnUnseal func(context.Context, sealer.UnsealRequest) (sealer.UnsealResponse, error)
+	fnSeal   func(context.Context, sealer.SealRequest) (sealer.SealResponse, error)
 }
 
-var _ cryptor.Sealer = (*mockmgr)(nil)
+var _ sealer.Sealer = (*mockmgr)(nil)
 
-// Seal implements [cryptor.Sealer].
-func (m *mockmgr) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+// Seal implements [sealer.Sealer].
+func (m *mockmgr) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	return m.fnSeal(ctx, req)
 }
 
-// Unseal implements [cryptor.Sealer].
-func (m *mockmgr) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+// Unseal implements [sealer.Sealer].
+func (m *mockmgr) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	return m.fnUnseal(ctx, req)
 }
 
@@ -637,7 +638,7 @@ func createTestKeyAndVersion(t *testing.T, kStore store.Key, kvStore store.KeyVe
 	return key, kv
 }
 
-func setupRemoteSealer(t *testing.T, s cryptor.Sealer) remoteManager {
+func setupRemoteSealer(t *testing.T, s sealer.Sealer) remoteManager {
 	t.Helper()
 
 	mgr := &mockmgr{}
@@ -652,7 +653,7 @@ func setupRemoteSealer(t *testing.T, s cryptor.Sealer) remoteManager {
 	require.NoError(t, err)
 
 	srv := grpc.NewServer(grpc.StatsHandler(securemem.NewRPCHandler()))
-	sealer.RegisterServiceServer(srv, sealer.NewSealerService(mgr))
+	sealergrpc.RegisterServiceServer(srv, sealergrpc.NewSealerService(mgr))
 
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(func() { srv.GracefulStop() })

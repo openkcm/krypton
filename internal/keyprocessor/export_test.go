@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/vault"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
@@ -39,7 +40,7 @@ func (p *processor) Decrypt(ctx context.Context, req cryptor.DecryptRequest) (*c
 	return p.decrypt(ctx, req)
 }
 
-func NewProcessor(generator cryptor.SecretGenerator, cryptor cryptor.Cryptor, transportSealer, parent cryptor.Sealer, v vault.Vault) *processor {
+func NewProcessor(generator cryptor.SecretGenerator, cryptor cryptor.Cryptor, transportSealer, parent sealer.Sealer, v vault.Vault) *processor {
 	return &processor{
 		generator:       generator,
 		cryptor:         cryptor,
@@ -57,10 +58,10 @@ func NewTestManagerWithAlgorithms(s store.Key, kvs store.KeyVersion, processors 
 	return &Manager{store: s, versionStore: kvs, processors: processors, algorithms: algorithms}
 }
 
-func NewTestRootManager(s store.Key, sealer cryptor.Sealer) *rootManager {
-	return &rootManager{store: s, sealer: sealer}
+func NewTestRootManager(s store.Key, slr sealer.Sealer) *rootManager {
+	return &rootManager{store: s, sealer: slr}
 }
 
-func NewTestRPCManager(client sealer.ServiceClient) *RPCManager {
+func NewTestRPCManager(client sealergrpc.ServiceClient) *RPCManager {
 	return &RPCManager{sealer: client}
 }

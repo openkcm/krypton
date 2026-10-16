@@ -8,9 +8,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 )
 
 const (
@@ -22,13 +22,13 @@ var (
 	ErrNilGRPCConn    = errors.New("gRPC connection is nil")
 )
 
-// RPCManager is a [cryptor.Sealer] that delegates seal and unseal operations
+// RPCManager is a [sealer.Sealer] that delegates seal and unseal operations
 // to a remote agent over gRPC.
 type RPCManager struct {
-	sealer sealer.ServiceClient
+	sealer sealergrpc.ServiceClient
 }
 
-var _ cryptor.Sealer = (*RPCManager)(nil)
+var _ sealer.Sealer = (*RPCManager)(nil)
 
 func NewRPCManager(conn *grpc.ClientConn) (*RPCManager, error) {
 	if conn == nil {
@@ -36,20 +36,19 @@ func NewRPCManager(conn *grpc.ClientConn) (*RPCManager, error) {
 	}
 
 	return &RPCManager{
-		sealer: sealer.NewServiceClient(conn),
+		sealer: sealergrpc.NewServiceClient(conn),
 	}, nil
 }
 
-// Seal implements [cryptor.Sealer].
-func (r *RPCManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+func (r *RPCManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
-		return cryptor.SealResponse{}, fmt.Errorf("%w: plaintext is nil or empty", ErrNilSecureBytes)
+		return sealer.SealResponse{}, fmt.Errorf("%w: plaintext is nil or empty", ErrNilSecureBytes)
 	}
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		defer req.Plaintext.Destroy()
 
-		resp, err := r.sealer.Seal(ctx, &sealer.SealRequest{
+		resp, err := r.sealer.Seal(ctx, &sealergrpc.SealRequest{
 			TenantId:   req.TenantID,
 			KeyId:      req.KeyID,
 			KeyVersion: int32(req.KeyVersion),
@@ -81,30 +80,29 @@ func (r *RPCManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor
 	})
 	if err != nil {
 		slog.Error("failed to run secure memory operation", "error", err)
-		return cryptor.SealResponse{}, err
+		return sealer.SealResponse{}, err
 	}
 
 	ctext, ok := resp.MemVault().Get(handlerKey)
 	if !ok {
 		slog.Error("failed to retrieve ciphertext from vault")
 		cleanHandlerResponse(resp)
-		return cryptor.SealResponse{}, ErrSecNotPersisted
+		return sealer.SealResponse{}, ErrSecNotPersisted
 	}
 
-	return cryptor.SealResponse{
+	return sealer.SealResponse{
 		Ciphertext: ctext,
 	}, nil
 }
 
-// Unseal implements [cryptor.Sealer].
-func (r *RPCManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+func (r *RPCManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
-		return cryptor.UnsealResponse{}, fmt.Errorf("%w: ciphertext is nil or empty", ErrNilSecureBytes)
+		return sealer.UnsealResponse{}, fmt.Errorf("%w: ciphertext is nil or empty", ErrNilSecureBytes)
 	}
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		defer req.Ciphertext.Destroy()
 
-		resp, err := r.sealer.Unseal(ctx, &sealer.UnsealRequest{
+		resp, err := r.sealer.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   req.TenantID,
 			KeyId:      req.KeyID,
 			KeyVersion: int32(req.KeyVersion),
@@ -136,17 +134,17 @@ func (r *RPCManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cry
 	})
 	if err != nil {
 		slog.Error("failed to run secure memory operation", "error", err)
-		return cryptor.UnsealResponse{}, err
+		return sealer.UnsealResponse{}, err
 	}
 
 	ptext, ok := resp.MemVault().Get(handlerKey)
 	if !ok {
 		slog.Error("failed to retrieve plaintext from vault")
 		cleanHandlerResponse(resp)
-		return cryptor.UnsealResponse{}, ErrSecNotPersisted
+		return sealer.UnsealResponse{}, ErrSecNotPersisted
 	}
 
-	return cryptor.UnsealResponse{
+	return sealer.UnsealResponse{
 		Plaintext: ptext,
 	}, nil
 }

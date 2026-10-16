@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 )
 
 func TestNewRPCManager(t *testing.T) {
@@ -52,14 +52,14 @@ func TestRPCManagerSeal(t *testing.T) {
 	t.Run("should seal data successfully", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
-				return &sealer.SealResponse{Ciphertext: []byte("encrypted-payload")}, nil
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
+				return &sealergrpc.SealResponse{Ciphertext: []byte("encrypted-payload")}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -80,20 +80,20 @@ func TestRPCManagerSeal(t *testing.T) {
 		var actPlaintext, actAAD []byte
 
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, in *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
+			sealFn: func(_ context.Context, in *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
 				actTenantID = in.GetTenantId()
 				actKeyID = in.GetKeyId()
 				actKeyVersion = in.GetKeyVersion()
 				// Copy plaintext — the underlying secure memory is destroyed after the handler returns.
 				actPlaintext = append([]byte(nil), in.GetPlaintext()...)
 				actAAD = in.GetAad()
-				return &sealer.SealResponse{Ciphertext: []byte("ciphertext")}, nil
+				return &sealergrpc.SealResponse{Ciphertext: []byte("ciphertext")}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		_, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-42",
 			KeyID:      "key-99",
 			KeyVersion: 7,
@@ -114,14 +114,14 @@ func TestRPCManagerSeal(t *testing.T) {
 		// given
 		sealErr := errors.New("rpc unavailable")
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
 				return nil, sealErr
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -130,20 +130,20 @@ func TestRPCManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, sealErr)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error when gRPC returns empty ciphertext", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
-				return &sealer.SealResponse{}, nil
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
+				return &sealergrpc.SealResponse{}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -152,7 +152,7 @@ func TestRPCManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, securemem.ErrInvalidSize)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error when context is cancelled", func(t *testing.T) {
@@ -164,7 +164,7 @@ func TestRPCManagerSeal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Seal(ctx, cryptor.SealRequest{
+		resp, err := subj.Seal(ctx, sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -173,14 +173,14 @@ func TestRPCManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, context.Canceled)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should destroy input plaintext after successful seal", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
-				return &sealer.SealResponse{Ciphertext: []byte("ciphertext")}, nil
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
+				return &sealergrpc.SealResponse{Ciphertext: []byte("ciphertext")}, nil
 			},
 		}
 		plaintext := newTestData(t, []byte("destroy-me"))
@@ -188,7 +188,7 @@ func TestRPCManagerSeal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		_, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -203,7 +203,7 @@ func TestRPCManagerSeal(t *testing.T) {
 	t.Run("should destroy input plaintext even when gRPC seal fails", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
 				return nil, errors.New("rpc error")
 			},
 		}
@@ -211,7 +211,7 @@ func TestRPCManagerSeal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		_, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -228,7 +228,7 @@ func TestRPCManagerSeal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(&mockServiceClient{})
 
 		// when
-		res, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		res, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -238,19 +238,19 @@ func TestRPCManagerSeal(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, keyprocessor.ErrNilSecureBytes)
-		assert.Equal(t, cryptor.SealResponse{}, res)
+		assert.Equal(t, sealer.SealResponse{}, res)
 	})
 
 	t.Run("should zero gRPC response ciphertext after copy", func(t *testing.T) {
 		ciphertextPayload := []byte("encrypted-payload")
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
-				return &sealer.SealResponse{Ciphertext: ciphertextPayload}, nil
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
+				return &sealergrpc.SealResponse{Ciphertext: ciphertextPayload}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
-		_, err := subj.Seal(t.Context(), cryptor.SealRequest{
+		_, err := subj.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -267,14 +267,14 @@ func TestRPCManagerUnseal(t *testing.T) {
 	t.Run("should unseal data successfully", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
-				return &sealer.UnsealResponse{Plaintext: []byte("decrypted-payload")}, nil
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
+				return &sealergrpc.UnsealResponse{Plaintext: []byte("decrypted-payload")}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -295,20 +295,20 @@ func TestRPCManagerUnseal(t *testing.T) {
 		var actCiphertext, actAAD []byte
 
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, in *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+			unsealFn: func(_ context.Context, in *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
 				actTenantID = in.GetTenantId()
 				actKeyID = in.GetKeyId()
 				actKeyVersion = in.GetKeyVersion()
 				// Copy ciphertext — the underlying secure memory is destroyed after the handler returns.
 				actCiphertext = append([]byte(nil), in.GetCiphertext()...)
 				actAAD = in.GetAad()
-				return &sealer.UnsealResponse{Plaintext: []byte("plaintext")}, nil
+				return &sealergrpc.UnsealResponse{Plaintext: []byte("plaintext")}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		_, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-42",
 			KeyID:      "key-99",
 			KeyVersion: 7,
@@ -329,14 +329,14 @@ func TestRPCManagerUnseal(t *testing.T) {
 		// given
 		unsealErr := errors.New("rpc unavailable")
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
 				return nil, unsealErr
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -345,20 +345,20 @@ func TestRPCManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, unsealErr)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error when gRPC returns empty plaintext", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
-				return &sealer.UnsealResponse{}, nil
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
+				return &sealergrpc.UnsealResponse{}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -367,7 +367,7 @@ func TestRPCManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, securemem.ErrInvalidSize)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error when context is cancelled", func(t *testing.T) {
@@ -379,7 +379,7 @@ func TestRPCManagerUnseal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		resp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		resp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -388,21 +388,21 @@ func TestRPCManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, context.Canceled)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should destroy input ciphertext after successful unseal", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
-				return &sealer.UnsealResponse{Plaintext: []byte("plaintext")}, nil
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
+				return &sealergrpc.UnsealResponse{Plaintext: []byte("plaintext")}, nil
 			},
 		}
 		ciphertext := newTestData(t, []byte("destroy-me"))
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		_, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -417,7 +417,7 @@ func TestRPCManagerUnseal(t *testing.T) {
 	t.Run("should destroy input ciphertext even when gRPC unseal fails", func(t *testing.T) {
 		// given
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
 				return nil, errors.New("rpc error")
 			},
 		}
@@ -425,7 +425,7 @@ func TestRPCManagerUnseal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(client)
 
 		// when
-		_, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		_, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -442,7 +442,7 @@ func TestRPCManagerUnseal(t *testing.T) {
 		subj := keyprocessor.NewTestRPCManager(&mockServiceClient{})
 
 		// when
-		res, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		res, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -452,19 +452,19 @@ func TestRPCManagerUnseal(t *testing.T) {
 		// then
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, keyprocessor.ErrNilSecureBytes)
-		assert.Equal(t, cryptor.UnsealResponse{}, res)
+		assert.Equal(t, sealer.UnsealResponse{}, res)
 	})
 
 	t.Run("should zero gRPC response plaintext after copy", func(t *testing.T) {
 		plaintextPayload := []byte("decrypted-payload")
 		client := &mockServiceClient{
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
-				return &sealer.UnsealResponse{Plaintext: plaintextPayload}, nil
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
+				return &sealergrpc.UnsealResponse{Plaintext: plaintextPayload}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
 
-		_, err := subj.Unseal(t.Context(), cryptor.UnsealRequest{
+		_, err := subj.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   "tenant-1",
 			KeyID:      "key-1",
 			KeyVersion: 1,
@@ -480,11 +480,11 @@ func TestRPCManagerUnseal(t *testing.T) {
 func TestConcurrentSealUnseal(t *testing.T) {
 	t.Run("should handle concurrent seal and unseal calls", func(t *testing.T) {
 		client := &mockServiceClient{
-			sealFn: func(_ context.Context, _ *sealer.SealRequest, _ ...grpc.CallOption) (*sealer.SealResponse, error) {
-				return &sealer.SealResponse{Ciphertext: []byte("ciphertext")}, nil
+			sealFn: func(_ context.Context, _ *sealergrpc.SealRequest, _ ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
+				return &sealergrpc.SealResponse{Ciphertext: []byte("ciphertext")}, nil
 			},
-			unsealFn: func(_ context.Context, _ *sealer.UnsealRequest, _ ...grpc.CallOption) (*sealer.UnsealResponse, error) {
-				return &sealer.UnsealResponse{Plaintext: []byte("plaintext")}, nil
+			unsealFn: func(_ context.Context, _ *sealergrpc.UnsealRequest, _ ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
+				return &sealergrpc.UnsealResponse{Plaintext: []byte("plaintext")}, nil
 			},
 		}
 		subj := keyprocessor.NewTestRPCManager(client)
@@ -495,7 +495,7 @@ func TestConcurrentSealUnseal(t *testing.T) {
 
 		for i := range goroutines {
 			wg.Go(func() {
-				_, errs[i] = subj.Seal(t.Context(), cryptor.SealRequest{
+				_, errs[i] = subj.Seal(t.Context(), sealer.SealRequest{
 					TenantID:   "tenant-1",
 					KeyID:      "key-1",
 					KeyVersion: 1,
@@ -506,7 +506,7 @@ func TestConcurrentSealUnseal(t *testing.T) {
 
 		for i := range goroutines {
 			wg.Go(func() {
-				_, errs[goroutines+i] = subj.Unseal(t.Context(), cryptor.UnsealRequest{
+				_, errs[goroutines+i] = subj.Unseal(t.Context(), sealer.UnsealRequest{
 					TenantID:   "tenant-1",
 					KeyID:      "key-1",
 					KeyVersion: 1,
@@ -523,17 +523,17 @@ func TestConcurrentSealUnseal(t *testing.T) {
 	})
 }
 
-// mockServiceClient implements sealer.ServiceClient for testing RPCManager
+// mockServiceClient implements sealergrpc.ServiceClient for testing RPCManager
 // without a real gRPC connection.
 type mockServiceClient struct {
-	sealFn   func(ctx context.Context, in *sealer.SealRequest, opts ...grpc.CallOption) (*sealer.SealResponse, error)
-	unsealFn func(ctx context.Context, in *sealer.UnsealRequest, opts ...grpc.CallOption) (*sealer.UnsealResponse, error)
+	sealFn   func(ctx context.Context, in *sealergrpc.SealRequest, opts ...grpc.CallOption) (*sealergrpc.SealResponse, error)
+	unsealFn func(ctx context.Context, in *sealergrpc.UnsealRequest, opts ...grpc.CallOption) (*sealergrpc.UnsealResponse, error)
 }
 
-func (m *mockServiceClient) Seal(ctx context.Context, in *sealer.SealRequest, opts ...grpc.CallOption) (*sealer.SealResponse, error) {
+func (m *mockServiceClient) Seal(ctx context.Context, in *sealergrpc.SealRequest, opts ...grpc.CallOption) (*sealergrpc.SealResponse, error) {
 	return m.sealFn(ctx, in, opts...)
 }
 
-func (m *mockServiceClient) Unseal(ctx context.Context, in *sealer.UnsealRequest, opts ...grpc.CallOption) (*sealer.UnsealResponse, error) {
+func (m *mockServiceClient) Unseal(ctx context.Context, in *sealergrpc.UnsealRequest, opts ...grpc.CallOption) (*sealergrpc.UnsealResponse, error) {
 	return m.unsealFn(ctx, in, opts...)
 }
