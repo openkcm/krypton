@@ -22,7 +22,7 @@ var (
 	ErrNilGRPCConn    = errors.New("gRPC connection is nil")
 )
 
-// RPCManager is a [sealer.Sealer] that delegates seal and unseal operation"
+// RPCManager is a [sealer.Sealer] that delegates seal and unseal operations
 // to a remote agent over gRPC.
 type RPCManager struct {
 	sealer sealergrpc.ServiceClient
