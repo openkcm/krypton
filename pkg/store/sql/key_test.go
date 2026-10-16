@@ -555,9 +555,9 @@ func TestGetDescendantKeys(t *testing.T) {
 		// Z1, Z2, C are pre-activation so they and their subtrees are excluded.
 		// D (suspended) and E (pre-activation) under B are also excluded.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive}},
 		}
 
 		// when
@@ -583,9 +583,9 @@ func TestGetDescendantKeys(t *testing.T) {
 	t.Run("should return not found when root does not match lifecycle filter", func(t *testing.T) {
 		// given – root A is "active", filter requires "pre-activation" → root excluded → empty result.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCyclePreActivation},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCyclePreActivation}},
 		}
 
 		// when
@@ -599,9 +599,12 @@ func TestGetDescendantKeys(t *testing.T) {
 		// given – allow "active" and "pre-activation".
 		// All keys pass except D (suspended). D has no children so only D is excluded.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive, model.KeyLifeCyclePreActivation},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters: []store.KeyFilter{
+				{LifeCycleState: model.KeyLifeCycleActive},
+				{LifeCycleState: model.KeyLifeCyclePreActivation},
+			},
 		}
 
 		// when
@@ -642,7 +645,7 @@ func TestGetDescendantKeys(t *testing.T) {
 		query := store.GetDescendantKeysQuery{
 			KeyID:    k.root.ID,
 			TenantID: k.tenant.ID,
-			Status:   []model.KeyProcessingStatus{model.KeyProcessingPending},
+			Filters:  []store.KeyFilter{{Status: []model.KeyProcessingStatus{model.KeyProcessingPending}}},
 		}
 
 		// when
@@ -674,7 +677,7 @@ func TestGetDescendantKeys(t *testing.T) {
 		query := store.GetDescendantKeysQuery{
 			KeyID:    k.root.ID,
 			TenantID: k.tenant.ID,
-			Status:   []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+			Filters:  []store.KeyFilter{{Status: []model.KeyProcessingStatus{model.KeyProcessingCompleted}}},
 		}
 
 		// when
@@ -688,10 +691,9 @@ func TestGetDescendantKeys(t *testing.T) {
 		// given – filter: active + pending. A (active, pending) ✓, B (active, pending) ✓.
 		// Z1, Z2, C are pre-activation → excluded with subtrees. D suspended → excluded. E pre-activation → excluded.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-			Status:         []model.KeyProcessingStatus{model.KeyProcessingPending},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive, Status: []model.KeyProcessingStatus{model.KeyProcessingPending}}},
 		}
 
 		// when
@@ -718,9 +720,9 @@ func TestGetDescendantKeys(t *testing.T) {
 		// given – filter by "active" starting from B.
 		// B (active) ✓. D (suspended) ✗ → excluded. E (pre-activation) ✗ → excluded.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.b.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
+			KeyID:    k.b.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive}},
 		}
 
 		// when
@@ -743,10 +745,9 @@ func TestGetDescendantKeys(t *testing.T) {
 	t.Run("should return full tree when filter slices are empty", func(t *testing.T) {
 		// given – empty slices behave the same as nil (no filter applied).
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{},
-			Status:         []model.KeyProcessingStatus{},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{},
 		}
 
 		// when
@@ -768,7 +769,7 @@ func TestGetDescendantKeys(t *testing.T) {
 		query := store.GetDescendantKeysQuery{
 			KeyID:    k.root.ID,
 			TenantID: k.tenant.ID,
-			Status:   []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingCompleted},
+			Filters:  []store.KeyFilter{{Status: []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingCompleted}}},
 		}
 
 		// when
@@ -808,10 +809,12 @@ func TestGetDescendantKeys(t *testing.T) {
 		// D excluded by lifecycle (suspended). E excluded by status (in-progress).
 		// Remaining: A(active,pending), Z1(pre-act,pending), B(active,pending).
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive, model.KeyLifeCyclePreActivation},
-			Status:         []model.KeyProcessingStatus{model.KeyProcessingPending},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters: []store.KeyFilter{
+				{LifeCycleState: model.KeyLifeCycleActive, Status: []model.KeyProcessingStatus{model.KeyProcessingPending}},
+				{LifeCycleState: model.KeyLifeCyclePreActivation, Status: []model.KeyProcessingStatus{model.KeyProcessingPending}},
+			},
 		}
 
 		// when
@@ -839,10 +842,9 @@ func TestGetDescendantKeys(t *testing.T) {
 		// given – A is (active, pending). Filter requires active + completed.
 		// Root matches lifecycle but not status → anchor returns nothing → ErrKeyNotFound.
 		query := store.GetDescendantKeysQuery{
-			KeyID:          k.root.ID,
-			TenantID:       k.tenant.ID,
-			LifeCycleState: []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-			Status:         []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+			KeyID:    k.root.ID,
+			TenantID: k.tenant.ID,
+			Filters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive, Status: []model.KeyProcessingStatus{model.KeyProcessingCompleted}}},
 		}
 
 		// when

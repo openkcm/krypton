@@ -38,11 +38,22 @@ type GetParentKeysResult struct {
 	Keys []model.Key
 }
 
-type GetDescendantKeysQuery struct {
-	KeyID          string
-	TenantID       string
-	LifeCycleState []model.KeyLifeCycleState
+// KeyFilter represents a single filter condition for descendant key queries.
+// Within a filter, non-empty fields are AND'd together. Across multiple
+// filters in a query, they are OR'd: a key passes if it matches at least one.
+//
+// Both fields are optional. When LifeCycleState is empty, any lifecycle state
+// matches. When Status is empty, any processing status matches. A filter with
+// all fields at their zero value produces no condition and is ignored.
+type KeyFilter struct {
+	LifeCycleState model.KeyLifeCycleState
 	Status         []model.KeyProcessingStatus
+}
+
+type GetDescendantKeysQuery struct {
+	KeyID    string
+	TenantID string
+	Filters  []KeyFilter
 }
 
 type GetDescendantKeysResult struct {

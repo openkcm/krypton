@@ -135,9 +135,9 @@ func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeys
 // by traversing parent_id down to the leaves.
 // The result is grouped by depth level.
 //
-// When LifeCycleState or Status filters are provided, the filters are applied
-// inside the recursive CTE so that any key that does not match the criteria is
-// excluded together with its entire subtree.
+// When Filters are provided, they are applied inside the recursive CTE so that
+// any key that does not match at least one filter is excluded together with its
+// entire subtree.
 func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
 	args := []any{query.KeyID, query.TenantID}
 	argIdx := 3
@@ -146,17 +146,41 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	// the recursive branch (prefixed with "k.").  Applying the filters inside
 	// the CTE ensures that when a key does not match the criteria its entire
 	// subtree is excluded from the result.
+	//
+	// Each KeyFilter produces a conjunction (AND) of its non-zero fields.
+	// Multiple filters are combined with OR so that a key passes if it
+	// matches at least one filter.
 	var anchorFilter, recursiveFilter strings.Builder
-	if len(query.LifeCycleState) > 0 {
-		fmt.Fprintf(&anchorFilter, " AND life_cycle_state = ANY($%d)", argIdx)
-		fmt.Fprintf(&recursiveFilter, " AND k.life_cycle_state = ANY($%d)", argIdx)
-		args = append(args, query.LifeCycleState)
-		argIdx++
-	}
-	if len(query.Status) > 0 {
-		fmt.Fprintf(&anchorFilter, " AND processing_status = ANY($%d)", argIdx)
-		fmt.Fprintf(&recursiveFilter, " AND k.processing_status = ANY($%d)", argIdx)
-		args = append(args, query.Status)
+	if len(query.Filters) > 0 {
+		anchorParts := make([]string, 0, len(query.Filters))
+		recursiveParts := make([]string, 0, len(query.Filters))
+		for _, f := range query.Filters {
+			aParts := make([]string, 0, 2)
+			rParts := make([]string, 0, 2)
+
+			if f.LifeCycleState != "" {
+				aParts = append(aParts, fmt.Sprintf("life_cycle_state = $%d", argIdx))
+				rParts = append(rParts, fmt.Sprintf("k.life_cycle_state = $%d", argIdx))
+				args = append(args, f.LifeCycleState)
+				argIdx++
+			}
+
+			if len(f.Status) > 0 {
+				aParts = append(aParts, fmt.Sprintf("processing_status = ANY($%d)", argIdx))
+				rParts = append(rParts, fmt.Sprintf("k.processing_status = ANY($%d)", argIdx))
+				args = append(args, f.Status)
+				argIdx++
+			}
+
+			if len(aParts) > 0 {
+				anchorParts = append(anchorParts, "("+strings.Join(aParts, " AND ")+")")
+				recursiveParts = append(recursiveParts, "("+strings.Join(rParts, " AND ")+")")
+			}
+		}
+		if len(anchorParts) > 0 {
+			fmt.Fprintf(&anchorFilter, " AND (%s)", strings.Join(anchorParts, " OR "))
+			fmt.Fprintf(&recursiveFilter, " AND (%s)", strings.Join(recursiveParts, " OR "))
+		}
 	}
 
 	var sb strings.Builder
