@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/openkcm/krypton/internal/cryptor"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
@@ -99,7 +99,7 @@ config: {}
 		err := yaml.Unmarshal([]byte(input), &spec)
 
 		// then
-		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+		assert.ErrorIs(t, err, sealer.ErrUnknownType)
 	})
 }
 
@@ -113,10 +113,10 @@ func TestGetSealer(t *testing.T) {
 		}
 
 		// when
-		sealer, err := sealerprovider.GetSealer(ctx, spec)
+		s, err := sealerprovider.GetSealer(ctx, spec)
 
 		// then
-		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
-		assert.Nil(t, sealer)
+		assert.ErrorIs(t, err, sealer.ErrUnknownType)
+		assert.Nil(t, s)
 	})
 }

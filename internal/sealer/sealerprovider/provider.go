@@ -7,8 +7,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/openkcm/krypton/internal/cryptor"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
 
@@ -16,10 +16,10 @@ var ErrSealerNameEmpty = errors.New("sealer name is empty")
 
 // Spec describes which sealer implementation to use and how to configure it.
 type Spec struct {
-	Name string       `yaml:"name"`
-	Type cryptor.Type `yaml:"type"`
+	Name string      `yaml:"name"`
+	Type sealer.Type `yaml:"type"`
 	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
-	Config cryptor.SealerConfig `yaml:"-"`
+	Config sealer.SealerConfig `yaml:"-"`
 }
 
 var (
@@ -33,7 +33,7 @@ func (s *Spec) MarshalYAML() (any, error) {
 	return struct {
 		alias `yaml:",inline"`
 
-		Config cryptor.SealerConfig `yaml:"config,omitempty"`
+		Config sealer.SealerConfig `yaml:"config,omitempty"`
 	}{
 		alias:  alias(*s),
 		Config: s.Config,
@@ -81,8 +81,8 @@ func (s *Spec) Validate() error {
 	return nil
 }
 
-// GetSealer constructs a ready-to-use cryptor.Sealer from the given Spec.
-func GetSealer(ctx context.Context, spec Spec) (cryptor.Sealer, error) {
+// GetSealer constructs a ready-to-use sealer.Sealer from the given Spec.
+func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 	switch cfg := spec.Config.(type) {
 	case *staticsecret.Config:
 		secret, err := secretprovider.GetSecret(ctx, cfg.Secret)
@@ -91,16 +91,16 @@ func GetSealer(ctx context.Context, spec Spec) (cryptor.Sealer, error) {
 		}
 		return staticsecret.New(spec.Name, secret)
 	default:
-		return nil, fmt.Errorf("%w: %T", cryptor.ErrUnknownType, spec.Config)
+		return nil, fmt.Errorf("%w: %T", sealer.ErrUnknownType, spec.Config)
 	}
 }
 
 // newSealerConfig is a factory that creates the correct SealerConfig struct by sealer type.
-func newSealerConfig(t cryptor.Type) (cryptor.SealerConfig, error) {
+func newSealerConfig(t sealer.Type) (sealer.SealerConfig, error) {
 	switch t {
 	case staticsecret.TypeStaticSecret:
 		return &staticsecret.Config{}, nil
 	default:
-		return nil, fmt.Errorf("%w: %q", cryptor.ErrUnknownType, t)
+		return nil, fmt.Errorf("%w: %q", sealer.ErrUnknownType, t)
 	}
 }

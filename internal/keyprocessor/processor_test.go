@@ -12,8 +12,9 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
@@ -86,13 +87,13 @@ func TestCreateSecret(t *testing.T) {
 			return resp, err
 		}
 
-		sealer := &sealerWrapper{Sealer: newTestSealer(t)}
-		sealer.sealFn = func(_ context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		sw := &sealerWrapper{Sealer: newTestSealer(t)}
+		sw.sealFn = func(_ context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
 			assert.Equal(t, keyID, req.KeyID)
-			return cryptor.SealResponse{}, sealErr
+			return sealer.SealResponse{}, sealErr
 		}
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, newTestSealer(t), newTestVault(t))
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sw, newTestSealer(t), newTestVault(t))
 
 		parentKeyID := uuid.New().String()
 		// when
@@ -110,8 +111,8 @@ func TestCreateSecret(t *testing.T) {
 		// given
 		parentErr := errors.New("parent vault down")
 		ps := setupParent(t)
-		ps.sealer.sealFn = func(_ context.Context, _ cryptor.SealRequest) (cryptor.SealResponse, error) {
-			return cryptor.SealResponse{}, parentErr
+		ps.sealer.sealFn = func(_ context.Context, _ sealer.SealRequest) (sealer.SealResponse, error) {
+			return sealer.SealResponse{}, parentErr
 		}
 
 		var genSec *securemem.Data
@@ -142,8 +143,8 @@ func TestCreateSecret(t *testing.T) {
 		// given
 		parentErr := errors.New("parent vault down")
 		ps := setupParent(t)
-		ps.sealer.sealFn = func(_ context.Context, _ cryptor.SealRequest) (cryptor.SealResponse, error) {
-			return cryptor.SealResponse{}, parentErr
+		ps.sealer.sealFn = func(_ context.Context, _ sealer.SealRequest) (sealer.SealResponse, error) {
+			return sealer.SealResponse{}, parentErr
 		}
 
 		var genSec *securemem.Data
@@ -158,8 +159,8 @@ func TestCreateSecret(t *testing.T) {
 
 		realSealer := newTestSealer(t)
 		var sealedSec *securemem.Data
-		sealer := &sealerWrapper{Sealer: realSealer}
-		sealer.sealFn = func(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+		sw := &sealerWrapper{Sealer: realSealer}
+		sw.sealFn = func(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 			resp, err := realSealer.Seal(ctx, req)
 			if err == nil {
 				sealedSec = resp.Ciphertext
@@ -168,7 +169,7 @@ func TestCreateSecret(t *testing.T) {
 		}
 
 		childKV := model.NewKeyVersion(ps.tenantID, uuid.New().String(), 1, &ps.parentKey.ID, nil)
-		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sealer, ps.sealer, newTestVault(t))
+		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), sw, ps.sealer, newTestVault(t))
 
 		// when
 		resp, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
@@ -329,8 +330,8 @@ func TestResolveSecret(t *testing.T) {
 			}
 			return resp, err
 		}
-		ps.sealer.unsealFn = func(_ context.Context, _ cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-			return cryptor.UnsealResponse{}, parentErr
+		ps.sealer.unsealFn = func(_ context.Context, _ sealer.UnsealRequest) (sealer.UnsealResponse, error) {
+			return sealer.UnsealResponse{}, parentErr
 		}
 
 		// when
@@ -351,13 +352,13 @@ func TestResolveSecret(t *testing.T) {
 		kv := model.NewKeyVersion(uuid.New().String(), uuid.New().String(), 1, &parentKeyID, nil)
 
 		realSealer := newTestSealer(t)
-		sealer := &sealerWrapper{Sealer: realSealer}
-		sealer.unsealFn = func(_ context.Context, _ cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-			return cryptor.UnsealResponse{}, unsealErr
+		sw := &sealerWrapper{Sealer: realSealer}
+		sw.unsealFn = func(_ context.Context, _ sealer.UnsealRequest) (sealer.UnsealResponse, error) {
+			return sealer.UnsealResponse{}, unsealErr
 		}
 
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), sealer, newTestSealer(t), v)
+		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), sw, newTestSealer(t), v)
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
@@ -655,20 +656,20 @@ func (w *secretGenWrapper) GenerateSecret(ctx context.Context) (*cryptor.Generat
 }
 
 type sealerWrapper struct {
-	cryptor.Sealer
+	sealer.Sealer
 
-	sealFn   func(context.Context, cryptor.SealRequest) (cryptor.SealResponse, error)
-	unsealFn func(context.Context, cryptor.UnsealRequest) (cryptor.UnsealResponse, error)
+	sealFn   func(context.Context, sealer.SealRequest) (sealer.SealResponse, error)
+	unsealFn func(context.Context, sealer.UnsealRequest) (sealer.UnsealResponse, error)
 }
 
-func (w *sealerWrapper) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+func (w *sealerWrapper) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	if w.sealFn != nil {
 		return w.sealFn(ctx, req)
 	}
 	return w.Sealer.Seal(ctx, req)
 }
 
-func (w *sealerWrapper) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+func (w *sealerWrapper) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	if w.unsealFn != nil {
 		return w.unsealFn(ctx, req)
 	}

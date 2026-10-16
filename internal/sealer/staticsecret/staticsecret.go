@@ -9,19 +9,20 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
 // TypeStaticSecret identifies the static-secret cryptor implementation.
-const TypeStaticSecret cryptor.Type = "aes256gcm-staticsecret"
+const TypeStaticSecret sealer.Type = "aes256gcm-staticsecret"
 
 // Config holds configuration for the static-secret cryptor.
 type Config struct {
 	Secret secretprovider.Spec `yaml:"secret"`
 }
 
-var _ cryptor.SealerConfig = (*Config)(nil)
+var _ sealer.SealerConfig = (*Config)(nil)
 
 func (c *Config) ValidateSealerConfig() error {
 	return c.Secret.Validate()
@@ -42,7 +43,7 @@ type StaticSecret struct {
 // due to an unsupported algorithm or invalid key material.
 var ErrInitializationFailed = errors.New("static secret initialization failed")
 
-var _ cryptor.Sealer = &StaticSecret{}
+var _ sealer.Sealer = &StaticSecret{}
 
 // New returns a StaticSecret with the given instance name and key material.
 // The secret must be non-nil and exactly 32 bytes (AES-256).
@@ -63,9 +64,9 @@ func New(name string, secret *securemem.Data) (*StaticSecret, error) {
 }
 
 // Seal seals the plaintext using the embedded static key.
-func (s *StaticSecret) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+func (s *StaticSecret) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	if req.Plaintext == nil || len(req.Plaintext.SecureBytes()) == 0 {
-		return cryptor.SealResponse{}, fmt.Errorf("invalid plaintext: %w", cryptor.ErrRequest)
+		return sealer.SealResponse{}, fmt.Errorf("invalid plaintext: %w", cryptor.ErrRequest)
 	}
 
 	resp, err := s.aes256gcm.Encrypt(ctx, cryptor.EncryptRequest{
@@ -77,18 +78,18 @@ func (s *StaticSecret) Seal(ctx context.Context, req cryptor.SealRequest) (crypt
 		AAD:       req.AAD,
 	})
 	if err != nil {
-		return cryptor.SealResponse{}, err
+		return sealer.SealResponse{}, err
 	}
 
-	return cryptor.SealResponse{
+	return sealer.SealResponse{
 		Ciphertext: resp.Ciphertext,
 	}, nil
 }
 
 // Unseal unseals the ciphertext using the embedded static key.
-func (s *StaticSecret) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+func (s *StaticSecret) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	if req.Ciphertext == nil || len(req.Ciphertext.SecureBytes()) == 0 {
-		return cryptor.UnsealResponse{}, fmt.Errorf("invalid ciphertext: %w", cryptor.ErrRequest)
+		return sealer.UnsealResponse{}, fmt.Errorf("invalid ciphertext: %w", cryptor.ErrRequest)
 	}
 
 	resp, err := s.aes256gcm.Decrypt(ctx, cryptor.DecryptRequest{
@@ -100,10 +101,10 @@ func (s *StaticSecret) Unseal(ctx context.Context, req cryptor.UnsealRequest) (c
 		AAD:        req.AAD,
 	})
 	if err != nil {
-		return cryptor.UnsealResponse{}, err
+		return sealer.UnsealResponse{}, err
 	}
 
-	return cryptor.UnsealResponse{
+	return sealer.UnsealResponse{
 		Plaintext: resp.Plaintext,
 	}, nil
 }

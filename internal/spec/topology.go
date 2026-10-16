@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
 

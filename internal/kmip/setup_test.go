@@ -13,9 +13,10 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
@@ -176,11 +177,11 @@ func (env *testEnv) seedSecret(t *testing.T, material []byte) {
 
 	keyData := newSecureData(t, "seed-sealer-key", env.sealerKey)
 	defer func() { require.NoError(t, keyData.Destroy()) }()
-	sealer, err := staticsecret.New("test-sealer", keyData)
+	s, err := staticsecret.New("test-sealer", keyData)
 	require.NoError(t, err, "staticsecret.New")
 
 	plain := newSecureData(t, "seed-material", material)
-	sealed, err := sealer.Seal(ctx, cryptor.SealRequest{
+	sealed, err := s.Seal(ctx, sealer.SealRequest{
 		TenantID:  env.tenantID,
 		KeyID:     env.rootKeyID,
 		Plaintext: plain,

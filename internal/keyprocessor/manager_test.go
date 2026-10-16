@@ -17,10 +17,11 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
@@ -37,7 +38,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(nil, nil, nil)
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:  uuid.New().String(),
 			KeyID:     uuid.New().String(),
 			Plaintext: newTestData(t, []byte("data")),
@@ -45,7 +46,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionRequired)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
@@ -63,7 +64,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: 1,
@@ -72,7 +73,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, kvStoreErr)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if no usable key version found", func(t *testing.T) {
@@ -87,7 +88,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: 1,
@@ -96,7 +97,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrNoUsableKeyVersion)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
@@ -120,7 +121,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: 1,
@@ -129,7 +130,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, storeErr)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if key is not active", func(t *testing.T) {
@@ -154,7 +155,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -163,7 +164,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
@@ -188,7 +189,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -197,7 +198,7 @@ func TestManagerSeal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should succeed", func(t *testing.T) {
@@ -227,7 +228,7 @@ func TestManagerSeal(t *testing.T) {
 		c := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -248,7 +249,7 @@ func TestManagerUnseal(t *testing.T) {
 		c := keyprocessor.NewTestManager(nil, nil, nil)
 
 		// when
-		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   uuid.New().String(),
 			KeyID:      uuid.New().String(),
 			Ciphertext: newTestData(t, []byte("data")),
@@ -256,7 +257,7 @@ func TestManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionRequired)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error if key version resolution fails", func(t *testing.T) {
@@ -274,7 +275,7 @@ func TestManagerUnseal(t *testing.T) {
 		c := keyprocessor.NewTestManager(nil, kvs, nil)
 
 		// when
-		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: 1,
@@ -283,7 +284,7 @@ func TestManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, kvStoreErr)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error if store lookup fails", func(t *testing.T) {
@@ -305,7 +306,7 @@ func TestManagerUnseal(t *testing.T) {
 		c := keyprocessor.NewTestManager(ks, kvs, nil)
 
 		// when
-		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      keyID,
 			KeyVersion: 1,
@@ -314,7 +315,7 @@ func TestManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, storeErr)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should return error if processor not found for key kind", func(t *testing.T) {
@@ -339,7 +340,7 @@ func TestManagerUnseal(t *testing.T) {
 		c := keyprocessor.NewTestManager(ks, kvs, map[model.KeyKind]keyprocessor.Processor{})
 
 		// when
-		resp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		resp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   key.TenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -348,7 +349,7 @@ func TestManagerUnseal(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should succeed with round trip", func(t *testing.T) {
@@ -377,7 +378,7 @@ func TestManagerUnseal(t *testing.T) {
 
 		c := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{key.Kind: *proc})
 
-		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		sealResp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -387,7 +388,7 @@ func TestManagerUnseal(t *testing.T) {
 		assert.NoError(t, err)
 
 		// when
-		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		unsealResp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			KeyVersion: 1,
@@ -412,7 +413,7 @@ func TestRootManager(t *testing.T) {
 		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:  uuid.New().String(),
 			KeyID:     uuid.New().String(),
 			Plaintext: newTestData(t, []byte("data")),
@@ -420,7 +421,7 @@ func TestRootManager(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, storeErr)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should return error if key is not active", func(t *testing.T) {
@@ -437,7 +438,7 @@ func TestRootManager(t *testing.T) {
 		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
 
 		// when
-		resp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		resp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:  key.TenantID,
 			KeyID:     key.ID,
 			Plaintext: newTestData(t, []byte("data")),
@@ -445,7 +446,7 @@ func TestRootManager(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should seal and unseal successfully", func(t *testing.T) {
@@ -461,7 +462,7 @@ func TestRootManager(t *testing.T) {
 		c := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		// when
-		sealResp, err := c.Seal(t.Context(), cryptor.SealRequest{
+		sealResp, err := c.Seal(t.Context(), sealer.SealRequest{
 			TenantID:  tenantID,
 			KeyID:     key.ID,
 			Plaintext: newTestData(t, []byte("root secret")),
@@ -469,7 +470,7 @@ func TestRootManager(t *testing.T) {
 		})
 		assert.NoError(t, err)
 
-		unsealResp, err := c.Unseal(t.Context(), cryptor.UnsealRequest{
+		unsealResp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      key.ID,
 			Ciphertext: sealResp.Ciphertext,
@@ -523,7 +524,7 @@ func TestManagerHierarchy(t *testing.T) {
 		leafMgr := keyprocessor.NewTestManager(keyStore, kvStore, map[model.KeyKind]keyprocessor.Processor{"K2": *leafProc})
 
 		// when
-		sealResp, err := leafMgr.Seal(t.Context(), cryptor.SealRequest{
+		sealResp, err := leafMgr.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
 			KeyVersion: 1,
@@ -531,7 +532,7 @@ func TestManagerHierarchy(t *testing.T) {
 		})
 		assert.NoError(t, err)
 
-		unsealResp, err := leafMgr.Unseal(t.Context(), cryptor.UnsealRequest{
+		unsealResp, err := leafMgr.Unseal(t.Context(), sealer.UnsealRequest{
 			TenantID:   tenantID,
 			KeyID:      leafKey.ID,
 			KeyVersion: 1,
@@ -594,7 +595,7 @@ func TestNewManager(t *testing.T) {
 
 		// then
 		assert.Nil(t, mgr)
-		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+		assert.ErrorIs(t, err, sealer.ErrUnknownType)
 	})
 
 	t.Run("should return error when non-root cryptor provider fails", func(t *testing.T) {
@@ -681,7 +682,7 @@ func TestNewManager(t *testing.T) {
 		// then
 		assert.Nil(t, mgr)
 		assert.ErrorContains(t, err, "building processor for key kind K1")
-		assert.ErrorIs(t, err, cryptor.ErrUnknownType)
+		assert.ErrorIs(t, err, sealer.ErrUnknownType)
 	})
 
 	t.Run("should return error when key store is nil", func(t *testing.T) {
@@ -1541,7 +1542,7 @@ func TestManagerExportSecret(t *testing.T) {
 		assert.Len(t, []byte(sec.Data.SecureBytes()), 32)
 
 		// exported material must decrypt data sealed through the manager
-		sealResp, err := es.mgr.Seal(t.Context(), cryptor.SealRequest{
+		sealResp, err := es.mgr.Seal(t.Context(), sealer.SealRequest{
 			TenantID:   es.tenantID,
 			KeyID:      es.key.ID,
 			KeyVersion: 1,

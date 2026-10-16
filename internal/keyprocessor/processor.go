@@ -6,7 +6,8 @@ import (
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault"
@@ -29,15 +30,15 @@ var (
 type processor struct {
 	generator       cryptor.SecretGenerator
 	cryptor         cryptor.Cryptor
-	transportSealer cryptor.Sealer
-	parent          cryptor.Sealer
+	transportSealer sealer.Sealer
+	parent          sealer.Sealer
 	vault           vault.Vault
 }
 
 // newProcessor builds a processor from a key binding and its parent sealer.
 // It resolves the optional cryptor bundle, vault, and transport sealer from
 // the binding's provider specs.
-func newProcessor(ctx context.Context, binding spec.KeyBinding, parent cryptor.Sealer) (*processor, error) {
+func newProcessor(ctx context.Context, binding spec.KeyBinding, parent sealer.Sealer) (*processor, error) {
 	p := &processor{parent: parent}
 
 	if binding.CryptorSpec != nil {
@@ -229,7 +230,7 @@ func (p *processor) transportSeal(ctx context.Context, kv model.KeyVersion, sec 
 	if p.transportSealer == nil {
 		return sec, nil
 	}
-	resp, err := p.transportSealer.Seal(ctx, cryptor.SealRequest{
+	resp, err := p.transportSealer.Seal(ctx, sealer.SealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,
 		KeyVersion: kv.Version,
@@ -246,7 +247,7 @@ func (p *processor) transportUnseal(ctx context.Context, kv model.KeyVersion, se
 	if p.transportSealer == nil {
 		return sec, nil
 	}
-	resp, err := p.transportSealer.Unseal(ctx, cryptor.UnsealRequest{
+	resp, err := p.transportSealer.Unseal(ctx, sealer.UnsealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,
 		KeyVersion: kv.Version,
@@ -267,7 +268,7 @@ func (p *processor) parentSeal(ctx context.Context, kv model.KeyVersion, sec *se
 	if kv.ParentKeyVersion != nil {
 		parentVersion = *kv.ParentKeyVersion
 	}
-	resp, err := p.parent.Seal(ctx, cryptor.SealRequest{
+	resp, err := p.parent.Seal(ctx, sealer.SealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      *kv.ParentKeyID,
 		KeyVersion: parentVersion,
@@ -288,7 +289,7 @@ func (p *processor) parentUnseal(ctx context.Context, kv model.KeyVersion, sec *
 	if kv.ParentKeyVersion != nil {
 		parentVersion = *kv.ParentKeyVersion
 	}
-	resp, err := p.parent.Unseal(ctx, cryptor.UnsealRequest{
+	resp, err := p.parent.Unseal(ctx, sealer.UnsealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      *kv.ParentKeyID,
 		KeyVersion: parentVersion,

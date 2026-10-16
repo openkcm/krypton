@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/openkcm/krypton/internal/cryptor"
-	"github.com/openkcm/krypton/internal/cryptor/sealerprovider"
 	"github.com/openkcm/krypton/internal/grpcconn"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -51,7 +52,7 @@ type Manager struct {
 	algorithms   map[model.KeyKind]cryptor.KeyAlgorithm
 }
 
-var _ cryptor.Sealer = &Manager{}
+var _ sealer.Sealer = &Manager{}
 
 type GenerateAndSealSecretRequest struct {
 	KeyVersion model.KeyVersion
@@ -196,13 +197,13 @@ func (km *Manager) resolveProcessorAndSecret(ctx context.Context, tenantID, keyI
 }
 
 // Seal validates the key lifecycle, resolves the key version and its secret to encrypt the plaintext.
-func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+func (km *Manager) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	if req.KeyVersion == 0 {
-		return cryptor.SealResponse{}, ErrKeyVersionRequired
+		return sealer.SealResponse{}, ErrKeyVersionRequired
 	}
 	proc, sec, err := km.resolveProcessorAndSecret(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
-		return cryptor.SealResponse{}, err
+		return sealer.SealResponse{}, err
 	}
 	defer sec.Data.Destroy()
 
@@ -212,22 +213,22 @@ func (km *Manager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.S
 		AAD:       req.AAD,
 	})
 	if err != nil {
-		return cryptor.SealResponse{}, err
+		return sealer.SealResponse{}, err
 	}
 
-	return cryptor.SealResponse{
+	return sealer.SealResponse{
 		Ciphertext: resp.Ciphertext,
 	}, nil
 }
 
 // Unseal validates the key lifecycle, resolves the key version and its secret to decrypt the ciphertext.
-func (km *Manager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+func (km *Manager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	if req.KeyVersion == 0 {
-		return cryptor.UnsealResponse{}, ErrKeyVersionRequired
+		return sealer.UnsealResponse{}, ErrKeyVersionRequired
 	}
 	proc, sec, err := km.resolveProcessorAndSecret(ctx, req.TenantID, req.KeyID, req.KeyVersion)
 	if err != nil {
-		return cryptor.UnsealResponse{}, err
+		return sealer.UnsealResponse{}, err
 	}
 	defer sec.Data.Destroy()
 
@@ -237,53 +238,53 @@ func (km *Manager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (crypt
 		AAD:        req.AAD,
 	})
 	if err != nil {
-		return cryptor.UnsealResponse{}, err
+		return sealer.UnsealResponse{}, err
 	}
 
-	return cryptor.UnsealResponse{
+	return sealer.UnsealResponse{
 		Plaintext: resp.Plaintext,
 	}, nil
 }
 
 type rootManager struct {
 	store  store.Key
-	sealer cryptor.Sealer
+	sealer sealer.Sealer
 }
 
-var _ cryptor.Sealer = &rootManager{}
+var _ sealer.Sealer = &rootManager{}
 
-func (rm *rootManager) Seal(ctx context.Context, req cryptor.SealRequest) (cryptor.SealResponse, error) {
+func (rm *rootManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
 	if err != nil {
-		return cryptor.SealResponse{}, err
+		return sealer.SealResponse{}, err
 	}
 	if key.LifeCycleState != model.KeyLifeCycleActive {
-		return cryptor.SealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+		return sealer.SealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
 	}
 
 	return rm.sealer.Seal(ctx, req)
 }
 
-func (rm *rootManager) Unseal(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+func (rm *rootManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
 	if err != nil {
-		return cryptor.UnsealResponse{}, err
+		return sealer.UnsealResponse{}, err
 	}
 	if key.LifeCycleState != model.KeyLifeCycleActive {
-		return cryptor.UnsealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
+		return sealer.UnsealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
 	}
 
 	return rm.sealer.Unseal(ctx, req)
 }
 
-func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind, binding spec.KeyBinding) (cryptor.Sealer, error) {
+func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind, binding spec.KeyBinding) (sealer.Sealer, error) {
 	if binding.HasRemoteParent() {
 		return resolveRemoteParent(cfg, binding)
 	}
 	return resolveLocalParent(ctx, cfg, mgr, kind)
 }
 
-func resolveRemoteParent(cfg ManagerConfig, binding spec.KeyBinding) (cryptor.Sealer, error) {
+func resolveRemoteParent(cfg ManagerConfig, binding spec.KeyBinding) (sealer.Sealer, error) {
 	name := binding.ParentKeyProvider.AgentName
 	if cfg.Registry == nil {
 		return nil, fmt.Errorf("%w: %q", ErrRegistryRequired, name)
@@ -301,7 +302,7 @@ func resolveRemoteParent(cfg ManagerConfig, binding spec.KeyBinding) (cryptor.Se
 	return mgr, nil
 }
 
-func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind) (cryptor.Sealer, error) {
+func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind) (sealer.Sealer, error) {
 	parentSpec, ok := cfg.Hierarchy.FindParentKeySpec(kind)
 	if !ok {
 		return nil, fmt.Errorf("no parent key spec found for key kind %s", kind)

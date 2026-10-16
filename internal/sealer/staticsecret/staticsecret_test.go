@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/cryptor"
-	"github.com/openkcm/krypton/internal/cryptor/staticsecret"
+	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
@@ -82,7 +82,7 @@ func TestStaticSecret_Seal(t *testing.T) {
 
 	t.Run("should fail if plaintext is nil", func(t *testing.T) {
 		// given
-		req := cryptor.SealRequest{
+		req := sealer.SealRequest{
 			Plaintext: nil,
 		}
 
@@ -91,14 +91,14 @@ func TestStaticSecret_Seal(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should succeed with valid plaintext", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.SealRequest{
+		req := sealer.SealRequest{
 			Plaintext: plainText,
 		}
 
@@ -115,7 +115,7 @@ func TestStaticSecret_Seal(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.SealRequest{
+		req := sealer.SealRequest{
 			Plaintext: plainText,
 		}
 
@@ -127,14 +127,14 @@ func TestStaticSecret_Seal(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.SealResponse{}, resp)
+		assert.Equal(t, sealer.SealResponse{}, resp)
 	})
 
 	t.Run("should generate different ciphertext for same plaintext and key", func(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.SealRequest{
+		req := sealer.SealRequest{
 			Plaintext: plainText,
 		}
 
@@ -155,7 +155,7 @@ func TestStaticSecret_Seal(t *testing.T) {
 		// given
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
-		req := cryptor.SealRequest{
+		req := sealer.SealRequest{
 			Plaintext: plainText,
 		}
 
@@ -177,7 +177,7 @@ func TestStaticSecret_Unseal(t *testing.T) {
 
 	t.Run("should fail if ciphertext is nil", func(t *testing.T) {
 		// given
-		req := cryptor.UnsealRequest{
+		req := sealer.UnsealRequest{
 			Ciphertext: nil,
 		}
 
@@ -186,14 +186,14 @@ func TestStaticSecret_Unseal(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 
 	t.Run("should fail to unseal if ciphertext data is destroyed", func(t *testing.T) {
 		// given
 		cipherText := newSecureMemData(t, []byte("ciphertext"))
 
-		req := cryptor.UnsealRequest{
+		req := sealer.UnsealRequest{
 			Ciphertext: cipherText,
 		}
 
@@ -205,7 +205,7 @@ func TestStaticSecret_Unseal(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, resp)
+		assert.Equal(t, sealer.UnsealResponse{}, resp)
 	})
 }
 
@@ -222,7 +222,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, text)
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 		})
 
@@ -234,7 +234,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		assert.NotEqual(t, text, []byte(sealResp.Ciphertext.SecureBytes()))
 
 		// when
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: sealResp.Ciphertext,
 		})
 
@@ -253,7 +253,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		aad := []byte("context-binding-data")
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 			AAD:       aad,
 		})
@@ -263,7 +263,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// when
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: sealResp.Ciphertext,
 			AAD:        aad,
 		})
@@ -280,7 +280,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 			AAD:       []byte("correct-aad"),
 		})
@@ -290,14 +290,14 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
 		// when
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: sealResp.Ciphertext,
 			AAD:        []byte("wrong-aad"),
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
+		assert.Equal(t, sealer.UnsealResponse{}, unsealResp)
 	})
 
 	t.Run("should fail to unseal with wrong key", func(t *testing.T) {
@@ -305,7 +305,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, []byte("secret"))
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 		})
 
@@ -317,13 +317,13 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		subj1, err := staticsecret.New("test-static-secret", newSecretKey(t))
 		require.NoError(t, err)
 
-		unsealResp, err := subj1.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj1.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: sealResp.Ciphertext,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
+		assert.Equal(t, sealer.UnsealResponse{}, unsealResp)
 	})
 
 	t.Run("should fail to unseal tampered ciphertext", func(t *testing.T) {
@@ -331,7 +331,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, []byte("do not tamper"))
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 		})
 
@@ -350,13 +350,13 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		tampered.SecureBytes()[len(ct)-1] ^= 0xFF
 
 		// when
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: tampered,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
+		assert.Equal(t, sealer.UnsealResponse{}, unsealResp)
 	})
 
 	t.Run("should fail to unseal if ciphertext is too short to contain nonce and tag", func(t *testing.T) {
@@ -364,7 +364,7 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, []byte("short cipher"))
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 		})
 
@@ -381,13 +381,13 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		copy(truncated.SecureBytes(), ct[:8])
 
 		// when
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: truncated,
 		})
 
 		// then
 		assert.Error(t, err)
-		assert.Equal(t, cryptor.UnsealResponse{}, unsealResp)
+		assert.Equal(t, sealer.UnsealResponse{}, unsealResp)
 	})
 
 	t.Run("should not destroy ciphertext after unsealing", func(t *testing.T) {
@@ -395,13 +395,13 @@ func TestStaticSecret_SealUnseal(t *testing.T) {
 		plainText := newSecureMemData(t, []byte("plaintext"))
 
 		// when
-		sealResp, err := subj.Seal(ctx, cryptor.SealRequest{
+		sealResp, err := subj.Seal(ctx, sealer.SealRequest{
 			Plaintext: plainText,
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = sealResp.Ciphertext.Destroy() })
 
-		unsealResp, err := subj.Unseal(ctx, cryptor.UnsealRequest{
+		unsealResp, err := subj.Unseal(ctx, sealer.UnsealRequest{
 			Ciphertext: sealResp.Ciphertext,
 		})
 		require.NoError(t, err)

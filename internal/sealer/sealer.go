@@ -1,10 +1,17 @@
-package cryptor
+package sealer
 
 import (
 	"context"
+	"errors"
 
 	"github.com/openkcm/krypton/internal/securemem"
 )
+
+// ErrUnknownType is returned when sealer type is unknown.
+var ErrUnknownType = errors.New("unknown sealer type")
+
+// Type identifies a sealer implementation for configuration deserialization.
+type Type string
 
 // SealRequest identifies a key version and provides the plaintext and AAD to seal.
 type SealRequest struct {

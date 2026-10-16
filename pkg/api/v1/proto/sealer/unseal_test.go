@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 )
 
 func TestUnsealer(t *testing.T) {
@@ -32,8 +32,8 @@ func TestUnsealer(t *testing.T) {
 		mgr := newMockManager(t)
 
 		actReqCiphertext := make([]byte, len(expCiphertext))
-		var actReq cryptor.UnsealRequest
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		var actReq sealer.UnsealRequest
+		mgr.FnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			actReq = req
 			copy(actReqCiphertext, req.Ciphertext.SecureBytes())
 
@@ -46,7 +46,7 @@ func TestUnsealer(t *testing.T) {
 
 			copy(cData.SecureBytes(), expRespBytes)
 
-			return cryptor.UnsealResponse{
+			return sealer.UnsealResponse{
 				Plaintext: cData,
 			}, nil
 		}
@@ -54,7 +54,7 @@ func TestUnsealer(t *testing.T) {
 		cli := newSealerClientWithRPCHandler(t, mgr)
 
 		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+		actRes, err := cli.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   expTenantID,
 			KeyId:      expKeyID,
 			KeyVersion: int32(expKeyVersion),
@@ -86,10 +86,10 @@ func TestUnsealer(t *testing.T) {
 			cData.Destroy()
 		})
 
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		mgr.FnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			copy(cData.SecureBytes(), expRespBytes)
 
-			return cryptor.UnsealResponse{
+			return sealer.UnsealResponse{
 				Plaintext: cData,
 			}, nil
 		}
@@ -97,7 +97,7 @@ func TestUnsealer(t *testing.T) {
 		cli := newSealerClientWithRPCHandler(t, mgr)
 
 		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+		actRes, err := cli.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   expTenantID,
 			KeyId:      expKeyID,
 			KeyVersion: int32(expKeyVersion),
@@ -121,123 +121,123 @@ func TestUnsealer(t *testing.T) {
 
 		tests := []struct {
 			name   string
-			req    *sealer.UnsealRequest
+			req    *sealergrpc.UnsealRequest
 			expErr error
 		}{
 			{
 				name: "missing tenant ID",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidTenantID,
+				expErr: sealergrpc.ErrInvalidTenantID,
 			},
 			{
 				name: "invalid tenant ID format",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   "not-a-uuid",
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidTenantID,
+				expErr: sealergrpc.ErrInvalidTenantID,
 			},
 			{
 				name: "missing key ID",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidKeyID,
+				expErr: sealergrpc.ErrInvalidKeyID,
 			},
 			{
 				name: "invalid key ID format",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      "not-a-uuid",
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidKeyID,
+				expErr: sealergrpc.ErrInvalidKeyID,
 			},
 			{
 				name: "zero key version",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidKeyVersion,
+				expErr: sealergrpc.ErrInvalidKeyVersion,
 			},
 			{
 				name: "negative key version",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					KeyVersion: -1,
 					Ciphertext: validCiphertext,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidKeyVersion,
+				expErr: sealergrpc.ErrInvalidKeyVersion,
 			},
 			{
 				name: "nil ciphertext",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidText,
+				expErr: sealergrpc.ErrInvalidText,
 			},
 			{
 				name: "empty ciphertext",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: []byte{},
 					Aad:        validAad,
 				},
-				expErr: sealer.ErrInvalidText,
+				expErr: sealergrpc.ErrInvalidText,
 			},
 			{
 				name: "nil AAD",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 				},
-				expErr: sealer.ErrInvalidAAD,
+				expErr: sealergrpc.ErrInvalidAAD,
 			},
 			{
 				name: "empty AAD",
-				req: &sealer.UnsealRequest{
+				req: &sealergrpc.UnsealRequest{
 					TenantId:   validTenantID,
 					KeyId:      validKeyID,
 					KeyVersion: validKeyVersion,
 					Ciphertext: validCiphertext,
 					Aad:        []byte{},
 				},
-				expErr: sealer.ErrInvalidAAD,
+				expErr: sealergrpc.ErrInvalidAAD,
 			},
 			{
 				name: "all fields missing",
-				req:  &sealer.UnsealRequest{},
+				req:  &sealergrpc.UnsealRequest{},
 				expErr: errors.Join(
-					sealer.ErrInvalidTenantID,
-					sealer.ErrInvalidKeyID,
-					sealer.ErrInvalidKeyVersion,
-					sealer.ErrInvalidText,
-					sealer.ErrInvalidAAD,
+					sealergrpc.ErrInvalidTenantID,
+					sealergrpc.ErrInvalidKeyID,
+					sealergrpc.ErrInvalidKeyVersion,
+					sealergrpc.ErrInvalidText,
+					sealergrpc.ErrInvalidAAD,
 				),
 			},
 		}
@@ -268,14 +268,14 @@ func TestUnsealer(t *testing.T) {
 
 		mgr := newMockManager(t)
 
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
-			return cryptor.UnsealResponse{}, assert.AnError
+		mgr.FnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
+			return sealer.UnsealResponse{}, assert.AnError
 		}
 
 		cli := newSealerClientWithRPCHandler(t, mgr)
 
 		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+		actRes, err := cli.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   expTenantID,
 			KeyId:      expKeyID,
 			KeyVersion: int32(expKeyVersion),
@@ -298,7 +298,7 @@ func TestUnsealer(t *testing.T) {
 
 		mgr := newMockManager(t)
 
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		mgr.FnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			pData, err := securemem.NewData("resp", len(expRespBytes))
 			require.NoError(t, err)
 
@@ -308,7 +308,7 @@ func TestUnsealer(t *testing.T) {
 
 			copy(pData.SecureBytes(), expRespBytes)
 
-			return cryptor.UnsealResponse{
+			return sealer.UnsealResponse{
 				Plaintext: pData,
 			}, nil
 		}
@@ -317,7 +317,7 @@ func TestUnsealer(t *testing.T) {
 		cli := newSealerClient(t, mgr)
 
 		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+		actRes, err := cli.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   expTenantID,
 			KeyId:      expKeyID,
 			KeyVersion: int32(expKeyVersion),
@@ -346,10 +346,10 @@ func TestUnsealer(t *testing.T) {
 		t.Cleanup(func() {
 			pData.Destroy()
 		})
-		mgr.FnUnseal = func(ctx context.Context, req cryptor.UnsealRequest) (cryptor.UnsealResponse, error) {
+		mgr.FnUnseal = func(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 			copy(pData.SecureBytes(), expRespBytes)
 
-			return cryptor.UnsealResponse{
+			return sealer.UnsealResponse{
 				Plaintext: pData,
 			}, nil
 		}
@@ -358,7 +358,7 @@ func TestUnsealer(t *testing.T) {
 		cli := newSealerClient(t, mgr)
 
 		// when
-		actRes, err := cli.Unseal(ctx, &sealer.UnsealRequest{
+		actRes, err := cli.Unseal(ctx, &sealergrpc.UnsealRequest{
 			TenantId:   expTenantID,
 			KeyId:      expKeyID,
 			KeyVersion: int32(expKeyVersion),
