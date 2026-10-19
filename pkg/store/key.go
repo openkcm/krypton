@@ -3,13 +3,17 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"uuid"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
 var (
 	ErrKeyNotFound       = errors.New("key not found")
 	ErrKeyInsertConflict = errors.New("key insert skipped due to conflict")
+	ErrInvalidQuery      = errors.New("invalid query")
 )
 
 type Key interface {
@@ -97,4 +101,30 @@ type UpdateKeyStatesQuery struct {
 	ToStatus   model.KeyProcessingStatus
 	FromState  []model.KeyLifeCycleState
 	FromStatus []model.KeyProcessingStatus
+}
+
+func (q GetDescendantKeysQuery) Validate() error {
+	if !isValidUUID(q.KeyID) {
+		return fmt.Errorf("%w: invalid query: KeyID must be a valid UUID, got %q", ErrInvalidQuery, q.KeyID)
+	}
+	if !isValidUUID(q.TenantID) {
+		return fmt.Errorf("%w: invalid query: TenantID must be a valid UUID, got %q", ErrInvalidQuery, q.TenantID)
+	}
+
+	for _, filter := range q.Filters {
+		if filter.LifeCycleState != "" && !keylifecycle.IsKnown(filter.LifeCycleState) {
+			return fmt.Errorf("%w: invalid query: unknown lifecycle state %q", ErrInvalidQuery, filter.LifeCycleState)
+		}
+		for _, status := range filter.Status {
+			if !model.IsKnownKeyStatus(status) {
+				return fmt.Errorf("%w: invalid query: unknown processing status %q", ErrInvalidQuery, status)
+			}
+		}
+	}
+	return nil
+}
+
+func isValidUUID(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
 }

@@ -443,6 +443,15 @@ func TestGetDescendantKeys(t *testing.T) {
 
 	k := createKeyHierarchy(t, keyStore, tenantStore)
 
+	t.Run("should validate the query", func(t *testing.T) {
+		// given
+		// when
+		_, err := keyStore.GetDescendantKeys(ctx, store.GetDescendantKeysQuery{KeyID: "", TenantID: k.tenant.ID})
+
+		// then
+		assert.ErrorIs(t, err, store.ErrInvalidQuery)
+	})
+
 	t.Run("should get all key tree for root node", func(t *testing.T) {
 		// given
 		query := store.GetDescendantKeysQuery{KeyID: k.root.ID, TenantID: k.tenant.ID}

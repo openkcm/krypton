@@ -139,6 +139,11 @@ func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeys
 // any key that does not match at least one filter is excluded together with its
 // entire subtree.
 func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
+	err := query.Validate()
+	if err != nil {
+		return store.GetDescendantKeysResult{}, err
+	}
+
 	args := []any{query.KeyID, query.TenantID}
 	argIdx := 3
 
