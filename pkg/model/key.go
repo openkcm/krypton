@@ -37,6 +37,13 @@ const (
 	KeyProcessingFailed     KeyProcessingStatus = "failed"
 )
 
+var allKeyStatus = map[KeyProcessingStatus]struct{}{
+	KeyProcessingPending:    {},
+	KeyProcessingInProgress: {},
+	KeyProcessingCompleted:  {},
+	KeyProcessingFailed:     {},
+}
+
 func (s KeyProcessingStatus) IsOneOf(statuses ...KeyProcessingStatus) bool {
 	return slices.Contains(statuses, s)
 }
@@ -159,4 +166,9 @@ func (kt KeyTree) IterLayerDsc() iter.Seq[KeyKind] {
 			}
 		}
 	}
+}
+
+func IsKnownKeyStatus(s KeyProcessingStatus) bool {
+	_, ok := allKeyStatus[s]
+	return ok
 }

@@ -8,6 +8,51 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
+func TestIsKnownKeyStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		status model.KeyProcessingStatus
+		want   bool
+	}{
+		{
+			name:   "pending is known",
+			status: model.KeyProcessingPending,
+			want:   true,
+		},
+		{
+			name:   "in-progress is known",
+			status: model.KeyProcessingInProgress,
+			want:   true,
+		},
+		{
+			name:   "completed is known",
+			status: model.KeyProcessingCompleted,
+			want:   true,
+		},
+		{
+			name:   "failed is known",
+			status: model.KeyProcessingFailed,
+			want:   true,
+		},
+		{
+			name:   "empty string is unknown",
+			status: "",
+			want:   false,
+		},
+		{
+			name:   "arbitrary string is unknown",
+			status: "some-random-status",
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, model.IsKnownKeyStatus(tt.status))
+		})
+	}
+}
+
 func TestKeyTreeTraversal(t *testing.T) {
 	// given
 	subj := model.KeyTree{

@@ -3,13 +3,17 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"uuid"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
 var (
 	ErrKeyNotFound       = errors.New("key not found")
 	ErrKeyInsertConflict = errors.New("key insert skipped due to conflict")
+	ErrInvalidQuery      = errors.New("invalid query")
 )
 
 type Key interface {
@@ -38,9 +42,22 @@ type GetParentKeysResult struct {
 	Keys []model.Key
 }
 
+// KeyFilter represents a single filter condition for descendant key queries.
+// Within a filter, non-empty fields are AND'd together. Across multiple
+// filters in a query, they are OR'd: a key passes if it matches at least one.
+//
+// Both fields are optional. When LifeCycleState is empty, any lifecycle state
+// matches. When Status is empty, any processing status matches. A filter with
+// all fields at their zero value produces no condition and is ignored.
+type KeyFilter struct {
+	LifeCycleState model.KeyLifeCycleState
+	Status         []model.KeyProcessingStatus
+}
+
 type GetDescendantKeysQuery struct {
 	KeyID    string
 	TenantID string
+	Filters  []KeyFilter
 }
 
 type GetDescendantKeysResult struct {
@@ -84,4 +101,30 @@ type UpdateKeyStatesQuery struct {
 	ToStatus   model.KeyProcessingStatus
 	FromState  []model.KeyLifeCycleState
 	FromStatus []model.KeyProcessingStatus
+}
+
+func (q GetDescendantKeysQuery) Validate() error {
+	if !isValidUUID(q.KeyID) {
+		return fmt.Errorf("%w: invalid query: KeyID must be a valid UUID, got %q", ErrInvalidQuery, q.KeyID)
+	}
+	if !isValidUUID(q.TenantID) {
+		return fmt.Errorf("%w: invalid query: TenantID must be a valid UUID, got %q", ErrInvalidQuery, q.TenantID)
+	}
+
+	for _, filter := range q.Filters {
+		if filter.LifeCycleState != "" && !keylifecycle.IsKnown(filter.LifeCycleState) {
+			return fmt.Errorf("%w: invalid query: unknown lifecycle state %q", ErrInvalidQuery, filter.LifeCycleState)
+		}
+		for _, status := range filter.Status {
+			if !model.IsKnownKeyStatus(status) {
+				return fmt.Errorf("%w: invalid query: unknown processing status %q", ErrInvalidQuery, status)
+			}
+		}
+	}
+	return nil
+}
+
+func isValidUUID(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
 }
