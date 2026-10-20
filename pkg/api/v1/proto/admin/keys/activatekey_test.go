@@ -430,7 +430,7 @@ func TestActivateKey(t *testing.T) {
 		assert.Equal(t, model.KeyProcessingCompleted, unchangedChild.KeyProcessingState.Status)
 	})
 
-	t.Run("should activate valid branch and ignore invalid branch with cascading allow partial", func(t *testing.T) {
+	t.Run("should activate valid branch and ignore invalid branch with cascading", func(t *testing.T) {
 		// given — root with two branches:
 		//
 		//              K0 (pre-activation + completed) ← activatable
@@ -469,10 +469,9 @@ func TestActivateKey(t *testing.T) {
 
 		// when
 		res, err := svc.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId:     tenant.ID,
-			Id:           k0.ID,
-			Cascading:    true,
-			AllowPartial: true,
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
 		})
 
 		// then
@@ -593,10 +592,9 @@ func TestActivateKey(t *testing.T) {
 		// when — AllowPartial is required because K2 is excluded and the
 		// fast-fail exclusion check rejects immediately when AllowPartial is false.
 		res, err := svc.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId:     tenant.ID,
-			Id:           k0.ID,
-			Cascading:    true,
-			AllowPartial: true,
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
 		})
 
 		// then
@@ -631,67 +629,6 @@ func TestActivateKey(t *testing.T) {
 		for _, job := range spy.groups[0].Jobs {
 			assertJobDataTenantID(t, job.Data, tenant.ID)
 		}
-	})
-
-	t.Run("should reject cascading activation when AllowPartial is false and layer has mixed valid and excluded siblings", func(t *testing.T) {
-		// given — root is activatable, but layer 1 contains both an excluded
-		// and a valid key. With AllowPartial=false, the valid key triggers
-		// the rejection because excluded keys exist.
-		//
-		//   K0 (pre-activation + completed) ← activatable
-		//     ├── K1a (deactivated + completed) ← excluded (created first)
-		//     └── K1b (pre-activation + completed) ← valid, triggers AllowPartial check
-		spy := &spyJobGroupPreparer{}
-		svc := keypb.NewKeyService(
-			config.RootConfig{},
-			storesql.NewTransactor(db),
-			keyStore,
-			spy,
-			nil,
-		)
-
-		tenant := createTenant(t, tenantStore)
-
-		// layer 0: root key
-		k0 := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
-		k0ID := k0.ID
-
-		// layer 1: excluded sibling created first so SQL orders it before the valid one
-		k1a := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
-		k1b := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
-
-		// when
-		res, err := svc.ActivateKey(ctx, &keypb.ActivateKeyRequest{
-			TenantId:     tenant.ID,
-			Id:           k0.ID,
-			Cascading:    true,
-			AllowPartial: false,
-		})
-
-		// then — error because layer 1 has both excluded and valid keys
-		require.Error(t, err)
-		assert.Nil(t, res)
-		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
-
-		// verify all keys are unchanged (transaction rolled back)
-		unchangedK0, err := keyStore.GetKeyByID(ctx, k0.ID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCyclePreActivation, unchangedK0.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, unchangedK0.KeyProcessingState.Status)
-
-		unchangedK1a, err := keyStore.GetKeyByID(ctx, k1a.ID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCycleDeactivated, unchangedK1a.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, unchangedK1a.KeyProcessingState.Status)
-
-		unchangedK1b, err := keyStore.GetKeyByID(ctx, k1b.ID, tenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyLifeCyclePreActivation, unchangedK1b.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, unchangedK1b.KeyProcessingState.Status)
-
-		// verify no jobs were prepared
-		require.Empty(t, spy.groups)
 	})
 
 	t.Run("should activate full 3-layer tree with mixed starting states and cascading", func(t *testing.T) {

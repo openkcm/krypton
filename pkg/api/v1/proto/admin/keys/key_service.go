@@ -91,27 +91,33 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		validator.ValidateKeyParents(tenantID, keyID),
 		func(ctx context.Context, stores store.Stores) error {
 			grp, err := keyoperator.ApplyKeyAction(ctx, stores, s.preparer, keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        keyID,
-				ToState:      model.KeyLifeCycleActive,
-				Cascading:    req.GetCascading(),
-				AllowPartial: req.GetAllowPartial(),
+				TenantID: tenantID,
+				KeyID:    keyID,
+				ToState:  model.KeyLifeCycleActive,
+				KeyFilters: []keyoperator.KeyFilter{
+					{
+						LifeCycleState: model.KeyLifeCycleActive,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingFailed,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleSuspended,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCyclePreActivation,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+				},
 				JobType:      activatekey.JobType,
 				JobGroupType: activatekey.JobGroupType,
-				Selector: keyoperator.AnySelectorMatches(
-					keyoperator.SelectByKeyStates(
-						model.KeyLifeCycleActive,
-						model.KeyProcessingFailed,
-					),
-					keyoperator.SelectByKeyStates(
-						model.KeyLifeCycleSuspended,
-						model.KeyProcessingCompleted,
-					),
-					keyoperator.SelectByKeyStates(
-						model.KeyLifeCyclePreActivation,
-						model.KeyProcessingCompleted,
-					),
-				),
+				Cascading:    req.GetCascading(),
 			})
 			if err != nil {
 				return err
