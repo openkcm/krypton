@@ -1,97 +1,487 @@
-# Default values for krypton-root.
+# Default values for the Krypton root node chart (krypton-root).
+#
+# The Krypton root node is the top of a Krypton key hierarchy. It creates and holds the
+# keys of the first kinds of the hierarchy (its segment, for example the root key K0 and the
+# key encryption keys K1), stores key metadata in PostgreSQL and serves one gRPC port
+# (8080) with the admin, key, action and agent APIs. Krypton agents hold the lower key kinds
+# (config.topology) and get their parent keys from the root. An optional KMIP server serves
+# keys to KMIP clients over mutual TLS.
+#
+# Krypton is in development. The vaults `unsafe-sqlite-memory` and `unsafe-sqlite` keep the
+# sealed key material in the pod's memory or in a local SQLite file: use them for development
+# and tests only.
+#
+# Layout of this file:
+#   1. Names and labels
+#   2. Workload: replicas, image, pod and container settings, probes, resources
+#   3. Secrets: the PostgreSQL URL and the root key
+#   4. Kubernetes API access: service account
+#   5. Networking: service, ports, network policy
+#   6. Extension points: extra containers, volumes and environment variables
+#   7. config: the root node's configuration, rendered into /etc/krypton/config.yaml
+#
+# Overview, upgrade notes and troubleshooting: README.md of this chart.
+#
+# Comments starting with "# --" document a value (helm-docs format).
+
+###############################################################################
+# 1. Names and labels
+###############################################################################
+
+# -- Override the chart name. Used in resource names and in the
+# `app.kubernetes.io/name` label.
 nameOverride: ""
+
+# -- Override the full name of all resources. Default: `krypton-root`, or the release name
+# if it contains `krypton-root`. The Service has this name, so agents and other clients reach
+# the root at `<full name>.<namespace>.svc:8080` (see `config.connections`).
 fullnameOverride: ""
+
+# -- Namespace for all resources. Empty: the namespace of the Helm release.
+# Useful when the chart is installed as a dependency of another chart.
 namespace: ""
 
-serviceAccount:
-  create: true
-  automount: true
-  annotations: {}
-  name: ""
+# -- Labels added to every resource of the chart, for example a team or cost center.
+commonLabels: {}
+
+###############################################################################
+# 2. Workload
+###############################################################################
+
+# -- Number of root node pods. Ignored when `hpa.enabled` is true. Keep 1 with the vaults
+# `unsafe-sqlite-memory` and `unsafe-sqlite`: each pod has its own vault, so a second pod
+# does not see the key material of the first.
+replicaCount: 1
+
+# -- Number of old ReplicaSets kept for `kubectl rollout undo`.
+revisionHistoryLimit: 10
+
+# -- Deployment update strategy. `Recreate` stops the old pod before the new one starts: the
+# vaults `unsafe-sqlite-memory` and `unsafe-sqlite` belong to one pod, and a file vault on a
+# ReadWriteOnce volume cannot be mounted by a second pod on another node. Use a rolling update
+# only with a shared vault (`openbao`):
+#   strategy:
+#     type: RollingUpdate
+#     rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+strategy:
+  type: Recreate
 
 image:
+  # -- Container registry of the image. Set to "" when `repository` contains the
+  # full image name.
   registry: ghcr.io/openkcm
-  repository: images/krypton-root
-  tag: latest
-  # digest: sha256:...
-  command: ["/bin/krypton-root"]
+
+  # -- Image repository within `image.registry`. Release images are published as
+  # `ghcr.io/openkcm/krypton/images/root`.
+  repository: krypton/images/root
+
+  # -- Image tag, for example `v0.1.0`. Empty: the chart's appVersion, the Krypton release
+  # this chart deploys by default.
+  tag: ""
+
+  # -- Image digest, for example `sha256:4d72…`. Takes precedence over `image.tag`.
+  # Use a digest for reproducible deployments.
+  digest: ""
+
+  # -- Kubernetes image pull policy: `IfNotPresent`, `Always` or `Never`.
   pullPolicy: IfNotPresent
-  pullSecrets:
-    - name: "registry-access"
+
+  # -- Container command, as a list or a single string. The release images contain the
+  # binary at `/root/root.linux-<architecture>` and their own command (`/root`) does not
+  # start it, so the chart sets the binary of amd64 nodes. On arm64 nodes use
+  # `["/root/root.linux-arm64"]`, or pin the pods to amd64 nodes with
+  # `pod.nodeSelector: { kubernetes.io/arch: amd64 }`. For an image built from
+  # `cmd/root/Dockerfile`, use `["/bin/krypton-root"]`.
+  command:
+    - /root/root.linux-amd64
+
+  # -- Arguments passed to the root node. It has no command-line flags; everything is
+  # configured through `config` and the environment variables of `extraEnvs`.
+  args: []
+
+# -- Secrets with credentials for pulling the image from a private registry.
+# Example: `[{ name: registry-access }]`
+imagePullSecrets: []
 
 pod:
+  # -- Annotations for the pods, for example for a service mesh
+  # (`linkerd.io/inject: enabled`). The chart always adds `checksum/config`, which
+  # restarts the pods when the configuration changes.
   annotations: {}
+
+  # -- Additional labels for the pods.
   labels: {}
-  securityContext: {}
+
+  # -- Pod security context. The defaults run the root node as user and group 65532
+  # (`nonroot` of the distroless release image), give that group access to the mounted
+  # volumes (`fsGroup`) and use the runtime's default seccomp profile. `runAsUser` is needed
+  # with `runAsNonRoot`: the kubelet refuses to start an image whose user is a name, such as
+  # `USER nonroot` of `cmd/root/Dockerfile`, because it cannot check that the user is not
+  # root. The volume of an `unsafe-sqlite` vault must be writable for this group.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Inject environment variables for the Services of the namespace
+  # (`<SERVICE>_PORT`, …). The root node does not use them.
+  enableServiceLinks: false
+
+  # -- PriorityClass of the pods. Empty: the cluster default.
+  priorityClassName: ""
+
+  # -- Seconds the pod has to shut down after SIGTERM. Null: the Kubernetes default (30).
+  # On SIGTERM the root node lets running gRPC calls finish, then stops the KMIP server, the
+  # agent health worker and the job orchestrator.
+  terminationGracePeriodSeconds: null
+
   disruptionBudget:
+    # -- Create a PodDisruptionBudget, which limits how many pods voluntary
+    # disruptions such as node drains may take down at once.
     enabled: false
+    # -- Minimum number (for example `1`) or percentage (for example `50%`) of pods
+    # that must stay available. Do not set together with `maxUnavailable`. With a
+    # single replica, `minAvailable: 1` blocks node drains.
     # minAvailable: 1
+    # -- Maximum number or percentage of pods that may be unavailable. Default
+    # when neither value is set: `1`.
     # maxUnavailable: 1
+
+  # -- Node labels the pods must be scheduled on, for example
+  # `{ kubernetes.io/arch: amd64 }` for the default `image.command`.
   nodeSelector: {}
-  tolerations: []
+
+  # -- Affinity rules, for example to spread pods across nodes.
   affinity: {}
+
+  # -- Topology spread constraints, for example across zones:
+  #   - maxSkew: 1
+  #     topologyKey: topology.kubernetes.io/zone
+  #     whenUnsatisfiable: ScheduleAnyway
+  #     labelSelector:
+  #       matchLabels: { app.kubernetes.io/name: krypton-root }
   topologySpreadConstraints: []
 
-service:
-  labels: {}
+  # -- Tolerations for node taints.
+  tolerations: []
+
+# -- Container security context. The defaults forbid privilege escalation, drop all Linux
+# capabilities and make the root filesystem read-only; `/tmp` is a writable emptyDir (see
+# `tmpVolume`). The root node keeps key material in locked memory (`mlock`) and marks itself
+# as not dumpable; neither needs a capability.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+tmpVolume:
+  # -- Mount a writable emptyDir at `/tmp`. Needed with a read-only root filesystem.
+  enabled: true
+  # -- Size limit of the `/tmp` volume.
+  sizeLimit: 64Mi
+
+# -- CPU, memory and ephemeral storage of the root node container. Requests are needed for
+# the autoscaler (`hpa`). No CPU limit is set by default. The `unsafe-sqlite-memory` vault
+# holds all key material in memory: raise the memory limit with the number of keys. The
+# ephemeral-storage limit covers the container's logs and the `/tmp` volume
+# (`tmpVolume.sizeLimit`); a pod that exceeds it is evicted.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+    ephemeral-storage: 64Mi
+  limits:
+    memory: 512Mi
+    ephemeral-storage: 256Mi
+
+# -- Startup probe: the root node migrates its database before it opens the gRPC port, so
+# it gets up to 120 seconds to start. It has no health endpoint; the probes check that the
+# gRPC port accepts connections.
+startupProbe:
+  tcpSocket:
+    port: grpc
+  periodSeconds: 2
+  failureThreshold: 60
+
+# -- Liveness probe: restarts the container when the gRPC port no longer accepts connections.
+livenessProbe:
+  tcpSocket:
+    port: grpc
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+# -- Readiness probe: the pod receives traffic while the gRPC port accepts connections.
+readinessProbe:
+  tcpSocket:
+    port: grpc
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+hpa:
+  # -- Create a HorizontalPodAutoscaler. Replaces `replicaCount`. Only with a shared vault
+  # (`openbao`), see `replicaCount`. Needs `resources.requests` for the metrics used.
+  enabled: false
+  # -- Minimum number of pods.
+  minReplicas: 1
+  # -- Maximum number of pods.
+  maxReplicas: 3
+  # -- Target average CPU utilization in percent of the request. Null disables the
+  # CPU metric.
+  targetCPUUtilizationPercentage: 80
+  # -- Target average memory utilization in percent of the request. Null disables
+  # the memory metric.
+  targetMemoryUtilizationPercentage: 80
+  # -- Scaling behavior (stabilization windows and policies) of the autoscaler.
+  behavior: {}
+
+###############################################################################
+# 3. Secrets
+#
+# The root node reads two secrets from environment variables. Create the Secret before the
+# installation, for example:
+#   kubectl -n services create secret generic krypton-secret \
+#     --from-literal=database-url='postgres://krypton:<password>@postgresql.services:5432/krypton?sslmode=verify-full' \
+#     --from-literal=root-key="$(openssl rand -base64 32)"
+# Keep a backup of the root key: the root keys are sealed with it, and without it they
+# cannot be unsealed.
+###############################################################################
+
+database:
+  # -- Secret that holds the PostgreSQL connection URL. The chart passes it to the root node
+  # as `DATABASE_URL`. **Required**, unless `DATABASE_URL` is set in `extraEnvs` or
+  # `extraEnvsFrom`. The URL has the form
+  # `postgres://<user>:<password>@<host>:<port>/<database>?sslmode=<mode>`; use
+  # `sslmode=verify-full` outside development. The root node creates its tables at startup,
+  # so the user needs to own the database or have CREATE on its schema.
+  existingSecret: ""
+  # -- Key of the URL in `database.existingSecret`.
+  urlKey: database-url
+
+rootKey:
+  # -- Secret that holds the key that seals the root keys: 32 random bytes, base64-encoded
+  # (`openssl rand -base64 32`). The chart passes it as `KRYPTON_ROOT_KEY`, the variable
+  # that the sealer of the default `config.key_bindings.K0` reads (`secret.config.name`); the
+  # root node loads it at startup and exits if it is missing or not 32 bytes long.
+  # **Required** with the default configuration, unless `KRYPTON_ROOT_KEY` is set in
+  # `extraEnvs` or `extraEnvsFrom`.
+  existingSecret: ""
+  # -- Key of the root key in `rootKey.existingSecret`.
+  key: root-key
+
+###############################################################################
+# 4. Kubernetes API access
+###############################################################################
+
+serviceAccount:
+  # -- Create a ServiceAccount for the root node. If false, `serviceAccount.name`
+  # (or `default`) must exist.
+  create: true
+  # -- Mount the ServiceAccount token into the pods. The root node does not call the
+  # Kubernetes API.
+  automount: false
+  # -- Annotations for the ServiceAccount.
   annotations: {}
+  # -- Name of the ServiceAccount. Empty with `create: true`: the chart's full name.
+  name: ""
+
+###############################################################################
+# 5. Networking
+###############################################################################
+
+service:
+  # -- Additional labels for the Service.
+  labels: {}
+  # -- Annotations for the Service.
+  annotations: {}
+  # -- Service type. Keep `ClusterIP`: the gRPC APIs include the admin API.
   type: ClusterIP
+  # -- Ports of the Service. The first port is shown in the release notes. With the KMIP
+  # server (`config.kmip`), add its port:
+  #   - name: grpc
+  #     protocol: TCP
+  #     port: 8080
+  #     targetPort: grpc
+  #   - name: kmip
+  #     protocol: TCP
+  #     port: 5696
+  #     targetPort: kmip
   ports:
     - name: grpc
       protocol: TCP
       port: 8080
-      targetPort: 8080
+      targetPort: grpc
 
-# resources:
-#   limits:
-#     cpu: 100m
-#     memory: 128Mi
-#   requests:
-#     cpu: 100m
-#     memory: 128Mi
-
-# livenessProbe:
-#   httpGet:
-#     path: /healthz
-#     port: 8080
-# readinessProbe:
-#   httpGet:
-#     path: /healthz
-#     port: 8080
-
-hpa:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
-
-extraContainers: []
-# Required environment variables (provide via extraEnvs):
-# - name: DATABASE_URL
-#   value: "postgres://user:pass@host:5432/dbname?sslmode=disable"
-# - name: KRYPTON_ROOT_KEY
-#   value: "<base64-encoded 32-byte AES-256 key>"
-extraEnvs: []
-extraEnvsFrom: []
-extraVolumes: []
-extraVolumeMounts: []
-extraPorts:
+# -- Ports of the root node container. The probes and the network policy refer to them by
+# name. The gRPC server listens on 8080, or on the port in the environment variable
+# `SERVER_PORT` (`extraEnvs`). With the KMIP server, add its port (`config.kmip.port`):
+#   - name: grpc
+#     containerPort: 8080
+#     protocol: TCP
+#   - name: kmip
+#     containerPort: 5696
+#     protocol: TCP
+ports:
   - name: grpc
-    protocol: TCP
     containerPort: 8080
+    protocol: TCP
+
+networkPolicy:
+  # -- Create a NetworkPolicy for the root node pods. When enabled, only the peers listed
+  # below can reach the pods; everything else is denied. Outgoing traffic (PostgreSQL, the
+  # agents, OpenBao) is not restricted.
+  enabled: false
+  grpc:
+    # -- Peers allowed to call the gRPC APIs (port `grpc`): the Krypton agents and the
+    # services that manage keys. NetworkPolicy peer syntax, for example:
+    #   - podSelector:
+    #       matchLabels: { app.kubernetes.io/name: krypton-agent }
+    #   - namespaceSelector:
+    #       matchLabels: { kubernetes.io/metadata.name: services }
+    # Empty: no peer can reach the gRPC APIs.
+    from: []
+  kmip:
+    # -- Peers allowed to reach the KMIP server (port `kmip`), if `ports` has a port named
+    # `kmip`. Empty: no peer can reach it.
+    from: []
+  # -- Additional ingress rules, in NetworkPolicy syntax.
+  extraIngress: []
+
+###############################################################################
+# 6. Extension points
+###############################################################################
+
+# -- Init containers added to the pod.
+extraInitContainers: []
+
+# -- Containers added to the pod, after the root node container.
+extraContainers: []
+
+# -- Volumes added to the pod. Besides its configuration, the root node reads the files that
+# `config` names: the certificates and keys of `config.auth` and `config.kmip`, and writes
+# the files of `unsafe-sqlite` vaults. The TLS files are PEM files:
+#   tls.crt   the certificate, then the intermediate CAs that issued it, if any:
+#               -----BEGIN CERTIFICATE-----
+#               MIIB…                                (certificate of the root node)
+#               -----END CERTIFICATE-----
+#   tls.key   the private key of that certificate, unencrypted:
+#               -----BEGIN PRIVATE KEY-----          (PKCS #8: RSA, ECDSA or Ed25519 key)
+#               MIIE…
+#               -----END PRIVATE KEY-----
+#             `BEGIN RSA PRIVATE KEY` (PKCS #1) and `BEGIN EC PRIVATE KEY` (SEC 1) work too
+#   ca.crt    one or more CA certificates, each a CERTIFICATE block as above
+# A Secret of type kubernetes.io/tls with an added ca.crt has these keys, for example one
+# issued by cert-manager. The pods run with group 65532 (`pod.securityContext.fsGroup`), so
+# the files are readable with mode 0440. Example of the volumes for mutual TLS on the gRPC
+# port, the KMIP server and a file vault:
+#   - name: grpc-tls
+#     secret: { secretName: krypton-root-grpc-tls, defaultMode: 0440 }
+#   - name: kmip-tls
+#     secret: { secretName: krypton-root-kmip-tls, defaultMode: 0440 }
+#   - name: vault-data
+#     persistentVolumeClaim: { claimName: krypton-root-vault-data }
+extraVolumes: []
+
+# -- Volume mounts added to the root node container. Mount Secrets read-only. Do not mount
+# anything at `/etc/krypton/config.yaml`, the configuration file, or over `/etc/krypton`.
+# Example of the mounts for the volumes above:
+#   - name: grpc-tls
+#     mountPath: /etc/krypton/grpc
+#     readOnly: true
+#   - name: kmip-tls
+#     mountPath: /etc/krypton/kmip
+#     readOnly: true
+#   - name: vault-data
+#     mountPath: /var/lib/krypton
+extraVolumeMounts: []
+
+# -- Environment variables added to the root node container, for example the secrets that
+# `config.key_bindings` reads with `type: envvar`, or the token of an `openbao` vault:
+#   - name: BAO_TOKEN
+#     valueFrom:
+#       secretKeyRef: { name: krypton-openbao, key: token }
+# The root node reads these variables itself: `DATABASE_URL` (see `database`) and
+# `SERVER_PORT`, the gRPC port (default 8080). The OpenBao client of `openbao` vaults reads
+# `BAO_TOKEN`, `BAO_CACERT` and the other `BAO_*` variables of OpenBao.
+extraEnvs: []
+
+# -- Sources of environment variables (ConfigMaps or Secrets) for the container.
+extraEnvsFrom: []
+
+###############################################################################
+# 7. Root node configuration
+#
+# Everything under `config` except `isImmutable` is written to /etc/krypton/config.yaml.
+# The root node reads it at startup, checks it and exits with an error if it is not
+# consistent. It ignores keys it does not know, so check the spelling of the keys below.
+#
+# Key kinds and hierarchy. Keys form a tree: each key of a kind is sealed (encrypted) by a
+# key of the kind above it. `hierarchy` lists the kinds from the top: one `root` kind, then
+# `kek` (key encryption key) or `tek` (transfer key, the top of an agent's part) kinds, and
+# a `dek` (data encryption key) kind at the bottom. The root node manages a contiguous range
+# of kinds from the top (`segment`); each Krypton agent of `topology` manages a range below.
+#
+# Key bindings. For each kind of a segment, `key_bindings` names how its keys are protected:
+#   sealer   seals with a secret provided from outside Krypton. Required for the `root` kind
+#            (which has no crypto) and for the first (`tek`) kind of an agent. Type:
+#              aes256gcm-staticsecret   AES-256-GCM with a 32-byte secret, from
+#                                       `config.secret`: { type: envvar, config: { name: <variable> } },
+#                                       a base64-encoded environment variable
+#   crypto   encrypts and decrypts with key material that Krypton generates and keeps in the
+#            vault. Required for all other kinds. Type: aes256gcm
+#   vault    stores the key material of the kind, sealed by its parent key. Types:
+#              unsafe-sqlite-memory     in the pod's memory, lost when the pod stops.
+#                                       Development only
+#              unsafe-sqlite            in a SQLite file, `config: { path: <file> }`, on a
+#                                       volume (`extraVolumes`). Development only
+#              openbao                  in OpenBao, `config: { address: https://<host>:8200 }`;
+#                                       token and CA from `BAO_TOKEN` and `BAO_CACERT`
+#                                       (`extraEnvs`)
+#   parent_key_provider  { agent_name: <root or segment name> } that holds the parent key of
+#            the first kind of an agent segment. Only in `topology`.
+# Each sealer, crypto and vault has a `name`.
+###############################################################################
 
 config:
+  # -- Make the configuration ConfigMap immutable. Chart setting, not written into
+  # config.yaml. An immutable ConfigMap cannot change, so an upgrade that changes the
+  # configuration fails with `field is immutable`: delete the ConfigMap
+  # (`<full name>-config`) before such an upgrade. Keep it false unless you need it.
   isImmutable: false
-  
-  # krypton root demo config
+
+  # -- Name of the root node. Agents and `config.connections` refer to the root by this
+  # name. **Required.**
   name: root
+
+  # -- Role of this node. Must be `root`.
   role: root
+
+  # -- Range of key kinds that the root node manages: from `start_kind`, the first kind of
+  # `hierarchy`, to `end_kind`. The last kind must not be a `tek`. Each kind in the range
+  # needs an entry in `key_bindings`, and no other kind may have one.
   segment:
     start_kind: K0
     end_kind: K2
+
+  # -- Metadata labels of the root node, for example
+  # `{ environment: production, region: eu10 }`. Each segment of `topology` has its own, which
+  # the root node passes to the agent.
   selector_labels:
     environment: local
+
+  # -- How the keys of each kind of `segment` are protected and stored; see "Key bindings"
+  # above. The default protects K0 with the root key (`rootKey`) and keeps K1 and K2 in
+  # memory, for development. For keys that survive a restart, use an `unsafe-sqlite` vault
+  # on a persistent volume, or `openbao`:
+  #   K1:
+  #     crypto: { name: kek-crypto, type: aes256gcm }
+  #     vault: { name: kek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/kek.db } }
   key_bindings:
     K0:
       sealer:
@@ -116,6 +506,15 @@ config:
       vault:
         name: dek-vault
         type: unsafe-sqlite-memory
+
+  # -- Key hierarchy: a `name` and the key kinds from the top (`key_specs`). Each kind has a
+  # `kind`, a `role` (`root` first, `dek` last, `kek` or `tek` between), an `algorithm`
+  # (`AES256`) and `labels_spec`, the labels its keys may or must have:
+  #   labels_spec:
+  #     allow_user_labels: false        # labels other than the requirements are rejected
+  #     requirements:
+  #       tenant: { is_required: true, validator: { type: regex, params: { pattern: "^[a-z0-9-]+$" } } }
+  #       tier: { is_required: false, validator: { type: enum, params: { values: "gold,silver" } } }
   hierarchy:
     name: demo-hierarchy
     key_specs:
@@ -134,4 +533,74 @@ config:
         algorithm: AES256
         labels_spec:
           allow_user_labels: true
+
+  # -- Krypton agents and the key kinds they manage. Empty: the root node manages the whole
+  # hierarchy. Each segment has a `name`, a `segment` range starting with a `tek` kind, its
+  # `key_bindings` (the `tek` kind with a `sealer` and a `parent_key_provider`) and
+  # `selector_labels`, and needs an entry in `config.connections`. Example, with `segment`
+  # of the root ending at K1 and K2 (`tek`) and K3 (`dek`) in `hierarchy`:
+  #   segments:
+  #     - name: agent-eu10
+  #       segment: { start_kind: K2, end_kind: K3 }
+  #       selector_labels: { region: eu10 }
+  #       key_bindings:
+  #         K2:
+  #           sealer:
+  #             name: tek-sealer
+  #             type: aes256gcm-staticsecret
+  #             config: { secret: { type: envvar, config: { name: KRYPTON_TEK_KEY } } }
+  #           crypto: { name: tek-crypto, type: aes256gcm }
+  #           vault: { name: tek-vault, type: unsafe-sqlite-memory }
+  #           parent_key_provider: { agent_name: root }
+  #         K3:
+  #           crypto: { name: dek-crypto, type: aes256gcm }
+  #           vault: { name: agent-dek-vault, type: unsafe-sqlite-memory }
   topology: {}
+
+  # -- gRPC addresses of the root node and of each agent of `topology`, by name. The root node
+  # calls the agents at their address, and gives each agent the address of its parent. The
+  # entry of the root (`config.name`) is **required**: the address at which the agents reach
+  # this chart's Service, `<full name>.<namespace>.svc:8080`. The default `krypton-root:8080`
+  # works for agents in the same namespace.
+  #   - name: agent-eu10
+  #     address: { type: grpc, url: krypton-agent-eu10.services.svc:8080 }
+  connections:
+    - name: root
+      address:
+        type: grpc
+        url: krypton-root:8080
+
+  # -- Mutual TLS on the gRPC port. Not set: the gRPC port accepts plaintext connections
+  # from every client that can reach it; restrict them with `networkPolicy` or a service
+  # mesh. With `auth`, the gRPC port requires TLS 1.3, and every client must present a
+  # certificate issued by the CA of `server.ca_path` with exactly one URI SAN, which must be
+  # one of the `identity` URIs (`kryptonid://<domain>/<type>/<name>…`). `identity` must list
+  # the root and every agent of `topology`. The files are mounted with `extraVolumes` (see
+  # there for their format):
+  #   type: mtls
+  #   identity:
+  #     - name: root
+  #       uri: kryptonid://example.org/node/root
+  #     - name: agent-eu10
+  #       uri: kryptonid://example.org/node/agent-eu10
+  #   config:
+  #     server:   # the certificate of the gRPC server, and the CA of the client certificates
+  #       cert_path: /etc/krypton/grpc/tls.crt
+  #       key_path: /etc/krypton/grpc/tls.key
+  #       ca_path: /etc/krypton/grpc/ca.crt
+  #     client:   # a client certificate, key and CA; all three are required
+  #       cert_path: /etc/krypton/grpc/tls.crt
+  #       key_path: /etc/krypton/grpc/tls.key
+  #       ca_path: /etc/krypton/grpc/ca.crt
+  # auth:
+
+  # -- KMIP server, for KMIP clients that need keys of this node. Not set: no KMIP server.
+  # It requires TLS 1.3 and a client certificate signed by `ca_path`. Add the port to
+  # `ports` and `service.ports`:
+  #   bind_addr: 0.0.0.0
+  #   port: 5696
+  #   tls:
+  #     cert_path: /etc/krypton/kmip/tls.crt
+  #     key_path: /etc/krypton/kmip/tls.key
+  #     ca_path: /etc/krypton/kmip/ca.crt
+  # kmip:

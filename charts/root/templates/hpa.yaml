@@ -1,4 +1,7 @@
 {{- if .Values.hpa.enabled }}
+{{- if not (or .Values.hpa.targetCPUUtilizationPercentage .Values.hpa.targetMemoryUtilizationPercentage) }}
+{{- fail "hpa.enabled requires hpa.targetCPUUtilizationPercentage or hpa.targetMemoryUtilizationPercentage" }}
+{{- end }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -15,16 +18,24 @@ spec:
   minReplicas: {{ .Values.hpa.minReplicas }}
   maxReplicas: {{ .Values.hpa.maxReplicas }}
   metrics:
+    {{- with .Values.hpa.targetCPUUtilizationPercentage }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ .Values.hpa.targetCPUUtilizationPercentage }}
+          averageUtilization: {{ . }}
+    {{- end }}
+    {{- with .Values.hpa.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: {{ .Values.hpa.targetMemoryUtilizationPercentage }}
+          averageUtilization: {{ . }}
+    {{- end }}
+  {{- with .Values.hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

@@ -1,0 +1,10 @@
+{{- /*
+Values of chart 0.0.1 that were renamed. They would otherwise be ignored without notice.
+Renders nothing.
+*/}}
+{{- if hasKey .Values "extraPorts" }}
+{{- fail "extraPorts was renamed to ports in chart 0.1.0: move the container ports there (a port has name, containerPort and protocol)" }}
+{{- end }}
+{{- if hasKey .Values.image "pullSecrets" }}
+{{- fail "image.pullSecrets was renamed to imagePullSecrets in chart 0.1.0: move the pull secrets there" }}
+{{- end }}

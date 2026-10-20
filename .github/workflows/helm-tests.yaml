@@ -1,0 +1,41 @@
+name: Helm test
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+      - 'helm-tests/**'
+      - 'internal/config/**'
+      - 'internal/spec/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'charts/**'
+      - 'helm-tests/**'
+      - 'internal/config/**'
+      - 'internal/spec/**'
+
+permissions:
+  contents: read
+
+jobs:
+  helm-unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Lint the chart
+        run: helm lint --strict charts/root
+
+      # Renders the chart with `helm template` and loads the configuration with the root node's
+      # own code; no cluster needed. The Makefile sets GOEXPERIMENT=runtimesecret.
+      - name: Run the Helm unit tests
+        run: make helm-test

@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,6 +8,6 @@ metadata:
     {{- include "krypton.labels" . | nindent 4 }}
 immutable: {{ .Values.config.isImmutable | default false }}
 data:
+  # Everything under config except the chart setting isImmutable.
   config.yaml: |-
-    {{- $cfg := omit .Values.config "isImmutable" }}
-    {{- toYaml $cfg | nindent 4 }}
+    {{- toYaml (omit .Values.config "isImmutable") | nindent 4 }}

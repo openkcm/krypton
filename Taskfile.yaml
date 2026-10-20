@@ -16,3 +16,4 @@ includes:
       SKIP_VALIDATION_TESTS: 'true'
 
       IMG_COMPONENTS: 'agent root'
+      CLI_COMPONENTS: './cli:kr'
