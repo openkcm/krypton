@@ -23,7 +23,6 @@ func TestGetKeys(t *testing.T) {
 	testDB, _ := createDatabase(t, storesql.Root)
 	tenantStore := newTenantStore(t, testDB, storesql.Root)
 	keyStore := newKeyStore(t, testDB, storesql.Root)
-	keyVersionStore := newKeyVersionStore(t, testDB, storesql.Root)
 
 	hierarchySpec := defaultTestHierarchy()
 	topology := spec.Topology{
@@ -43,7 +42,7 @@ func TestGetKeys(t *testing.T) {
 
 	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
 		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService(rootCfg, transactor, keyStore, keyVersionStore, nil, nil))
+		keypb.RegisterKeyServiceServer(srv, keypb.NewKeyService(rootCfg, transactor, keyStore, nil, nil))
 	})
 
 	// login with no auth
@@ -161,7 +160,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
-			//given
+			// given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
 			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
@@ -186,7 +185,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
-			//given
+			// given
 			// login with no auth
 			homeDir := t.TempDir()
 			loginNoAuth(t, homeDir)
@@ -239,7 +238,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
-			//given
+			// given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
 			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
@@ -321,7 +320,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
-			//given
+			// given
 			// login with no auth
 			homeDir := t.TempDir()
 			loginNoAuth(t, homeDir)
@@ -386,7 +385,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
-			//given
+			// given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
 			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
@@ -469,7 +468,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
-			//given
+			// given
 			// login with no auth
 			homeDir := t.TempDir()
 			loginNoAuth(t, homeDir)
@@ -585,7 +584,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fall back to selected tenant when tenant-id is not provided", func(t *testing.T) {
-			//given
+			// given
 			// create selected tenant in store to test fetching tenant id from store when not provided as parameter
 			tmpDir := homeDir
 			seedSelectedTenant(t, tmpDir, tenantID, expTenantName)
@@ -631,7 +630,7 @@ func TestGetKeys(t *testing.T) {
 		})
 
 		t.Run("should fail if tenant id parameter is not provided", func(t *testing.T) {
-			//given
+			// given
 			// login with no auth
 			homeDir := t.TempDir()
 			loginNoAuth(t, homeDir)

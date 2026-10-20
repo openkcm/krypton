@@ -50,9 +50,11 @@ message AnnounceKeyResponse {
 message ActivateKeyRequest {
   string id = 1;
   string tenant_id = 2;
+  bool cascading = 3;
 }
 
 message ActivateKeyResponse {
+  string job_group_id = 1;
 }
 
 message GetKeyRequest {
