@@ -1,0 +1,77 @@
+The Krypton root node is deployed as {{ include "krypton.fullname" . }} in namespace {{ include "krypton.namespace" . }}.
+{{- $cfg := .Values.config }}
+{{- with .Values.service.ports }}
+
+gRPC APIs (cluster internal): {{ include "krypton.fullname" $ }}.{{ include "krypton.namespace" $ }}.svc:{{ (index . 0).port }}
+{{- end }}
+Configuration: ConfigMap {{ include "krypton.fullname" . }}-config
+
+Check the pods:
+  kubectl --namespace {{ include "krypton.namespace" . }} get pods -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ include "krypton.name" . }}
+
+Call the gRPC APIs from your machine with the kr CLI (make cli in the Krypton repository):
+  kubectl --namespace {{ include "krypton.namespace" . }} port-forward service/{{ include "krypton.fullname" . }} 8080:grpc
+  {{- if $cfg.auth }}
+  kr login mtls --cert <client certificate> --key <client key> --ca <CA certificate>
+  {{- else }}
+  kr login no-auth
+  {{- end }}
+  kr --server localhost:8080 get tenants
+{{- /* Environment variables that the container gets. */}}
+{{- $envs := list }}
+{{- if .Values.database.existingSecret }}{{ $envs = append $envs "DATABASE_URL" }}{{ end }}
+{{- if .Values.rootKey.existingSecret }}{{ $envs = append $envs "KRYPTON_ROOT_KEY" }}{{ end }}
+{{- range .Values.extraEnvs }}{{ $envs = append $envs .name }}{{ end }}
+{{- $envsFrom := not (empty .Values.extraEnvsFrom) }}
+{{- /* Vaults and sealer secrets of the root node's own key bindings. */}}
+{{- $unsafeVaults := list }}
+{{- $secretEnvs := list }}
+{{- range $kind, $binding := $cfg.key_bindings }}
+{{- with $binding.vault }}{{ if hasPrefix "unsafe-" (.type | default "" | toString) }}{{ $unsafeVaults = append $unsafeVaults (printf "%s (%s)" $kind .type) }}{{ end }}{{ end }}
+{{- with $binding.sealer }}{{ with .config }}{{ with .secret }}{{ if eq (.type | default "" | toString) "envvar" }}{{ with .config }}{{ with .name }}{{ $secretEnvs = append $secretEnvs . }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}
+{{- end }}
+{{- $rootConnection := false }}
+{{- range $cfg.connections }}{{ if eq (.name | default "" | toString) ($cfg.name | default "" | toString) }}{{ $rootConnection = true }}{{ end }}{{ end }}
+{{- $kmipPort := false }}
+{{- range .Values.ports }}{{ if eq (.name | default "" | toString) "kmip" }}{{ $kmipPort = true }}{{ end }}{{ end }}
+{{- $replicas := 1 }}
+{{- if .Values.hpa.enabled }}{{ $replicas = int .Values.hpa.maxReplicas }}{{ else }}{{ $replicas = int .Values.replicaCount }}{{ end }}
+{{- $warnings := list }}
+{{- if not (or (has "DATABASE_URL" $envs) $envsFrom) }}
+{{- $warnings = append $warnings "DATABASE_URL is not set: the root node exits at startup. Set database.existingSecret to the Secret with the PostgreSQL URL." }}
+{{- end }}
+{{- range $secretEnvs }}
+{{- if not (or (has . $envs) $envsFrom) }}
+{{- $warnings = append $warnings (printf "%s is not set, but a sealer of config.key_bindings reads it: the root node exits at startup. Set rootKey.existingSecret, or add %s to extraEnvs." . .) }}
+{{- end }}
+{{- end }}
+{{- if not $rootConnection }}
+{{- $warnings = append $warnings (printf "config.connections has no entry named %q (config.name): the root node exits at startup. Add the address at which the agents reach this Service." ($cfg.name | default "" | toString)) }}
+{{- end }}
+{{- with $unsafeVaults }}
+{{- $warnings = append $warnings (printf "Development vaults in config.key_bindings: %s. Use them for development and tests only; unsafe-sqlite-memory loses all keys when the pod stops." (join ", " .)) }}
+{{- if gt $replicas 1 }}
+{{- $warnings = append $warnings "More than one pod with unsafe-sqlite vaults: each pod has its own vault and does not see the keys of the others. Keep replicaCount 1 and hpa.enabled false, or use an openbao vault." }}
+{{- end }}
+{{- if ne (dig "type" "" $.Values.strategy | toString) "Recreate" }}
+{{- $warnings = append $warnings "strategy is not Recreate: during an update the old and the new pod run at the same time, each with its own unsafe-sqlite vault, and a ReadWriteOnce volume cannot be mounted by both on different nodes." }}
+{{- end }}
+{{- end }}
+{{- if and $cfg.kmip (not $kmipPort) }}
+{{- $warnings = append $warnings "config.kmip is set, but ports has no port named kmip: KMIP clients cannot reach the server. Add the port to ports and service.ports." }}
+{{- end }}
+{{- if and (not $cfg.auth) (not .Values.networkPolicy.enabled) }}
+{{- $warnings = append $warnings "config.auth is not set and networkPolicy.enabled is false: every client that can reach the Service can call the gRPC APIs, including the admin API. Enable networkPolicy, use a service mesh, or configure config.auth." }}
+{{- end }}
+{{- if ne .Values.service.type "ClusterIP" }}
+{{- $warnings = append $warnings (printf "service.type is %s: the gRPC APIs are reachable from outside the cluster." .Values.service.type) }}
+{{- end }}
+{{- if $warnings }}
+
+WARNINGS:
+{{- range $warnings }}
+  - {{ . }}
+{{- end }}
+{{- end }}
+
+Documentation: https://github.com/openkcm/krypton/tree/main/charts/root

@@ -1,4 +1,9 @@
 {{- if .Values.pod.disruptionBudget.enabled }}
+{{- $pdb := .Values.pod.disruptionBudget }}
+{{- if and (hasKey $pdb "minAvailable") (hasKey $pdb "maxUnavailable") }}
+{{- fail "pod.disruptionBudget: set either minAvailable or maxUnavailable, not both" }}
+{{- end }}
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -10,16 +15,13 @@ spec:
   selector:
     matchLabels:
       {{- include "krypton.selectorLabels" . | nindent 6 }}
-  {{- if not (or (hasKey .Values.pod.disruptionBudget "minAvailable") (hasKey .Values.pod.disruptionBudget "maxUnavailable")) }}
-  minAvailable: 1
-  {{- end }}
-  {{- if (and (hasKey .Values.pod.disruptionBudget "minAvailable") (hasKey .Values.pod.disruptionBudget "maxUnavailable")) }}
-  {{- fail "You can only set one of minAvailable or maxUnavailable in the PodDisruptionBudget" }}
-  {{- end }}
-  {{- if hasKey .Values.pod.disruptionBudget "minAvailable" }}
-  minAvailable: {{ .Values.pod.disruptionBudget.minAvailable }}
-  {{- end }}
-  {{- if hasKey .Values.pod.disruptionBudget "maxUnavailable" }}
-  maxUnavailable: {{ .Values.pod.disruptionBudget.maxUnavailable }}
+  {{- if hasKey $pdb "minAvailable" }}
+  minAvailable: {{ $pdb.minAvailable }}
+  {{- else if hasKey $pdb "maxUnavailable" }}
+  maxUnavailable: {{ $pdb.maxUnavailable }}
+  {{- else }}
+  # Neither minAvailable nor maxUnavailable is set. maxUnavailable: 1 never blocks
+  # node drains, even with a single replica.
+  maxUnavailable: 1
   {{- end }}
 {{- end }}

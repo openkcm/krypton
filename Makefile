@@ -22,6 +22,12 @@ test: clean
 
 	@echo "On a Mac, you can use the following command to open the coverage report in the browser\ngo tool cover -html=cover.out -o cover.html && open cover.html"
 
+# Helm chart unit tests: render charts/root with `helm template` and load the configuration
+# with the root node's own code. Needs the helm command, no cluster.
+.PHONY: helm-test
+helm-test:
+	go test -count=1 -race -tags=helmtests ./helm-tests/unit/...
+
 CLI_TOOL_NAME := kr
 
 .PHONY: cli

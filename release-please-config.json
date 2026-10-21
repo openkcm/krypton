@@ -48,7 +48,13 @@
   "packages": {
     ".": {
       "release-type": "go",
-      "bump-minor-pre-major": true
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "charts/root/Chart.yaml"
+        }
+      ]
     }
   },
   "changelog": {

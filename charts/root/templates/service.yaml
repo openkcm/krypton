@@ -9,15 +9,15 @@ metadata:
     {{- with .Values.service.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-{{- with .Values.service.annotations }}
+  {{- with .Values.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
-{{- end }}
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
-{{- with .Values.service.ports }}
+  {{- with .Values.service.ports }}
   ports:
     {{- toYaml . | nindent 4 }}
-{{- end }}
+  {{- end }}
   selector:
     {{- include "krypton.selectorLabels" . | nindent 4 }}
