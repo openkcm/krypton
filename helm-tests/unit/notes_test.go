@@ -3,25 +3,60 @@
 package unit_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// releaseNotes renders the release notes (templates/NOTES.txt) with the arguments.
+// releaseNotes renders templates/NOTES.txt with the arguments, without a cluster. `helm install
+// --dry-run=client` needs a reachable cluster with Helm 3, and `helm template` does not render
+// the notes, so the test renders a copy of the chart in which NOTES.txt is a named template that
+// a test-only ConfigMap writes out. The notes get the same values and helpers as in an install.
 func releaseNotes(t *testing.T, args ...string) string {
 	t.Helper()
 
-	out, err := runHelm(t, append([]string{"install", releaseName, chartPath, "--dry-run=client"}, args...)...)
+	chart := filepath.Join(t.TempDir(), filepath.Base(chartPath))
+
+	err := os.CopyFS(chart, os.DirFS(chartPath))
 	if err != nil {
-		t.Fatalf("helm install --dry-run failed: %v", err)
+		t.Fatal(err)
 	}
 
-	_, notes, found := strings.Cut(out, "NOTES:\n")
-	if !found {
-		t.Fatalf("no release notes in:\n%s", out)
+	templates := filepath.Join(chart, "templates")
+
+	notes, err := os.ReadFile(filepath.Join(templates, "NOTES.txt"))
+	if err == nil {
+		err = os.Remove(filepath.Join(templates, "NOTES.txt"))
 	}
 
-	return notes
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, content := range map[string]string{
+		"_notes_under_test.tpl": "{{- define \"notesUnderTest\" -}}\n" + string(notes) + "\n{{- end -}}\n",
+		"notes-under-test.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: notes-under-test\n" +
+			"data:\n  notes: {{ include \"notesUnderTest\" . | toJson }}\n",
+	} {
+		err = os.WriteFile(filepath.Join(templates, name), []byte(content), 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out, err := runHelm(t, append([]string{"template", releaseName, chart,
+		"--show-only", "templates/notes-under-test.yaml"}, args...)...)
+	if err != nil {
+		t.Fatalf("rendering the release notes failed: %v", err)
+	}
+
+	cm := object[configMap](t, out, "ConfigMap")
+	if cm.Data["notes"] == "" {
+		t.Fatalf("no release notes in the output:\n%s", out)
+	}
+
+	return cm.Data["notes"]
 }
 
 // Values with which the root node starts: its Secrets, a network policy and a file vault.
