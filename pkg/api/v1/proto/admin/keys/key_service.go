@@ -29,8 +29,7 @@ type KeyService struct {
 	keyStore   store.Key
 	preparer   keyoperator.JobGroupPreparer
 	manager    *keyprocessor.Manager
-
-	config config.RootConfig
+	config     config.RootConfig
 }
 
 func NewKeyService(cfg config.RootConfig, transactor store.Transactor, keyStore store.Key, preparer keyoperator.JobGroupPreparer, manager *keyprocessor.Manager) *KeyService {
