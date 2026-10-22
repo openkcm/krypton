@@ -20,3 +20,7 @@ type Config interface {
 type Loader interface {
 	LoadSecret(ctx context.Context) (*securemem.Data, error)
 }
+
+type Destroyer interface {
+	DestroySecret() error
+}

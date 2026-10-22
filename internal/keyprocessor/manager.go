@@ -8,7 +8,6 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/sealer"
-	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -33,6 +32,8 @@ var (
 	ErrRegistryRequired = errors.New("no registry provided for parent key provider")
 	// ErrParentNotRegistered is returned when the registry has no connection for the requested parent agent.
 	ErrParentNotRegistered = errors.New("no connection registered for parent key provider")
+	// ErrNoRootSealer is returned when no root sealer is provided
+	ErrNoRootSealer = errors.New("no root sealer is provided")
 )
 
 // ManagerConfig holds the dependencies needed to construct a Manager.
@@ -42,6 +43,7 @@ type ManagerConfig struct {
 	Bindings        map[model.KeyKind]spec.KeyBinding
 	Hierarchy       spec.KeyHierarchy
 	Registry        *grpcconn.Registry
+	RootSealer      sealer.Sealer
 }
 
 // Manager validates the key lifecycle, resolves key versions, and delegates to processors.
@@ -70,6 +72,9 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 	}
 	if cfg.KeyVersionStore == nil {
 		return nil, ErrKeyVersionStoreMissing
+	}
+	if cfg.RootSealer == nil {
+		return nil, ErrNoRootSealer
 	}
 
 	mgr := &Manager{
@@ -312,23 +317,7 @@ func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, ki
 		return mgr, nil
 	}
 
-	parentBinding, ok := cfg.Bindings[parentSpec.Kind]
-	if !ok {
-		return nil, fmt.Errorf("no binding found for root key kind %s", parentSpec.Kind)
-	}
-
-	return buildRootManager(ctx, cfg.KeyStore, parentBinding)
-}
-
-func buildRootManager(ctx context.Context, s store.Key, binding spec.KeyBinding) (*rootManager, error) {
-	if binding.SealerSpec == nil {
-		return nil, ErrRootMissingSealerSpec
-	}
-	sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
-	if err != nil {
-		return nil, err
-	}
-	return &rootManager{store: s, sealer: sealer}, nil
+	return &rootManager{store: cfg.KeyStore, sealer: cfg.RootSealer}, nil
 }
 
 // resolveUsableKeyVersion returns the highest usable revision of version, or

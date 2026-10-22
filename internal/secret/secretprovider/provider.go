@@ -9,6 +9,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/secret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/inline"
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
@@ -78,6 +79,13 @@ func (s *Spec) Validate() error {
 	return nil
 }
 
+func (s *Spec) DestroySecret() error {
+	if d, ok := s.Config.(secret.Destroyer); ok {
+		return d.DestroySecret()
+	}
+	return nil
+}
+
 // GetSecret creates the appropriate Loader from the Spec and loads the secret.
 func GetSecret(ctx context.Context, spec Spec) (*securemem.Data, error) {
 	loader, err := newLoader(spec)
@@ -96,6 +104,12 @@ func newLoader(spec Spec) (secret.Loader, error) {
 			return nil, fmt.Errorf("expected *envvar.Config for type %q, got %T", spec.Type, spec.Config)
 		}
 		return envvar.New(cfg), nil
+	case inline.Type:
+		cfg, ok := spec.Config.(*inline.Config)
+		if !ok {
+			return nil, fmt.Errorf("expected *inline.Config for type %q, got %T", spec.Type, spec.Config)
+		}
+		return inline.New(cfg), nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, spec.Type)
 	}
@@ -106,6 +120,8 @@ func newConfig(t secret.Type) (secret.Config, error) {
 	switch t {
 	case envvar.Type:
 		return &envvar.Config{}, nil
+	case inline.Type:
+		return &inline.Config{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, t)
 	}

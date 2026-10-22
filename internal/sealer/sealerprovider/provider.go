@@ -9,7 +9,9 @@ import (
 
 	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
+	"github.com/openkcm/krypton/internal/secret"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
 
 var ErrSealerNameEmpty = errors.New("sealer name is empty")
@@ -81,9 +83,26 @@ func (s *Spec) Validate() error {
 	return nil
 }
 
+func (s *Spec) DestroySecret() error {
+	if d, ok := s.Config.(secret.Destroyer); ok {
+		return d.DestroySecret()
+	}
+	return nil
+}
+
 // GetSealer constructs a ready-to-use sealer.Sealer from the given Spec.
 func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 	switch cfg := spec.Config.(type) {
+	case *Config:
+		v, err := vaultprovider.GetVault(ctx, cfg.Vault)
+		if err != nil {
+			return nil, err
+		}
+		s, err := GetSealer(ctx, cfg.Sealer)
+		if err != nil {
+			return nil, err
+		}
+		return New(*cfg, v, s)
 	case *staticsecret.Config:
 		secret, err := secretprovider.GetSecret(ctx, cfg.Secret)
 		if err != nil {
@@ -98,6 +117,8 @@ func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 // newSealerConfig is a factory that creates the correct SealerConfig struct by sealer type.
 func newSealerConfig(t sealer.Type) (sealer.SealerConfig, error) {
 	switch t {
+	case TypeSealerRouter:
+		return &Config{}, nil
 	case staticsecret.TypeStaticSecret:
 		return &staticsecret.Config{}, nil
 	default:
