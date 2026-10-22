@@ -8,13 +8,22 @@ selector_labels:
 key_bindings:
   K0:
     sealer:
-      name: root-key-sealer
-      type: aes256gcm-staticsecret
+      name: credentials-router
+      type: krypton-sealer-router
       config:
-        secret:
-          type: envvar
+        allowed_types:
+          - aes256gcm-staticsecret
+        vault:
+          name: credentials-vault
+          type: unsafe-sqlite-memory
+        sealer:
+          name: credentials-sealer
+          type: aes256gcm-staticsecret
           config:
-            name: KRYPTON_ROOT_KEY
+            secret:
+              type: envvar
+              config:
+                name: KRYPTON_CREDENTIALS_KEY
   K1:
     crypto:
       name: kek-crypto

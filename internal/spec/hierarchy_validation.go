@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -28,6 +29,7 @@ var (
 
 	ErrTekBindingMissingSealer = errors.New("tek key binding must have a sealer")
 	ErrBindingMissingCryptor   = errors.New("key binding must have a cryptor")
+	ErrBindingRouterSealer     = errors.New("key binding must not have a sealer of type router sealer")
 
 	ErrTopologyDuplicateSegmentName           = errors.New("duplicate topology segment name")
 	ErrParentKeyProviderNotResolvable         = errors.New("parent key provider agent name does not resolve to root or any topology segment")
@@ -161,6 +163,9 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 		binding := bindings[string(ks.Kind)]
 		if binding.CryptorSpec == nil {
 			return fmt.Errorf("%w: %q", ErrBindingMissingCryptor, ks.Kind)
+		}
+		if binding.SealerSpec != nil && binding.SealerSpec.Type == sealerprovider.TypeSealerRouter {
+			return fmt.Errorf("%w: %q", ErrBindingRouterSealer, ks.Kind)
 		}
 	}
 
