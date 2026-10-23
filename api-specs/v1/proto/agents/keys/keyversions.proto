@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package krypton.v1.agents.keyversions;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keyversions";
+
+service KeyVersionService {
+  rpc UpsertKeyVersion(UpsertKeyVersionRequest) returns (UpsertKeyVersionResponse) {}
+}
+
+message UpsertKeyVersionRequest {
+ string tenant_id = 1;
+ string key_id = 2;
+ int32  version = 3;
+ int32  revision = 4;
+ string parent_id = 5;
+ int32  parent_version = 6;
+ string lifecycle_state = 7;
+ string processing_state = 8;
+}
+
+message UpsertKeyVersionResponse {}

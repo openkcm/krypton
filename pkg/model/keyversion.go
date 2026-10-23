@@ -11,6 +11,12 @@ const (
 	KeyVersionActivating KeyVersionProcessingState = "activating"
 )
 
+var allKeyVersionStates = map[KeyVersionProcessingState]struct{}{
+	KeyVersionUsable:     {},
+	KeyVersionReWrapping: {},
+	KeyVersionActivating: {},
+}
+
 // KeyVersion tracks both the version (which key material is used) and the
 // revision (which wrapping of that material is current). A KeyVersion is
 // uniquely identified by the composite key (TenantID, KeyID, Version, Revision).
@@ -41,4 +47,9 @@ func NewKeyVersion(tenantID, keyID string, version int, parentKeyID *string, par
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
+}
+
+func IsKnownKeyVersionState(state string) bool {
+	_, ok := allKeyVersionStates[KeyVersionProcessingState(state)]
+	return ok
 }
