@@ -376,6 +376,54 @@ func TestListKeyVersions(t *testing.T) {
 	})
 }
 
+func TestGetKeyVersion(t *testing.T) {
+	ctx := t.Context()
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
+	kvStore := storesql.NewKeyVersionStore(db)
+	keyStore := storesql.NewKeyStore(db)
+	tenantStore := storesql.NewTenantStore(db)
+
+	tenant := createTenant(t, tenantStore)
+	key := model.NewKey(tenant.ID, "kv-get-key-"+uuid.New().String(), "K1", nil, "root", nil)
+	require.NoError(t, keyStore.CreateKey(ctx, key))
+
+	// seed a key version
+	seeded := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
+	_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: seeded})
+	require.NoError(t, err)
+
+	t.Run("should return the key version when it exists", func(t *testing.T) {
+		// when
+		result, err := kvStore.GetKeyVersion(ctx, store.GetKeyVersionQuery{
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			Version:  1,
+			Revision: 1,
+		})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, seeded, result.KeyVersion)
+	})
+
+	t.Run("should return ErrKeyVersionNotFound when not found", func(t *testing.T) {
+		// when
+		_, err := kvStore.GetKeyVersion(ctx, store.GetKeyVersionQuery{
+			TenantID: tenant.ID,
+			KeyID:    key.ID,
+			Version:  999,
+			Revision: 1,
+		})
+
+		// then
+		assert.ErrorIs(t, err, store.ErrKeyVersionNotFound)
+	})
+}
+
 func TestUpdateKeyVersionStates(t *testing.T) {
 	ctx := t.Context()
 	db, err := sql.Open("postgres", pgConnStr)

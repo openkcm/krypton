@@ -7,11 +7,14 @@ import (
 	"github.com/openkcm/krypton/pkg/model"
 )
 
-var ErrKeyVersionNotFound = errors.New("key version not found")
-var ErrKeyVersionQueryInvalid = errors.New("invalid key version query")
+var (
+	ErrKeyVersionNotFound     = errors.New("key version not found")
+	ErrKeyVersionQueryInvalid = errors.New("invalid key version query")
+)
 
 type KeyVersion interface {
 	CreateKeyVersion(ctx context.Context, query CreateKeyVersionQuery) (CreateKeyVersionResult, error)
+	GetKeyVersion(ctx context.Context, query GetKeyVersionQuery) (GetKeyVersionResult, error)
 	ListKeyVersions(ctx context.Context, query ListKeyVersionsQuery) (ListKeyVersionsResult, error)
 	UpdateKeyVersionStates(ctx context.Context, query UpdateKeyVersionStatesQuery) error
 }
@@ -59,4 +62,15 @@ type UpdateKeyVersionStatesQuery struct {
 	ToProcessingState   model.KeyVersionProcessingState
 	FromLifeCycleState  []model.KeyLifeCycleState
 	ToLifeCycleState    model.KeyLifeCycleState
+}
+
+type GetKeyVersionQuery struct {
+	TenantID string
+	KeyID    string
+	Version  int
+	Revision int
+}
+
+type GetKeyVersionResult struct {
+	KeyVersion model.KeyVersion
 }

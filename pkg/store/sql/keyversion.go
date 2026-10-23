@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -50,6 +51,36 @@ func (s *KeyVersionStore) CreateKeyVersion(ctx context.Context, query store.Crea
 	}
 
 	return store.CreateKeyVersionResult{KeyVersion: kv}, nil
+}
+
+func (s *KeyVersionStore) GetKeyVersion(ctx context.Context, query store.GetKeyVersionQuery) (store.GetKeyVersionResult, error) {
+	stmt := `
+	SELECT tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, created_at, updated_at
+	FROM key_versions WHERE tenant_id = $1 AND key_id = $2 AND version = $3 AND revision = $4
+	`
+	row := s.db.QueryRowContext(ctx, stmt, query.TenantID, query.KeyID, query.Version, query.Revision)
+
+	var kv model.KeyVersion
+	err := row.Scan(
+		&kv.TenantID,
+		&kv.KeyID,
+		&kv.Version,
+		&kv.Revision,
+		&kv.ParentKeyID,
+		&kv.ParentKeyVersion,
+		&kv.LifeCycleState,
+		&kv.ProcessingState,
+		&kv.CreatedAt,
+		&kv.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return store.GetKeyVersionResult{}, store.ErrKeyVersionNotFound
+		}
+		return store.GetKeyVersionResult{}, err
+	}
+
+	return store.GetKeyVersionResult{KeyVersion: kv}, nil
 }
 
 func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListKeyVersionsQuery) (store.ListKeyVersionsResult, error) {
