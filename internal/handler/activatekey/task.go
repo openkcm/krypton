@@ -13,14 +13,11 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/handler"
+	"github.com/openkcm/krypton/internal/handler/common"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/orchestrator"
-	"github.com/openkcm/krypton/internal/spec"
-	"github.com/openkcm/krypton/pkg/api/v1/proto"
-	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keyversions"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
-	"github.com/openkcm/krypton/pkg/validator"
 )
 
 const (
@@ -38,7 +35,7 @@ type TaskHandler struct {
 	rootName   string
 	registry   *grpcconn.Registry
 	manager    *keyprocessor.Manager
-	config     config.RootConfig
+	config     *config.RootConfig
 }
 
 var _ orchestrator.TaskHandler = &TaskHandler{}
@@ -48,7 +45,7 @@ func NewTaskHandler(
 	registry *grpcconn.Registry,
 	rootName string,
 	manager *keyprocessor.Manager,
-	cfg config.RootConfig,
+	cfg *config.RootConfig,
 ) *TaskHandler {
 	return &TaskHandler{
 		transactor: transactor,
@@ -66,101 +63,63 @@ func (h *TaskHandler) TaskType() string {
 
 // Handle implements [orchestrator.TaskHandler].
 func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
-	var id handler.KeyIdentifier
+	var kid handler.KeyIdentifier
 
-	err := json.Unmarshal(req.TaskData, &id)
+	err := json.Unmarshal(req.TaskData, &kid)
 	if err != nil {
 		_ = markFail(resp, fmt.Sprintf("failed to unmarshal task data: %v", err))
 		return
 	}
 
-	err = h.transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
-		// fetching the key to make sure it exists and is in the correct state
-		key, err := stores.Keys.GetKeyByID(ctx, id.ID, id.TenantID)
-		if err != nil {
-			if errors.Is(err, store.ErrKeyNotFound) {
-				return markFail(resp, fmt.Sprintf("key not found: %v", err))
+	err = store.ChainTransaction(ctx, h.transactor,
+		common.ValidateTenantID(kid.TenantID),
+		common.EnsureKeyState(kid, func(key *model.Key) bool {
+			return key.LifeCycleState == model.KeyLifeCycleActive &&
+				key.KeyProcessingState.Status == model.KeyProcessingPending
+		}),
+		func(ctx context.Context, stores store.Stores) error {
+			proc, or := common.NewProcessor(
+				h.rootName,
+				h.manager,
+				h.config,
+				h.registry,
+				stores,
+			)
+
+			if or != nil {
+				return or.Apply(resp)
 			}
-			return markContinue(resp, err)
-		}
 
-		// defensive check, this should not happen, but if it does, we will mark the task as failed
-		if key == nil {
-			return markFail(resp, "key not found")
-		}
+			or = proc.LoadKeyAndVersions(ctx, kid)
+			if or != nil {
+				return or.Apply(resp)
+			}
 
-		// making sure that no other process has already changed the status of the key,
-		// if so, we will mark the task as complete and not retry
-		isKeyTaken := key.LifeCycleState != model.KeyLifeCycleActive ||
-			key.KeyProcessingState.Status != model.KeyProcessingPending
+			or = proc.GenerateAndSealSecret(ctx)
+			if or != nil {
+				return or.Apply(resp)
+			}
 
-		if isKeyTaken {
+			or = proc.UpsertRemote(ctx)
+			if or != nil {
+				return or.Apply(resp)
+			}
+
+			or = proc.MarkKeyAsActiveAndComplete(ctx)
+			if or != nil {
+				return or.Apply(resp)
+			}
+
 			return markComplete(resp)
-		}
-
-		tenantID, managedBy := key.TenantID, key.ManagedBy
-
-		// check tenant status
-		err = validator.ValidateTenant(tenantID)(ctx, stores)
-		if err != nil {
-			return markContinue(resp, err)
-		}
-
-		// get the key version, if it exists, we will upsert it to the remote agent, if not,
-		// we will create a new key version based on the parent key version
-		kv, isNewKV, err := upsertAndResolveKeyVersion(ctx, stores, *key)
-		if err != nil {
-			if errors.Is(err, ErrTaskFailed) {
-				return markKeyFailed(ctx, resp, stores, *key, "parent key version is not in usable state, cannot create new key version")
-			}
-			return markContinue(resp, err)
-		}
-
-		// defensive check, this should not happen, but if it does, we will mark the task as failed
-		if kv == nil {
-			return markFail(resp, "keyversion not found")
-		}
-
-		// check if key is root key
-		isRootKey, err := isValidRootKeyKind(*key, h.config)
-		if err != nil {
-			if errors.Is(err, ErrTaskFailed) {
-				return markKeyFailed(ctx, resp, stores, *key, fmt.Sprintf("failed to determine if key is root: %v", err))
-			}
-			return markContinue(resp, err)
-		}
-
-		isManagedByRoot := key.ManagedBy == h.rootName
-
-		// check if the key is managed by root and is not a root key, if so, we need to generate and seal the secret for this key version
-		if isManagedByRoot && !isRootKey && isNewKV {
-			err := generateAndSealSecret(ctx, h.manager, *key, *kv)
-			if err != nil {
-				return markContinue(resp, err)
-			}
-		}
-
-		// if the key is managed by a remote agent, we need to upsert the key version to the remote agent
-		if !isManagedByRoot {
-			err = upsertRemoteKeyVersion(ctx, h.registry, managedBy, *kv)
-			if err != nil {
-				if errors.Is(err, ErrTaskFailed) {
-					return markKeyFailed(ctx, resp, stores, *key, err.Error())
-				}
-				return markContinue(resp, err)
-			}
-		}
-
-		// here the state of the key is updated from pending to completed
-		err = markKeyAsActiveAndComplete(ctx, stores, *key)
-		if err != nil {
-			return markContinue(resp, fmt.Errorf("failed to update key state to completed: %w", err))
-		}
-
-		return markComplete(resp)
-	})
+		},
+	)
 	if err != nil {
-		slog.Error("failed to activate key", "error", err, "key_id", id.ID, "tenant_id", id.TenantID)
+		slog.Error("failed to activate key", "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
+		if r, ok := errors.AsType[*common.OrbitalResponseError](err); ok {
+			_ = r.Apply(resp)
+			return
+		}
+		resp.ContinueAndWaitFor(retryBackoff)
 	}
 }
 
@@ -242,119 +201,9 @@ func createAndUpsertKeyVersionFromParent(ctx context.Context, stores store.Store
 	return &kvres.KeyVersion, nil
 }
 
-func upsertRemoteKeyVersion(ctx context.Context, reg *grpcconn.Registry, managedBy string, kv model.KeyVersion) error {
-	if reg == nil {
-		return fmt.Errorf("%w: registry is nil, cannot upsert key version", ErrTaskFailed)
-	}
-
-	conn, ok := reg.Get(managedBy)
-	if !ok {
-		return fmt.Errorf("%w: no connection found for agent "+managedBy, ErrTaskFailed)
-	}
-
-	var parentKeyID string
-	if kv.ParentKeyID != nil {
-		parentKeyID = *kv.ParentKeyID
-	}
-	var parentKeyVersion int32
-	if kv.ParentKeyVersion != nil {
-		parentKeyVersion = int32(*kv.ParentKeyVersion)
-	}
-
-	_, err := keyversions.NewKeyVersionServiceClient(conn).
-		UpsertKeyVersion(ctx, &keyversions.UpsertKeyVersionRequest{
-			TenantId:        kv.TenantID,
-			KeyId:           kv.KeyID,
-			Version:         int32(kv.Version),
-			Revision:        int32(kv.Revision),
-			ParentId:        parentKeyID,
-			ParentVersion:   parentKeyVersion,
-			LifecycleState:  string(kv.LifeCycleState),
-			ProcessingState: string(kv.ProcessingState),
-		})
-	if err == nil {
-		return nil
-	}
-
-	if proto.Retryable(err) {
-		return err
-	}
-	return fmt.Errorf("%w: failed to upsert key version to remote agent %s: %w", ErrTaskFailed, managedBy, err)
-}
-
-func isValidRootKeyKind(key model.Key, cfg config.RootConfig) (bool, error) {
-	s, ok := cfg.Hierarchy.FindKeySpec(key.Kind)
-	if !ok {
-		return false, fmt.Errorf("%w: key kind %s not found in hierarchy", ErrTaskFailed, key.Kind)
-	}
-
-	return s.Role == spec.KeyRoleRoot, nil
-}
-
-func upsertAndResolveKeyVersion(ctx context.Context, stores store.Stores, key model.Key) (*model.KeyVersion, bool, error) {
-	var isNew bool
-	kv, err := fetchAndUpsertExistingKeyVersion(ctx, stores, key)
-	if err != nil {
-		if !errors.Is(err, ErrKeyVersionNotFound) {
-			return nil, isNew, err
-		}
-		kv, err = createAndUpsertKeyVersionFromParent(ctx, stores, key)
-		if err != nil {
-			return nil, isNew, err
-		}
-		isNew = true
-	}
-	return kv, isNew, nil
-}
-
-func generateAndSealSecret(ctx context.Context, manager *keyprocessor.Manager, key model.Key, kv model.KeyVersion) error {
-	aad := fmt.Appendf(nil, "%s:%s:%d:%d:%d", key.TenantID, key.ID, kv.Version, kv.Revision, kv.CreatedAt)
-	_, err := manager.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
-		KeyVersion: kv,
-		AAD:        aad,
-		KeyKind:    key.Kind,
-	})
-	return err
-}
-
-func markKeyAsActiveAndComplete(ctx context.Context, stores store.Stores, key model.Key) error {
-	err := stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
-		ID:         key.ID,
-		TenantID:   key.TenantID,
-		FromState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-		ToState:    model.KeyLifeCycleActive,
-		FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending},
-		ToStatus:   model.KeyProcessingCompleted,
-	})
-	return err
-}
-
 func markFail(resp *orbital.HandlerResponse, msg string) error {
 	resp.Fail(msg)
 	return nil
-}
-
-func markKeyFailed(ctx context.Context, resp *orbital.HandlerResponse, stores store.Stores, key model.Key, msg string) error {
-	err := stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
-		ID:         key.ID,
-		TenantID:   key.TenantID,
-		FromState:  []model.KeyLifeCycleState{key.LifeCycleState},
-		ToState:    key.LifeCycleState,
-		FromStatus: []model.KeyProcessingStatus{key.KeyProcessingState.Status},
-		ToStatus:   model.KeyProcessingFailed,
-	})
-	if err != nil {
-		resp.ContinueAndWaitFor(retryBackoff)
-		return err
-	}
-	// this error should not happen, but if it does, we will retry the task
-	resp.Fail(msg)
-	return nil
-}
-
-func markContinue(resp *orbital.HandlerResponse, err error) error {
-	resp.ContinueAndWaitFor(retryBackoff)
-	return err
 }
 
 func markComplete(resp *orbital.HandlerResponse) error {

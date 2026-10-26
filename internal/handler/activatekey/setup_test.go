@@ -13,6 +13,7 @@ import (
 	"uuid"
 
 	"github.com/openkcm/orbital"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"google.golang.org/grpc"
@@ -25,19 +26,29 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/grpcconn"
+	"github.com/openkcm/krypton/internal/handler"
 	"github.com/openkcm/krypton/internal/handler/activatekey"
+	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	agentkeys "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keyversions"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants"
+	sealergrpc "github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+// ---------------------------------------------------------------------------
+// Postgres container (shared across all tests in the package)
+// ---------------------------------------------------------------------------
 
 var pgConnStr string
 
@@ -53,7 +64,6 @@ func TestMain(m *testing.M) {
 
 func setupPostgres() (func(), error) {
 	ctx := context.Background()
-
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
 		postgres.WithDatabase("postgres"),
@@ -65,10 +75,13 @@ func setupPostgres() (func(), error) {
 		return nil, err
 	}
 	cleanup := func() { _ = pgContainer.Terminate(ctx) }
-
 	pgConnStr, err = pgContainer.ConnectionString(ctx, "sslmode=disable")
 	return cleanup, err
 }
+
+// ---------------------------------------------------------------------------
+// Database helpers
+// ---------------------------------------------------------------------------
 
 func createDatabase(t *testing.T) *sql.DB {
 	t.Helper()
@@ -88,7 +101,6 @@ func createDatabase(t *testing.T) *sql.DB {
 
 	t.Cleanup(func() {
 		testDB.Close()
-
 		root, err := sql.Open("postgres", pgConnStr)
 		if err == nil {
 			_, _ = root.ExecContext(context.Background(), "DROP DATABASE "+dbName)
@@ -112,36 +124,12 @@ func newAgentDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// func seedRootTenantAndKey(t *testing.T, db *sql.DB, managedBy string) model.Key {
-// 	t.Helper()
-// 	ctx := t.Context()
-//
-// 	tenantRes := createTenant(t, db)
-//
-// 	keyStore := storesql.NewKeyStore(db)
-//
-// 	// Root DB has a self-FK: keys(parent_id) -> keys(id). Seed a parent
-// 	// first so the child's parent_id is satisfiable.
-// 	parent := model.NewKey(tenantRes.ID, "parent-"+uuid.New().String(), "K0", nil, rootName, nil)
-// 	require.NoError(t, keyStore.CreateKey(ctx, parent))
-//
-// 	parentID := parent.ID
-// 	key := model.NewKey(tenantRes.ID, "test-key-"+uuid.New().String(), "K0", &parentID, managedBy, nil)
-// 	require.NoError(t, keyStore.CreateKey(ctx, key))
-//
-// 	// Move processing state to InProgress so the ChainTransaction's
-// 	// UpdateKeyState step (FromProcessing=[InProgress]) matches.
-// 	require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
-// 		ID:        key.ID,
-// 		TenantID:  key.TenantID,
-// 		NewStatus: model.KeyProcessingInProgress,
-// 		NewJobID:  uuid.NewV7().String(),
-// 	}))
-// 	key.KeyProcessingState.Status = model.KeyProcessingInProgress
-// 	return key
-// }
+// ---------------------------------------------------------------------------
+// Data creation helpers
+// ---------------------------------------------------------------------------
 
 func createKey(t *testing.T, db store.Key, k model.Key) model.Key {
+	t.Helper()
 	key := model.NewKey(k.TenantID, "test-key-"+uuid.New().String(), string(k.Kind), k.ParentID, k.ManagedBy, nil)
 	if k.LifeCycleState != "" {
 		key.LifeCycleState = k.LifeCycleState
@@ -155,24 +143,11 @@ func createKey(t *testing.T, db store.Key, k model.Key) model.Key {
 
 func createTenant(t *testing.T, db *sql.DB) model.Tenant {
 	t.Helper()
-	ctx := t.Context()
 	tenantStore := storesql.NewTenantStore(db)
 	tenant := model.NewTenant("test-tenant-"+uuid.New().String(), nil)
-	tenantRes, err := tenantStore.UpsertTenant(ctx, store.UpsertTenantQuery{Tenant: tenant})
+	tenantRes, err := tenantStore.UpsertTenant(t.Context(), store.UpsertTenantQuery{Tenant: tenant})
 	require.NoError(t, err)
 	return tenantRes.Tenant
-}
-
-func dropTenantTable(t *testing.T, db *sql.DB) {
-	t.Helper()
-
-	// Drop in FK dependency order to simulate the tenants table being unavailable.
-	_, err := db.ExecContext(t.Context(), `DROP TABLE key_versions`)
-	require.NoError(t, err)
-	_, err = db.ExecContext(t.Context(), `DROP TABLE keys`)
-	require.NoError(t, err)
-	_, err = db.ExecContext(t.Context(), `DROP TABLE tenants`)
-	require.NoError(t, err)
 }
 
 func seedAgentTenant(t *testing.T, db *sql.DB, tenantID string) {
@@ -184,56 +159,143 @@ func seedAgentTenant(t *testing.T, db *sql.DB, tenantID string) {
 	require.NoError(t, err)
 }
 
+// parentChain holds a K0 (root) -> K1 (KEK) hierarchy with active/usable key versions.
+type parentChain struct {
+	key0 model.Key
+	kv0  model.KeyVersion
+	key1 model.Key
+	kv1  model.KeyVersion
+}
+
+// createParentChain creates the reusable K0 -> K1 parent hierarchy for tests
+// that exercise the upsertRemote code path.
+func createParentChain(t *testing.T, kStore store.Key, kvStore store.KeyVersion, tenantID, rootName string) parentChain {
+	t.Helper()
+	key0 := createKey(t, kStore, model.Key{
+		TenantID: tenantID, Kind: "K0", ManagedBy: rootName,
+		LifeCycleState:     model.KeyLifeCycleActive,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+	})
+	kv0 := createKeyVersion(t, kvStore, tenantID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
+		kv.ProcessingState = model.KeyVersionUsable
+		kv.LifeCycleState = model.KeyLifeCycleActive
+	})
+	key1 := createKey(t, kStore, model.Key{
+		TenantID: tenantID, Kind: "K1", ParentID: new(key0.ID), ManagedBy: rootName,
+		LifeCycleState:     model.KeyLifeCycleActive,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+	})
+	kv1 := createKeyVersion(t, kvStore, tenantID, key1.ID, 100, &key0.ID, &kv0.Version, func(kv *model.KeyVersion) {
+		kv.ProcessingState = model.KeyVersionUsable
+		kv.LifeCycleState = model.KeyLifeCycleActive
+	})
+	return parentChain{key0: key0, kv0: kv0, key1: key1, kv1: kv1}
+}
+
+// createRemoteKey creates a K2 (TEK) key managed by agentName, parented to parentKeyID.
+func createRemoteKey(t *testing.T, kStore store.Key, tenantID, parentKeyID, agentName string) model.Key {
+	t.Helper()
+	return createKey(t, kStore, model.Key{
+		TenantID: tenantID, Kind: "K2", ParentID: new(parentKeyID), ManagedBy: agentName,
+		LifeCycleState:     model.KeyLifeCycleActive,
+		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+	})
+}
+
+func taskDataForKey(t *testing.T, key model.Key) []byte {
+	t.Helper()
+	b, err := json.Marshal(handler.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
+	require.NoError(t, err)
+	return b
+}
+
+// ---------------------------------------------------------------------------
+// DB manipulation (for error-path tests)
+// ---------------------------------------------------------------------------
+
+func dropTenantTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, err := db.ExecContext(t.Context(), `DROP TABLE key_versions`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), `DROP TABLE keys`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), `DROP TABLE tenants`)
+	require.NoError(t, err)
+}
+
+func dropKeyVersionsTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+	_, err := db.ExecContext(t.Context(), `DROP TABLE key_versions`)
+	require.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// gRPC server infrastructure
+// ---------------------------------------------------------------------------
+
 type agentServer struct {
 	listener    *bufconn.Listener
 	grpcSrv     *grpc.Server
 	db          *sql.DB
 	keyStore    store.Key
+	kvStore     store.KeyVersion
 	tenantStore store.Tenant
 }
 
-func startAgentServer(t *testing.T) *agentServer {
+func (s *agentServer) stop() { s.grpcSrv.GracefulStop() }
+
+// startAgentServer creates a fresh agent DB and starts a gRPC server with
+// key, tenant, and key-version services registered.
+func startAgentServer(t *testing.T, mgr *keyprocessor.Manager) *agentServer {
+	t.Helper()
+	return startAgentServerFromDB(t, newAgentDB(t), mgr, nil)
+}
+
+// startAgentServerFromDB starts a gRPC server using the provided DB.
+// If sealerSvc is non-nil the sealer service is also registered.
+func startAgentServerFromDB(t *testing.T, db *sql.DB, mgr *keyprocessor.Manager, sealerSvc sealer.Sealer) *agentServer {
 	t.Helper()
 
-	db := newAgentDB(t)
 	transactor := storesql.NewTransactor(db)
 
 	const bufSize = 1024 * 1024
 	lis := bufconn.Listen(bufSize)
 
-	srv := grpc.NewServer()
+	var opts []grpc.ServerOption
+	if sealerSvc != nil {
+		opts = append(opts, grpc.StatsHandler(securemem.NewRPCHandler()))
+	}
+
+	srv := grpc.NewServer(opts...)
 	agentkeys.RegisterKeyServiceServer(srv, agentkeys.NewKeyService(transactor))
 	tenants.RegisterTenantServiceServer(srv, tenants.NewTenantService(transactor))
+	keyversions.RegisterKeyVersionServiceServer(srv, keyversions.NewService(transactor, mgr))
+	if sealerSvc != nil {
+		sealergrpc.RegisterServiceServer(srv, sealergrpc.NewSealerService(sealerSvc))
+	}
 
 	go func() { _ = srv.Serve(lis) }()
 
 	s := &agentServer{
-		listener:    lis,
-		grpcSrv:     srv,
-		db:          db,
-		keyStore:    storesql.NewKeyStore(db),
-		tenantStore: storesql.NewTenantStore(db),
+		listener: lis, grpcSrv: srv, db: db,
+		keyStore: storesql.NewKeyStore(db), kvStore: storesql.NewKeyVersionStore(db), tenantStore: storesql.NewTenantStore(db),
 	}
 	t.Cleanup(s.stop)
 	return s
 }
 
-func (s *agentServer) stop() {
-	s.grpcSrv.GracefulStop()
-}
+// ---------------------------------------------------------------------------
+// gRPC registries
+// ---------------------------------------------------------------------------
 
+// newRegistry creates a bufconn-backed registry pointing to srv under targetName.
 func newRegistry(t *testing.T, targetName string, srv *agentServer) *grpcconn.Registry {
 	t.Helper()
-	dialer := func(context.Context, string) (net.Conn, error) {
-		return srv.listener.Dial()
-	}
+	dialer := func(context.Context, string) (net.Conn, error) { return srv.listener.Dial() }
 	reg, err := grpcconn.NewRegistry(
 		[]config.ConnectionConfig{{
-			Name: targetName,
-			Address: config.Address{
-				Type: config.AddressTypeGRPC,
-				URL:  "passthrough:///bufconn",
-			},
+			Name:    targetName,
+			Address: config.Address{Type: config.AddressTypeGRPC, URL: "passthrough:///bufconn"},
 		}},
 		grpc.WithContextDialer(dialer),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -251,12 +313,9 @@ func emptyRegistry(t *testing.T) *grpcconn.Registry {
 	return reg
 }
 
-func taskPayload(t *testing.T, key model.Key) []byte {
-	t.Helper()
-	payload, err := json.Marshal(key)
-	require.NoError(t, err)
-	return payload
-}
+// ---------------------------------------------------------------------------
+// Task runner
+// ---------------------------------------------------------------------------
 
 func runTask(t *testing.T, h *activatekey.TaskHandler, payload []byte) orbital.TaskResponse {
 	t.Helper()
@@ -267,27 +326,54 @@ func runTask(t *testing.T, h *activatekey.TaskHandler, payload []byte) orbital.T
 	})
 }
 
-type failingTransactor struct {
-	err error
+// ---------------------------------------------------------------------------
+// Assertions
+// ---------------------------------------------------------------------------
+
+func assertTaskDone(t *testing.T, resp orbital.TaskResponse) {
+	t.Helper()
+	assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
 }
 
-func (f *failingTransactor) Transaction(context.Context, store.TransactionFunc) error {
-	return f.err
+func assertTaskFailed(t *testing.T, resp orbital.TaskResponse) {
+	t.Helper()
+	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
 }
+
+func assertTaskRetry(t *testing.T, resp orbital.TaskResponse) {
+	t.Helper()
+	assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
+	assert.Positive(t, resp.ReconcileAfterSec)
+}
+
+func assertKeyState(t *testing.T, s store.Key, keyID, tenantID string, wantProcessing model.KeyProcessingStatus, wantLifecycle model.KeyLifeCycleState) {
+	t.Helper()
+	key, err := s.GetKeyByID(t.Context(), keyID, tenantID)
+	require.NoError(t, err)
+	assert.Equal(t, wantProcessing, key.KeyProcessingState.Status)
+	assert.Equal(t, wantLifecycle, key.LifeCycleState)
+}
+
+func assertKeyVersionCreated(t *testing.T, s store.KeyVersion, tenantID, keyID string) model.KeyVersion {
+	t.Helper()
+	res, err := s.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{TenantID: tenantID, KeyID: keyID})
+	require.NoError(t, err)
+	require.Len(t, res.KeyVersions, 1)
+	assert.Equal(t, model.KeyVersionUsable, res.KeyVersions[0].ProcessingState)
+	assert.Equal(t, model.KeyLifeCycleActive, res.KeyVersions[0].LifeCycleState)
+	return res.KeyVersions[0]
+}
+
+// ---------------------------------------------------------------------------
+// Spec factories (sealer, cryptor, vault)
+// ---------------------------------------------------------------------------
 
 func newTestVaultSpec() *vaultprovider.Spec {
-	return &vaultprovider.Spec{
-		Name: "test-vault",
-		Type: sqlitevault.TypeUnsafeMemory,
-	}
+	return &vaultprovider.Spec{Name: "test-vault", Type: sqlitevault.TypeUnsafeMemory}
 }
 
 func newTestCryptorSpec() *cryptorprovider.Spec {
-	return &cryptorprovider.Spec{
-		Name:   "test-cryptor",
-		Type:   aes256gcm.TypeAES256GCM,
-		Config: &aes256gcm.Config{},
-	}
+	return &cryptorprovider.Spec{Name: "test-cryptor", Type: aes256gcm.TypeAES256GCM, Config: &aes256gcm.Config{}}
 }
 
 func newTestSealerSpec(t *testing.T) *sealerprovider.Spec {
@@ -303,10 +389,14 @@ func newTestSealerSpec(t *testing.T) *sealerprovider.Spec {
 		Name: "test-sealer",
 		Type: staticsecret.TypeStaticSecret,
 		Config: &staticsecret.Config{
-			Secret: secretprovider.Spec{
-				Type:   envvar.Type,
-				Config: &envvar.Config{Name: envName},
-			},
+			Secret: secretprovider.Spec{Type: envvar.Type, Config: &envvar.Config{Name: envName}},
 		},
 	}
+}
+
+func newTestSealer(t *testing.T) sealer.Sealer {
+	t.Helper()
+	s, err := sealerprovider.GetSealer(t.Context(), *newTestSealerSpec(t))
+	require.NoError(t, err)
+	return s
 }

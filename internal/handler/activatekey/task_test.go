@@ -6,12 +6,12 @@ import (
 	"testing"
 	"uuid"
 
-	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
+	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/handler"
 	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/keyprocessor"
@@ -27,624 +27,405 @@ func TestActivate_Handler(t *testing.T) {
 	kStore := storesql.NewKeyStore(rootDB)
 	kvStore := storesql.NewKeyVersionStore(rootDB)
 	tenant := createTenant(t, rootDB)
-	id := handler.KeyIdentifier{
-		ID:       "",
-		TenantID: tenant.ID,
-	}
-	_, err := json.Marshal(id)
-	require.NoError(t, err)
 
 	ctx := t.Context()
 
 	validHierarchy := spec.KeyHierarchy{
 		Name: "production-hierarchy",
 		KeySpecs: []spec.KeySpec{
-			{
-				Kind:      "K0",
-				Role:      spec.KeyRoleRoot,
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
-			{
-				Kind:      "K1",
-				Role:      spec.KeyRoleKek,
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
-			{
-				Kind:      "K2",
-				Role:      spec.KeyRoleTek,
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
-			{
-				Kind:      "K3",
-				Role:      spec.KeyRoleDek,
-				Algorithm: cryptor.KeyAlgorithmAES256,
-			},
+			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 		},
 	}
-
-	validRootCfg := config.RootConfig{
-		Hierarchy: validHierarchy,
-	}
+	validRootCfg := &config.RootConfig{Hierarchy: validHierarchy}
 
 	mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 		KeyStore:        kStore,
 		KeyVersionStore: kvStore,
 		Bindings: map[model.KeyKind]spec.KeyBinding{
-			"K0": {
-				SealerSpec:  newTestSealerSpec(t),
-				CryptorSpec: newTestCryptorSpec(),
-				VaultSpec:   newTestVaultSpec(),
-			},
-			"K1": {
-				SealerSpec:  newTestSealerSpec(t),
-				CryptorSpec: newTestCryptorSpec(),
-				VaultSpec:   newTestVaultSpec(),
-			},
+			"K0": {SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
+			"K1": {SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
 		},
 		Hierarchy: validHierarchy,
-		Registry:  nil,
 	})
-
 	require.NoError(t, err)
 
+	// default handler: root-managed, with empty registry
 	subj := activatekey.NewTaskHandler(
 		storesql.NewTransactor(rootDB),
-		nil,
+		emptyRegistry(t),
 		rootName,
 		mgr,
 		validRootCfg,
 	)
 
-	t.Run("should fail if task data is invalid", func(t *testing.T) {
-		// given
+	// newHandler builds a TaskHandler with the given overrides.
+	newHandler := func(transactor store.Transactor, registry *grpcconn.Registry, manager *keyprocessor.Manager) *activatekey.TaskHandler {
+		if transactor == nil {
+			transactor = storesql.NewTransactor(rootDB)
+		}
+		if manager == nil {
+			manager = mgr
+		}
+		return activatekey.NewTaskHandler(transactor, registry, rootName, manager, validRootCfg)
+	}
 
+	// ---- input validation ----
+
+	t.Run("should fail if task data is invalid JSON", func(t *testing.T) {
 		// when
-		resp := runTask(t, subj, []byte("invalid-json"))
-		// then
+		resp := runTask(t, subj, []byte("not-valid-json"))
 
-		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
+		// then
+		assertTaskFailed(t, resp)
 		assert.Zero(t, resp.ReconcileAfterSec)
 	})
 
-	t.Run("should fail if key is not present", func(t *testing.T) {
-		// given
-		unknownKeyID := uuid.New().String()
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       unknownKeyID,
-			TenantID: tenant.ID,
-		})
+	// ---- tenant validation ----
 
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-		assert.Zero(t, resp.ReconcileAfterSec)
-	})
-
-	t.Run("should retry if the get key returns a internal error", func(t *testing.T) {
-		// given
-		invalidUUID := "non-uuid"
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       invalidUUID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
-		assert.Positive(t, resp.ReconcileAfterSec)
-	})
-
-	t.Run("should succeed if key is present and in not in active state", func(t *testing.T) {
-		// given
-		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleDeactivated,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key.ID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
-	})
-
-	t.Run("should succeed if key is present status is not in pending status", func(t *testing.T) {
-		// given
-		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingFailed},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key.ID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
-	})
-
-	t.Run("should ContinueAndWaitFor if tenant fetching fails", func(t *testing.T) {
+	t.Run("should retry if tenant fetching fails", func(t *testing.T) {
 		// given
 		tmpDB := newRootDB(t)
 		tmpStore := storesql.NewKeyStore(tmpDB)
 		tmpTenant := createTenant(t, tmpDB)
-
 		key := createKey(t, tmpStore, model.Key{
-			TenantID:           tmpTenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
+			TenantID: tmpTenant.ID, Kind: "K0", ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key.ID,
-			TenantID: tmpTenant.ID,
-		})
-
-		subj := activatekey.NewTaskHandler(
-			storesql.NewTransactor(tmpDB),
-			nil,
-			rootName,
-			mgr,
-			validRootCfg,
-		)
-
 		renameTenantTable(t, tmpDB)
 
 		// when
-		resp := runTask(t, subj, taskdata)
+		resp := runTask(t, newHandler(storesql.NewTransactor(tmpDB), nil, nil), taskDataForKey(t, key))
 
 		// then
-		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
-		assert.Positive(t, resp.ReconcileAfterSec)
+		assertTaskRetry(t, resp)
 	})
 
-	t.Run("should return error if parent keyversion is not present", func(t *testing.T) {
+	t.Run("should fail if tenant is not found", func(t *testing.T) {
 		// given
-		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
+		tmpDB := newRootDB(t)
+		tmpStore := storesql.NewKeyStore(tmpDB)
+		tmpTenant := createTenant(t, tmpDB)
+		key := createKey(t, tmpStore, model.Key{
+			TenantID: tmpTenant.ID, Kind: "K0", ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
-		createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
-			kv.ProcessingState = model.KeyVersionUsable
-			kv.LifeCycleState = model.KeyLifeCycleDeactivated
-		})
-
-		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key1.ID,
-			TenantID: tenant.ID,
-		})
+		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: key.ID, TenantID: uuid.New().String()})
 
 		// when
-		// make sure no keyversion is present for the key
-		kvlist1, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
-		require.NoError(t, err)
-		assert.Empty(t, kvlist1.KeyVersions)
-
-		// resolve and upsert keyversion for the key
-		resp := runTask(t, subj, taskdata)
+		resp := runTask(t, newHandler(storesql.NewTransactor(tmpDB), nil, nil), taskdata)
 
 		// then
-		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-
-		// fetch key k1
-		fetchedKey1, err := kStore.GetKeyByID(ctx, key1.ID, key1.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingFailed, fetchedKey1.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey1.LifeCycleState)
+		assertTaskFailed(t, resp)
 	})
 
-	t.Run("should fail if the key kind is invalid", func(t *testing.T) {
+	// ---- key state guards ----
+
+	t.Run("should skip if key is not in active state", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0-wrong", // making wrong kind to fail the generation of the secret
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleDeactivated,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key.ID,
-			TenantID: tenant.ID,
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key))
+
+		// then
+		assertTaskDone(t, resp)
+	})
+
+	t.Run("should skip if key is not in pending status", func(t *testing.T) {
+		// given
+		key := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingFailed},
 		})
+
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key))
+
+		// then
+		assertTaskDone(t, resp)
+	})
+
+	// ---- fetchKey ----
+
+	t.Run("should fail if key is not found", func(t *testing.T) {
+		// given
+		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID})
 
 		// when
 		resp := runTask(t, subj, taskdata)
 
 		// then
-		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-		// fetch key
-		fetchedKey, err := kStore.GetKeyByID(ctx, key.ID, key.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingFailed, fetchedKey.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
+		assertTaskFailed(t, resp)
 	})
 
-	t.Run("should continue and wait if the geneation of secret fails", func(t *testing.T) {
+	t.Run("should retry if fetchKey returns an internal error", func(t *testing.T) {
+		// given
+		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID})
+
+		// when
+		resp := runTask(t, subj, taskdata)
+
+		// then
+		assertTaskRetry(t, resp)
+	})
+
+	// ---- upsertAndResolveKeyVersion ----
+
+	t.Run("should fail if parent key version is not found", func(t *testing.T) {
 		// given
 		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
-		_ = createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
+		createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
 			kv.ProcessingState = model.KeyVersionUsable
-			kv.LifeCycleState = model.KeyLifeCycleActive
+			kv.LifeCycleState = model.KeyLifeCycleDeactivated // not active, so child won't find a usable parent
 		})
-
 		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
-			ManagedBy:          rootName,
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(key0.ID), ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key1.ID,
-			TenantID: tenant.ID,
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key1))
+
+		// then
+		assertTaskFailed(t, resp)
+		assertKeyState(t, kStore, key1.ID, key1.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- generateAndSealSecret ----
+
+	t.Run("should fail if key kind is not in hierarchy", func(t *testing.T) {
+		// given
+		key := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K0-wrong", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
-		// here we dont have k1 in the bindings so it will fail to generate the secret and should return ContinueAndWaitFor
-		invalidMgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
-			KeyStore:        kStore,
-			KeyVersionStore: kvStore,
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key))
+
+		// then
+		assertTaskFailed(t, resp)
+		assertKeyState(t, kStore, key.ID, key.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should retry if secret generation fails", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key1 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+		incompleteMgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
+			KeyStore: kStore, KeyVersionStore: kvStore,
+			Bindings:  map[model.KeyKind]spec.KeyBinding{"K0": {SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()}},
+			Hierarchy: validHierarchy,
+		})
+		require.NoError(t, err)
+
+		// when
+		resp := runTask(t, newHandler(nil, nil, incompleteMgr), taskDataForKey(t, key1))
+
+		// then
+		assertTaskRetry(t, resp)
+	})
+
+	// ---- upsertRemote: registry errors ----
+
+	t.Run("should fail if registry is nil", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+
+		// when
+		resp := runTask(t, newHandler(nil, nil, nil), taskDataForKey(t, key2))
+
+		// then
+		assertTaskFailed(t, resp)
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should fail if agent is not in registry", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+
+		// when
+		resp := runTask(t, newHandler(nil, emptyRegistry(t), nil), taskDataForKey(t, key2))
+
+		// then
+		assertTaskFailed(t, resp)
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- upsertRemoteKey ----
+
+	t.Run("should retry if upsertRemoteKey returns a retryable error", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+		agentSrv := startAgentServer(t, nil)
+		dropTenantTable(t, agentSrv.db) // generic DB error -> ERROR_CODE_RETRY
+
+		// when
+		resp := runTask(t, newHandler(nil, newRegistry(t, "agent-1", agentSrv), nil), taskDataForKey(t, key2))
+
+		// then
+		assertTaskRetry(t, resp)
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingPending, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should fail key if upsertRemoteKey returns a non-retryable error", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+		agentSrv := startAgentServer(t, nil) // no tenant seeded -> ErrTenantNotFound -> ERROR_CODE_ABORT
+
+		// when
+		resp := runTask(t, newHandler(nil, newRegistry(t, "agent-1", agentSrv), nil), taskDataForKey(t, key2))
+
+		// then
+		assertTaskFailed(t, resp)
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- upsertRemoteKeyVersion ----
+
+	t.Run("should retry if upsertRemoteKeyVersion returns a retryable error", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+		agentSrv := startAgentServer(t, nil)
+		seedAgentTenant(t, agentSrv.db, tenant.ID)
+		dropKeyVersionsTable(t, agentSrv.db) // upsertRemoteKey succeeds, key_versions missing -> ERROR_CODE_RETRY
+
+		// when
+		resp := runTask(t, newHandler(nil, newRegistry(t, "agent-1", agentSrv), nil), taskDataForKey(t, key2))
+
+		// then
+		assertTaskRetry(t, resp)
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingPending, model.KeyLifeCycleActive)
+	})
+
+	// ---- happy path: root-managed keys ----
+
+	t.Run("should activate root key and create key version", func(t *testing.T) {
+		// given
+		key0 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key0))
+
+		// then
+		assertTaskDone(t, resp)
+		assertKeyState(t, kStore, key0.ID, key0.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		assertKeyVersionCreated(t, kvStore, key0.TenantID, key0.ID)
+	})
+
+	t.Run("should activate non-root key and create key version from parent", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key1 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key1))
+
+		// then
+		assertTaskDone(t, resp)
+		assertKeyState(t, kStore, key1.ID, key1.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		kv := assertKeyVersionCreated(t, kvStore, key1.TenantID, key1.ID)
+		assert.Equal(t, pc.kv0.Version, *kv.ParentKeyVersion)
+	})
+
+	t.Run("should activate non-root key and update existing key version", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key1 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+		kv1 := createKeyVersion(t, kvStore, tenant.ID, key1.ID, 100, &pc.key0.ID, &pc.kv0.Version, func(kv *model.KeyVersion) {
+			kv.ProcessingState = model.KeyVersionUsable
+			kv.LifeCycleState = model.KeyLifeCycleSuspended
+		})
+
+		// when
+		resp := runTask(t, subj, taskDataForKey(t, key1))
+
+		// then
+		assertTaskDone(t, resp)
+		kv := assertKeyVersionCreated(t, kvStore, key1.TenantID, key1.ID)
+		assert.Equal(t, kv1.Version, kv.Version)
+		assert.Equal(t, pc.kv0.Version, *kv.ParentKeyVersion)
+	})
+
+	// ---- happy path: remote-managed key with RPC sealer ----
+
+	t.Run("should activate remote-managed key with RPC sealer", func(t *testing.T) {
+		// given
+		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
+
+		rootSealerSrv := startAgentServerFromDB(t, newAgentDB(t), nil, newTestSealer(t))
+
+		agentDB := newAgentDB(t)
+		agentMgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
+			KeyStore: storesql.NewKeyStore(agentDB), KeyVersionStore: storesql.NewKeyVersionStore(agentDB),
 			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K0": {
-					SealerSpec:  newTestSealerSpec(t),
-					CryptorSpec: newTestCryptorSpec(),
-					VaultSpec:   newTestVaultSpec(),
+				"K2": {
+					SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec(),
+					ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
 				},
 			},
 			Hierarchy: validHierarchy,
-			Registry:  nil,
+			Registry:  newRegistry(t, "root", rootSealerSrv),
 		})
-
 		require.NoError(t, err)
 
-		subj := activatekey.NewTaskHandler(
-			storesql.NewTransactor(rootDB),
-			nil,
-			rootName,
-			invalidMgr,
-			validRootCfg,
-		)
+		agentSrv := startAgentServerFromDB(t, agentDB, agentMgr, nil)
+		seedAgentTenant(t, agentSrv.db, tenant.ID)
 
 		// when
-		resp := runTask(t, subj, taskdata)
+		resp := runTask(t, newHandler(nil, newRegistry(t, "agent-1", agentSrv), nil), taskDataForKey(t, key2))
 
 		// then
-		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
-	})
+		assertTaskDone(t, resp)
 
-	t.Run("should fail if registry conn is nil", func(t *testing.T) {
-		// given
-		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-		})
+		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		rootKV := assertKeyVersionCreated(t, kvStore, key2.TenantID, key2.ID)
 
-		kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil,
-			func(kv *model.KeyVersion) {
-				kv.ProcessingState = model.KeyVersionUsable
-				kv.LifeCycleState = model.KeyLifeCycleActive
-			})
-
-		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-		})
-
-		_ = createKeyVersion(t, kvStore, tenant.ID, key1.ID, 100, &key0.ID, &kv0.Version,
-			func(kv *model.KeyVersion) {
-				kv.ProcessingState = model.KeyVersionUsable
-				kv.LifeCycleState = model.KeyLifeCycleActive
-			})
-
-		key2 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K2",
-			ParentID:           new(key1.ID),
-			ManagedBy:          "agent-1",
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key2.ID,
-			TenantID: tenant.ID,
-		})
-
-		subj := activatekey.NewTaskHandler(
-			storesql.NewTransactor(rootDB),
-			nil, // registry is nil
-			rootName,
-			mgr,
-			validRootCfg,
-		)
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-
-		fetchedKey, err := kStore.GetKeyByID(ctx, key2.ID, key2.TenantID)
+		agentKey, err := agentSrv.keyStore.GetKeyByID(ctx, key2.ID, key2.TenantID)
 		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingFailed, fetchedKey.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
-	})
+		assert.Equal(t, key2.Kind, agentKey.Kind)
+		assert.Equal(t, model.KeyLifeCycleActive, agentKey.LifeCycleState)
 
-	// t.Run("should fail if registry dont have the agent name", func(t *testing.T) {
-	// 	// given
-	// 	key0 := createKey(t, kStore, model.Key{
-	// 		TenantID:           tenant.ID,
-	// 		Kind:               "K0",
-	// 		ParentID:           nil,
-	// 		ManagedBy:          rootName,
-	// 		LifeCycleState:     model.KeyLifeCycleActive,
-	// 		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-	// 	})
-	//
-	// 	kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil,
-	// 		func(kv *model.KeyVersion) {
-	// 			kv.ProcessingState = model.KeyVersionUsable
-	// 			kv.LifeCycleState = model.KeyLifeCycleActive
-	// 		})
-	//
-	// 	key1 := createKey(t, kStore, model.Key{
-	// 		TenantID:           tenant.ID,
-	// 		Kind:               "K1",
-	// 		ParentID:           new(key0.ID),
-	// 		ManagedBy:          rootName,
-	// 		LifeCycleState:     model.KeyLifeCycleActive,
-	// 		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-	// 	})
-	//
-	// 	_ = createKeyVersion(t, kvStore, tenant.ID, key1.ID, 100, &key0.ID, &kv0.Version,
-	// 		func(kv *model.KeyVersion) {
-	// 			kv.ProcessingState = model.KeyVersionUsable
-	// 			kv.LifeCycleState = model.KeyLifeCycleActive
-	// 		})
-	//
-	// 	key2 := createKey(t, kStore, model.Key{
-	// 		TenantID:           tenant.ID,
-	// 		Kind:               "K2",
-	// 		ParentID:           new(key1.ID),
-	// 		ManagedBy:          "agent-1",
-	// 		LifeCycleState:     model.KeyLifeCycleActive,
-	// 		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-	// 	})
-	//
-	// 	taskdata := jsonMarshal(t, handler.KeyIdentifier{
-	// 		ID:       key2.ID,
-	// 		TenantID: tenant.ID,
-	// 	})
-	//
-	// 	subj := activatekey.NewTaskHandler(
-	// 		storesql.NewTransactor(rootDB),
-	// 		nil, // registry is nil
-	// 		rootName,
-	// 		mgr,
-	// 		validRootCfg,
-	// 	)
-	//
-	// 	// when
-	// 	resp := runTask(t, subj, taskdata)
-	//
-	// 	// then
-	// 	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
-	//
-	// 	fetchedKey, err := kStore.GetKeyByID(ctx, key2.ID, key2.TenantID)
-	// 	require.NoError(t, err)
-	// 	assert.Equal(t, model.KeyProcessingFailed, fetchedKey.KeyProcessingState.Status)
-	// 	assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
-	// })
-
-	t.Run("should be successfully create key version for root key", func(t *testing.T) {
-		// given
-		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key0.ID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
-
-		fetchedKey, err := kStore.GetKeyByID(ctx, key0.ID, key0.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingCompleted, fetchedKey.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
-
-		fetchedKeyVersion, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: key0.TenantID,
-			KeyID:    key0.ID,
-		})
-		require.NoError(t, err)
-		require.Len(t, fetchedKeyVersion.KeyVersions, 1)
-		assert.Equal(t, model.KeyVersionUsable, fetchedKeyVersion.KeyVersions[0].ProcessingState)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKeyVersion.KeyVersions[0].LifeCycleState)
-	})
-
-	t.Run("should be successfully create key version for non root key managed by root", func(t *testing.T) {
-		// given
-		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-		})
-
-		kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil,
-			func(kv *model.KeyVersion) {
-				kv.ProcessingState = model.KeyVersionUsable
-				kv.LifeCycleState = model.KeyLifeCycleActive
-			})
-
-		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key1.ID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
-
-		fetchedKey, err := kStore.GetKeyByID(ctx, key0.ID, key0.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingCompleted, fetchedKey.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
-
-		fetchedKeyVersion, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
-		require.NoError(t, err)
-		require.Len(t, fetchedKeyVersion.KeyVersions, 1)
-		assert.Equal(t, model.KeyVersionUsable, fetchedKeyVersion.KeyVersions[0].ProcessingState)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKeyVersion.KeyVersions[0].LifeCycleState)
-		assert.Equal(t, kv0.Version, *fetchedKeyVersion.KeyVersions[0].ParentKeyVersion)
-	})
-
-	t.Run("should be successfully update key version for non root key managed by root", func(t *testing.T) {
-		// given
-		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
-		})
-
-		kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil,
-			func(kv *model.KeyVersion) {
-				kv.ProcessingState = model.KeyVersionUsable
-				kv.LifeCycleState = model.KeyLifeCycleActive
-			})
-
-		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
-			ManagedBy:          rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
-			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
-		})
-
-		kv1 := createKeyVersion(t, kvStore, tenant.ID, key1.ID, 100, &key0.ID, &kv0.Version,
-			func(kv *model.KeyVersion) {
-				kv.ProcessingState = model.KeyVersionUsable
-				kv.LifeCycleState = model.KeyLifeCycleSuspended
-			})
-
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{
-			ID:       key1.ID,
-			TenantID: tenant.ID,
-		})
-
-		// when
-		resp := runTask(t, subj, taskdata)
-
-		// then
-		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
-
-		fetchedKey, err := kStore.GetKeyByID(ctx, key0.ID, key0.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, model.KeyProcessingCompleted, fetchedKey.KeyProcessingState.Status)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKey.LifeCycleState)
-
-		fetchedKeyVersion, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
-		require.NoError(t, err)
-		require.Len(t, fetchedKeyVersion.KeyVersions, 1)
-		assert.Equal(t, kv1.KeyID, fetchedKeyVersion.KeyVersions[0].KeyID)
-		assert.Equal(t, model.KeyVersionUsable, fetchedKeyVersion.KeyVersions[0].ProcessingState)
-		assert.Equal(t, model.KeyLifeCycleActive, fetchedKeyVersion.KeyVersions[0].LifeCycleState)
-		assert.Equal(t, kv1.Version, fetchedKeyVersion.KeyVersions[0].Version)
-		assert.Equal(t, kv0.Version, *fetchedKeyVersion.KeyVersions[0].ParentKeyVersion)
+		agentKV := assertKeyVersionCreated(t, agentSrv.kvStore, key2.TenantID, key2.ID)
+		assert.Equal(t, rootKV.Version, agentKV.Version)
 	})
 }
 
@@ -653,21 +434,15 @@ func TestFetchExistingKeyVersion(t *testing.T) {
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
 	kvStore := storesql.NewKeyVersionStore(db)
-	stores := store.Stores{
-		Keys:        kStore,
-		KeyVersions: kvStore,
-	}
+	stores := store.Stores{Keys: kStore, KeyVersions: kvStore}
 
-	t.Run("should fetch and update already exisiting keyversion for the key", func(t *testing.T) {
+	t.Run("should fetch and update existing key version", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
+			TenantID: tenant.ID, Kind: "K0",
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
 		kv := createKeyVersion(t, kvStore, tenant.ID, key.ID, 1, nil, nil, func(kv *model.KeyVersion) {
 			kv.ProcessingState = model.KeyVersionReWrapping
 			kv.LifeCycleState = model.KeyLifeCycleSuspended
@@ -678,23 +453,20 @@ func TestFetchExistingKeyVersion(t *testing.T) {
 
 		// then
 		assert.NoError(t, err)
-		assert.NotNil(t, actual)
+		require.NotNil(t, actual)
 		assert.Equal(t, kv.KeyID, actual.KeyID)
 		assert.Equal(t, kv.Version, actual.Version)
 		assert.Equal(t, kv.TenantID, actual.TenantID)
-		assert.Equal(t, kv.KeyID, actual.KeyID)
 		assert.Equal(t, kv.ParentKeyID, actual.ParentKeyID)
 		assert.Equal(t, kv.ParentKeyVersion, actual.ParentKeyVersion)
 		assert.Equal(t, model.KeyVersionUsable, actual.ProcessingState)
 		assert.Equal(t, model.KeyLifeCycleActive, actual.LifeCycleState)
 	})
 
-	t.Run("should return nil if no keyversion is present for the key", func(t *testing.T) {
+	t.Run("should return error if no key version exists", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
+			TenantID: tenant.ID, Kind: "K0",
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
@@ -713,150 +485,78 @@ func TestCreateKeyVersionFromParent(t *testing.T) {
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
 	kvStore := storesql.NewKeyVersionStore(db)
-	stores := store.Stores{
-		Keys:        kStore,
-		KeyVersions: kvStore,
-	}
-	t.Run("should create a new keyversion for the key if not present", func(t *testing.T) {
+	stores := store.Stores{Keys: kStore, KeyVersions: kvStore}
+
+	t.Run("should create key version for root key (no parent)", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
+			TenantID: tenant.ID, Kind: "K0",
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
 		// when
-		// make sure no keyversion is present for the key
-		kvlist, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key.TenantID,
-			KeyID:    key.ID,
-		})
-		require.NoError(t, err)
-		assert.Empty(t, kvlist.KeyVersions)
-
-		// resolve and upsert keyversion for the key
 		actual, err := activatekey.CreateAndUpsertKeyVersionFromParent(t.Context(), stores, key)
 
 		// then
-		assert.NoError(t, err)
-
-		// make sure a new keyversion is created for the key
-		kvlist, err = kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key.TenantID,
-			KeyID:    key.ID,
-		})
 		require.NoError(t, err)
-		assert.Len(t, kvlist.KeyVersions, 1)
-
-		assert.NotNil(t, actual)
-		assert.Equal(t, kvlist.KeyVersions[0].KeyID, actual.KeyID)
-		assert.Equal(t, kvlist.KeyVersions[0].Version, actual.Version)
-		assert.Equal(t, kvlist.KeyVersions[0].TenantID, actual.TenantID)
-		assert.Equal(t, kvlist.KeyVersions[0].KeyID, actual.KeyID)
-		assert.Equal(t, kvlist.KeyVersions[0].ParentKeyID, actual.ParentKeyID)
-		assert.Equal(t, kvlist.KeyVersions[0].ParentKeyVersion, actual.ParentKeyVersion)
-		assert.Equal(t, kvlist.KeyVersions[0].ProcessingState, actual.ProcessingState)
-		assert.Equal(t, kvlist.KeyVersions[0].LifeCycleState, actual.LifeCycleState)
+		require.NotNil(t, actual)
 		assert.Equal(t, model.KeyVersionUsable, actual.ProcessingState)
 		assert.Equal(t, model.KeyLifeCycleActive, actual.LifeCycleState)
+
+		kvlist, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{TenantID: key.TenantID, KeyID: key.ID})
+		require.NoError(t, err)
+		require.Len(t, kvlist.KeyVersions, 1)
+		assert.Equal(t, actual.Version, kvlist.KeyVersions[0].Version)
 	})
 
-	t.Run("should create a new keyversion for the key based on parent keyversion if parent is present", func(t *testing.T) {
+	t.Run("should create key version based on parent key version", func(t *testing.T) {
 		// given
 		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
+			TenantID: tenant.ID, Kind: "K0",
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
 		kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
 			kv.ProcessingState = model.KeyVersionUsable
 			kv.LifeCycleState = model.KeyLifeCycleActive
 		})
-
 		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(key0.ID),
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
 		// when
-		// make sure no keyversion is present for the key
-		kvlist1, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
-		require.NoError(t, err)
-		assert.Empty(t, kvlist1.KeyVersions)
-
-		// resolve and upsert keyversion for the key
 		actual, err := activatekey.CreateAndUpsertKeyVersionFromParent(t.Context(), stores, key1)
 
 		// then
-		assert.NoError(t, err)
-
-		// make sure a new keyversion is created for the key
-		kvlist1, err = kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
 		require.NoError(t, err)
-		assert.Len(t, kvlist1.KeyVersions, 1)
-
-		assert.NotNil(t, actual)
-		assert.Equal(t, kvlist1.KeyVersions[0].KeyID, actual.KeyID)
-		assert.Equal(t, kvlist1.KeyVersions[0].Version, actual.Version)
-		assert.Equal(t, kvlist1.KeyVersions[0].TenantID, actual.TenantID)
-		assert.Equal(t, kvlist1.KeyVersions[0].KeyID, actual.KeyID)
-		assert.Equal(t, kvlist1.KeyVersions[0].ParentKeyID, actual.ParentKeyID)
-		assert.Equal(t, kvlist1.KeyVersions[0].ParentKeyVersion, actual.ParentKeyVersion)
-		assert.Equal(t, kvlist1.KeyVersions[0].ProcessingState, actual.ProcessingState)
-		assert.Equal(t, kvlist1.KeyVersions[0].LifeCycleState, actual.LifeCycleState)
-		assert.Equal(t, model.KeyVersionUsable, actual.ProcessingState)
-		assert.Equal(t, model.KeyLifeCycleActive, actual.LifeCycleState)
+		require.NotNil(t, actual)
 		assert.Equal(t, kv0.KeyID, *actual.ParentKeyID)
 		assert.Equal(t, kv0.Version, *actual.ParentKeyVersion)
+		assert.Equal(t, model.KeyVersionUsable, actual.ProcessingState)
+		assert.Equal(t, model.KeyLifeCycleActive, actual.LifeCycleState)
 	})
 
-	t.Run("should return error if parent keyversion is not present", func(t *testing.T) {
+	t.Run("should return error if parent key version is not found", func(t *testing.T) {
 		// given
 		key0 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K0",
-			ParentID:           nil,
+			TenantID: tenant.ID, Kind: "K0",
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-
 		createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
 			kv.ProcessingState = model.KeyVersionUsable
 			kv.LifeCycleState = model.KeyLifeCycleDeactivated
 		})
-
 		key1 := createKey(t, kStore, model.Key{
-			TenantID:           tenant.ID,
-			Kind:               "K1",
-			ParentID:           new(key0.ID),
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(key0.ID),
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 
 		// when
-		// make sure no keyversion is present for the key
-		kvlist1, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
-			TenantID: key1.TenantID,
-			KeyID:    key1.ID,
-		})
-		require.NoError(t, err)
-		assert.Empty(t, kvlist1.KeyVersions)
-
-		// resolve and upsert keyversion for the key
 		actual, err := activatekey.CreateAndUpsertKeyVersionFromParent(t.Context(), stores, key1)
 
 		// then
@@ -872,8 +572,6 @@ func jsonMarshal(t *testing.T, v any) []byte {
 	return b
 }
 
-// renameTenantTable renames the tenants table to make GetTenant fail with a DB error,
-// and returns a cleanup function that restores it.
 func renameTenantTable(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.ExecContext(t.Context(), "ALTER TABLE tenants RENAME TO tenants_hidden")
