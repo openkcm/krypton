@@ -151,10 +151,12 @@ func TestUpsertKeyVersion(t *testing.T) {
 		req.ProcessingState = string(model.KeyVersionReWrapping)
 
 		// when
-		_, err := setup.cli.UpsertKeyVersion(ctx, req)
+		resp, err := setup.cli.UpsertKeyVersion(ctx, req)
 
 		// then
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
+
 		result, err := setup.kvStore.GetKeyVersion(ctx, store.GetKeyVersionQuery{
 			TenantID: tenant.ID,
 			KeyID:    key.ID,
@@ -184,8 +186,9 @@ func TestUpsertKeyVersion(t *testing.T) {
 		req := validUpsertKeyVersionRequest(tenant.ID, key.ID)
 
 		// when — send same request twice
-		_, err := setup.cli.UpsertKeyVersion(ctx, req)
+		resp, err := setup.cli.UpsertKeyVersion(ctx, req)
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
 
 		_, err = setup.cli.UpsertKeyVersion(ctx, req)
 
@@ -273,10 +276,11 @@ func TestUpsertKeyVersion(t *testing.T) {
 		require.ErrorIs(t, err, store.ErrKeyVersionNotFound)
 
 		// when
-		_, err = setup.cli.UpsertKeyVersion(ctx, req)
+		resp, err := setup.cli.UpsertKeyVersion(ctx, req)
 
 		// then
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
 
 		result, err := setup.kvStore.GetKeyVersion(ctx, store.GetKeyVersionQuery{
 			TenantID: tenant.ID,

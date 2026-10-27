@@ -60,24 +60,29 @@ func (s *Service) UpsertKeyVersion(ctx context.Context, req *UpsertKeyVersionReq
 			if err != nil {
 				return err
 			}
-			if err := ensureKeyInRightState(k.LifeCycleState, rkv.LifeCycleState); err != nil {
+
+			if err := ensureKeyState(k.LifeCycleState, rkv.LifeCycleState); err != nil {
 				return err
 			}
-			fkv, isPresent, err := fetchKeyVersion(ctx, kvs, rkv)
+
+			fkv, isExist, err := fetchKeyVersion(ctx, kvs, rkv)
 			if err != nil {
 				return err
 			}
-			if isPresent {
+
+			if isExist {
 				return updateKeyVersion(ctx, kvs, fkv, rkv)
 			}
+
 			if err := createKeyVersion(ctx, kvs, rkv); err != nil {
 				return err
 			}
+
 			return generateAndSealSecret(ctx, s.manager, rkv, k.Kind)
 		},
 	)
 
-	return nil, err
+	return &UpsertKeyVersionResponse{}, err
 }
 
 func generateAndSealSecret(ctx context.Context, mgr *keyprocessor.Manager, kv model.KeyVersion, kind model.KeyKind) error {
@@ -106,28 +111,28 @@ func createKeyVersion(ctx context.Context, s store.KeyVersion, rkv model.KeyVers
 func validateTenant(tenantID string) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
 		err := validator.ValidateTenant(tenantID)(ctx, stores)
-		if err != nil {
-			if errors.Is(err, store.ErrTenantNotFound) {
-				return codeFailedWithAbort(fmt.Errorf("tenant not found: %w", err))
-			}
-			return codeInternalWithRetry(fmt.Errorf("failed to validate tenant: %w", err))
+		if err == nil {
+			return nil
 		}
-		return nil
+		if errors.Is(err, store.ErrTenantNotFound) {
+			return codeFailedWithAbort(fmt.Errorf("tenant not found: %w", err))
+		}
+		return codeInternalWithRetry(fmt.Errorf("failed to validate tenant: %w", err))
 	}
 }
 
 func fetchKey(ctx context.Context, s store.Key, keyID, tenantID string) (*model.Key, error) {
 	key, err := s.GetKeyByID(ctx, keyID, tenantID)
-	if err != nil {
-		if errors.Is(err, store.ErrKeyNotFound) {
-			return key, codeFailedWithAbort(fmt.Errorf("key not found: %w", err))
-		}
-		return nil, codeInternalWithRetry(fmt.Errorf("failed to fetch key: %w", err))
+	if err == nil {
+		return key, nil
 	}
-	return key, nil
+	if errors.Is(err, store.ErrKeyNotFound) {
+		return key, codeFailedWithAbort(fmt.Errorf("key not found: %w", err))
+	}
+	return nil, codeInternalWithRetry(fmt.Errorf("failed to fetch key: %w", err))
 }
 
-func ensureKeyInRightState(key, req model.KeyLifeCycleState) error {
+func ensureKeyState(key, req model.KeyLifeCycleState) error {
 	if key != req {
 		return codeFailedWithAbort(fmt.Errorf("key is in %s state, cannot transition to %s state", key, req))
 	}
