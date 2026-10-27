@@ -19,15 +19,15 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-type State struct {
-	Manager    *keyprocessor.Manager
-	Config     *config.RootConfig
-	Registry   *grpcconn.Registry
-	Stores     store.Stores
+type Processor struct {
+	manager    *keyprocessor.Manager
+	config     *config.RootConfig
+	registry   *grpcconn.Registry
+	stores     store.Stores
+	rootName   string
 	Key        *model.Key
 	KeyVersion *model.KeyVersion
 	IsNewKV    bool
-	RootName   string
 }
 
 var (
@@ -42,23 +42,23 @@ func NewProcessor(
 	cfg *config.RootConfig,
 	registry *grpcconn.Registry,
 	stores store.Stores,
-) (*State, *OrbitalResponseError) {
-	return &State{
-		RootName: rootName,
-		Manager:  manager,
-		Config:   cfg,
-		Registry: registry,
-		Stores:   stores,
-	}, nil
+) *Processor {
+	return &Processor{
+		rootName: rootName,
+		manager:  manager,
+		config:   cfg,
+		registry: registry,
+		stores:   stores,
+	}
 }
 
-func (s *State) LoadKeyAndVersions(ctx context.Context, kid handler.KeyIdentifier) *OrbitalResponseError {
-	or := s.loadKey(ctx, kid)
+func (p *Processor) ResolveKeyAndVersions(ctx context.Context, kid handler.KeyIdentifier) *OrbitalResponseError {
+	or := p.loadKey(ctx, kid)
 	if or != nil {
 		return or
 	}
 
-	or = s.loadKeyVersions(ctx)
+	or = p.resolveKeyVersions(ctx)
 	if or != nil {
 		return or
 	}
@@ -66,13 +66,13 @@ func (s *State) LoadKeyAndVersions(ctx context.Context, kid handler.KeyIdentifie
 	return nil
 }
 
-func (s *State) MarkKeyFailed(ctx context.Context, failedErr error) *OrbitalResponseError {
-	if s.Key == nil {
+func (p *Processor) MarkKeyFailed(ctx context.Context, failedErr error) *OrbitalResponseError {
+	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternalError))
 	}
 
-	ks := s.Stores.Keys
-	key := s.Key
+	ks := p.stores.Keys
+	key := p.Key
 
 	err := ks.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 		ID:         key.ID,
@@ -89,37 +89,44 @@ func (s *State) MarkKeyFailed(ctx context.Context, failedErr error) *OrbitalResp
 	return OrbitalFail(failedErr)
 }
 
-func (s *State) GenerateAndSealSecret(ctx context.Context) *OrbitalResponseError {
-	if s.Key == nil {
+func (p *Processor) GenerateAndSealSecret(ctx context.Context) *OrbitalResponseError {
+	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternalError))
 	}
-	if s.KeyVersion == nil {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("%w: key version is nil", ErrInternalError))
+	if p.KeyVersion == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: key version is nil", ErrInternalError))
 	}
-	if s.Manager == nil {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("%w: key processor manager is nil", ErrInternalError))
+	if p.manager == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: key processor manager is nil", ErrInternalError))
 	}
-	if s.RootName == "" {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("%w: root name is empty", ErrInternalError))
+	if p.rootName == "" {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: root name is empty", ErrInternalError))
+	}
+	if p.config == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: config is nil", ErrInternalError))
 	}
 
-	key := s.Key
-	isManagedByRoot := key.ManagedBy == s.RootName
+	key := p.Key
+	isManagedByRoot := key.ManagedBy == p.rootName
 
-	// check if key is root key
-	isRootKey, or := s.isRootKey(ctx)
+	isRootKey, or := p.isRootKey(ctx)
 	if or != nil {
 		return or
 	}
 
-	// check if the key is managed by root and is not a root key, if so, we need to generate and seal the secret for this key version
-	if !isManagedByRoot || isRootKey || !s.IsNewKV {
+	skipGeneration := !isManagedByRoot || isRootKey || !p.IsNewKV
+
+	if skipGeneration {
 		return nil
 	}
 
-	kv := s.KeyVersion
-	aad := fmt.Appendf(nil, "%s:%s:%d:%d", key.TenantID, key.ID, kv.Version, kv.Revision)
-	_, err := s.Manager.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
+	kv := p.KeyVersion
+	aad := kv.AAD()
+	if aad == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: failed to generate AAD for key version", ErrInternalError))
+	}
+
+	_, err := p.manager.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
 		KeyVersion: *kv,
 		AAD:        aad,
 		KeyKind:    key.Kind,
@@ -130,48 +137,51 @@ func (s *State) GenerateAndSealSecret(ctx context.Context) *OrbitalResponseError
 	return nil
 }
 
-func (s *State) UpsertRemote(ctx context.Context) *OrbitalResponseError {
-	if s.Key == nil {
+func (p *Processor) UpsertRemote(ctx context.Context) *OrbitalResponseError {
+	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternalError))
 	}
-	if s.KeyVersion == nil {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("%w: key version is nil", ErrInternalError))
+	if p.KeyVersion == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: key version is nil", ErrInternalError))
 	}
-	if s.Registry == nil {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("%w: registry is nil, cannot upsert key version", ErrInternalError))
+	if p.registry == nil {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: registry is nil, cannot upsert key version", ErrInternalError))
+	}
+	if p.rootName == "" {
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: root name is empty", ErrInternalError))
 	}
 
-	managedBy := s.Key.ManagedBy
-	isManagedByRoot := managedBy == s.RootName
+	managedBy := p.Key.ManagedBy
+	isManagedByRoot := managedBy == p.rootName
 
 	if isManagedByRoot {
 		return nil
 	}
 
-	conn, ok := s.Registry.Get(managedBy)
+	conn, ok := p.registry.Get(managedBy)
 	if !ok {
-		return s.MarkKeyFailed(ctx, fmt.Errorf("no connection found for agent %s", managedBy))
+		return p.MarkKeyFailed(ctx, fmt.Errorf("%w: no connection found for agent %s", ErrInternalError, managedBy))
 	}
 
-	or := s.upsertRemoteKey(ctx, conn)
+	or := p.upsertRemoteKey(ctx, conn)
 	if or != nil {
 		return or
 	}
 
-	return s.upsertRemoteKeyVersion(ctx, conn)
+	return p.upsertRemoteKeyVersion(ctx, conn)
 }
 
-func (s *State) MarkKeyAsActiveAndComplete(ctx context.Context) *OrbitalResponseError {
-	if s.Key == nil {
+func (p *Processor) MarkKeyComplete(ctx context.Context) *OrbitalResponseError {
+	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternalError))
 	}
-	key := s.Key
+	key := p.Key
 
-	err := s.Stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
+	err := p.stores.Keys.UpdateKeyStates(ctx, store.UpdateKeyStatesQuery{
 		ID:         key.ID,
 		TenantID:   key.TenantID,
-		FromState:  []model.KeyLifeCycleState{model.KeyLifeCycleActive},
-		ToState:    model.KeyLifeCycleActive,
+		FromState:  []model.KeyLifeCycleState{key.LifeCycleState},
+		ToState:    key.LifeCycleState,
 		FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending},
 		ToStatus:   model.KeyProcessingCompleted,
 	})
@@ -181,8 +191,8 @@ func (s *State) MarkKeyAsActiveAndComplete(ctx context.Context) *OrbitalResponse
 	return nil
 }
 
-func (s *State) upsertRemoteKey(ctx context.Context, conn *grpc.ClientConn) *OrbitalResponseError {
-	k := s.Key
+func (p *Processor) upsertRemoteKey(ctx context.Context, conn *grpc.ClientConn) *OrbitalResponseError {
+	k := p.Key
 	var parentID string
 	if k.ParentID != nil {
 		parentID = *k.ParentID
@@ -206,12 +216,12 @@ func (s *State) upsertRemoteKey(ctx context.Context, conn *grpc.ClientConn) *Orb
 	if proto.Retryable(err) {
 		return OrbitalContinue(err)
 	}
-	return s.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key to remote agent %s: %w", k.ManagedBy, err))
+	return p.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key to remote agent %s: %w", k.ManagedBy, err))
 }
 
-func (s *State) upsertRemoteKeyVersion(ctx context.Context, conn *grpc.ClientConn) *OrbitalResponseError {
-	kv := s.KeyVersion
-	k := s.Key
+func (p *Processor) upsertRemoteKeyVersion(ctx context.Context, conn *grpc.ClientConn) *OrbitalResponseError {
+	kv := p.KeyVersion
+	k := p.Key
 
 	var parentKeyID string
 	if kv.ParentKeyID != nil {
@@ -241,29 +251,22 @@ func (s *State) upsertRemoteKeyVersion(ctx context.Context, conn *grpc.ClientCon
 		return OrbitalContinue(err)
 	}
 
-	return s.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key version to remote agent %s: %w", k.ManagedBy, err))
+	return p.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key version to remote agent %s: %w", k.ManagedBy, err))
 }
 
-func (s *State) isRootKey(ctx context.Context) (bool, *OrbitalResponseError) {
-	if s.Key == nil {
-		return false, OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternalError))
-	}
-	if s.Config == nil {
-		return false, s.MarkKeyFailed(ctx, fmt.Errorf("%w: config is nil", ErrInternalError))
-	}
-
-	key := s.Key
-	kspec, ok := s.Config.Hierarchy.FindKeySpec(key.Kind)
+func (p *Processor) isRootKey(ctx context.Context) (bool, *OrbitalResponseError) {
+	key := p.Key
+	kspec, ok := p.config.Hierarchy.FindKeySpec(key.Kind)
 	if !ok {
-		return false, s.MarkKeyFailed(ctx, fmt.Errorf("key kind %s not found in hierarchy", key.Kind))
+		return false, p.MarkKeyFailed(ctx, fmt.Errorf("%w: key kind %s not found in hierarchy", ErrInternalError, key.Kind))
 	}
 	return kspec.Role == spec.KeyRoleRoot, nil
 }
 
-func (s *State) loadKey(ctx context.Context, kid handler.KeyIdentifier) *OrbitalResponseError {
-	key, err := s.Stores.Keys.GetKeyByID(ctx, kid.ID, kid.TenantID)
+func (p *Processor) loadKey(ctx context.Context, kid handler.KeyIdentifier) *OrbitalResponseError {
+	key, err := p.stores.Keys.GetKeyByID(ctx, kid.ID, kid.TenantID)
 	if err == nil {
-		s.Key = key
+		p.Key = key
 		return nil
 	}
 
@@ -274,10 +277,10 @@ func (s *State) loadKey(ctx context.Context, kid handler.KeyIdentifier) *Orbital
 	return OrbitalContinue(err)
 }
 
-func (s *State) loadKeyVersions(ctx context.Context) *OrbitalResponseError {
-	kv, err := s.fetchAndUpdateExistingKeyVersion(ctx)
+func (p *Processor) resolveKeyVersions(ctx context.Context) *OrbitalResponseError {
+	kv, err := p.fetchAndUpdateExistingKeyVersion(ctx)
 	if err == nil {
-		s.KeyVersion = kv
+		p.KeyVersion = kv
 		return nil
 	}
 
@@ -285,23 +288,23 @@ func (s *State) loadKeyVersions(ctx context.Context) *OrbitalResponseError {
 		return OrbitalContinue(err)
 	}
 
-	kv, err = s.createKeyVersionFromParent(ctx)
+	kv, err = p.deriveKeyVersionFromParent(ctx)
 	if err == nil {
-		s.KeyVersion = kv
-		s.IsNewKV = true
+		p.KeyVersion = kv
+		p.IsNewKV = true
 		return nil
 	}
 
 	if errors.Is(err, ErrNoParentKeyVersionFound) {
-		return s.MarkKeyFailed(ctx, err)
+		return p.MarkKeyFailed(ctx, err)
 	}
 
 	return OrbitalContinue(err)
 }
 
-func (s *State) fetchAndUpdateExistingKeyVersion(ctx context.Context) (*model.KeyVersion, error) {
-	kvStore := s.Stores.KeyVersions
-	key := s.Key
+func (p *Processor) fetchAndUpdateExistingKeyVersion(ctx context.Context) (*model.KeyVersion, error) {
+	kvStore := p.stores.KeyVersions
+	key := p.Key
 	// check if keyversion is already present
 	kvList, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
 		TenantID: key.TenantID,
@@ -328,19 +331,19 @@ func (s *State) fetchAndUpdateExistingKeyVersion(ctx context.Context) (*model.Ke
 		FromProcessingState: []model.KeyVersionProcessingState{kv.ProcessingState},
 		ToProcessingState:   model.KeyVersionUsable,
 		FromLifeCycleState:  []model.KeyLifeCycleState{kv.LifeCycleState},
-		ToLifeCycleState:    model.KeyLifeCycleActive,
+		ToLifeCycleState:    key.LifeCycleState,
 	})
 	if err != nil {
 		return nil, err
 	}
-	kv.LifeCycleState = model.KeyLifeCycleActive
+	kv.LifeCycleState = key.LifeCycleState
 	kv.ProcessingState = model.KeyVersionUsable
 	return &kv, nil
 }
 
-func (s *State) createKeyVersionFromParent(ctx context.Context) (*model.KeyVersion, error) {
-	kvStore := s.Stores.KeyVersions
-	key := s.Key
+func (p *Processor) deriveKeyVersionFromParent(ctx context.Context) (*model.KeyVersion, error) {
+	kvStore := p.stores.KeyVersions
+	key := p.Key
 
 	var parentKeyVersion *int
 	if key.ParentID != nil {

@@ -23,7 +23,7 @@ func ValidateTenantID(tenantID string) store.TransactionFunc {
 	}
 }
 
-func EnsureKeyState(kid handler.KeyIdentifier, cond func(key *model.Key) bool) store.TransactionFunc {
+func EnsureKey(kid handler.KeyIdentifier, cond func(key *model.Key) bool) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
 		key, err := stores.Keys.GetKeyByID(ctx, kid.ID, kid.TenantID)
 		if err != nil {

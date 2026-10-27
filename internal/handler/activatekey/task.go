@@ -73,12 +73,12 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 
 	err = store.ChainTransaction(ctx, h.transactor,
 		common.ValidateTenantID(kid.TenantID),
-		common.EnsureKeyState(kid, func(key *model.Key) bool {
+		common.EnsureKey(kid, func(key *model.Key) bool {
 			return key.LifeCycleState == model.KeyLifeCycleActive &&
 				key.KeyProcessingState.Status == model.KeyProcessingPending
 		}),
 		func(ctx context.Context, stores store.Stores) error {
-			proc, or := common.NewProcessor(
+			proc := common.NewProcessor(
 				h.rootName,
 				h.manager,
 				h.config,
@@ -86,11 +86,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 				stores,
 			)
 
-			if or != nil {
-				return or.Apply(resp)
-			}
-
-			or = proc.LoadKeyAndVersions(ctx, kid)
+			or := proc.ResolveKeyAndVersions(ctx, kid)
 			if or != nil {
 				return or.Apply(resp)
 			}
@@ -105,7 +101,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 				return or.Apply(resp)
 			}
 
-			or = proc.MarkKeyAsActiveAndComplete(ctx)
+			or = proc.MarkKeyComplete(ctx)
 			if or != nil {
 				return or.Apply(resp)
 			}

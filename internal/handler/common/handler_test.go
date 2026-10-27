@@ -1,7 +1,6 @@
 package common_test
 
 import (
-	"context"
 	"testing"
 	"uuid"
 
@@ -62,7 +61,7 @@ func TestValidateTenantID(t *testing.T) {
 	})
 }
 
-func TestEnsureKeyState(t *testing.T) {
+func TestEnsureKey(t *testing.T) {
 	db := newRootDB(t)
 	transactor := storesql.NewTransactor(db)
 	kStore := storesql.NewKeyStore(db)
@@ -80,7 +79,7 @@ func TestEnsureKeyState(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKeyState(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
+		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -96,7 +95,7 @@ func TestEnsureKeyState(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleDeactivated,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKeyState(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
+		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -113,7 +112,7 @@ func TestEnsureKeyState(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKeyState(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, nil)
+		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, nil)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -124,7 +123,7 @@ func TestEnsureKeyState(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
 		// given
-		step := common.EnsureKeyState(handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID}, isActivePending)
+		step := common.EnsureKey(handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -149,7 +148,7 @@ func TestEnsureKeyState(t *testing.T) {
 		require.NoError(t, execErr)
 
 		brokenTransactor := storesql.NewTransactor(brokenDB)
-		step := common.EnsureKeyState(handler.KeyIdentifier{ID: key.ID, TenantID: brokenTenant.ID}, isActivePending)
+		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: brokenTenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), brokenTransactor, step)
@@ -158,19 +157,4 @@ func TestEnsureKeyState(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, string(orbital.TaskStatusProcessing), applyResponse(t, err).Status)
 	})
-}
-
-// applyResponse extracts the *OrbitalResponse from an error and returns the
-// resulting task status after applying it to a HandlerResponse.
-func applyResponse(t *testing.T, err error) orbital.TaskResponse {
-	t.Helper()
-	var or *common.OrbitalResponseError
-	require.ErrorAs(t, err, &or)
-
-	resp := orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(
-		func(_ context.Context, _ orbital.HandlerRequest, r *orbital.HandlerResponse) {
-			_ = or.Apply(r)
-		},
-	), orbital.TaskRequest{TaskID: uuid.New(), Type: "test"})
-	return resp
 }
