@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package krypton.v1.admin.rootkey;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin/rootkey";
+
+// Provider lifecycle (root key backed by an external provider):
+//
+//  Provisioning
+//   1. Create/activate the external provider key out-of-band (e.g. an AWS KMS key).
+//   2. kr announce key --kind K0 --name root
+//   3. CreateProvider(key_id, config, auth, provider_key)
+//   4. kr activate key --key-id <root>
+//   5. kr announce key --kind K1 --name child --parent <root>
+//   6. kr activate key --key-id <child> (child is now wrapped with the external provider key)
+//
+//  Auth rotation (credentials change, same provider + key)
+//   - RotateAuth(key_id, auth)
+//
+//  Provider-key rotation (repoint to a new external key)
+//   - RotateProviderKey(key_id, provider_key)
+//   - re-wraps descendants under the new key (each gets a new revision)
+service Service {
+  rpc CreateProvider(CreateProviderRequest) returns (CreateProviderResponse);
+  rpc RotateAuth(RotateAuthRequest) returns (RotateAuthResponse);
+  rpc RotateProviderKey(RotateProviderKeyRequest) returns (RotateProviderKeyResponse);
+  rpc RemoveProvider(RemoveProviderRequest) returns (RemoveProviderResponse);
+}
+
+message CreateProviderRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  ProviderConfig config = 3;
+  ProviderAuth auth = 4;
+  ProviderKey provider_key = 5;
+}
+
+message CreateProviderResponse {}
+
+message RotateAuthRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  ProviderAuth auth = 3;
+}
+
+message RotateAuthResponse {}
+
+message RotateProviderKeyRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  ProviderKey provider_key = 3;
+}
+
+message RotateProviderKeyResponse {}
+
+message RemoveProviderRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+}
+
+message RemoveProviderResponse {}
+
+message ProviderConfig {
+  oneof provider {
+    StaticSecretConfig static_secret = 1;
+    AwsKmsConfig aws_kms = 2;
+  }
+}
+
+message StaticSecretConfig {
+  string secret_name = 1;
+  bytes secret = 2; 
+}
+
+message AwsKmsConfig {
+  string region = 1;
+}
+
+message ProviderAuth {
+  oneof provider {
+    AwsKmsAuth aws_kms = 1;
+  }
+}
+
+message AwsKmsAuth {
+  oneof credentials {
+    AwsRoleCredentials role = 1;
+    AwsStaticCredentials static = 2;
+  }
+}
+
+message AwsRoleCredentials {
+  string role_arn = 1;
+  string external_id = 2;
+}
+
+message AwsStaticCredentials {
+  string access_key_id = 1;
+  string secret_access_key = 2; 
+  string session_token = 3;
+}
+
+message ProviderKey {
+  oneof provider {
+    StaticSecretKey static_secret = 1;
+    AwsKmsKey aws_kms = 2;
+  }
+}
+
+message StaticSecretKey {
+  string id = 1;
+}
+
+message AwsKmsKey {
+  string key_arn = 1;
+}
