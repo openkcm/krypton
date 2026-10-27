@@ -74,3 +74,28 @@ func TestApply(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyDefault(t *testing.T) {
+	t.Run("unknown status should update response to processing", func(t *testing.T) {
+		// given
+		subj := &common.OrbitalOperatorError{}
+
+		// when
+		resp := applyResponse(t, subj)
+
+		// then
+		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
+		assert.Positive(t, resp.ReconcileAfterSec)
+	})
+
+	t.Run("unknown status should return error", func(t *testing.T) {
+		// given
+		subj := &common.OrbitalOperatorError{}
+
+		// when
+		err := subj.Apply(&orbital.HandlerResponse{})
+
+		// then
+		assert.Error(t, err)
+	})
+}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/openkcm/orbital"
 
@@ -20,15 +19,7 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-const (
-	TaskType     = "activate-key"
-	retryBackoff = 30 * time.Second
-)
-
-var (
-	ErrTaskFailed         = errors.New("task failed")
-	ErrKeyVersionNotFound = errors.New("key version not found")
-)
+const TaskType = "activate-key"
 
 type TaskHandler struct {
 	transactor store.Transactor
@@ -49,8 +40,8 @@ func NewTaskHandler(
 ) *TaskHandler {
 	return &TaskHandler{
 		transactor: transactor,
-		rootName:   rootName,
 		registry:   registry,
+		rootName:   rootName,
 		manager:    manager,
 		config:     cfg,
 	}
@@ -67,7 +58,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 
 	err := json.Unmarshal(req.TaskData, &kid)
 	if err != nil {
-		_ = markFail(resp, fmt.Sprintf("failed to unmarshal task data: %v", err))
+		resp.Fail(fmt.Sprintf("failed to unmarshal task data: %v", err))
 		return
 	}
 
@@ -110,18 +101,14 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 		},
 	)
 	if err != nil {
-		slog.Error("failed to activate key", "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
 		if r, ok := errors.AsType[*common.OrbitalOperatorError](err); ok {
+			// not checking the error here because we want to propagate the error to orbital for retry
 			_ = r.Apply(resp)
 			return
 		}
-		resp.ContinueAndWaitFor(retryBackoff)
+		slog.Error("failed to activate key", "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
+		resp.ContinueAndWaitFor(common.RetryBackoff)
 	}
-}
-
-func markFail(resp *orbital.HandlerResponse, msg string) error {
-	resp.Fail(msg)
-	return nil
 }
 
 func markComplete(resp *orbital.HandlerResponse) error {
