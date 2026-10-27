@@ -45,7 +45,7 @@ func TestOrbitalComplete(t *testing.T) {
 func TestApply(t *testing.T) {
 	tts := []struct {
 		name string
-		subj *common.OrbitalResponseError
+		subj *common.OrbitalOperatorError
 		exp  error
 	}{
 		{

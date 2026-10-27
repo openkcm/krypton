@@ -78,7 +78,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 				key.KeyProcessingState.Status == model.KeyProcessingPending
 		}),
 		func(ctx context.Context, stores store.Stores) error {
-			proc := common.NewProcessor(
+			proc := common.NewOrbitalOperator(
 				h.rootName,
 				h.manager,
 				h.config,
@@ -111,7 +111,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 	)
 	if err != nil {
 		slog.Error("failed to activate key", "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
-		if r, ok := errors.AsType[*common.OrbitalResponseError](err); ok {
+		if r, ok := errors.AsType[*common.OrbitalOperatorError](err); ok {
 			_ = r.Apply(resp)
 			return
 		}

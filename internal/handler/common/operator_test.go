@@ -21,7 +21,7 @@ import (
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-func TestNewProcessor(t *testing.T) {
+func TestNewOrbitalOperator(t *testing.T) {
 	db := newRootDB(t)
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
@@ -41,7 +41,7 @@ func TestNewProcessor(t *testing.T) {
 
 	t.Run("should create processor with zero-valued outputs", func(t *testing.T) {
 		// when
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// then
 		require.NotNil(t, p)
@@ -57,7 +57,7 @@ func TestNewProcessor(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.ResolveKeyAndVersions(t.Context(), handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID})
@@ -82,7 +82,7 @@ func TestNewProcessor(t *testing.T) {
 			kv.ProcessingState = model.KeyVersionReWrapping
 			kv.LifeCycleState = model.KeyLifeCycleSuspended
 		})
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.ResolveKeyAndVersions(t.Context(), handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID})
@@ -96,7 +96,7 @@ func TestNewProcessor(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
 		// given
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.ResolveKeyAndVersions(t.Context(), handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID})
@@ -122,7 +122,7 @@ func TestNewProcessor(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.ResolveKeyAndVersions(t.Context(), handler.KeyIdentifier{ID: key1.ID, TenantID: tenant.ID})
@@ -135,7 +135,7 @@ func TestNewProcessor(t *testing.T) {
 
 	t.Run("should retry when loadKey returns an internal DB error", func(t *testing.T) {
 		// given — "non-uuid" triggers a SQL error (not ErrKeyNotFound)
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.ResolveKeyAndVersions(t.Context(), handler.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID})
@@ -190,9 +190,9 @@ func TestGenerateAndSealSecret(t *testing.T) {
 	require.NoError(t, err)
 
 	// helper: create a processor with key and key version loaded
-	loadProcessor := func(t *testing.T, manager *keyprocessor.Manager, key model.Key) *common.Processor {
+	loadProcessor := func(t *testing.T, manager *keyprocessor.Manager, key model.Key) *common.OrbitalOperator {
 		t.Helper()
-		p := common.NewProcessor(rootName, manager, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, manager, cfg, nil, stores)
 		or := p.ResolveKeyAndVersions(ctx, handler.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
 		require.Nil(t, or)
 		return p
@@ -358,7 +358,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 		kv := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
-		p := common.NewProcessor(rootName, mgr, nil, nil, stores) // nil config
+		p := common.NewOrbitalOperator(rootName, mgr, nil, nil, stores) // nil config
 		p.Key = &key
 		p.KeyVersion = &kv
 		p.IsNewKV = true
@@ -376,7 +376,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 
 	t.Run("should fail if key is nil", func(t *testing.T) {
 		// given
-		p := common.NewProcessor(rootName, mgr, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, mgr, cfg, nil, stores)
 		// Key is nil (LoadKeyAndVersions not called)
 
 		// when
@@ -394,7 +394,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := common.NewProcessor(rootName, mgr, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, mgr, cfg, nil, stores)
 		p.Key = &key // set key but leave KeyVersion nil
 
 		// when
@@ -414,7 +414,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 		kv := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores) // nil manager
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores) // nil manager
 		p.Key = &key
 		p.KeyVersion = &kv
 
@@ -435,7 +435,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 		kv := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
-		p := common.NewProcessor("", mgr, cfg, nil, stores) // empty rootName
+		p := common.NewOrbitalOperator("", mgr, cfg, nil, stores) // empty rootName
 		p.Key = &key
 		p.KeyVersion = &kv
 
@@ -460,7 +460,7 @@ func TestMarkKeyFailed(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is nil", func(t *testing.T) {
 		// given
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 		// Key is nil (LoadKeyAndVersions not called)
 
 		// when
@@ -478,7 +478,7 @@ func TestMarkKeyFailed(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 		p.Key = &key
 
 		// when
@@ -505,7 +505,7 @@ func TestMarkKeyFailed(t *testing.T) {
 		require.NoError(t, err)
 
 		brokenStores := store.Stores{Keys: brokenKStore}
-		p := common.NewProcessor(rootName, nil, cfg, nil, brokenStores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, brokenStores)
 		p.Key = &key
 
 		// when
@@ -566,9 +566,9 @@ func TestUpsertRemote(t *testing.T) {
 	}
 
 	// helper: load processor with key and key version
-	loadProcessor := func(t *testing.T, key model.Key, registry *grpcconn.Registry) *common.Processor {
+	loadProcessor := func(t *testing.T, key model.Key, registry *grpcconn.Registry) *common.OrbitalOperator {
 		t.Helper()
-		p := common.NewProcessor(rootName, nil, cfg, registry, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, registry, stores)
 		or := p.ResolveKeyAndVersions(ctx, handler.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
 		require.Nil(t, or)
 		return p
@@ -596,7 +596,7 @@ func TestUpsertRemote(t *testing.T) {
 
 	t.Run("should fail if key is nil", func(t *testing.T) {
 		// given
-		p := common.NewProcessor(rootName, nil, cfg, emptyRegistry(t), stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, emptyRegistry(t), stores)
 
 		// when
 		or := p.UpsertRemote(ctx)
@@ -609,7 +609,7 @@ func TestUpsertRemote(t *testing.T) {
 	t.Run("should fail key if key version is nil", func(t *testing.T) {
 		// given
 		key := createRemoteKeyHierarchy(t)
-		p := common.NewProcessor(rootName, nil, cfg, emptyRegistry(t), stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, emptyRegistry(t), stores)
 		p.Key = &key
 
 		// when
@@ -627,7 +627,7 @@ func TestUpsertRemote(t *testing.T) {
 		p := loadProcessor(t, key, emptyRegistry(t))
 		// loadProcessor used emptyRegistry but we need nil registry on the processor;
 		// we can't set it directly (unexported), so create a fresh processor with nil registry
-		p2 := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p2 := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 		p2.Key = p.Key
 		p2.KeyVersion = p.KeyVersion
 
@@ -645,7 +645,7 @@ func TestUpsertRemote(t *testing.T) {
 		key := createRemoteKeyHierarchy(t)
 		p := loadProcessor(t, key, emptyRegistry(t))
 		// create a fresh processor with empty rootName but non-nil registry
-		p2 := common.NewProcessor("", nil, cfg, emptyRegistry(t), stores)
+		p2 := common.NewOrbitalOperator("", nil, cfg, emptyRegistry(t), stores)
 		p2.Key = p.Key
 		p2.KeyVersion = p.KeyVersion
 
@@ -789,7 +789,7 @@ func TestMarkKeyComplete(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is nil", func(t *testing.T) {
 		// given
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 
 		// when
 		or := p.MarkKeyComplete(t.Context())
@@ -806,7 +806,7 @@ func TestMarkKeyComplete(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := common.NewProcessor(rootName, nil, cfg, nil, stores)
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, stores)
 		p.Key = &key
 
 		// when
@@ -831,7 +831,7 @@ func TestMarkKeyComplete(t *testing.T) {
 		_, err := brokenDB.ExecContext(t.Context(), "ALTER TABLE keys RENAME TO keys_hidden")
 		require.NoError(t, err)
 
-		p := common.NewProcessor(rootName, nil, cfg, nil, store.Stores{Keys: brokenKStore})
+		p := common.NewOrbitalOperator(rootName, nil, cfg, nil, store.Stores{Keys: brokenKStore})
 		p.Key = &key
 
 		// when

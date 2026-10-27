@@ -17,34 +17,34 @@ const (
 	orbitalStatusComplete
 )
 
-type OrbitalResponseError struct {
+type OrbitalOperatorError struct {
 	status       orbitalStatus
 	retryBackoff time.Duration
 	err          error
 }
 
-func OrbitalContinue(err error) *OrbitalResponseError {
-	return &OrbitalResponseError{
+func OrbitalContinue(err error) *OrbitalOperatorError {
+	return &OrbitalOperatorError{
 		status:       orbitalStatusContinue,
 		err:          err,
 		retryBackoff: retryBackoff,
 	}
 }
 
-func OrbitalFail(err error) *OrbitalResponseError {
-	return &OrbitalResponseError{
+func OrbitalFail(err error) *OrbitalOperatorError {
+	return &OrbitalOperatorError{
 		status: orbitalStatusFail,
 		err:    err,
 	}
 }
 
-func OrbitalComplete() *OrbitalResponseError {
-	return &OrbitalResponseError{
+func OrbitalComplete() *OrbitalOperatorError {
+	return &OrbitalOperatorError{
 		status: orbitalStatusComplete,
 	}
 }
 
-func (r *OrbitalResponseError) Apply(resp *orbital.HandlerResponse) error {
+func (r *OrbitalOperatorError) Apply(resp *orbital.HandlerResponse) error {
 	switch r.status {
 	case orbitalStatusContinue:
 		resp.ContinueAndWaitFor(r.retryBackoff)
@@ -58,9 +58,9 @@ func (r *OrbitalResponseError) Apply(resp *orbital.HandlerResponse) error {
 	}
 }
 
-var _ error = (*OrbitalResponseError)(nil)
+var _ error = (*OrbitalOperatorError)(nil)
 
 // Error implements [error].
-func (r *OrbitalResponseError) Error() string {
+func (r *OrbitalOperatorError) Error() string {
 	return fmt.Sprintf("orbital response: status=%v, err=%v", r.status, r.err)
 }

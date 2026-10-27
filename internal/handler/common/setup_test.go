@@ -155,7 +155,7 @@ func assertKeyState(t *testing.T, kStore store.Key, k model.Key, wantProcessing 
 // resulting task status after applying it to a HandlerResponse.
 func applyResponse(t *testing.T, err error) orbital.TaskResponse {
 	t.Helper()
-	var or *common.OrbitalResponseError
+	var or *common.OrbitalOperatorError
 	require.ErrorAs(t, err, &or)
 
 	resp := orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(
