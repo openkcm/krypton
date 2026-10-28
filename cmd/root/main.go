@@ -29,6 +29,7 @@ import (
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/orchestrator"
+	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
@@ -36,6 +37,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -101,16 +103,16 @@ func main() {
 		}
 	}()
 
-	// initialization of keyprocessor manager
-	bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
-	for kind, binding := range cfg.KeyBindings {
-		bindings[model.KeyKind(kind)] = binding
-	}
+	bindings := splitKeyBindings(cfg.KeyBindings, cfg.Hierarchy)
+	rootSealer, err := sealerprovider.GetSealer(context.Background(), *bindings.root.SealerSpec)
+	handleErr(err, "failed to get root sealer")
+
 	kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
 		KeyStore:        keyStore,
 		KeyVersionStore: keyVersionStore,
-		Bindings:        bindings,
+		Bindings:        bindings.processors,
 		Hierarchy:       cfg.Hierarchy,
+		RootSealer:      rootSealer,
 	})
 	handleErr(err, "failed to create key processor manager")
 
@@ -130,6 +132,11 @@ func main() {
 
 	// gRPC server setup for admin API
 	grpcServer := grpc.NewServer(grpcOpts...)
+
+	if router, ok := rootSealer.(sealer.Router); ok {
+		sealer.RegisterRouterServiceServer(grpcServer, sealer.NewRouterService(router))
+	}
+
 	admin.RegisterTenantServiceServer(grpcServer, admin.NewTenantService(tenantStore))
 
 	// gRPC server setup for agent API
@@ -232,4 +239,23 @@ func handleErr(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %v", msg, err)
 	}
+}
+
+type bindings struct {
+	root       spec.KeyBinding
+	processors map[model.KeyKind]spec.KeyBinding
+}
+
+func splitKeyBindings(cfg map[string]spec.KeyBinding, h spec.KeyHierarchy) bindings {
+	bs := bindings{}
+	bs.processors = make(map[model.KeyKind]spec.KeyBinding, len(cfg)-1)
+	for kind, binding := range cfg {
+		if s, _ := h.FindKeySpec(model.KeyKind(kind)); s.Role == spec.KeyRoleRoot {
+			bs.root = binding
+			continue
+		}
+		bs.processors[model.KeyKind(kind)] = binding
+	}
+
+	return bs
 }

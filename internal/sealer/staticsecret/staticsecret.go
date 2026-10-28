@@ -28,6 +28,10 @@ func (c *Config) ValidateSealerConfig() error {
 	return c.Secret.Validate()
 }
 
+func (c *Config) DestroySecret() error {
+	return c.Secret.DestroySecret()
+}
+
 // StaticSecret is a [cryptor.Sealer] that seals [aes256gcm.AES256GCM] with a pre-configured key,
 // so callers don't need to supply secrets per-request.
 //
