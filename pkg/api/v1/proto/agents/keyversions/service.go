@@ -86,10 +86,9 @@ func (s *Service) UpsertKeyVersion(ctx context.Context, req *UpsertKeyVersionReq
 }
 
 func generateAndSealSecret(ctx context.Context, mgr *keyprocessor.Manager, kv model.KeyVersion, kind model.KeyKind) error {
-	aad := fmt.Appendf(nil, "%s:%s:%d:%d", kv.TenantID, kv.KeyID, kv.Version, kv.Revision)
 	_, err := mgr.GenerateAndSealSecret(ctx, keyprocessor.GenerateAndSealSecretRequest{
 		KeyVersion: kv,
-		AAD:        aad,
+		AAD:        kv.AAD(),
 		KeyKind:    kind,
 	})
 	if err != nil {
