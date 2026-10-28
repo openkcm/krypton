@@ -1,6 +1,10 @@
 package model
 
-import "github.com/openkcm/krypton/internal/clock"
+import (
+	"fmt"
+
+	"github.com/openkcm/krypton/internal/clock"
+)
 
 // KeyVersionProcessingState represents the processing state of a key version.
 type KeyVersionProcessingState string
@@ -10,6 +14,12 @@ const (
 	KeyVersionReWrapping KeyVersionProcessingState = "re-wrapping"
 	KeyVersionActivating KeyVersionProcessingState = "activating"
 )
+
+var allKeyVersionStates = map[KeyVersionProcessingState]struct{}{
+	KeyVersionUsable:     {},
+	KeyVersionReWrapping: {},
+	KeyVersionActivating: {},
+}
 
 // KeyVersion tracks both the version (which key material is used) and the
 // revision (which wrapping of that material is current). A KeyVersion is
@@ -41,4 +51,16 @@ func NewKeyVersion(tenantID, keyID string, version int, parentKeyID *string, par
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
+}
+
+func (kv *KeyVersion) AAD() []byte {
+	if kv == nil {
+		return nil
+	}
+	return fmt.Appendf(nil, "%s:%s:%d:%d", kv.TenantID, kv.KeyID, kv.Version, kv.Revision)
+}
+
+func IsKnownKeyVersionState(state string) bool {
+	_, ok := allKeyVersionStates[KeyVersionProcessingState(state)]
+	return ok
 }
