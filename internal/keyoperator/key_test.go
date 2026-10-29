@@ -296,3 +296,90 @@ func TestUpsertKey(t *testing.T) {
 		})
 	}
 }
+
+func TestUpsertKey_CASUsesExistingProcessingStatus(t *testing.T) {
+	parentID := "parent-1"
+
+	tests := []struct {
+		name           string
+		existingStatus model.KeyProcessingStatus
+		existingState  model.KeyLifeCycleState
+	}{
+		{
+			name:           "existing key in pending status",
+			existingStatus: model.KeyProcessingPending,
+			existingState:  model.KeyLifeCycleActive,
+		},
+		{
+			name:           "existing key in in-progress status",
+			existingStatus: model.KeyProcessingInProgress,
+			existingState:  model.KeyLifeCycleActive,
+		},
+		{
+			name:           "existing key in completed status",
+			existingStatus: model.KeyProcessingCompleted,
+			existingState:  model.KeyLifeCycleSuspended,
+		},
+		{
+			name:           "existing key in failed status",
+			existingStatus: model.KeyProcessingFailed,
+			existingState:  model.KeyLifeCycleDeactivated,
+		},
+		{
+			name:           "existing key in preactive status",
+			existingStatus: model.KeyProcessingFailed,
+			existingState:  model.KeyLifeCyclePreActivation,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newKey := model.Key{
+				ID:                 testKeyID,
+				Name:               "some-name",
+				TenantID:           testTenantID,
+				Kind:               "K1",
+				ParentID:           &parentID,
+				ManagedBy:          "agent-aws",
+				LifeCycleState:     model.KeyLifeCyclePreActivation,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+			}
+
+			existing := &model.Key{
+				ID:                 "existing-key-id",
+				Name:               "some-name",
+				TenantID:           testTenantID,
+				Kind:               "K1",
+				ParentID:           &parentID,
+				ManagedBy:          "agent-aws",
+				LifeCycleState:     tc.existingState,
+				KeyProcessingState: model.KeyProcessingState{Status: tc.existingStatus},
+			}
+
+			var capturedQuery store.UpdateKeyStatesQuery
+			keys := &stubKeyStore{
+				createKey: func(_ context.Context, _ model.Key) error {
+					return store.ErrKeyInsertConflict
+				},
+				getKeyByName: func(_ context.Context, _ store.GetKeyByNameQuery) (*model.Key, error) {
+					return existing, nil
+				},
+				updateKeyStates: func(_ context.Context, q store.UpdateKeyStatesQuery) error {
+					capturedQuery = q
+					return nil
+				},
+			}
+
+			step := keyoperator.UpsertKey(&newKey)
+			err := step(t.Context(), store.Stores{Keys: keys})
+
+			assert.NoError(t, err)
+			assert.Equal(t, existing.ID, capturedQuery.ID)
+			assert.Equal(t, existing.TenantID, capturedQuery.TenantID)
+			assert.Equal(t, newKey.LifeCycleState, capturedQuery.ToState)
+			assert.Equal(t, newKey.KeyProcessingState.Status, capturedQuery.ToStatus)
+			assert.Equal(t, []model.KeyLifeCycleState{tc.existingState}, capturedQuery.FromState)
+			assert.Equal(t, []model.KeyProcessingStatus{tc.existingStatus}, capturedQuery.FromStatus)
+		})
+	}
+}

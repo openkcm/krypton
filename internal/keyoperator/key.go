@@ -115,7 +115,7 @@ func UpsertKey(newKey *model.Key) store.TransactionFunc {
 			ToState:    newKey.LifeCycleState,
 			ToStatus:   newKey.KeyProcessingState.Status,
 			FromState:  []model.KeyLifeCycleState{existing.LifeCycleState},
-			FromStatus: []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingFailed},
+			FromStatus: []model.KeyProcessingStatus{existing.KeyProcessingState.Status},
 		})
 		// compare-and-swap matched zero rows: row is already in the target state (idempotent replay).
 		if errors.Is(err, store.ErrKeyNotFound) {
