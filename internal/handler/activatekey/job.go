@@ -19,17 +19,13 @@ const JobType = "activate-key"
 // JobHandler handles the orbital job lifecycle for activating keys.
 // It unmarshals a [handler.KeyLayer] from the job payload and fans out
 // one task per key identifier to the local operator target.
-type JobHandler struct {
-	localTarget string
-}
+type JobHandler struct{}
 
 var _ orchestrator.JobHandler = &JobHandler{}
 
 // NewJobHandler returns a JobHandler that routes tasks to localTarget.
-func NewJobHandler(localTarget string) *JobHandler {
-	return &JobHandler{
-		localTarget: localTarget,
-	}
+func NewJobHandler() *JobHandler {
+	return &JobHandler{}
 }
 
 func (h *JobHandler) JobType() string {
@@ -58,7 +54,7 @@ func (h *JobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.
 		infos = append(infos, orbital.TaskInfo{
 			Data:   infoData,
 			Type:   TaskType,
-			Target: h.localTarget,
+			Target: orchestrator.DefaultLocalTargetName,
 		})
 	}
 

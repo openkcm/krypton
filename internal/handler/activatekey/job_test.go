@@ -10,11 +10,12 @@ import (
 
 	"github.com/openkcm/krypton/internal/handler"
 	"github.com/openkcm/krypton/internal/handler/activatekey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
 func TestJobHandler_JobType(t *testing.T) {
 	// given  when
-	handler := activatekey.NewJobHandler("local-target")
+	handler := activatekey.NewJobHandler()
 
 	// when
 	assert.Equal(t, activatekey.JobType, handler.JobType())
@@ -22,7 +23,7 @@ func TestJobHandler_JobType(t *testing.T) {
 
 func TestJobHandler_New(t *testing.T) {
 	// given  when
-	handler := activatekey.NewJobHandler("local-target")
+	handler := activatekey.NewJobHandler()
 
 	// when
 	assert.NotNil(t, handler)
@@ -30,7 +31,7 @@ func TestJobHandler_New(t *testing.T) {
 
 func TestJobHandler_ConfirmJob(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler("local-target")
+	subj := activatekey.NewJobHandler()
 
 	// when
 	res, err := subj.ConfirmJob(t.Context(), orbital.Job{})
@@ -43,7 +44,7 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 func TestJobHandler_ResolveTasks(t *testing.T) {
 	t.Run("invalid JSON input", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler("local-target")
+		subj := activatekey.NewJobHandler()
 
 		// when
 		res, err := subj.ResolveTasks(t.Context(), orbital.Job{
@@ -58,7 +59,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 	t.Run("empty identifiers list", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler("local-target")
+		subj := activatekey.NewJobHandler()
 		keyLayer := handler.KeyLayer{
 			Identifiers: []handler.KeyIdentifier{},
 		}
@@ -78,7 +79,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 	t.Run("resolves task per key identifier", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler("local-target")
+		subj := activatekey.NewJobHandler()
 		keyLayer := handler.KeyLayer{
 			Identifiers: []handler.KeyIdentifier{
 				{
@@ -102,7 +103,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 			expTaskInfos = append(expTaskInfos, orbital.TaskInfo{
 				Data:   jobData,
 				Type:   activatekey.TaskType,
-				Target: "local-target",
+				Target: orchestrator.DefaultLocalTargetName,
 			})
 		}
 		expRes := orbital.CompleteTaskResolver().WithTaskInfo(expTaskInfos)
@@ -121,7 +122,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 func TestJobHandler_OnJobCanceled(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler("local-target")
+	subj := activatekey.NewJobHandler()
 
 	// when
 	err := subj.OnJobCanceled(t.Context(), orbital.Job{})
@@ -132,7 +133,7 @@ func TestJobHandler_OnJobCanceled(t *testing.T) {
 
 func TestJobHandler_OnJobDone(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler("local-target")
+	subj := activatekey.NewJobHandler()
 
 	// when
 	err := subj.OnJobDone(t.Context(), orbital.Job{})
@@ -143,7 +144,7 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 
 func TestJobHandler_OnJobFailed(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler("local-target")
+	subj := activatekey.NewJobHandler()
 
 	// when
 	err := subj.OnJobFailed(t.Context(), orbital.Job{})
