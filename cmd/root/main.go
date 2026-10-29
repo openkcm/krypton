@@ -24,6 +24,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/grpcconn"
+	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
@@ -36,6 +37,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -85,22 +87,6 @@ func main() {
 	registry, err := grpcconn.NewRegistry(cfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	handleErr(err, "failed to create grpc connection registry")
 
-	orchestratorOpts := make([]orchestrator.Option, 0, 1)
-	orchestratorOpts = append(orchestratorOpts, orchestrator.WithExecInterval(10*time.Millisecond))
-
-	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
-		Jobs:   []orchestrator.JobHandler{announcekey.NewJobHandler(transactor)},
-		Groups: []orchestrator.JobGroupHandler{announcekey.NewJobGroupHandler()},
-		Tasks:  []orchestrator.TaskHandler{announcekey.NewTaskHandler(transactor, registry, cfg.Name)},
-	}, orchestratorOpts...)
-	handleErr(err, "failed to create orchestrator")
-
-	go func() {
-		if err := orch.Start(context.Background()); err != nil {
-			log.Printf("orchestrator stopped: %v", err)
-		}
-	}()
-
 	// initialization of keyprocessor manager
 	bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
 	for kind, binding := range cfg.KeyBindings {
@@ -113,6 +99,31 @@ func main() {
 		Hierarchy:       cfg.Hierarchy,
 	})
 	handleErr(err, "failed to create key processor manager")
+
+	orchestratorOpts := make([]orchestrator.Option, 0, 1)
+	orchestratorOpts = append(orchestratorOpts, orchestrator.WithExecInterval(10*time.Millisecond))
+
+	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
+		Jobs: []orchestrator.JobHandler{
+			announcekey.NewJobHandler(transactor),
+			activatekey.NewJobHandler(),
+		},
+		Groups: []orchestrator.JobGroupHandler{
+			announcekey.NewJobGroupHandler(),
+			activatekey.NewJobGroupHandler(),
+		},
+		Tasks: []orchestrator.TaskHandler{
+			announcekey.NewTaskHandler(transactor, registry, cfg.Name),
+			activatekey.NewTaskHandler(transactor, registry, kpMgr, cfg),
+		},
+	}, orchestratorOpts...)
+	handleErr(err, "failed to create orchestrator")
+
+	go func() {
+		if err := orch.Start(context.Background()); err != nil {
+			log.Printf("orchestrator stopped: %v", err)
+		}
+	}()
 
 	var grpcOpts []grpc.ServerOption
 	if cfg.Auth != nil {
@@ -127,6 +138,8 @@ func main() {
 		handleErr(err, "failed to build TLS config for gRPC server")
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
+	// this is important to ensure that sensitive data in the gRPC messages is handled securely in memory
+	grpcOpts = append(grpcOpts, grpc.StatsHandler(securemem.NewRPCHandler()))
 
 	// gRPC server setup for admin API
 	grpcServer := grpc.NewServer(grpcOpts...)
@@ -140,6 +153,9 @@ func main() {
 
 	// gRPC server setup for actions API
 	actions.RegisterActionServiceServer(grpcServer, actions.NewService(orch))
+
+	// grpc server setup for sealer
+	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
