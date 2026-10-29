@@ -39,7 +39,10 @@ func TestActivate_Handler(t *testing.T) {
 			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
 		},
 	}
-	validRootCfg := &config.RootConfig{Hierarchy: validHierarchy}
+	validRootCfg := &config.RootConfig{
+		Name:      rootName,
+		Hierarchy: validHierarchy,
+	}
 
 	mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 		KeyStore:        kStore,
@@ -56,7 +59,6 @@ func TestActivate_Handler(t *testing.T) {
 	subj := activatekey.NewTaskHandler(
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
-		rootName,
 		mgr,
 		validRootCfg,
 	)
@@ -69,7 +71,7 @@ func TestActivate_Handler(t *testing.T) {
 		if manager == nil {
 			manager = mgr
 		}
-		return activatekey.NewTaskHandler(transactor, registry, rootName, manager, validRootCfg)
+		return activatekey.NewTaskHandler(transactor, registry, manager, validRootCfg)
 	}
 
 	// ---- input validation ----
