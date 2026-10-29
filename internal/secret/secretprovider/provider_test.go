@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
@@ -65,6 +66,29 @@ func TestSpec_Validate(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestUnMarshalAndUnMarshal(t *testing.T) {
+	// given
+	before := &staticsecret.Config{
+		Secret: secretprovider.Spec{
+			Type:   envvar.Type,
+			Config: &envvar.Config{Name: "MY_SECRET_KEY"},
+		},
+	}
+
+	b, err := yaml.Marshal(before)
+	require.NoError(t, err)
+
+	// when
+	after := &staticsecret.Config{}
+	err = yaml.Unmarshal(b, after)
+
+	// then
+	require.NoError(t, err)
+
+	assert.Equal(t, before.Secret.Type, after.Secret.Type)
+	assert.Equal(t, before.Secret.Config, after.Secret.Config)
 }
 
 func TestSpec_UnmarshalYAML(t *testing.T) {

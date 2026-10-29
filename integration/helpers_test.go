@@ -86,6 +86,7 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 	agentCmd := createCmd(t, agentBinary, []string{
 		"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
 		"AGENT_DATABASE_URL=" + agentConnStr,
+		"KRYPTON_TEK_KEY=" + testKeyBase64,
 		"AGENT_PORT=" + agentPort,
 	})
 	require.NoError(t, agentCmd.Start(), "failed to start agent")

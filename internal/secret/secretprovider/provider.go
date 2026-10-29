@@ -15,6 +15,8 @@ import (
 var ErrUnknownType = errors.New("unknown secret source type")
 
 // Spec describes which secret source implementation to use and how to configure it.
+//
+//nolint:revcheck
 type Spec struct {
 	Type secret.Type `yaml:"type"`
 	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
@@ -23,18 +25,18 @@ type Spec struct {
 
 var (
 	_ yaml.Unmarshaler = (*Spec)(nil)
-	_ yaml.Marshaler   = (*Spec)(nil)
+	_ yaml.Marshaler   = Spec{}
 )
 
 // MarshalYAML implements [yaml.Marshaler].
-func (s *Spec) MarshalYAML() (any, error) {
+func (s Spec) MarshalYAML() (any, error) {
 	type alias Spec
 	return struct {
 		alias `yaml:",inline"`
 
 		Config secret.Config `yaml:"config"`
 	}{
-		alias:  alias(*s),
+		alias:  alias(s),
 		Config: s.Config,
 	}, nil
 }
