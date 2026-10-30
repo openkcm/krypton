@@ -23,7 +23,6 @@ const TaskType = "activate-key"
 
 type TaskHandler struct {
 	transactor store.Transactor
-	rootName   string
 	registry   *grpcconn.Registry
 	manager    *keyprocessor.Manager
 	config     *config.RootConfig
@@ -34,14 +33,12 @@ var _ orchestrator.TaskHandler = &TaskHandler{}
 func NewTaskHandler(
 	transactor store.Transactor,
 	registry *grpcconn.Registry,
-	rootName string,
 	manager *keyprocessor.Manager,
 	cfg *config.RootConfig,
 ) *TaskHandler {
 	return &TaskHandler{
 		transactor: transactor,
 		registry:   registry,
-		rootName:   rootName,
 		manager:    manager,
 		config:     cfg,
 	}
@@ -70,11 +67,12 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 		}),
 		func(ctx context.Context, stores store.Stores) error {
 			proc := common.NewOrbitalOperator(
-				h.rootName,
-				h.manager,
-				h.config,
-				h.registry,
-				stores,
+				common.OrbitalOperatorConfig{
+					Manager:    h.manager,
+					RootConfig: h.config,
+					Registry:   h.registry,
+					Stores:     stores,
+				},
 			)
 
 			or := proc.ResolveKeyAndVersions(ctx, kid)

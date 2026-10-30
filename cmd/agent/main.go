@@ -20,11 +20,17 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/grpcconn"
+	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keyversions"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	"github.com/openkcm/krypton/pkg/model"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
@@ -88,7 +94,7 @@ func main() {
 	handleErr(err, "failed to create heartbeat worker")
 	go wrkr.Start(ctx)
 
-	agentDB, grpcServer, lis := setupKeyServiceServer(ctx)
+	agentDB, grpcServer, lis := setupKeyServiceServer(ctx, agentCfg)
 	defer agentDB.Close()
 
 	log.Println("Starting agent key service listener")
@@ -145,7 +151,7 @@ func loadConfig() *config.AgentBootstrapConfig {
 	return cfg
 }
 
-func setupKeyServiceServer(ctx context.Context) (*sql.DB, *grpc.Server, net.Listener) {
+func setupKeyServiceServer(ctx context.Context, agentCfg *config.AgentConfig) (*sql.DB, *grpc.Server, net.Listener) {
 	dsn := os.Getenv("AGENT_DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("AGENT_DATABASE_URL environment variable is required")
@@ -167,9 +173,32 @@ func setupKeyServiceServer(ctx context.Context) (*sql.DB, *grpc.Server, net.List
 	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+agentPort)
 	handleErr(err, "failed to listen on agent port")
 
-	grpcServer := grpc.NewServer()
+	reg, err := grpcconn.NewRegistry(agentCfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	handleErr(err, "failed to create grpc connection registry")
+
+	bindings := make(map[model.KeyKind]spec.KeyBinding, len(agentCfg.KeyBindings))
+	for kind, binding := range agentCfg.KeyBindings {
+		bindings[model.KeyKind(kind)] = binding
+	}
+
+	kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
+		KeyStore:        storesql.NewKeyStore(db),
+		KeyVersionStore: storesql.NewKeyVersionStore(db),
+		Bindings:        bindings,
+		Hierarchy:       agentCfg.Hierarchy,
+		Registry:        reg,
+	})
+	handleErr(err, "failed to create key processor manager")
+
+	grpcServer := grpc.NewServer(
+		// this is required to ensure that sensitive data in the RPC context is cleaned up after each RPC call
+		grpc.StatsHandler(securemem.NewRPCHandler()),
+	)
+
 	keys.RegisterKeyServiceServer(grpcServer, keys.NewKeyService(transactor))
+	keyversions.RegisterKeyVersionServiceServer(grpcServer, keyversions.NewService(transactor, kpMgr))
 	tenants.RegisterTenantServiceServer(grpcServer, tenants.NewTenantService(transactor))
+	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
 	log.Printf("agent key service listening on :%s", agentPort)
 	return db, grpcServer, lis
