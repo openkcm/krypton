@@ -26,7 +26,7 @@ type ValidationError struct {
 	err  error
 }
 
-type ActivateInput struct {
+type KeyIdentifierInput struct {
 	TenantID string
 	KeyID    string
 }
