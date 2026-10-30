@@ -41,6 +41,11 @@ type ApplyKeyActionRequest struct {
 	JobType      string
 	JobGroupType string
 	Cascading    bool
+	// BottomUp, when true, iterates the key tree from leaves to root
+	// (using IterKeysByLayerDsc) instead of the default root-to-leaf order.
+	// Set to true when the action must reach leaves before their parents
+	// (e.g. SuspendKey).
+	BottomUp bool
 }
 
 // Class sentinels raised by key-level operations. The transport layer
@@ -71,6 +76,11 @@ var (
 
 	// ErrNoKeysFound signals that no keys were found in the key tree.
 	ErrNoKeysFound = errors.New("keys not found")
+
+	// ErrNoEligibleKeys signals that the key tree was non-empty but all
+	// keys were already at the target state with completed processing;
+	// no transition was required.
+	ErrNoEligibleKeys = errors.New("no eligible keys found for processing")
 
 	// ErrInternal signals an internal error.
 	ErrInternal = errors.New("internal error")
@@ -165,7 +175,11 @@ func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupP
 
 	var jobs []orbital.Job
 
-	for layer := range kt.IterKeysByLayerAsc() {
+	itr := kt.IterKeysByLayerAsc()
+	if action.BottomUp {
+		itr = kt.IterKeysByLayerDsc()
+	}
+	for layer := range itr {
 		ids := make([]handler.KeyIdentifier, 0, len(layer))
 
 		for _, key := range layer {
@@ -204,7 +218,7 @@ func ApplyKeyAction(ctx context.Context, stores store.Stores, preparer JobGroupP
 	}
 
 	if len(jobs) == 0 {
-		return orbital.JobGroup{}, fmt.Errorf("%w: no actionable keys found", ErrNoKeysFound)
+		return orbital.JobGroup{}, fmt.Errorf("%w: no actionable keys found", ErrNoEligibleKeys)
 	}
 
 	return preparer.PrepareJobGroup(ctx, orbital.NewJobGroup(action.JobGroupType, jobs...))
