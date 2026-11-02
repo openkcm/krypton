@@ -1,4 +1,4 @@
-package announcekey
+package orchestrator
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/keyoperator"
-	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents/tenants"
 	"github.com/openkcm/krypton/pkg/model"
@@ -22,38 +21,39 @@ import (
 	"github.com/openkcm/krypton/pkg/validator"
 )
 
-const TaskType = "announce-key"
-
 const retryBackoff = 2 * time.Second
 
-type TaskHandler struct {
+// AnnounceTaskHandler is the [TaskHandler] for the announce-key task type.
+// It validates the tenant, upserts the tenant and key to the remote agent,
+// and updates the key's processing state.
+type AnnounceTaskHandler struct {
 	transactor store.Transactor
 	registry   *grpcconn.Registry
 	rootName   string
 }
 
-var _ orchestrator.TaskHandler = &TaskHandler{}
+var _ TaskHandler = &AnnounceTaskHandler{}
 
-func NewTaskHandler(transactor store.Transactor, registry *grpcconn.Registry, rootName string) *TaskHandler {
-	return &TaskHandler{
+func NewAnnounceTaskHandler(transactor store.Transactor, registry *grpcconn.Registry, rootName string) *AnnounceTaskHandler {
+	return &AnnounceTaskHandler{
 		transactor: transactor,
 		registry:   registry,
 		rootName:   rootName,
 	}
 }
 
-func (h *TaskHandler) TaskType() string {
-	return TaskType
+func (h *AnnounceTaskHandler) TaskType() string {
+	return AnnounceKey
 }
 
-func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
+func (h *AnnounceTaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
 	var key model.Key
 	if err := json.Unmarshal(req.TaskData, &key); err != nil {
 		resp.Fail(fmt.Sprintf("unmarshal task data: %v", err))
 		return
 	}
 
-	state := newSharedState()
+	state := newAnnounceState()
 
 	err := store.ChainTransaction(ctx, h.transactor,
 		func(ctx context.Context, stores store.Stores) error {
@@ -83,7 +83,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 	}
 }
 
-func (h *TaskHandler) validateTenant(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+func (h *AnnounceTaskHandler) validateTenant(ctx context.Context, sharedState *announceState, stores store.Stores, key model.Key) error {
 	err := validator.ValidateTenant(key.TenantID)(ctx, stores)
 	if err != nil {
 		if errors.Is(err, store.ErrTenantNotFound) {
@@ -96,7 +96,7 @@ func (h *TaskHandler) validateTenant(ctx context.Context, sharedState *sharedSta
 	return nil
 }
 
-func (h *TaskHandler) updateKeyState(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+func (h *AnnounceTaskHandler) updateKeyState(ctx context.Context, sharedState *announceState, stores store.Stores, key model.Key) error {
 	if sharedState.state == "" {
 		sharedState.withState(model.KeyProcessingFailed).
 			withErrorMessage("internal error: state not set before updating key state")
@@ -110,7 +110,7 @@ func (h *TaskHandler) updateKeyState(ctx context.Context, sharedState *sharedSta
 	})(ctx, stores)
 }
 
-func (h *TaskHandler) upsertTenant(ctx context.Context, sharedState *sharedState, stores store.Stores, key model.Key) error {
+func (h *AnnounceTaskHandler) upsertTenant(ctx context.Context, sharedState *announceState, stores store.Stores, key model.Key) error {
 	if sharedState.isTerminalState() {
 		return nil
 	}
@@ -155,7 +155,7 @@ func (h *TaskHandler) upsertTenant(ctx context.Context, sharedState *sharedState
 	return nil
 }
 
-func (h *TaskHandler) upsertKey(ctx context.Context, sharedState *sharedState, key *model.Key) error {
+func (h *AnnounceTaskHandler) upsertKey(ctx context.Context, sharedState *announceState, key *model.Key) error {
 	if sharedState.isTerminalState() {
 		return nil
 	}

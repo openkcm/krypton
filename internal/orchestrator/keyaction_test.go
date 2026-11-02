@@ -1,4 +1,4 @@
-package keyoperator_test
+package orchestrator_test
 
 import (
 	"context"
@@ -11,16 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
-	"github.com/openkcm/krypton/internal/keyoperator"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
 // activateFilter is the standard filter used by the activate-key action.
-var activateFilter = []keyoperator.KeyFilter{
+var activateFilter = []orchestrator.KeyFilter{
 	{
 		LifeCycleState: model.KeyLifeCycleActive,
 		Status: []model.KeyProcessingStatus{
@@ -43,8 +41,9 @@ var activateFilter = []keyoperator.KeyFilter{
 }
 
 func TestApplyKeyAction(t *testing.T) {
-	db := createDatabase(t)
-	tenantID := createTenant(t, db)
+	db := newRootDB(t)
+	tenant := createTenant(t, db)
+	tenantID := tenant.ID
 	keyStore := storesql.NewKeyStore(db)
 
 	t.Run("fetch keytree error", func(t *testing.T) {
@@ -66,23 +65,21 @@ func TestApplyKeyAction(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				got, err := keyoperator.ApplyKeyAction(
+				got, err := orchestrator.ApplyKeyAction(
 					t.Context(),
 					store.Stores{Keys: keyStore},
 					&stubPreparer{},
-					keyoperator.ApplyKeyActionRequest{
-						TenantID:     tenantID,
-						KeyID:        nonExistentKeyID,
-						ToState:      model.KeyLifeCycleActive,
-						KeyFilters:   activateFilter,
-						Cascading:    tc.cascading,
-						JobType:      activatekey.JobType,
-						JobGroupType: activatekey.JobGroupType,
+					orchestrator.ApplyKeyActionRequest{
+						TenantID:      tenantID,
+						KeyID:         nonExistentKeyID,
+						KeyFilters:    activateFilter,
+						Cascading:     tc.cascading,
+						HandlerConfig: orchestrator.ActivateHandlerConfig(),
 					},
 				)
 
 				assert.Empty(t, got)
-				assert.ErrorIs(t, err, keyoperator.ErrNoKeysFound)
+				assert.ErrorIs(t, err, orchestrator.ErrNoKeysFound)
 			})
 		}
 
@@ -95,7 +92,7 @@ func TestApplyKeyAction(t *testing.T) {
 
 			tests := []struct {
 				name       string
-				keyFilters []keyoperator.KeyFilter
+				keyFilters []orchestrator.KeyFilter
 			}{
 				{
 					name:       "nil filters",
@@ -103,11 +100,11 @@ func TestApplyKeyAction(t *testing.T) {
 				},
 				{
 					name:       "empty filters",
-					keyFilters: []keyoperator.KeyFilter{},
+					keyFilters: []orchestrator.KeyFilter{},
 				},
 				{
 					name: "lifecycle state mismatch",
-					keyFilters: []keyoperator.KeyFilter{
+					keyFilters: []orchestrator.KeyFilter{
 						{
 							LifeCycleState: model.KeyLifeCycleActive,
 							Status:         []model.KeyProcessingStatus{model.KeyProcessingCompleted},
@@ -116,7 +113,7 @@ func TestApplyKeyAction(t *testing.T) {
 				},
 				{
 					name: "processing status mismatch",
-					keyFilters: []keyoperator.KeyFilter{
+					keyFilters: []orchestrator.KeyFilter{
 						{
 							LifeCycleState: model.KeyLifeCyclePreActivation,
 							Status:         []model.KeyProcessingStatus{model.KeyProcessingFailed},
@@ -125,7 +122,7 @@ func TestApplyKeyAction(t *testing.T) {
 				},
 				{
 					name: "multiple filters none matching",
-					keyFilters: []keyoperator.KeyFilter{
+					keyFilters: []orchestrator.KeyFilter{
 						{
 							LifeCycleState: model.KeyLifeCycleActive,
 							Status:         []model.KeyProcessingStatus{model.KeyProcessingCompleted},
@@ -140,22 +137,20 @@ func TestApplyKeyAction(t *testing.T) {
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
-					got, err := keyoperator.ApplyKeyAction(
+					got, err := orchestrator.ApplyKeyAction(
 						t.Context(),
 						store.Stores{Keys: keyStore},
 						&stubPreparer{},
-						keyoperator.ApplyKeyActionRequest{
-							TenantID:     tenantID,
-							KeyID:        key.ID,
-							ToState:      model.KeyLifeCycleActive,
-							KeyFilters:   tc.keyFilters,
-							JobType:      activatekey.JobType,
-							JobGroupType: activatekey.JobGroupType,
+						orchestrator.ApplyKeyActionRequest{
+							TenantID:      tenantID,
+							KeyID:         key.ID,
+							KeyFilters:    tc.keyFilters,
+							HandlerConfig: orchestrator.ActivateHandlerConfig(),
 						},
 					)
 
 					assert.Empty(t, got)
-					assert.ErrorIs(t, err, keyoperator.ErrNoKeysFound)
+					assert.ErrorIs(t, err, orchestrator.ErrNoKeysFound)
 				})
 			}
 		})
@@ -172,31 +167,31 @@ func TestApplyKeyAction(t *testing.T) {
 				name:   "filter mismatch: destroyed has no activatable filter entry",
 				lcs:    model.KeyLifeCycleDestroyed,
 				ps:     model.KeyProcessingCompleted,
-				expErr: keyoperator.ErrNoKeysFound,
+				expErr: orchestrator.ErrNoKeysFound,
 			},
 			{
 				name:   "filter mismatch: deactivated has no activatable filter entry",
 				lcs:    model.KeyLifeCycleDeactivated,
 				ps:     model.KeyProcessingCompleted,
-				expErr: keyoperator.ErrNoKeysFound,
+				expErr: orchestrator.ErrNoKeysFound,
 			},
 			{
 				name:   "filter mismatch: pre-activation with pending processing",
 				lcs:    model.KeyLifeCyclePreActivation,
 				ps:     model.KeyProcessingPending,
-				expErr: keyoperator.ErrNoKeysFound,
+				expErr: orchestrator.ErrNoKeysFound,
 			},
 			{
 				name:   "filter mismatch: active with in-progress processing",
 				lcs:    model.KeyLifeCycleActive,
 				ps:     model.KeyProcessingInProgress,
-				expErr: keyoperator.ErrNoKeysFound,
+				expErr: orchestrator.ErrNoKeysFound,
 			},
 			{
 				name:   "already at target state with completed processing",
 				lcs:    model.KeyLifeCycleActive,
 				ps:     model.KeyProcessingCompleted,
-				expErr: keyoperator.ErrNoEligibleKeys,
+				expErr: orchestrator.ErrNoEligibleKeys,
 			},
 		}
 
@@ -204,17 +199,15 @@ func TestApplyKeyAction(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				key := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil, tc.lcs, tc.ps)
 
-				got, err := keyoperator.ApplyKeyAction(
+				got, err := orchestrator.ApplyKeyAction(
 					t.Context(),
 					store.Stores{Keys: keyStore},
 					&stubPreparer{},
-					keyoperator.ApplyKeyActionRequest{
-						TenantID:     tenantID,
-						KeyID:        key.ID,
-						ToState:      model.KeyLifeCycleActive,
-						KeyFilters:   activateFilter,
-						JobType:      activatekey.JobType,
-						JobGroupType: activatekey.JobGroupType,
+					orchestrator.ApplyKeyActionRequest{
+						TenantID:      tenantID,
+						KeyID:         key.ID,
+						KeyFilters:    activateFilter,
+						HandlerConfig: orchestrator.ActivateHandlerConfig(),
 					},
 				)
 
@@ -245,26 +238,24 @@ func TestApplyKeyAction(t *testing.T) {
 			seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 				model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted) // child-B
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        root.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					Cascading:    true,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         root.ID,
+					KeyFilters:    activateFilter,
+					Cascading:     true,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			require.NoError(t, err)
-			assert.Equal(t, activatekey.JobGroupType, got.Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Type)
 			require.Len(t, got.Jobs, 2)
 			for _, job := range got.Jobs {
-				assert.Equal(t, activatekey.JobType, job.Type)
+				assert.Equal(t, orchestrator.ActivateKey, job.Type)
 				assertJobDataTenantID(t, job.Data, tenantID)
 			}
 			assertJobDataContainsKeys(t, got.Jobs[0].Data, root.ID)
@@ -283,23 +274,21 @@ func TestApplyKeyAction(t *testing.T) {
 			seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 				model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted) // child-A
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        root.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					Cascading:    true,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         root.ID,
+					KeyFilters:    activateFilter,
+					Cascading:     true,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			assert.Empty(t, got)
-			assert.ErrorIs(t, err, keyoperator.ErrNoKeysFound)
+			assert.ErrorIs(t, err, orchestrator.ErrNoKeysFound)
 		})
 	})
 
@@ -316,26 +305,24 @@ func TestApplyKeyAction(t *testing.T) {
 		child := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
 		// Root should be SKIPPED (not excluded), child should be activated.
 		require.NoError(t, err)
-		assert.Equal(t, activatekey.JobGroupType, got.Type)
+		assert.Equal(t, orchestrator.ActivateKey, got.Type)
 		require.Len(t, got.Jobs, 1)
-		assert.Equal(t, activatekey.JobType, got.Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, got.Jobs[0].Type)
 		assertJobDataContainsKeys(t, got.Jobs[0].Data, child.ID)
 		assertJobDataTenantID(t, got.Jobs[0].Data, tenantID)
 	})
@@ -347,17 +334,15 @@ func TestApplyKeyAction(t *testing.T) {
 		key := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&failPreparer{err: errPrepare},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        key.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         key.ID,
+				KeyFilters:    activateFilter,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -371,24 +356,22 @@ func TestApplyKeyAction(t *testing.T) {
 			key := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil,
 				model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        key.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         key.ID,
+					KeyFilters:    activateFilter,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			require.NoError(t, err)
-			assert.Equal(t, activatekey.JobGroupType, got.Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Type)
 			require.Len(t, got.Jobs, 1)
-			assert.Equal(t, activatekey.JobType, got.Jobs[0].Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Jobs[0].Type)
 			assertJobDataContainsKeys(t, got.Jobs[0].Data, key.ID)
 			assertJobDataTenantID(t, got.Jobs[0].Data, tenantID)
 		})
@@ -397,24 +380,22 @@ func TestApplyKeyAction(t *testing.T) {
 			key := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil,
 				model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        key.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         key.ID,
+					KeyFilters:    activateFilter,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			require.NoError(t, err)
-			assert.Equal(t, activatekey.JobGroupType, got.Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Type)
 			require.Len(t, got.Jobs, 1)
-			assert.Equal(t, activatekey.JobType, got.Jobs[0].Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Jobs[0].Type)
 			assertJobDataContainsKeys(t, got.Jobs[0].Data, key.ID)
 			assertJobDataTenantID(t, got.Jobs[0].Data, tenantID)
 		})
@@ -423,24 +404,22 @@ func TestApplyKeyAction(t *testing.T) {
 			key := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil,
 				model.KeyLifeCycleActive, model.KeyProcessingFailed)
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        key.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         key.ID,
+					KeyFilters:    activateFilter,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			require.NoError(t, err)
-			assert.Equal(t, activatekey.JobGroupType, got.Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Type)
 			require.Len(t, got.Jobs, 1)
-			assert.Equal(t, activatekey.JobType, got.Jobs[0].Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Jobs[0].Type)
 			assertJobDataContainsKeys(t, got.Jobs[0].Data, key.ID)
 			assertJobDataTenantID(t, got.Jobs[0].Data, tenantID)
 		})
@@ -451,23 +430,21 @@ func TestApplyKeyAction(t *testing.T) {
 			child := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 				model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        root.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					Cascading:    true,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         root.ID,
+					KeyFilters:    activateFilter,
+					Cascading:     true,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
 			require.NoError(t, err)
-			assert.Equal(t, activatekey.JobGroupType, got.Type)
+			assert.Equal(t, orchestrator.ActivateKey, got.Type)
 			require.Len(t, got.Jobs, 2)
 			assertJobDataContainsKeys(t, got.Jobs[0].Data, root.ID)
 			assertJobDataContainsKeys(t, got.Jobs[1].Data, child.ID)
@@ -482,18 +459,16 @@ func TestApplyKeyAction(t *testing.T) {
 			child := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 				model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-			got, err := keyoperator.ApplyKeyAction(
+			got, err := orchestrator.ApplyKeyAction(
 				t.Context(),
 				store.Stores{Keys: keyStore},
 				&stubPreparer{},
-				keyoperator.ApplyKeyActionRequest{
-					TenantID:     tenantID,
-					KeyID:        root.ID,
-					ToState:      model.KeyLifeCycleActive,
-					KeyFilters:   activateFilter,
-					Cascading:    true,
-					JobType:      activatekey.JobType,
-					JobGroupType: activatekey.JobGroupType,
+				orchestrator.ApplyKeyActionRequest{
+					TenantID:      tenantID,
+					KeyID:         root.ID,
+					KeyFilters:    activateFilter,
+					Cascading:     true,
+					HandlerConfig: orchestrator.ActivateHandlerConfig(),
 				},
 			)
 
@@ -507,8 +482,9 @@ func TestApplyKeyAction(t *testing.T) {
 
 // ── cascading multi-layer: all keys included ────────────────────────────
 func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
-	db := createDatabase(t)
-	tenantID := createTenant(t, db)
+	db := newRootDB(t)
+	tenant := createTenant(t, db)
+	tenantID := tenant.ID
 	keyStore := storesql.NewKeyStore(db)
 
 	t.Run("wide tree: two branches across 3 layers with mixed activatable states", func(t *testing.T) {
@@ -530,23 +506,21 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		grandB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K2", &childB.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
 		require.NoError(t, err)
-		assert.Equal(t, activatekey.JobGroupType, got.Type)
+		assert.Equal(t, orchestrator.ActivateKey, got.Type)
 		require.Len(t, got.Jobs, 3, "one job per layer")
 		assertJobDataContainsKeys(t, got.Jobs[0].Data, root.ID)
 		assertJobDataContainsKeys(t, got.Jobs[1].Data, childA.ID, childB.ID)
@@ -575,24 +549,22 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		grandB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K2", &childB.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
-				BottomUp:     true,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
+				BottomUp:      true,
 			},
 		)
 
 		require.NoError(t, err)
-		assert.Equal(t, activatekey.JobGroupType, got.Type)
+		assert.Equal(t, orchestrator.ActivateKey, got.Type)
 		require.Len(t, got.Jobs, 3, "one job per layer")
 		assertJobDataContainsKeys(t, got.Jobs[0].Data, grandA.ID, grandB.ID)
 		assertJobDataContainsKeys(t, got.Jobs[1].Data, childA.ID, childB.ID)
@@ -618,18 +590,16 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		great := seedKey(t, keyStore, tenantID, uuid.New().String(), "K3", &grand.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -669,18 +639,16 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		greatA1 := seedKey(t, keyStore, tenantID, uuid.New().String(), "K3", &grandA1.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -721,18 +689,16 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		seedKey(t, keyStore, tenantID, uuid.New().String(), "K3", &grandA1.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted) // great-A1: cascade-excluded
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -767,18 +733,16 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		grandB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K2", &childB.ID,
 			model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -805,18 +769,16 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		childB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
 			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
-		got, err := keyoperator.ApplyKeyAction(
+		got, err := orchestrator.ApplyKeyAction(
 			t.Context(),
 			store.Stores{Keys: keyStore},
 			&stubPreparer{},
-			keyoperator.ApplyKeyActionRequest{
-				TenantID:     tenantID,
-				KeyID:        root.ID,
-				ToState:      model.KeyLifeCycleActive,
-				KeyFilters:   activateFilter,
-				Cascading:    true,
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
+			orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         root.ID,
+				KeyFilters:    activateFilter,
+				Cascading:     true,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
 			},
 		)
 
@@ -848,7 +810,7 @@ func (f *failPreparer) PrepareJobGroup(_ context.Context, _ orbital.JobGroup) (o
 
 func assertJobDataContainsKeys(t *testing.T, jobData []byte, expectedKeyIDs ...string) {
 	t.Helper()
-	var layer handler.KeyLayer
+	var layer orchestrator.KeyLayer
 	require.NoError(t, json.Unmarshal(jobData, &layer))
 	actualIDs := make([]string, 0, len(layer.Identifiers))
 	for _, ki := range layer.Identifiers {
@@ -860,9 +822,40 @@ func assertJobDataContainsKeys(t *testing.T, jobData []byte, expectedKeyIDs ...s
 // assertJobDataTenantID verifies every identifier in the job data carries the expected tenant ID.
 func assertJobDataTenantID(t *testing.T, jobData []byte, expectedTenantID string) {
 	t.Helper()
-	var layer handler.KeyLayer
+	var layer orchestrator.KeyLayer
 	require.NoError(t, json.Unmarshal(jobData, &layer))
 	for _, ki := range layer.Identifiers {
 		assert.Equal(t, expectedTenantID, ki.TenantID, "key %s has wrong tenant ID", ki.ID)
 	}
+}
+
+// seedKey creates a key in the database with the given lifecycle state and
+// processing status, returning the seeded key with its generated ID.
+func seedKey(
+	t *testing.T,
+	keyStore store.Key,
+	tenantID, name, kind string,
+	parentID *string,
+	lcs model.KeyLifeCycleState,
+	ps model.KeyProcessingStatus,
+) model.Key {
+	t.Helper()
+	ctx := t.Context()
+	key := model.NewKey(tenantID, name, kind, parentID, "test-agent", nil)
+	require.NoError(t, keyStore.CreateKey(ctx, key))
+
+	if lcs != model.KeyLifeCyclePreActivation {
+		require.NoError(t, keyStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+			ID: key.ID, TenantID: tenantID, NewState: lcs,
+		}))
+	}
+	if ps != model.KeyProcessingPending {
+		require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+			ID: key.ID, TenantID: tenantID, NewStatus: ps,
+		}))
+	}
+
+	key.LifeCycleState = lcs
+	key.KeyProcessingState.Status = ps
+	return key
 }

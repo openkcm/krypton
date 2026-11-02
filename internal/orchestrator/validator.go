@@ -1,10 +1,9 @@
-package common
+package orchestrator
 
 import (
 	"context"
 	"errors"
 
-	"github.com/openkcm/krypton/internal/handler"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/validator"
@@ -28,7 +27,7 @@ func ValidateTenantID(tenantID string) store.TransactionFunc {
 // EnsureKey loads the key and evaluates cond. Returns [OrbitalFail] if not
 // found, [OrbitalContinue] on transient errors, or [OrbitalComplete] if cond
 // is false (skips remaining steps). A nil cond is treated as always-true.
-func EnsureKey(kid handler.KeyIdentifier, cond func(key *model.Key) bool) store.TransactionFunc {
+func EnsureKey(kid KeyIdentifier, cond func(key *model.Key) bool) store.TransactionFunc {
 	return func(ctx context.Context, stores store.Stores) error {
 		key, err := stores.Keys.GetKeyByID(ctx, kid.ID, kid.TenantID)
 		if err != nil {

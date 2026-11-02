@@ -1,4 +1,4 @@
-package common_test
+package orchestrator_test
 
 import (
 	"testing"
@@ -6,13 +6,13 @@ import (
 	"github.com/openkcm/orbital"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/krypton/internal/handler/common"
+	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
 func TestOrbitalContinue(t *testing.T) {
 	// given
 	// when
-	subj := common.OrbitalContinue(assert.AnError)
+	subj := orchestrator.OrbitalContinue(assert.AnError)
 
 	// then
 	resp := applyResponse(t, subj)
@@ -23,7 +23,7 @@ func TestOrbitalContinue(t *testing.T) {
 func TestOrbitalFail(t *testing.T) {
 	// given
 	// when
-	subj := common.OrbitalFail(assert.AnError)
+	subj := orchestrator.OrbitalFail(assert.AnError)
 
 	// then
 	resp := applyResponse(t, subj)
@@ -34,7 +34,7 @@ func TestOrbitalFail(t *testing.T) {
 func TestOrbitalComplete(t *testing.T) {
 	// given
 	// when
-	subj := common.OrbitalComplete()
+	subj := orchestrator.OrbitalComplete()
 
 	// then
 	resp := applyResponse(t, subj)
@@ -45,22 +45,22 @@ func TestOrbitalComplete(t *testing.T) {
 func TestApply(t *testing.T) {
 	tts := []struct {
 		name string
-		subj *common.OrbitalOperatorError
+		subj *orchestrator.OrbitalOperatorError
 		exp  error
 	}{
 		{
 			name: "continue",
-			subj: common.OrbitalContinue(assert.AnError),
+			subj: orchestrator.OrbitalContinue(assert.AnError),
 			exp:  assert.AnError,
 		},
 		{
 			name: "failed",
-			subj: common.OrbitalFail(assert.AnError),
+			subj: orchestrator.OrbitalFail(assert.AnError),
 			exp:  nil,
 		},
 		{
 			name: "complete",
-			subj: common.OrbitalComplete(),
+			subj: orchestrator.OrbitalComplete(),
 			exp:  nil,
 		},
 	}
@@ -78,7 +78,7 @@ func TestApply(t *testing.T) {
 func TestApplyDefault(t *testing.T) {
 	t.Run("unknown status should update response to processing", func(t *testing.T) {
 		// given
-		subj := &common.OrbitalOperatorError{}
+		subj := &orchestrator.OrbitalOperatorError{}
 
 		// when
 		resp := applyResponse(t, subj)
@@ -90,7 +90,7 @@ func TestApplyDefault(t *testing.T) {
 
 	t.Run("unknown status should return error", func(t *testing.T) {
 		// given
-		subj := &common.OrbitalOperatorError{}
+		subj := &orchestrator.OrbitalOperatorError{}
 
 		// when
 		err := subj.Apply(&orbital.HandlerResponse{})

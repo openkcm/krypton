@@ -1,4 +1,4 @@
-package activatekey_test
+package orchestrator_test
 
 import (
 	"encoding/json/v2"
@@ -8,22 +8,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
 func TestJobHandler_JobType(t *testing.T) {
 	// given  when
-	handler := activatekey.NewJobHandler()
+	handler := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
-	assert.Equal(t, activatekey.JobType, handler.JobType())
+	assert.Equal(t, orchestrator.ActivateKey, handler.JobType())
 }
 
 func TestJobHandler_New(t *testing.T) {
 	// given  when
-	handler := activatekey.NewJobHandler()
+	handler := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
 	assert.NotNil(t, handler)
@@ -31,7 +29,7 @@ func TestJobHandler_New(t *testing.T) {
 
 func TestJobHandler_ConfirmJob(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler()
+	subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
 	res, err := subj.ConfirmJob(t.Context(), orbital.Job{})
@@ -44,12 +42,12 @@ func TestJobHandler_ConfirmJob(t *testing.T) {
 func TestJobHandler_ResolveTasks(t *testing.T) {
 	t.Run("invalid JSON input", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler()
+		subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 		// when
 		res, err := subj.ResolveTasks(t.Context(), orbital.Job{
 			Data: []byte("invalid-json"),
-			Type: activatekey.JobType,
+			Type: orchestrator.ActivateKey,
 		}, orbital.TaskResolverCursor(""))
 
 		// then
@@ -59,9 +57,9 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 	t.Run("empty identifiers list", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler()
-		keyLayer := handler.KeyLayer{
-			Identifiers: []handler.KeyIdentifier{},
+		subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
+		keyLayer := orchestrator.KeyLayer{
+			Identifiers: []orchestrator.KeyIdentifier{},
 		}
 		jobData, err := json.Marshal(keyLayer)
 		require.NoError(t, err)
@@ -69,7 +67,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 		// when
 		res, err := subj.ResolveTasks(t.Context(), orbital.Job{
 			Data: jobData,
-			Type: activatekey.JobType,
+			Type: orchestrator.ActivateKey,
 		}, orbital.TaskResolverCursor(""))
 
 		// then
@@ -79,9 +77,9 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 	t.Run("resolves task per key identifier", func(t *testing.T) {
 		// given
-		subj := activatekey.NewJobHandler()
-		keyLayer := handler.KeyLayer{
-			Identifiers: []handler.KeyIdentifier{
+		subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
+		keyLayer := orchestrator.KeyLayer{
+			Identifiers: []orchestrator.KeyIdentifier{
 				{
 					ID:       "id1",
 					TenantID: "tenant",
@@ -102,7 +100,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 			expTaskInfos = append(expTaskInfos, orbital.TaskInfo{
 				Data:   jobData,
-				Type:   activatekey.TaskType,
+				Type:   orchestrator.ActivateKey,
 				Target: orchestrator.DefaultLocalTargetName,
 			})
 		}
@@ -111,7 +109,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 		// when
 		res, err := subj.ResolveTasks(t.Context(), orbital.Job{
 			Data: jobData,
-			Type: activatekey.JobType,
+			Type: orchestrator.ActivateKey,
 		}, orbital.TaskResolverCursor(""))
 
 		// then
@@ -122,7 +120,7 @@ func TestJobHandler_ResolveTasks(t *testing.T) {
 
 func TestJobHandler_OnJobCanceled(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler()
+	subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
 	err := subj.OnJobCanceled(t.Context(), orbital.Job{})
@@ -133,7 +131,7 @@ func TestJobHandler_OnJobCanceled(t *testing.T) {
 
 func TestJobHandler_OnJobDone(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler()
+	subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
 	err := subj.OnJobDone(t.Context(), orbital.Job{})
@@ -144,7 +142,7 @@ func TestJobHandler_OnJobDone(t *testing.T) {
 
 func TestJobHandler_OnJobFailed(t *testing.T) {
 	// given
-	subj := activatekey.NewJobHandler()
+	subj := orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig())
 
 	// when
 	err := subj.OnJobFailed(t.Context(), orbital.Job{})

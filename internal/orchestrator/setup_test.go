@@ -1,4 +1,4 @@
-package activatekey_test
+package orchestrator_test
 
 import (
 	"context"
@@ -26,15 +26,15 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/grpcconn"
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	agentkeys "github.com/openkcm/krypton/pkg/api/v1/proto/agents/keys"
@@ -45,6 +45,8 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
+
+const rootName = "root"
 
 // ---------------------------------------------------------------------------
 // Postgres container (shared across all tests in the package)
@@ -204,9 +206,45 @@ func createRemoteKey(t *testing.T, kStore store.Key, tenantID, parentKeyID, agen
 
 func taskDataForKey(t *testing.T, key model.Key) []byte {
 	t.Helper()
-	b, err := json.Marshal(handler.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
+	b, err := json.Marshal(orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
 	require.NoError(t, err)
 	return b
+}
+
+func seedRootTenantAndKey(t *testing.T, db *sql.DB, managedBy string) model.Key {
+	t.Helper()
+	ctx := t.Context()
+
+	tenantRes := createTenant(t, db)
+
+	keyStore := storesql.NewKeyStore(db)
+
+	// Root DB has a self-FK: keys(parent_id) -> keys(id). Seed a parent
+	// first so the child's parent_id is satisfiable.
+	parent := model.NewKey(tenantRes.ID, "parent-"+uuid.New().String(), "K0", nil, rootName, nil)
+	require.NoError(t, keyStore.CreateKey(ctx, parent))
+
+	parentID := parent.ID
+	key := model.NewKey(tenantRes.ID, "test-key-"+uuid.New().String(), "K0", &parentID, managedBy, nil)
+	require.NoError(t, keyStore.CreateKey(ctx, key))
+
+	// Move processing state to InProgress so the ChainTransaction's
+	// UpdateKeyState step (FromProcessing=[InProgress]) matches.
+	require.NoError(t, keyStore.UpdateKeyProcessingState(ctx, store.UpdateKeyProcessingStateQuery{
+		ID:        key.ID,
+		TenantID:  key.TenantID,
+		NewStatus: model.KeyProcessingInProgress,
+		NewJobID:  uuid.NewV7().String(),
+	}))
+	key.KeyProcessingState.Status = model.KeyProcessingInProgress
+	return key
+}
+
+func taskPayload(t *testing.T, key model.Key) []byte {
+	t.Helper()
+	payload, err := json.Marshal(key)
+	require.NoError(t, err)
+	return payload
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +265,18 @@ func dropKeyVersionsTable(t *testing.T, db *sql.DB) {
 	t.Helper()
 	_, err := db.ExecContext(t.Context(), `DROP TABLE key_versions`)
 	require.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// Stubs
+// ---------------------------------------------------------------------------
+
+type failingTransactor struct {
+	err error
+}
+
+func (f *failingTransactor) Transaction(context.Context, store.TransactionFunc) error {
+	return f.err
 }
 
 // ---------------------------------------------------------------------------
@@ -317,11 +367,11 @@ func emptyRegistry(t *testing.T) *grpcconn.Registry {
 // Task runner
 // ---------------------------------------------------------------------------
 
-func runTask(t *testing.T, h *activatekey.TaskHandler, payload []byte) orbital.TaskResponse {
+func runTask(t *testing.T, h orchestrator.TaskHandler, payload []byte) orbital.TaskResponse {
 	t.Helper()
 	return orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(h.Handle), orbital.TaskRequest{
 		TaskID: uuid.NewV7(),
-		Type:   activatekey.TaskType,
+		Type:   orchestrator.ActivateKey,
 		Data:   payload,
 	})
 }
@@ -346,9 +396,9 @@ func assertTaskRetry(t *testing.T, resp orbital.TaskResponse) {
 	assert.Positive(t, resp.ReconcileAfterSec)
 }
 
-func assertKeyState(t *testing.T, s store.Key, keyID, tenantID string, wantProcessing model.KeyProcessingStatus, wantLifecycle model.KeyLifeCycleState) {
+func assertKeyState(t *testing.T, s store.Key, k model.Key, wantProcessing model.KeyProcessingStatus, wantLifecycle model.KeyLifeCycleState) {
 	t.Helper()
-	key, err := s.GetKeyByID(t.Context(), keyID, tenantID)
+	key, err := s.GetKeyByID(t.Context(), k.ID, k.TenantID)
 	require.NoError(t, err)
 	assert.Equal(t, wantProcessing, key.KeyProcessingState.Status)
 	assert.Equal(t, wantLifecycle, key.LifeCycleState)
@@ -362,6 +412,21 @@ func assertKeyVersionCreated(t *testing.T, s store.KeyVersion, tenantID, keyID s
 	assert.Equal(t, model.KeyVersionUsable, res.KeyVersions[0].ProcessingState)
 	assert.Equal(t, model.KeyLifeCycleActive, res.KeyVersions[0].LifeCycleState)
 	return res.KeyVersions[0]
+}
+
+// applyResponse extracts the *OrbitalResponse from an error and returns the
+// resulting task status after applying it to a HandlerResponse.
+func applyResponse(t *testing.T, err error) orbital.TaskResponse {
+	t.Helper()
+	var or *orchestrator.OrbitalOperatorError
+	require.ErrorAs(t, err, &or)
+
+	resp := orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(
+		func(_ context.Context, _ orbital.HandlerRequest, r *orbital.HandlerResponse) {
+			_ = or.Apply(r)
+		},
+	), orbital.TaskRequest{TaskID: uuid.New(), Type: "test"})
+	return resp
 }
 
 // ---------------------------------------------------------------------------
@@ -399,4 +464,13 @@ func newTestSealer(t *testing.T) sealer.Sealer {
 	s, err := sealerprovider.GetSealer(t.Context(), *newTestSealerSpec(t))
 	require.NoError(t, err)
 	return s
+}
+
+func newTestBinding(t *testing.T) spec.KeyBinding {
+	t.Helper()
+	return spec.KeyBinding{
+		SealerSpec:  newTestSealerSpec(t),
+		CryptorSpec: newTestCryptorSpec(),
+		VaultSpec:   newTestVaultSpec(),
+	}
 }

@@ -1,4 +1,4 @@
-package activatekey
+package orchestrator
 
 import (
 	"context"
@@ -11,65 +11,67 @@ import (
 
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/grpcconn"
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/common"
 	"github.com/openkcm/krypton/internal/keyprocessor"
-	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-const TaskType = "activate-key"
-
-type TaskHandler struct {
+// KeyProcessTaskHandler is a [TaskHandler] that processes a single key within
+// a transaction: it validates the tenant and key, resolves key versions,
+// generates and seals secrets, upserts to remote agents, and marks the key
+// complete.
+type KeyProcessTaskHandler struct {
+	handlerCfg HandlerConfig
 	transactor store.Transactor
 	registry   *grpcconn.Registry
 	manager    *keyprocessor.Manager
-	config     *config.RootConfig
+	rootCfg    *config.RootConfig
 }
 
-var _ orchestrator.TaskHandler = &TaskHandler{}
+var _ TaskHandler = &KeyProcessTaskHandler{}
 
-func NewTaskHandler(
+func NewKeyProcessTaskHandler(
+	handleCfg HandlerConfig,
 	transactor store.Transactor,
 	registry *grpcconn.Registry,
 	manager *keyprocessor.Manager,
-	cfg *config.RootConfig,
-) *TaskHandler {
-	return &TaskHandler{
+	rootCfg *config.RootConfig,
+) *KeyProcessTaskHandler {
+	return &KeyProcessTaskHandler{
+		handlerCfg: handleCfg,
 		transactor: transactor,
 		registry:   registry,
 		manager:    manager,
-		config:     cfg,
+		rootCfg:    rootCfg,
 	}
 }
 
 // TaskType implements [orchestrator.TaskHandler].
-func (h *TaskHandler) TaskType() string {
-	return TaskType
+func (h *KeyProcessTaskHandler) TaskType() string {
+	return h.handlerCfg.handlerType
 }
 
 // Handle implements [orchestrator.TaskHandler].
-func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
-	var kid handler.KeyIdentifier
+func (h *KeyProcessTaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
+	var kid KeyIdentifier
 
 	err := json.Unmarshal(req.TaskData, &kid)
 	if err != nil {
-		resp.Fail(fmt.Sprintf("failed to unmarshal task data: %v", err))
+		resp.Fail(fmt.Sprintf("handler %v failed to unmarshal task data: %v", h.handlerCfg, err))
 		return
 	}
 
 	err = store.ChainTransaction(ctx, h.transactor,
-		common.ValidateTenantID(kid.TenantID),
-		common.EnsureKey(kid, func(key *model.Key) bool {
-			return key.LifeCycleState == model.KeyLifeCycleActive &&
+		ValidateTenantID(kid.TenantID),
+		EnsureKey(kid, func(key *model.Key) bool {
+			return key.LifeCycleState == h.handlerCfg.toState &&
 				key.KeyProcessingState.Status == model.KeyProcessingPending
 		}),
 		func(ctx context.Context, stores store.Stores) error {
-			proc := common.NewOrbitalOperator(
-				common.OrbitalOperatorConfig{
+			proc := NewKeyProcessOperator(
+				KeyProcessOperatorConfig{
 					Manager:    h.manager,
-					RootConfig: h.config,
+					RootConfig: h.rootCfg,
 					Registry:   h.registry,
 					Stores:     stores,
 				},
@@ -99,13 +101,13 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 		},
 	)
 	if err != nil {
-		if r, ok := errors.AsType[*common.OrbitalOperatorError](err); ok {
+		if r, ok := errors.AsType[*OrbitalOperatorError](err); ok {
 			// not checking the error here because we want to propagate the error to orbital for retry
 			_ = r.Apply(resp)
 			return
 		}
-		slog.Error("failed to activate key", "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
-		resp.ContinueAndWaitFor(common.RetryBackoff)
+		slog.Error("task failed", "handler", h.handlerCfg, "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
+		resp.ContinueAndWaitFor(RetryBackoff)
 	}
 }
 

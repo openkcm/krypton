@@ -13,8 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
@@ -400,9 +399,9 @@ func TestActivateKey(t *testing.T) {
 
 		// verify 1 job was created (child only, root skipped)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, activatekey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 1)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, child.ID)
 		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
@@ -522,11 +521,11 @@ func TestActivateKey(t *testing.T) {
 
 		// verify 3 jobs: layer 0 (K0), layer 1 (K1a only), layer 2 (K2a only)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, activatekey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 3)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[1].Type)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[2].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[2].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1a.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k2a.ID)
@@ -569,9 +568,9 @@ func TestActivateKey(t *testing.T) {
 
 		// verify a job group was prepared with one job
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, activatekey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 1)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
 		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
@@ -632,10 +631,10 @@ func TestActivateKey(t *testing.T) {
 
 		// verify 2 jobs were created (one per activatable layer)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, activatekey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 2)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[1].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1.ID)
 		for _, job := range spy.groups[0].Jobs {
@@ -702,11 +701,11 @@ func TestActivateKey(t *testing.T) {
 
 		// verify 3 jobs were created (one per layer)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, activatekey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 3)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[0].Type)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[1].Type)
-		assert.Equal(t, activatekey.JobType, spy.groups[0].Jobs[2].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.ActivateKey, spy.groups[0].Jobs[2].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k0.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k2.ID)
@@ -732,7 +731,7 @@ func newTestKey(t *testing.T, ks store.Key, tenantID, kind string, parentID *str
 // contains exactly the given key IDs (order-independent).
 func assertJobDataContainsKeys(t *testing.T, jobData []byte, expectedKeyIDs ...string) {
 	t.Helper()
-	var layer handler.KeyLayer
+	var layer orchestrator.KeyLayer
 	require.NoError(t, json.Unmarshal(jobData, &layer))
 	actualIDs := make([]string, 0, len(layer.Identifiers))
 	for _, k := range layer.Identifiers {
@@ -744,7 +743,7 @@ func assertJobDataContainsKeys(t *testing.T, jobData []byte, expectedKeyIDs ...s
 // assertJobDataTenantID verifies every identifier in the job data carries the expected tenant ID.
 func assertJobDataTenantID(t *testing.T, jobData []byte, expectedTenantID string) {
 	t.Helper()
-	var layer handler.KeyLayer
+	var layer orchestrator.KeyLayer
 	require.NoError(t, json.Unmarshal(jobData, &layer))
 	for _, ki := range layer.Identifiers {
 		assert.Equal(t, expectedTenantID, ki.TenantID, "key %s has wrong tenant ID", ki.ID)

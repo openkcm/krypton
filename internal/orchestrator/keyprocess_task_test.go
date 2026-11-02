@@ -1,4 +1,4 @@
-package activatekey_test
+package orchestrator_test
 
 import (
 	"database/sql"
@@ -12,9 +12,8 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/grpcconn"
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -56,7 +55,8 @@ func TestActivate_Handler(t *testing.T) {
 	require.NoError(t, err)
 
 	// default handler: root-managed, with empty registry
-	subj := activatekey.NewTaskHandler(
+	subj := orchestrator.NewKeyProcessTaskHandler(
+		orchestrator.ActivateHandlerConfig(),
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
 		mgr,
@@ -64,14 +64,14 @@ func TestActivate_Handler(t *testing.T) {
 	)
 
 	// newHandler builds a TaskHandler with the given overrides.
-	newHandler := func(transactor store.Transactor, registry *grpcconn.Registry, manager *keyprocessor.Manager) *activatekey.TaskHandler {
+	newHandler := func(transactor store.Transactor, registry *grpcconn.Registry, manager *keyprocessor.Manager) *orchestrator.KeyProcessTaskHandler {
 		if transactor == nil {
 			transactor = storesql.NewTransactor(rootDB)
 		}
 		if manager == nil {
 			manager = mgr
 		}
-		return activatekey.NewTaskHandler(transactor, registry, manager, validRootCfg)
+		return orchestrator.NewKeyProcessTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, manager, validRootCfg)
 	}
 
 	// ---- input validation ----
@@ -116,7 +116,7 @@ func TestActivate_Handler(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: key.ID, TenantID: uuid.New().String()})
+		taskdata := jsonMarshal(t, orchestrator.KeyIdentifier{ID: key.ID, TenantID: uuid.New().String()})
 
 		// when
 		resp := runTask(t, newHandler(storesql.NewTransactor(tmpDB), nil, nil), taskdata)
@@ -161,7 +161,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should fail if key is not found", func(t *testing.T) {
 		// given
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID})
+		taskdata := jsonMarshal(t, orchestrator.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID})
 
 		// when
 		resp := runTask(t, subj, taskdata)
@@ -172,7 +172,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should retry if fetchKey returns an internal error", func(t *testing.T) {
 		// given
-		taskdata := jsonMarshal(t, handler.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID})
+		taskdata := jsonMarshal(t, orchestrator.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID})
 
 		// when
 		resp := runTask(t, subj, taskdata)
@@ -205,7 +205,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskFailed(t, resp)
-		assertKeyState(t, kStore, key1.ID, key1.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key1, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
 	// ---- generateAndSealSecret ----
@@ -223,7 +223,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskFailed(t, resp)
-		assertKeyState(t, kStore, key.ID, key.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
 	t.Run("should retry if secret generation fails", func(t *testing.T) {
@@ -260,7 +260,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskFailed(t, resp)
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
 	t.Run("should fail if agent is not in registry", func(t *testing.T) {
@@ -273,7 +273,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskFailed(t, resp)
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
 	// ---- upsertRemoteKey ----
@@ -290,7 +290,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskRetry(t, resp)
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingPending, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingPending, model.KeyLifeCycleActive)
 	})
 
 	t.Run("should fail key if upsertRemoteKey returns a non-retryable error", func(t *testing.T) {
@@ -304,7 +304,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskFailed(t, resp)
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
 	// ---- upsertRemoteKeyVersion ----
@@ -322,7 +322,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskRetry(t, resp)
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingPending, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingPending, model.KeyLifeCycleActive)
 	})
 
 	// ---- happy path: root-managed keys ----
@@ -340,7 +340,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskDone(t, resp)
-		assertKeyState(t, kStore, key0.ID, key0.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key0, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
 		assertKeyVersionCreated(t, kvStore, key0.TenantID, key0.ID)
 	})
 
@@ -358,7 +358,7 @@ func TestActivate_Handler(t *testing.T) {
 
 		// then
 		assertTaskDone(t, resp)
-		assertKeyState(t, kStore, key1.ID, key1.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key1, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
 		kv := assertKeyVersionCreated(t, kvStore, key1.TenantID, key1.ID)
 		assert.Equal(t, pc.kv0.Version, *kv.ParentKeyVersion)
 	})
@@ -418,7 +418,7 @@ func TestActivate_Handler(t *testing.T) {
 		// then
 		assertTaskDone(t, resp)
 
-		assertKeyState(t, kStore, key2.ID, key2.TenantID, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+		assertKeyState(t, kStore, key2, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
 		rootKV := assertKeyVersionCreated(t, kvStore, key2.TenantID, key2.ID)
 
 		agentKey, err := agentSrv.keyStore.GetKeyByID(ctx, key2.ID, key2.TenantID)

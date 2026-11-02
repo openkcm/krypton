@@ -24,8 +24,6 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/core"
 	"github.com/openkcm/krypton/internal/grpcconn"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
-	"github.com/openkcm/krypton/internal/handler/announcekey"
 	"github.com/openkcm/krypton/internal/interceptor"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
@@ -105,16 +103,16 @@ func main() {
 
 	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
 		Jobs: []orchestrator.JobHandler{
-			announcekey.NewJobHandler(transactor),
-			activatekey.NewJobHandler(),
+			orchestrator.NewAnnounceJobHandler(transactor),
+			orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig()),
 		},
 		Groups: []orchestrator.JobGroupHandler{
-			announcekey.NewJobGroupHandler(),
-			activatekey.NewJobGroupHandler(),
+			orchestrator.NewKeyProcessJobGroupHandler(orchestrator.AnnounceHandlerConfig()),
+			orchestrator.NewKeyProcessJobGroupHandler(orchestrator.ActivateHandlerConfig()),
 		},
 		Tasks: []orchestrator.TaskHandler{
-			announcekey.NewTaskHandler(transactor, registry, cfg.Name),
-			activatekey.NewTaskHandler(transactor, registry, kpMgr, cfg),
+			orchestrator.NewAnnounceTaskHandler(transactor, registry, cfg.Name),
+			orchestrator.NewKeyProcessTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, kpMgr, cfg),
 		},
 	}, orchestratorOpts...)
 	handleErr(err, "failed to create orchestrator")

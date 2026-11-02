@@ -32,7 +32,43 @@ import (
 	"context"
 
 	"github.com/openkcm/orbital"
+
+	"github.com/openkcm/krypton/pkg/model"
 )
+
+const (
+	AnnounceKey = "announce-key"
+	ActivateKey = "activate-key"
+	SuspendKey  = "suspend-key"
+)
+
+type (
+	HandlerConfig struct {
+		handlerType string
+		toState     model.KeyLifeCycleState
+	}
+)
+
+func AnnounceHandlerConfig() HandlerConfig {
+	return HandlerConfig{
+		handlerType: AnnounceKey,
+		toState:     model.KeyLifeCyclePreActivation,
+	}
+}
+
+func ActivateHandlerConfig() HandlerConfig {
+	return HandlerConfig{
+		handlerType: ActivateKey,
+		toState:     model.KeyLifeCycleActive,
+	}
+}
+
+func SuspendHandlerConfig() HandlerConfig {
+	return HandlerConfig{
+		handlerType: SuspendKey,
+		toState:     model.KeyLifeCycleSuspended,
+	}
+}
 
 // JobHandler owns the orbital lifecycle for a single Krypton job type.
 type JobHandler interface {

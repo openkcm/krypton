@@ -1,4 +1,4 @@
-package common_test
+package orchestrator_test
 
 import (
 	"testing"
@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/handler"
-	"github.com/openkcm/krypton/internal/handler/common"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -22,7 +21,7 @@ func TestValidateTenantID(t *testing.T) {
 
 	t.Run("should return nil when tenant exists", func(t *testing.T) {
 		// given
-		step := common.ValidateTenantID(tenant.ID)
+		step := orchestrator.ValidateTenantID(tenant.ID)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -33,7 +32,7 @@ func TestValidateTenantID(t *testing.T) {
 
 	t.Run("should return OrbitalFail when tenant is not found", func(t *testing.T) {
 		// given
-		step := common.ValidateTenantID(uuid.New().String())
+		step := orchestrator.ValidateTenantID(uuid.New().String())
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -50,7 +49,7 @@ func TestValidateTenantID(t *testing.T) {
 		require.NoError(t, execErr)
 
 		brokenTransactor := storesql.NewTransactor(brokenDB)
-		step := common.ValidateTenantID(tenant.ID)
+		step := orchestrator.ValidateTenantID(tenant.ID)
 
 		// when
 		err := store.ChainTransaction(t.Context(), brokenTransactor, step)
@@ -79,7 +78,7 @@ func TestEnsureKey(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
+		step := orchestrator.EnsureKey(orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -95,7 +94,7 @@ func TestEnsureKey(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleDeactivated,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
+		step := orchestrator.EnsureKey(orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -112,7 +111,7 @@ func TestEnsureKey(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, nil)
+		step := orchestrator.EnsureKey(orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID}, nil)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -123,7 +122,7 @@ func TestEnsureKey(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
 		// given
-		step := common.EnsureKey(handler.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID}, isActivePending)
+		step := orchestrator.EnsureKey(orchestrator.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), transactor, step)
@@ -148,7 +147,7 @@ func TestEnsureKey(t *testing.T) {
 		require.NoError(t, execErr)
 
 		brokenTransactor := storesql.NewTransactor(brokenDB)
-		step := common.EnsureKey(handler.KeyIdentifier{ID: key.ID, TenantID: brokenTenant.ID}, isActivePending)
+		step := orchestrator.EnsureKey(orchestrator.KeyIdentifier{ID: key.ID, TenantID: brokenTenant.ID}, isActivePending)
 
 		// when
 		err := store.ChainTransaction(t.Context(), brokenTransactor, step)
