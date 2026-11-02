@@ -156,7 +156,7 @@ func TestActivateKey(t *testing.T) {
 				// then
 				require.Error(t, err)
 				assert.Nil(t, res)
-				assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+				assert.Equal(t, codes.NotFound, status.Code(err))
 				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 			})
 		}
@@ -215,18 +215,32 @@ func TestActivateKey(t *testing.T) {
 		tts := []struct {
 			name             string
 			processingStatus model.KeyProcessingStatus
+			keyState         model.KeyLifeCycleState
 		}{
 			{
-				name:             "key processing is pending",
+				name:             "key processing is pending and key is preactive",
 				processingStatus: model.KeyProcessingPending,
+				keyState:         model.KeyLifeCyclePreActivation,
 			},
 			{
-				name:             "key processing is in-progress",
+				name:             "key processing is in-progress and key is preactive",
 				processingStatus: model.KeyProcessingInProgress,
+				keyState:         model.KeyLifeCyclePreActivation,
 			},
 			{
-				name:             "key processing is failed",
+				name:             "key processing is failed and key is preactive",
 				processingStatus: model.KeyProcessingFailed,
+				keyState:         model.KeyLifeCyclePreActivation,
+			},
+			{
+				name:             "key processing is pending and key active",
+				processingStatus: model.KeyProcessingPending,
+				keyState:         model.KeyLifeCycleActive,
+			},
+			{
+				name:             "key processing is in-progress and key active",
+				processingStatus: model.KeyProcessingInProgress,
+				keyState:         model.KeyLifeCycleActive,
 			},
 		}
 		for _, tt := range tts {
@@ -236,7 +250,7 @@ func TestActivateKey(t *testing.T) {
 
 				// create a key in pre-activation (passes ValidateTransition) but
 				// with non-completed processing so the selector excludes it
-				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCyclePreActivation, tt.processingStatus)
+				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, tt.keyState, tt.processingStatus)
 
 				// when
 				res, err := svc.ActivateKey(ctx, &keypb.ActivateKeyRequest{
@@ -247,7 +261,7 @@ func TestActivateKey(t *testing.T) {
 				// then
 				require.Error(t, err)
 				assert.Nil(t, res)
-				assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+				assert.Equal(t, codes.NotFound, status.Code(err))
 				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 			})
 		}
@@ -415,7 +429,7 @@ func TestActivateKey(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.Nil(t, res)
-		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assert.Equal(t, codes.NotFound, status.Code(err))
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 
 		// verify neither key was modified
@@ -437,7 +451,7 @@ func TestActivateKey(t *testing.T) {
 		//              /                               \
 		//   K1a (pre-activation + completed)     K1b (deactivated + completed)
 		//        |                                      |
-		//   K2a (pre-activation + completed)     K2b (pre-activation + completed)
+		//   K2a (active + failed)     K2b (pre-activation + completed)
 		//
 		// Branch A (K1a, K2a): fully activatable.
 		// Branch B: K1b is deactivated (cannot transition to active),
@@ -464,7 +478,7 @@ func TestActivateKey(t *testing.T) {
 		k1bID := k1b.ID
 
 		// layer 2: grandchildren
-		k2a := newTestKey(t, keyStore, tenant.ID, "K2", &k1aID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+		k2a := newTestKey(t, keyStore, tenant.ID, "K2", &k1aID, model.KeyLifeCycleActive, model.KeyProcessingFailed)
 		k2b := newTestKey(t, keyStore, tenant.ID, "K2", &k1bID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		// when
@@ -589,8 +603,6 @@ func TestActivateKey(t *testing.T) {
 		k1ID := k1.ID
 		k2 := newTestKey(t, keyStore, tenant.ID, "K2", &k1ID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
 
-		// when — AllowPartial is required because K2 is excluded and the
-		// fast-fail exclusion check rejects immediately when AllowPartial is false.
 		res, err := svc.ActivateKey(ctx, &keypb.ActivateKeyRequest{
 			TenantId:  tenant.ID,
 			Id:        k0.ID,

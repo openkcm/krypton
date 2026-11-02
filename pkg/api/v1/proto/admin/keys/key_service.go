@@ -13,6 +13,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/handler/activatekey"
 	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/handler/suspendkey"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
@@ -75,7 +76,7 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 	tenantID := req.GetTenantId()
 	keyID := req.GetId()
 
-	if err := validator.ValidateActivateRequest(validator.ActivateInput{
+	if err := validator.ValidateKeyRequest(validator.KeyIdentifierInput{
 		TenantID: tenantID, KeyID: keyID,
 	}); err != nil {
 		return nil, proto.ErrDetailsWithCode(
@@ -130,6 +131,61 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 	}
 
 	return &ActivateKeyResponse{JobGroupId: group.ID.String()}, nil
+}
+
+func (s *KeyService) SuspendKey(ctx context.Context, req *SuspendKeyRequest) (*SuspendKeyResponse, error) {
+	tenantID := req.GetTenantId()
+	keyID := req.GetId()
+
+	if err := validator.ValidateKeyRequest(validator.KeyIdentifierInput{
+		TenantID: tenantID, KeyID: keyID,
+	}); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
+
+	var group orbital.JobGroup
+	err := store.ChainTransaction(ctx, s.transactor,
+		validator.ValidateTenant(tenantID),
+		func(ctx context.Context, stores store.Stores) error {
+			grp, err := keyoperator.ApplyKeyAction(ctx, stores, s.preparer, keyoperator.ApplyKeyActionRequest{
+				TenantID: tenantID,
+				KeyID:    keyID,
+				ToState:  model.KeyLifeCycleSuspended,
+				KeyFilters: []keyoperator.KeyFilter{
+					{
+						LifeCycleState: model.KeyLifeCycleSuspended,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingFailed,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleActive,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+				},
+				JobType:      suspendkey.JobType,
+				JobGroupType: suspendkey.JobGroupType,
+				Cascading:    req.GetCascading(),
+				BottomUp:     true,
+			})
+			if err != nil {
+				return err
+			}
+			group = grp
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, mappedOrInternal(err)
+	}
+
+	return &SuspendKeyResponse{JobGroupId: group.ID.String()}, nil
 }
 
 func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {

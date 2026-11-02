@@ -24,7 +24,9 @@ func mapToProtoErr(err error) error {
 			status.New(codes.FailedPrecondition, validator.ErrInvalidTenantID.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-	case errors.Is(err, store.ErrKeyNotFound):
+	case errorIsOneOf(err,
+		store.ErrKeyNotFound,
+		keyoperator.ErrNoKeysFound):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "key not found"),
 			proto.Code_ERROR_CODE_ABORT,
@@ -83,9 +85,9 @@ func mapToProtoErr(err error) error {
 			status.New(codes.Internal, keyoperator.ErrGenerateAndSealKeyMaterial.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-	case errors.Is(err, keyoperator.ErrNoKeysFound):
+	case errors.Is(err, keyoperator.ErrNoEligibleKeys):
 		return proto.ErrDetailsWithCode(
-			status.New(codes.FailedPrecondition, err.Error()),
+			status.New(codes.FailedPrecondition, "key is already at the target state"),
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	case errors.Is(err, keyoperator.ErrInternal):

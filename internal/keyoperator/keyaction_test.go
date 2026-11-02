@@ -163,34 +163,40 @@ func TestApplyKeyAction(t *testing.T) {
 
 	t.Run("no actionable keys", func(t *testing.T) {
 		tests := []struct {
-			name string
-			lcs  model.KeyLifeCycleState
-			ps   model.KeyProcessingStatus
+			name   string
+			lcs    model.KeyLifeCycleState
+			ps     model.KeyProcessingStatus
+			expErr error
 		}{
 			{
-				name: "invalid transition: destroyed has no outgoing transitions",
-				lcs:  model.KeyLifeCycleDestroyed,
-				ps:   model.KeyProcessingCompleted,
+				name:   "filter mismatch: destroyed has no activatable filter entry",
+				lcs:    model.KeyLifeCycleDestroyed,
+				ps:     model.KeyProcessingCompleted,
+				expErr: keyoperator.ErrNoKeysFound,
 			},
 			{
-				name: "invalid transition: deactivated cannot transition to active",
-				lcs:  model.KeyLifeCycleDeactivated,
-				ps:   model.KeyProcessingCompleted,
+				name:   "filter mismatch: deactivated has no activatable filter entry",
+				lcs:    model.KeyLifeCycleDeactivated,
+				ps:     model.KeyProcessingCompleted,
+				expErr: keyoperator.ErrNoKeysFound,
 			},
 			{
-				name: "filter mismatch: pre-activation with pending processing",
-				lcs:  model.KeyLifeCyclePreActivation,
-				ps:   model.KeyProcessingPending,
+				name:   "filter mismatch: pre-activation with pending processing",
+				lcs:    model.KeyLifeCyclePreActivation,
+				ps:     model.KeyProcessingPending,
+				expErr: keyoperator.ErrNoKeysFound,
 			},
 			{
-				name: "filter mismatch: active with in-progress processing",
-				lcs:  model.KeyLifeCycleActive,
-				ps:   model.KeyProcessingInProgress,
+				name:   "filter mismatch: active with in-progress processing",
+				lcs:    model.KeyLifeCycleActive,
+				ps:     model.KeyProcessingInProgress,
+				expErr: keyoperator.ErrNoKeysFound,
 			},
 			{
-				name: "already at target state with completed processing",
-				lcs:  model.KeyLifeCycleActive,
-				ps:   model.KeyProcessingCompleted,
+				name:   "already at target state with completed processing",
+				lcs:    model.KeyLifeCycleActive,
+				ps:     model.KeyProcessingCompleted,
+				expErr: keyoperator.ErrNoEligibleKeys,
 			},
 		}
 
@@ -213,7 +219,7 @@ func TestApplyKeyAction(t *testing.T) {
 				)
 
 				assert.Empty(t, got)
-				assert.ErrorIs(t, err, keyoperator.ErrNoKeysFound)
+				assert.ErrorIs(t, err, tc.expErr)
 			})
 		}
 	})
@@ -545,6 +551,52 @@ func TestApplyKeyAction_CascadingMultiLayerAllIncluded(t *testing.T) {
 		assertJobDataContainsKeys(t, got.Jobs[0].Data, root.ID)
 		assertJobDataContainsKeys(t, got.Jobs[1].Data, childA.ID, childB.ID)
 		assertJobDataContainsKeys(t, got.Jobs[2].Data, grandA.ID, grandB.ID)
+		for _, job := range got.Jobs {
+			assertJobDataTenantID(t, job.Data, tenantID)
+		}
+	})
+
+	t.Run("wide tree: two branches across 3 layers with mixed activatable states with bottom up true", func(t *testing.T) {
+		// given — all keys can transition to active, mixed pre-activation and suspended.
+		//
+		//                 root (pre-activation + completed)
+		//                /                                 \
+		//   child-A (pre-activation + completed)   child-B (suspended + completed)
+		//        |                                       |
+		//   grand-A (pre-activation + completed)   grand-B (pre-activation + completed)
+		root := seedKey(t, keyStore, tenantID, uuid.New().String(), "K0", nil,
+			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+		childA := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
+			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+		childB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K1", &root.ID,
+			model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
+		grandA := seedKey(t, keyStore, tenantID, uuid.New().String(), "K2", &childA.ID,
+			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+		grandB := seedKey(t, keyStore, tenantID, uuid.New().String(), "K2", &childB.ID,
+			model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+
+		got, err := keyoperator.ApplyKeyAction(
+			t.Context(),
+			store.Stores{Keys: keyStore},
+			&stubPreparer{},
+			keyoperator.ApplyKeyActionRequest{
+				TenantID:     tenantID,
+				KeyID:        root.ID,
+				ToState:      model.KeyLifeCycleActive,
+				KeyFilters:   activateFilter,
+				Cascading:    true,
+				JobType:      activatekey.JobType,
+				JobGroupType: activatekey.JobGroupType,
+				BottomUp:     true,
+			},
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, activatekey.JobGroupType, got.Type)
+		require.Len(t, got.Jobs, 3, "one job per layer")
+		assertJobDataContainsKeys(t, got.Jobs[0].Data, grandA.ID, grandB.ID)
+		assertJobDataContainsKeys(t, got.Jobs[1].Data, childA.ID, childB.ID)
+		assertJobDataContainsKeys(t, got.Jobs[2].Data, root.ID)
 		for _, job := range got.Jobs {
 			assertJobDataTenantID(t, job.Data, tenantID)
 		}

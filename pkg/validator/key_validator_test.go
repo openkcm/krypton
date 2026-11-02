@@ -161,32 +161,42 @@ func TestValidator_ValidateKeyUpsert(t *testing.T) {
 	}
 }
 
-func TestValidator_ValidateActivateRequest(t *testing.T) {
+func TestValidator_ValidateKeyRequest(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   validator.ActivateInput
+		input   validator.KeyIdentifierInput
 		wantErr error
 	}{
 		{
 			name:    "invalid tenantID",
-			input:   validator.ActivateInput{TenantID: invalidUUID, KeyID: validUUID},
-			wantErr: validator.ErrEmptyTenantID,
+			input:   validator.KeyIdentifierInput{TenantID: invalidUUID, KeyID: validUUID},
+			wantErr: validator.ErrInvalidTenantID,
+		},
+		{
+			name:    "empty tenantID",
+			input:   validator.KeyIdentifierInput{TenantID: "", KeyID: validUUID},
+			wantErr: validator.ErrInvalidTenantID,
 		},
 		{
 			name:    "invalid keyID",
-			input:   validator.ActivateInput{TenantID: validUUID, KeyID: invalidUUID},
+			input:   validator.KeyIdentifierInput{TenantID: validUUID, KeyID: invalidUUID},
+			wantErr: validator.ErrInvalidKeyID,
+		},
+		{
+			name:    "empty keyID",
+			input:   validator.KeyIdentifierInput{TenantID: validUUID, KeyID: ""},
 			wantErr: validator.ErrInvalidKeyID,
 		},
 		{
 			name:    "both valid",
-			input:   validator.ActivateInput{TenantID: validUUID, KeyID: validUUID},
+			input:   validator.KeyIdentifierInput{TenantID: validUUID, KeyID: validUUID},
 			wantErr: nil,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validator.ValidateActivateRequest(tc.input)
+			err := validator.ValidateKeyRequest(tc.input)
 			if tc.wantErr == nil {
 				assert.NoError(t, err)
 				return

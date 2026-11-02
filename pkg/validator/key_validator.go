@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	ErrEmptyTenantID              = errors.New("tenantId cannot be empty")
 	ErrEmptyKeyKind               = errors.New("key kind cannot be empty")
 	ErrInvalidKeyID               = errors.New("keyId is invalid")
 	ErrEmptyName                  = errors.New("name cannot be empty")
@@ -112,12 +111,12 @@ func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) erro
 	return nil
 }
 
-// ValidateActivateRequest verifies that the tenant and key IDs of an
-// activation request are valid UUIDs.
-func ValidateActivateRequest(input ActivateInput) error {
+// ValidateKeyRequest verifies that the tenant and key IDs of a
+// request are valid UUIDs.
+func ValidateKeyRequest(input KeyIdentifierInput) error {
 	switch {
 	case !isValidUUID(input.TenantID):
-		return ErrEmptyTenantID
+		return ErrInvalidTenantID
 	case !isValidUUID(input.KeyID):
 		return ErrInvalidKeyID
 	}
