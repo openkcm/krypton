@@ -25,6 +25,8 @@ var (
 	ErrProviderTypeMismatch = errors.New("provider type does not match stored spec")
 	// ErrNoProviderKeyVersion means no provider key version exists.
 	ErrNoProviderKeyVersion = errors.New("no provider key version found")
+	// ErrProviderKeyLabelEmpty means the provider key label is missing or empty.
+	ErrProviderKeyLabelEmpty = errors.New("provider key label is empty")
 	// ErrTransactorMissing means no transactor was supplied.
 	ErrTransactorMissing = errors.New("transactor is required")
 )
@@ -333,7 +335,11 @@ func (p providerKeyVersions) resolveLabel(ctx context.Context, version int, t se
 	if err != nil {
 		return "", err
 	}
-	return kv.Labels[providerKeyLabel(t)], nil
+	label, ok := kv.Labels[providerKeyLabel(t)]
+	if !ok || label == "" {
+		return "", ErrProviderKeyLabelEmpty
+	}
+	return label, nil
 }
 
 func (p providerKeyVersions) create(ctx context.Context, version int, t sealer.Type, providerKeyID string) error {

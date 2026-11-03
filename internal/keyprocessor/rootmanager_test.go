@@ -453,6 +453,37 @@ func TestRootManagerSealUnseal(t *testing.T) {
 		assert.ErrorIs(t, err, keylifecycle.ErrOperationNotAllowedInState)
 	})
 
+	t.Run("should reject an empty provider key label", func(t *testing.T) {
+		db := createDatabase(t)
+		tenantID := createTenant(t, db)
+		rm := newTestRootManager(t, db)
+		rootKey, _ := createRootProvider(t, db, rm, tenantID)
+		activateKey(t, db, rootKey)
+
+		kvStore := storesql.NewKeyVersionStore(db)
+		res, err := kvStore.ListKeyVersions(t.Context(), store.ListKeyVersionsQuery{
+			TenantID: tenantID,
+			KeyID:    rootKey.ID,
+			Version:  1,
+		})
+		require.NoError(t, err)
+		require.Len(t, res.KeyVersions, 1)
+
+		kv := res.KeyVersions[0]
+		kv.Revision++
+		kv.Labels = nil
+		_, err = kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
+		require.NoError(t, err)
+
+		_, err = rm.Seal(t.Context(), sealer.SealRequest{
+			TenantID:   tenantID,
+			KeyID:      rootKey.ID,
+			KeyVersion: 1,
+			Plaintext:  newTestData(t, []byte("data")),
+		})
+		assert.ErrorIs(t, err, keyprocessor.ErrProviderKeyLabelEmpty)
+	})
+
 	t.Run("should seal and unseal round trip with nil metadata", func(t *testing.T) {
 		db := createDatabase(t)
 		tenantID := createTenant(t, db)
