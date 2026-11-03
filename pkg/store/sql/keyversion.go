@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -29,12 +30,17 @@ func NewKeyVersionStore(db DBTX) *KeyVersionStore {
 
 func (s *KeyVersionStore) CreateKeyVersion(ctx context.Context, query store.CreateKeyVersionQuery) (store.CreateKeyVersionResult, error) {
 	stmt := `
-		INSERT INTO key_versions (tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO key_versions (tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, labels, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	kv := query.KeyVersion
-	_, err := s.db.ExecContext(ctx, stmt,
+	labelsJSON, err := json.Marshal(kv.Labels)
+	if err != nil {
+		return store.CreateKeyVersionResult{}, err
+	}
+
+	_, err = s.db.ExecContext(ctx, stmt,
 		kv.TenantID,
 		kv.KeyID,
 		kv.Version,
@@ -43,6 +49,7 @@ func (s *KeyVersionStore) CreateKeyVersion(ctx context.Context, query store.Crea
 		kv.ParentKeyVersion,
 		kv.LifeCycleState,
 		kv.ProcessingState,
+		labelsJSON,
 		kv.CreatedAt,
 		kv.UpdatedAt,
 	)
@@ -55,12 +62,13 @@ func (s *KeyVersionStore) CreateKeyVersion(ctx context.Context, query store.Crea
 
 func (s *KeyVersionStore) GetKeyVersion(ctx context.Context, query store.GetKeyVersionQuery) (store.GetKeyVersionResult, error) {
 	stmt := `
-	SELECT tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, created_at, updated_at
+	SELECT tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, labels, created_at, updated_at
 	FROM key_versions WHERE tenant_id = $1 AND key_id = $2 AND version = $3 AND revision = $4
 	`
 	row := s.db.QueryRowContext(ctx, stmt, query.TenantID, query.KeyID, query.Version, query.Revision)
 
 	var kv model.KeyVersion
+	var labelsData []byte
 	err := row.Scan(
 		&kv.TenantID,
 		&kv.KeyID,
@@ -70,6 +78,7 @@ func (s *KeyVersionStore) GetKeyVersion(ctx context.Context, query store.GetKeyV
 		&kv.ParentKeyVersion,
 		&kv.LifeCycleState,
 		&kv.ProcessingState,
+		&labelsData,
 		&kv.CreatedAt,
 		&kv.UpdatedAt,
 	)
@@ -78,6 +87,12 @@ func (s *KeyVersionStore) GetKeyVersion(ctx context.Context, query store.GetKeyV
 			return store.GetKeyVersionResult{}, store.ErrKeyVersionNotFound
 		}
 		return store.GetKeyVersionResult{}, err
+	}
+
+	if len(labelsData) > 0 {
+		if err := json.Unmarshal(labelsData, &kv.Labels); err != nil {
+			return store.GetKeyVersionResult{}, err
+		}
 	}
 
 	return store.GetKeyVersionResult{KeyVersion: kv}, nil
@@ -91,7 +106,7 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 	}
 
 	var q strings.Builder
-	fmt.Fprintf(&q, `SELECT tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, created_at, updated_at
+	fmt.Fprintf(&q, `SELECT tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, labels, created_at, updated_at
 		FROM key_versions WHERE tenant_id = %s `, nextParam(query.TenantID))
 
 	if query.KeyID != "" {
@@ -132,6 +147,7 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 	var keyVersions []model.KeyVersion
 	for rows.Next() {
 		var kv model.KeyVersion
+		var labelsData []byte
 		err := rows.Scan(
 			&kv.TenantID,
 			&kv.KeyID,
@@ -141,11 +157,17 @@ func (s *KeyVersionStore) ListKeyVersions(ctx context.Context, query store.ListK
 			&kv.ParentKeyVersion,
 			&kv.LifeCycleState,
 			&kv.ProcessingState,
+			&labelsData,
 			&kv.CreatedAt,
 			&kv.UpdatedAt,
 		)
 		if err != nil {
 			return store.ListKeyVersionsResult{}, err
+		}
+		if len(labelsData) > 0 {
+			if err := json.Unmarshal(labelsData, &kv.Labels); err != nil {
+				return store.ListKeyVersionsResult{}, err
+			}
 		}
 		keyVersions = append(keyVersions, kv)
 	}

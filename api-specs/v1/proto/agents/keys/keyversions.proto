@@ -17,6 +17,7 @@ message UpsertKeyVersionRequest {
  int32  parent_version = 6;
  string lifecycle_state = 7;
  string processing_state = 8;
+ map<string, string> labels = 9;
 }
 
 message UpsertKeyVersionResponse {}

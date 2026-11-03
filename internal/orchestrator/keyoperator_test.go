@@ -200,13 +200,16 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		Hierarchy: hierarchy,
 	}
 
+	rootMgr := newTestRootManager(t, db)
+
 	mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 		KeyStore: kStore, KeyVersionStore: kvStore,
 		Bindings: map[model.KeyKind]spec.KeyBinding{
 			"K0": newTestBinding(t),
 			"K1": newTestBinding(t),
 		},
-		Hierarchy: hierarchy,
+		Hierarchy:   hierarchy,
+		RootManager: rootMgr,
 	})
 	require.NoError(t, err)
 
@@ -218,7 +221,8 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			"K0": newTestBinding(t),
 			"K1": newTestBinding(t),
 		},
-		Hierarchy: hierarchy,
+		Hierarchy:   hierarchy,
+		RootManager: rootMgr,
 	})
 	require.NoError(t, err)
 
@@ -312,16 +316,21 @@ func TestGenerateAndSealSecret(t *testing.T) {
 	})
 
 	t.Run("should generate and seal secret for new non-root key managed by root", func(t *testing.T) {
-		// given
+		// given — provision the root key (K0) through the RootManager so that a
+		// provider spec is stored and version 1 carries the provider-key label.
 		key0 := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
-			LifeCycleState:     model.KeyLifeCycleActive,
+			LifeCycleState:     model.KeyLifeCyclePreActivation,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
 		})
-		createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
-			kv.ProcessingState = model.KeyVersionUsable
-			kv.LifeCycleState = model.KeyLifeCycleActive
-		})
+		require.NoError(t, rootMgr.CreateProvider(ctx, keyprocessor.CreateProviderInput{
+			TenantID:      tenant.ID,
+			KeyID:         key0.ID,
+			Spec:          newInlineStaticSecretSpec(t),
+			ProviderKeyID: "pk-1",
+		}))
+		activateRootKey(t, kStore, key0)
+
 		key1 := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K1", ParentID: new(key0.ID), ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,

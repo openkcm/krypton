@@ -78,7 +78,6 @@ func setupEnvironment(t *testing.T) *testEnvironment {
 		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + rootConnStr,
 		"SERVER_PORT=" + rootPort,
-		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 	})
 	require.NoError(t, rootCmd.Start(), "failed to start root server")
 	waitForPort(t, rootPort)
@@ -127,7 +126,6 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + rootConnStr,
 		"SERVER_PORT=" + rootPort,
-		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 	})
 	require.NoError(t, rootCmd.Start(), "failed to start root server")
 	waitForPort(t, rootPort)
@@ -164,7 +162,6 @@ func setupRootEnvWithKMIP(t *testing.T) *testEnvWithRootKMIP {
 		"ROOT_CONFIG_PATH=" + rootCfgPath,
 		"DATABASE_URL=" + rootConnStr,
 		"SERVER_PORT=" + rootPort,
-		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 	})
 	require.NoError(t, rootCmd.Start(), "failed to start root server")
 	waitForPort(t, rootPort)
@@ -201,16 +198,13 @@ segment:
   end_kind: K1
 selector_labels:
   environment: production
+root_key:
+  allowed_providers:
+    - aes256gcm-staticsecret
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
 key_bindings:
-  K0:
-    sealer:
-      name: root-sealer
-      type: aes256gcm-staticsecret
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto
@@ -299,16 +293,13 @@ segment:
   end_kind: K2
 selector_labels:
   environment: production
+root_key:
+  allowed_providers:
+    - aes256gcm-staticsecret
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
 key_bindings:
-  K0:
-    sealer:
-      name: root-sealer
-      type: aes256gcm-staticsecret
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto
@@ -370,16 +361,13 @@ segment:
   end_kind: K1
 selector_labels:
   environment: production
+root_key:
+  allowed_providers:
+    - aes256gcm-staticsecret
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
 key_bindings:
-  K0:
-    sealer:
-      name: root-sealer
-      type: aes256gcm-staticsecret
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto
@@ -484,16 +472,13 @@ segment:
   end_kind: K2
 selector_labels:
   environment: production
+root_key:
+  allowed_providers:
+    - aes256gcm-staticsecret
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
 key_bindings:
-  K0:
-    sealer:
-      name: root-sealer
-      type: aes256gcm-staticsecret
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto

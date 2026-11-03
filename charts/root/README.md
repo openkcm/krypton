@@ -34,9 +34,7 @@ The Service name is part of the root node's address, which the agents use.
 - Kubernetes 1.23 or later, Helm 3.
 - PostgreSQL. The root node creates its tables at startup, so its database user needs to own
   the database or have `CREATE` on its schema.
-- A Secret with the PostgreSQL URL and the root key. The root key seals the tenant root keys:
-  32 random bytes, base64-encoded. Keep a backup of it; without it the root keys cannot be
-  unsealed.
+- A Secret with the PostgreSQL URL.
 - amd64 nodes, or set `image.command` for arm64 nodes (see [Image](#image)).
 
 ## Install
@@ -45,8 +43,7 @@ Create the Secret:
 
 ```sh
 kubectl -n services create secret generic krypton-secret \
-  --from-literal=database-url='postgres://krypton:<password>@postgresql.services:5432/krypton?sslmode=verify-full' \
-  --from-literal=root-key="$(openssl rand -base64 32)"
+  --from-literal=database-url='postgres://krypton:<password>@postgresql.services:5432/krypton?sslmode=verify-full'
 ```
 
 To keep the keys across restarts in development, give the root node a volume for SQLite vault
@@ -70,8 +67,6 @@ Create a values file, for example `krypton-root.yaml`:
 
 ```yaml
 database:
-  existingSecret: krypton-secret
-rootKey:
   existingSecret: krypton-secret
 
 networkPolicy:
@@ -131,8 +126,8 @@ before it opens the port.
 | `image.tag` / `image.digest` | chart's `appVersion` | The Krypton version to deploy |
 | `image.command` | `[/root/root.linux-amd64]` | The binary in the release image (see [Image](#image)) |
 | `database.existingSecret` | `""` | Secret with the PostgreSQL URL (`DATABASE_URL`). Required |
-| `rootKey.existingSecret` | `""` | Secret with the root key (`KRYPTON_ROOT_KEY`). Required with the default configuration |
-| `config.key_bindings` | K0 sealed with the root key, K1 and K2 in memory | How the keys of each kind are protected and stored |
+| `config.root_key` | static-secret provider allowed, credentials vault in memory | The root key's allowed providers and provider-binding vault |
+| `config.key_bindings` | K1 and K2 in memory | How the keys of each non-root kind are protected and stored |
 | `config.hierarchy` | K0 `root`, K1 `kek`, K2 `dek` | The key kinds |
 | `config.topology` | no agents | The agents and the key kinds they manage |
 | `config.connections` | `root` at `krypton-root:8080` | The gRPC addresses of the root node and the agents |
@@ -158,10 +153,11 @@ image built from `cmd/root/Dockerfile`, set `image.command: [/bin/krypton-root]`
 
 ## Key storage
 
-Each key kind of the root node's segment has a key binding (`config.key_bindings`): the root
-kind is sealed with a secret from outside Krypton (the root key), and every other kind is
-encrypted with key material that Krypton generates and stores, sealed by its parent key, in a
-vault:
+The root key is configured with `config.root_key`: the sealer providers allowed to seal it
+and the vault that stores its provider bindings. The root provider (and its sealing secret)
+is created at runtime via the root key API, not in the chart. Every other key kind of the
+root node's segment has a key binding (`config.key_bindings`) and is encrypted with key
+material that Krypton generates and stores, sealed by its parent key, in a vault:
 
 | Vault type | Stores in | Use |
 | --- | --- | --- |
@@ -230,7 +226,7 @@ know: check the spelling of the keys against values.yaml.
 | --- | --- |
 | The default image is `ghcr.io/openkcm/krypton/images/root` with the tag from the chart's `appVersion`, started with `/root/root.linux-amd64` (was `images/krypton-root:latest` with `/bin/krypton-root`) | If you set `image.*` yourself, check them; on arm64 nodes set `image.command` |
 | `extraPorts` is now `ports`, and `image.pullSecrets` is now `imagePullSecrets` (default empty, was `registry-access`) | Move your values; the chart stops with an error while the old keys are set |
-| The PostgreSQL URL and the root key can come from `database.existingSecret` and `rootKey.existingSecret` | Optional: `DATABASE_URL` and `KRYPTON_ROOT_KEY` in `extraEnvs` still work |
+| The PostgreSQL URL can come from `database.existingSecret` | Optional: `DATABASE_URL` in `extraEnvs` still works |
 | `config.connections` has an entry for the root node (`krypton-root:8080`). Krypton releases after v0.1.0 require it | If you replace `config.connections`, keep an entry named like `config.name` |
 | New security defaults (user and group 65532, read-only root filesystem, dropped capabilities, `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables) | The release image runs as this user. A volume for an `unsafe-sqlite` vault must be writable for group 65532, or set `pod.securityContext.fsGroup` |
 | One replica with the `Recreate` strategy; startup, liveness and readiness probes on the gRPC port; resource requests and limits | Override `strategy`, the probes and `resources` if needed |
@@ -260,7 +256,6 @@ configuration works with v0.1.0 as well. When you move from v0.1.0 to a later re
 | Pod exits with `DATABASE_URL environment variable is required` | `database.existingSecret` is not set |
 | Pod exits with `failed to run migrations` | PostgreSQL is not reachable with the URL, or the user may not create tables |
 | Pod exits with `no connection config for root "root"` | `config.connections` has no entry for the root node |
-| Pod exits with `environment variable is empty or not set: KRYPTON_ROOT_KEY` | `rootKey.existingSecret` is not set, or the Secret has no key `rootKey.key` |
 | Pod exits with `kmip: invalid TLS configuration` | `config.kmip.tls` misses a file, for example because it uses the v0.1.0 key names |
 | New pod stays `Pending` with `Multi-Attach error` | Rolling update with a ReadWriteOnce vault volume: use `strategy: { type: Recreate }` |
 | Keys are gone after a restart | `unsafe-sqlite-memory` vaults keep keys only in memory |

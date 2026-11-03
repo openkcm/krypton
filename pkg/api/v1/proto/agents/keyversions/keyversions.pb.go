@@ -32,6 +32,7 @@ type UpsertKeyVersionRequest struct {
 	ParentVersion   int32                  `protobuf:"varint,6,opt,name=parent_version,json=parentVersion,proto3" json:"parent_version,omitempty"`
 	LifecycleState  string                 `protobuf:"bytes,7,opt,name=lifecycle_state,json=lifecycleState,proto3" json:"lifecycle_state,omitempty"`
 	ProcessingState string                 `protobuf:"bytes,8,opt,name=processing_state,json=processingState,proto3" json:"processing_state,omitempty"`
+	Labels          map[string]string      `protobuf:"bytes,9,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -122,6 +123,13 @@ func (x *UpsertKeyVersionRequest) GetProcessingState() string {
 	return ""
 }
 
+func (x *UpsertKeyVersionRequest) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
 type UpsertKeyVersionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -162,7 +170,7 @@ var File_keyversions_proto protoreflect.FileDescriptor
 
 const file_keyversions_proto_rawDesc = "" +
 	"\n" +
-	"\x11keyversions.proto\x12\x1dkrypton.v1.agents.keyversions\"\x9b\x02\n" +
+	"\x11keyversions.proto\x12\x1dkrypton.v1.agents.keyversions\"\xb2\x03\n" +
 	"\x17UpsertKeyVersionRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x18\n" +
@@ -171,7 +179,11 @@ const file_keyversions_proto_rawDesc = "" +
 	"\tparent_id\x18\x05 \x01(\tR\bparentId\x12%\n" +
 	"\x0eparent_version\x18\x06 \x01(\x05R\rparentVersion\x12'\n" +
 	"\x0flifecycle_state\x18\a \x01(\tR\x0elifecycleState\x12)\n" +
-	"\x10processing_state\x18\b \x01(\tR\x0fprocessingState\"\x1a\n" +
+	"\x10processing_state\x18\b \x01(\tR\x0fprocessingState\x12Z\n" +
+	"\x06labels\x18\t \x03(\v2B.krypton.v1.agents.keyversions.UpsertKeyVersionRequest.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1a\n" +
 	"\x18UpsertKeyVersionResponse2\x9b\x01\n" +
 	"\x11KeyVersionService\x12\x85\x01\n" +
 	"\x10UpsertKeyVersion\x126.krypton.v1.agents.keyversions.UpsertKeyVersionRequest\x1a7.krypton.v1.agents.keyversions.UpsertKeyVersionResponse\"\x00B@Z>github.com/openkcm/krypton/pkg/api/v1/proto/agents/keyversionsb\x06proto3"
@@ -188,19 +200,21 @@ func file_keyversions_proto_rawDescGZIP() []byte {
 	return file_keyversions_proto_rawDescData
 }
 
-var file_keyversions_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_keyversions_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_keyversions_proto_goTypes = []any{
 	(*UpsertKeyVersionRequest)(nil),  // 0: krypton.v1.agents.keyversions.UpsertKeyVersionRequest
 	(*UpsertKeyVersionResponse)(nil), // 1: krypton.v1.agents.keyversions.UpsertKeyVersionResponse
+	nil,                              // 2: krypton.v1.agents.keyversions.UpsertKeyVersionRequest.LabelsEntry
 }
 var file_keyversions_proto_depIdxs = []int32{
-	0, // 0: krypton.v1.agents.keyversions.KeyVersionService.UpsertKeyVersion:input_type -> krypton.v1.agents.keyversions.UpsertKeyVersionRequest
-	1, // 1: krypton.v1.agents.keyversions.KeyVersionService.UpsertKeyVersion:output_type -> krypton.v1.agents.keyversions.UpsertKeyVersionResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2, // 0: krypton.v1.agents.keyversions.UpsertKeyVersionRequest.labels:type_name -> krypton.v1.agents.keyversions.UpsertKeyVersionRequest.LabelsEntry
+	0, // 1: krypton.v1.agents.keyversions.KeyVersionService.UpsertKeyVersion:input_type -> krypton.v1.agents.keyversions.UpsertKeyVersionRequest
+	1, // 2: krypton.v1.agents.keyversions.KeyVersionService.UpsertKeyVersion:output_type -> krypton.v1.agents.keyversions.UpsertKeyVersionResponse
+	2, // [2:3] is the sub-list for method output_type
+	1, // [1:2] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_keyversions_proto_init() }
@@ -214,7 +228,7 @@ func file_keyversions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keyversions_proto_rawDesc), len(file_keyversions_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -16,6 +16,7 @@ var (
 	ErrInvalidKeyID               = errors.New("keyId is invalid")
 	ErrEmptyName                  = errors.New("name cannot be empty")
 	ErrInvalidTenantID            = errors.New("tenantId is invalid")
+	ErrInvalidKey                 = errors.New("key is invalid")
 	ErrInvalidKeyKind             = errors.New("key kind is invalid")
 	ErrInvalidParentKey           = errors.New("parent key is invalid")
 	ErrTargetNotInTopology        = errors.New("target not present in topology")
@@ -145,6 +146,21 @@ func ValidateTransition(tenantID, keyID string, to model.KeyLifeCycleState) stor
 			return keylifecycle.ValidateTransition(key.LifeCycleState, to)
 		}
 		return nil
+	}
+}
+
+// ValidateKeyUsage returns a transaction step that checks whether the target
+// key permits the requested usage in its current lifecycle state.
+func ValidateKeyUsage(tenantID, keyID string, usage spec.KeyUsage) store.TransactionFunc {
+	return func(ctx context.Context, stores store.Stores) error {
+		key, err := stores.Keys.GetKeyByID(ctx, keyID, tenantID)
+		if err != nil {
+			return err
+		}
+		if key.KeyProcessingState.Status != model.KeyProcessingCompleted {
+			return ErrKeyTransientState
+		}
+		return keylifecycle.ValidateKeyUsage(key.LifeCycleState, usage)
 	}
 }
 

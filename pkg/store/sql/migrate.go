@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS key_versions (
 	parent_key_version INT NULL,
 	life_cycle_state TEXT NOT NULL,
 	processing_state TEXT NOT NULL,
+	labels JSONB,
 	created_at BIGINT NOT NULL,
 	updated_at BIGINT NOT NULL,
 

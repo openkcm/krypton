@@ -11,11 +11,14 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault/sqlitevault"
+	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/model"
 )
 
@@ -49,8 +52,14 @@ func validRootConfig() *config.RootConfig {
 			EndKind:   "K1",
 		},
 		SelectorLabels: spec.SelectorLabels{"env": "prod"},
+		RootKey: &spec.RootKeySpec{
+			AllowedProviders: []sealer.Type{staticsecret.TypeStaticSecret},
+			Vault: vaultprovider.Spec{
+				Name: "credentials-vault",
+				Type: sqlitevault.TypeUnsafeMemory,
+			},
+		},
 		KeyBindings: map[string]spec.KeyBinding{
-			"K0": {SealerSpec: validSealerSpec()},
 			"K1": {
 				CryptorSpec:       validCryptorSpec(),
 				ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
@@ -137,6 +146,23 @@ func TestValidateRootConfig(t *testing.T) {
 			name:    "wrong role",
 			modify:  func(c *config.RootConfig) { c.Role = "agent" },
 			wantErr: config.ErrRoleInvalid,
+		},
+		{
+			name:    "root key missing",
+			modify:  func(c *config.RootConfig) { c.RootKey = nil },
+			wantErr: config.ErrRootKeyMissing,
+		},
+		{
+			name:    "root key no allowed providers",
+			modify:  func(c *config.RootConfig) { c.RootKey.AllowedProviders = nil },
+			wantErr: spec.ErrRootKeyNoProviders,
+		},
+		{
+			name: "root key unknown provider",
+			modify: func(c *config.RootConfig) {
+				c.RootKey.AllowedProviders = []sealer.Type{"not-a-real-provider"}
+			},
+			wantErr: spec.ErrRootKeyUnknownProvider,
 		},
 		{
 			name:    "invalid hierarchy",
@@ -232,7 +258,6 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {SealerSpec: validSealerSpec()},
 					"K1": {SealerSpec: validSealerSpec(), CryptorSpec: validCryptorSpec()},
 				}
 				c.Topology = spec.Topology{}
@@ -252,7 +277,6 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {SealerSpec: validSealerSpec()},
 					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
@@ -283,7 +307,6 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {SealerSpec: validSealerSpec()},
 					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
@@ -345,7 +368,6 @@ func TestValidateRootConfig(t *testing.T) {
 				}
 				c.Segment = spec.HierarchySegment{StartKind: "K0", EndKind: "K1"}
 				c.KeyBindings = map[string]spec.KeyBinding{
-					"K0": {SealerSpec: validSealerSpec()},
 					"K1": {CryptorSpec: validCryptorSpec(), ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"}},
 				}
 				c.Topology = spec.Topology{
@@ -392,16 +414,13 @@ segment:
   end_kind: "K1"
 selector_labels:
   environment: "production"
+root_key:
+  allowed_providers:
+    - aes256gcm-staticsecret
+  vault:
+    name: "credentials-vault"
+    type: "unsafe-sqlite-memory"
 key_bindings:
-  K0:
-    sealer:
-      name: "root-sealer"
-      type: "aes256gcm-staticsecret"
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: "kek-crypto"
@@ -512,9 +531,10 @@ connections:
 
 				assert.Equal(t, "production", cfg.SelectorLabels["environment"])
 
-				assert.Len(t, cfg.KeyBindings, 2)
-				assert.Equal(t, "root-sealer", cfg.KeyBindings["K0"].SealerSpec.Name)
-				assert.Nil(t, cfg.KeyBindings["K0"].CryptorSpec)
+				assert.Len(t, cfg.KeyBindings, 1)
+				assert.NotNil(t, cfg.RootKey)
+				assert.Equal(t, []sealer.Type{staticsecret.TypeStaticSecret}, cfg.RootKey.AllowedProviders)
+				assert.Equal(t, "credentials-vault", cfg.RootKey.Vault.Name)
 
 				assert.Equal(t, "root-vault", cfg.KeyBindings["K1"].VaultSpec.Name)
 				assert.Equal(t, "root", cfg.KeyBindings["K1"].ParentKeyProvider.AgentName)

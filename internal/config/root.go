@@ -19,6 +19,7 @@ var (
 	ErrAuthConfigMissing      = errors.New("auth config is missing")
 	ErrAgentNotAllowed        = errors.New("agent is not allowed to connect to root")
 	ErrIdentityConfigsMissing = errors.New("identity configs missing for topology members")
+	ErrRootKeyMissing         = errors.New("root key config is missing")
 )
 
 // RootConfig is the complete configuration for the root instance combining hierarchy and topology.
@@ -28,6 +29,7 @@ type RootConfig struct {
 	Auth           *RootAuthConfig            `yaml:"auth,omitempty"`
 	Segment        spec.HierarchySegment      `yaml:"segment"`
 	SelectorLabels spec.SelectorLabels        `yaml:"selector_labels,omitempty"`
+	RootKey        *spec.RootKeySpec          `yaml:"root_key"`
 	KeyBindings    map[string]spec.KeyBinding `yaml:"key_bindings"`
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
@@ -54,6 +56,13 @@ func (cfg *RootConfig) Validate() error {
 	}
 	if len(cfg.KeyBindings) == 0 {
 		return ErrConfigKeyBindingsEmpty
+	}
+
+	if cfg.RootKey == nil {
+		return ErrRootKeyMissing
+	}
+	if err := cfg.RootKey.Validate(); err != nil {
+		return fmt.Errorf("root key: %w", err)
 	}
 
 	if err := spec.ValidateRootSegment(cfg.Hierarchy, cfg.Segment, cfg.KeyBindings); err != nil {

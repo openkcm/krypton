@@ -15,6 +15,7 @@ message SealRequest {
   int32 key_version = 3;
   bytes plaintext = 4;
   bytes aad = 5;
+  map<string, string> metadata = 6;
 }
 
 message SealResponse {
@@ -27,6 +28,7 @@ message UnsealRequest {
   int32 key_version = 3;
   bytes ciphertext = 4;
   bytes aad = 5;
+  map<string, string> metadata = 6;
 }
 
 message UnsealResponse {

@@ -8,7 +8,6 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/sealer"
-	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
@@ -23,8 +22,6 @@ var (
 	ErrKeyNotActivated = errors.New("key is not in activated state")
 	// ErrKeyVersionRequired is returned when the key version is not specified.
 	ErrKeyVersionRequired = errors.New("key version is required")
-	// ErrRootMissingSealerSpec is returned when the root key binding has no sealer spec.
-	ErrRootMissingSealerSpec = errors.New("root key binding must have a sealer spec")
 	// ErrKeyStoreMissing is returned when the key store is nil.
 	ErrKeyStoreMissing = errors.New("key store is required")
 	// ErrKeyVersionStoreMissing is returned when the key version store is nil.
@@ -42,6 +39,7 @@ type ManagerConfig struct {
 	Bindings        map[model.KeyKind]spec.KeyBinding
 	Hierarchy       spec.KeyHierarchy
 	Registry        *grpcconn.Registry
+	RootManager     sealer.Sealer
 }
 
 // Manager validates the key lifecycle, resolves key versions, and delegates to processors.
@@ -246,37 +244,6 @@ func (km *Manager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer
 	}, nil
 }
 
-type rootManager struct {
-	store  store.Key
-	sealer sealer.Sealer
-}
-
-var _ sealer.Sealer = &rootManager{}
-
-func (rm *rootManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
-	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
-	if err != nil {
-		return sealer.SealResponse{}, err
-	}
-	if key.LifeCycleState != model.KeyLifeCycleActive {
-		return sealer.SealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
-	}
-
-	return rm.sealer.Seal(ctx, req)
-}
-
-func (rm *rootManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
-	key, err := rm.store.GetKeyByID(ctx, req.KeyID, req.TenantID)
-	if err != nil {
-		return sealer.UnsealResponse{}, err
-	}
-	if key.LifeCycleState != model.KeyLifeCycleActive {
-		return sealer.UnsealResponse{}, fmt.Errorf("%w: key %s is in state %s", ErrKeyNotActivated, key.ID, key.LifeCycleState)
-	}
-
-	return rm.sealer.Unseal(ctx, req)
-}
-
 func resolveParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, kind model.KeyKind, binding spec.KeyBinding) (sealer.Sealer, error) {
 	if binding.HasRemoteParent() {
 		return resolveRemoteParent(cfg, binding)
@@ -312,23 +279,7 @@ func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, ki
 		return mgr, nil
 	}
 
-	parentBinding, ok := cfg.Bindings[parentSpec.Kind]
-	if !ok {
-		return nil, fmt.Errorf("no binding found for root key kind %s", parentSpec.Kind)
-	}
-
-	return buildRootManager(ctx, cfg.KeyStore, parentBinding)
-}
-
-func buildRootManager(ctx context.Context, s store.Key, binding spec.KeyBinding) (*rootManager, error) {
-	if binding.SealerSpec == nil {
-		return nil, ErrRootMissingSealerSpec
-	}
-	sealer, err := sealerprovider.GetSealer(ctx, *binding.SealerSpec)
-	if err != nil {
-		return nil, err
-	}
-	return &rootManager{store: s, sealer: sealer}, nil
+	return cfg.RootManager, nil
 }
 
 // resolveUsableKeyVersion returns the highest usable revision of version, or

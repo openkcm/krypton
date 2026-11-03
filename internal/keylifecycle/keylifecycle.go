@@ -52,8 +52,8 @@ var defaultLifecycle = lifecycle{
 		model.KeyLifeCycleDestroyed: {},
 	},
 	stateUsages: map[model.KeyLifeCycleState]spec.KeyUsage{
-		model.KeyLifeCyclePreActivation: spec.KeyUsageNone,
-		model.KeyLifeCycleActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap,
+		model.KeyLifeCyclePreActivation: spec.KeyUsageLink,
+		model.KeyLifeCycleActive:        spec.KeyUsageEncrypt | spec.KeyUsageDecrypt | spec.KeyUsageUnwrap | spec.KeyUsageWrap | spec.KeyUsageRotate,
 		model.KeyLifeCycleSuspended:     spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		model.KeyLifeCycleDeactivated:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,
 		model.KeyLifeCycleCompromised:   spec.KeyUsageDecrypt | spec.KeyUsageUnwrap,

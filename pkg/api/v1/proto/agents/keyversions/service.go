@@ -159,6 +159,7 @@ func newKeyVersion(req *UpsertKeyVersionRequest) model.KeyVersion {
 		ParentKeyVersion: pv,
 		LifeCycleState:   model.KeyLifeCycleState(req.GetLifecycleState()),
 		ProcessingState:  model.KeyVersionProcessingState(req.GetProcessingState()),
+		Labels:           req.GetLabels(),
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}

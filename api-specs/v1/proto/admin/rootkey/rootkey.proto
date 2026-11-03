@@ -78,9 +78,12 @@ message AwsKmsConfig {
 
 message ProviderAuth {
   oneof provider {
-    AwsKmsAuth aws_kms = 1;
+    StaticSecretAuth static_secret = 1;
+    AwsKmsAuth aws_kms = 2;
   }
 }
+
+message StaticSecretAuth {}
 
 message AwsKmsAuth {
   oneof credentials {

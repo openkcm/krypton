@@ -15,27 +15,31 @@ import (
 var ErrSealerNameEmpty = errors.New("sealer name is empty")
 
 // Spec describes which sealer implementation to use and how to configure it.
-type Spec struct {
+type Spec struct { //nolint:recvcheck // MarshalYAML must support values while the remaining methods use pointers.
 	Name string      `yaml:"name"`
 	Type sealer.Type `yaml:"type"`
-	// Config is marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
+	// Config and Auth are marshaled/unmarshaled via custom MarshalYAML/UnmarshalYAML, not by the default YAML codec.
 	Config sealer.SealerConfig `yaml:"-"`
+	Auth   sealer.SealerAuth   `yaml:"-"`
 }
 
 var (
 	_ yaml.Unmarshaler = (*Spec)(nil)
-	_ yaml.Marshaler   = (*Spec)(nil)
+	_ yaml.Marshaler   = Spec{}
 )
 
-// MarshalYAML implements [yaml.Marshaler].
-func (s *Spec) MarshalYAML() (any, error) {
+// MarshalYAML implements [yaml.Marshaler]. It uses a value receiver so the
+// custom marshaling also applies when a Spec is held by value.
+func (s Spec) MarshalYAML() (any, error) {
 	type alias Spec
 	return struct {
 		alias `yaml:",inline"`
 
+		Auth   sealer.SealerAuth   `yaml:"auth,omitempty"`
 		Config sealer.SealerConfig `yaml:"config,omitempty"`
 	}{
-		alias:  alias(*s),
+		alias:  alias(s),
+		Auth:   s.Auth,
 		Config: s.Config,
 	}, nil
 }
@@ -46,13 +50,14 @@ func (s *Spec) UnmarshalYAML(node *yaml.Node) error {
 	var raw struct {
 		alias `yaml:",inline"`
 
+		Auth   yaml.Node `yaml:"auth"`
 		Config yaml.Node `yaml:"config"`
 	}
 	if err := node.Decode(&raw); err != nil {
 		return fmt.Errorf("failed to decode sealer spec: %w", err)
 	}
 
-	cfg, err := newSealerConfig(raw.Type)
+	cfg, auth, err := newSealer(raw.Type)
 	if err != nil {
 		return err
 	}
@@ -63,8 +68,15 @@ func (s *Spec) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 
+	if raw.Auth.Kind != 0 {
+		if err := raw.Auth.Decode(auth); err != nil {
+			return fmt.Errorf("failed to decode sealer auth: %w", err)
+		}
+	}
+
 	*s = Spec(raw.alias)
 	s.Config = cfg
+	s.Auth = auth
 	return nil
 }
 
@@ -75,6 +87,11 @@ func (s *Spec) Validate() error {
 	}
 	if s.Config != nil {
 		if err := s.Config.ValidateSealerConfig(); err != nil {
+			return err
+		}
+	}
+	if s.Auth != nil {
+		if err := s.Auth.ValidateSealerAuth(); err != nil {
 			return err
 		}
 	}
@@ -95,12 +112,19 @@ func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 	}
 }
 
-// newSealerConfig is a factory that creates the correct SealerConfig struct by sealer type.
-func newSealerConfig(t sealer.Type) (sealer.SealerConfig, error) {
+// ValidateType reports whether t is a known/supported sealer type.
+func ValidateType(t sealer.Type) error {
+	_, _, err := newSealer(t)
+	return err
+}
+
+// newSealer is a factory that creates the correct SealerConfig and SealerAuth
+// structs by sealer type.
+func newSealer(t sealer.Type) (sealer.SealerConfig, sealer.SealerAuth, error) {
 	switch t {
 	case staticsecret.TypeStaticSecret:
-		return &staticsecret.Config{}, nil
+		return &staticsecret.Config{}, &staticsecret.Auth{}, nil
 	default:
-		return nil, fmt.Errorf("%w: %q", sealer.ErrUnknownType, t)
+		return nil, nil, fmt.Errorf("%w: %q", sealer.ErrUnknownType, t)
 	}
 }
