@@ -145,6 +145,7 @@ func (rm *RootManager) RotateAuth(ctx context.Context, in RotateAuthInput) error
 }
 
 // RotateProviderKey records a new provider key version for the key.
+// TODO: Reseal child keys after rotating the provider key.
 func (rm *RootManager) RotateProviderKey(ctx context.Context, in RotateProviderKeyInput) error {
 	return store.ChainTransaction(ctx, rm.transactor,
 		validator.ValidateTenant(in.TenantID),
@@ -170,6 +171,7 @@ func (rm *RootManager) RotateProviderKey(ctx context.Context, in RotateProviderK
 }
 
 // RemoveProvider removes the key's provider binding from the vault.
+// TODO: Ensure the key is inactive before removal or check the force parameter, which must be implemented first.
 func (rm *RootManager) RemoveProvider(ctx context.Context, in RemoveProviderInput) error {
 	return store.ChainTransaction(ctx, rm.transactor,
 		validator.ValidateTenant(in.TenantID),
