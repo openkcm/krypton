@@ -26,6 +26,8 @@ var (
 	ErrKeyStoreMissing = errors.New("key store is required")
 	// ErrKeyVersionStoreMissing is returned when the key version store is nil.
 	ErrKeyVersionStoreMissing = errors.New("key version store is required")
+	// ErrRootManagerMissing is returned when the root manager is nil.
+	ErrRootManagerMissing = errors.New("root manager is required")
 	// ErrRegistryRequired is returned when a remote parent key provider is configured but no registry is set.
 	ErrRegistryRequired = errors.New("no registry provided for parent key provider")
 	// ErrParentNotRegistered is returned when the registry has no connection for the requested parent agent.
@@ -68,6 +70,9 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 	}
 	if cfg.KeyVersionStore == nil {
 		return nil, ErrKeyVersionStoreMissing
+	}
+	if cfg.RootManager == nil {
+		return nil, ErrRootManagerMissing
 	}
 
 	mgr := &Manager{

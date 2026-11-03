@@ -465,11 +465,14 @@ func TestManagerHierarchy(t *testing.T) {
 }
 
 func TestNewManager(t *testing.T) {
+	rootManager := &sealerWrapper{}
+
 	t.Run("should return error when non-root cryptor provider fails", func(t *testing.T) {
 		// given
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -497,6 +500,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -526,6 +530,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -557,6 +562,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        nil,
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -583,6 +589,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: nil,
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -604,11 +611,39 @@ func TestNewManager(t *testing.T) {
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionStoreMissing)
 	})
 
+	t.Run("should return error when root manager is nil", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     nil,
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, keyprocessor.ErrRootManagerMissing)
+	})
+
 	t.Run("should construct manager for two-level hierarchy", func(t *testing.T) {
 		// given
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -638,6 +673,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -672,6 +708,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -703,6 +740,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -736,6 +774,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -785,6 +824,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -838,6 +878,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -877,6 +918,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
