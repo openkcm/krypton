@@ -71,9 +71,6 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 	if cfg.KeyVersionStore == nil {
 		return nil, ErrKeyVersionStoreMissing
 	}
-	if cfg.RootManager == nil {
-		return nil, ErrRootManagerMissing
-	}
 
 	mgr := &Manager{
 		store:        cfg.KeyStore,
@@ -282,6 +279,10 @@ func resolveLocalParent(ctx context.Context, cfg ManagerConfig, mgr *Manager, ki
 
 	if parentSpec.Role != spec.KeyRoleRoot {
 		return mgr, nil
+	}
+
+	if cfg.RootManager == nil {
+		return nil, ErrRootManagerMissing
 	}
 
 	return cfg.RootManager, nil

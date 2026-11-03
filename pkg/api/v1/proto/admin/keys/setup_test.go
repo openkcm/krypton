@@ -29,6 +29,7 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
@@ -173,9 +174,18 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 		Hierarchy: hierarchy,
 	}
 
+	rootMgr, err := keyprocessor.NewRootManager(t.Context(), keyprocessor.RootManagerConfig{
+		Transactor: setup.transactor,
+		RootKey: spec.RootKeySpec{
+			AllowedProviders: []sealer.Type{staticsecret.TypeStaticSecret},
+			Vault:            vaultprovider.Spec{Name: "root-vault", Type: sqlitevault.TypeUnsafeMemory},
+		},
+	})
+	require.NoError(t, err)
+
 	// create root secret
 	sealerKey := make([]byte, 32)
-	_, err := rand.Read(sealerKey)
+	_, err = rand.Read(sealerKey)
 	require.NoError(t, err)
 	envName := "TEST_KMIP_SEALER_KEY"
 	t.Setenv(envName, base64.StdEncoding.EncodeToString(sealerKey))
@@ -222,7 +232,8 @@ func setupKeyServerAndClientWith(t *testing.T, db *sql.DB, hierarchy spec.KeyHie
 				VaultSpec: setup.vaultK3,
 			},
 		},
-		Hierarchy: defaultTestHierarchy(),
+		Hierarchy:   defaultTestHierarchy(),
+		RootManager: rootMgr,
 	})
 	require.NoError(t, err)
 
