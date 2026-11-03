@@ -35,6 +35,12 @@ func (s *Service) UpsertTenant(ctx context.Context, req *UpsertTenantRequest) (*
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
+	if err := validator.ValidateUserLabels(req.GetLabels()); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
 
 	err = store.ChainTransaction(ctx, s.transactor,
 		func(ctx context.Context, stores store.Stores) error {

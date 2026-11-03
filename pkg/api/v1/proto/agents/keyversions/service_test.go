@@ -35,6 +35,21 @@ func TestUpsertKeyVersion(t *testing.T) {
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
+	t.Run("should return InvalidArgument when labels are reserved", func(t *testing.T) {
+		setup := setupServerAndClient(t)
+
+		req := validUpsertKeyVersionRequest(uuid.New().String(), uuid.New().String())
+		req.Labels = map[string]string{
+			model.ReservedLabelPrefix + "origin": "user",
+		}
+
+		_, err := setup.cli.UpsertKeyVersion(ctx, req)
+
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
 	t.Run("should return FailedPrecondition when tenant does not exist", func(t *testing.T) {
 		// given
 		req := validUpsertKeyVersionRequest(uuid.New().String(), uuid.New().String())
