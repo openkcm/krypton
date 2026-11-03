@@ -57,6 +57,9 @@ var _ secret.Loader = (*Loader)(nil)
 
 // New creates a Loader bound to the given config.
 func New(cfg *Config) *Loader {
+	if cfg == nil {
+		cfg = &Config{}
+	}
 	return &Loader{cfg: cfg}
 }
 

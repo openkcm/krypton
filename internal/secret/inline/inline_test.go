@@ -70,6 +70,19 @@ func TestConfig_ValidateSecretConfig(t *testing.T) {
 }
 
 func TestLoader_LoadSecret(t *testing.T) {
+	t.Run("should return error for nil config", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+		loader := inline.New(nil)
+
+		// when
+		data, err := loader.LoadSecret(ctx)
+
+		// then
+		assert.ErrorIs(t, err, inline.ErrSecretEmpty)
+		assert.Nil(t, data)
+	})
+
 	t.Run("should load base64-encoded inline secret", func(t *testing.T) {
 		// given
 		ctx := t.Context()
