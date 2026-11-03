@@ -101,18 +101,18 @@ func main() {
 	orchestratorOpts := make([]orchestrator.Option, 0, 1)
 	orchestratorOpts = append(orchestratorOpts, orchestrator.WithExecInterval(10*time.Millisecond))
 
-	orch, err := orchestrator.New(context.Background(), repo, orchestrator.Handlers{
-		Jobs: []orchestrator.JobHandler{
-			orchestrator.NewAnnounceJobHandler(transactor),
-			orchestrator.NewKeyProcessJobHandler(orchestrator.ActivateHandlerConfig()),
+	orch, err := orchestrator.New(context.Background(), repo, orchestrator.OrbitalHandlers{
+		TaskResolvers: []orchestrator.OrbitalTaskResolver{
+			orchestrator.NewAnnounceTaskResolver(transactor),
+			orchestrator.NewTaskResolver(orchestrator.ActivateHandlerConfig()),
 		},
-		Groups: []orchestrator.JobGroupHandler{
-			orchestrator.NewKeyProcessJobGroupHandler(orchestrator.AnnounceHandlerConfig()),
-			orchestrator.NewKeyProcessJobGroupHandler(orchestrator.ActivateHandlerConfig()),
+		GroupHandlers: []orchestrator.OrbitalJobGroupHandler{
+			orchestrator.NewJobGroupHandler(orchestrator.AnnounceHandlerConfig()),
+			orchestrator.NewJobGroupHandler(orchestrator.ActivateHandlerConfig()),
 		},
-		Tasks: []orchestrator.TaskHandler{
+		TaskHandlers: []orchestrator.OrbitalTaskHandler{
 			orchestrator.NewAnnounceTaskHandler(transactor, registry, cfg.Name),
-			orchestrator.NewKeyProcessTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, kpMgr, cfg),
+			orchestrator.NewTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, kpMgr, cfg),
 		},
 	}, orchestratorOpts...)
 	handleErr(err, "failed to create orchestrator")

@@ -14,12 +14,12 @@ import (
 	"github.com/openkcm/krypton/internal/orchestrator"
 )
 
-func minHandlers(extra ...orchestrator.JobHandler) orchestrator.Handlers {
-	jobs := []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}}
+func minHandlers(extra ...orchestrator.OrbitalTaskResolver) orchestrator.OrbitalHandlers {
+	jobs := []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}}
 	jobs = append(jobs, extra...)
-	return orchestrator.Handlers{
-		Jobs:  jobs,
-		Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+	return orchestrator.OrbitalHandlers{
+		TaskResolvers: jobs,
+		TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 	}
 }
 
@@ -55,7 +55,7 @@ func TestNewValidation(t *testing.T) {
 	tests := []struct {
 		name     string
 		repo     *orbital.Repository
-		handlers orchestrator.Handlers
+		handlers orchestrator.OrbitalHandlers
 		opts     []orchestrator.Option
 		wantErr  error
 	}{
@@ -72,56 +72,56 @@ func TestNewValidation(t *testing.T) {
 		{
 			name: "task handler required",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs: []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
 			},
 			wantErr: orchestrator.ErrTaskHandlerRequired,
 		},
 		{
 			name: "nil job handler",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs:  []orchestrator.JobHandler{nil},
-				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{nil},
+				TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 			},
 			wantErr: orchestrator.ErrJobHandlerNil,
 		},
 		{
 			name: "empty job handler type",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs:  []orchestrator.JobHandler{&fakeJobHandler{}},
-				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{}},
+				TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 			},
 			wantErr: orchestrator.ErrJobTypeEmpty,
 		},
 		{
 			name: "duplicate job handler",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs: []orchestrator.JobHandler{
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{
 					&fakeJobHandler{jobType: "dup"}, &fakeJobHandler{jobType: "dup"},
 				},
-				Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+				TaskHandlers: []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 			},
 			wantErr: orchestrator.ErrJobHandlerDuplicate,
 		},
 		{
 			name: "nil task handler",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-				Tasks: []orchestrator.TaskHandler{nil},
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+				TaskHandlers:  []orchestrator.OrbitalTaskHandler{nil},
 			},
 			wantErr: orchestrator.ErrTaskHandlerNil,
 		},
 		{
 			name: "nil group handler",
 			repo: newNoopRepo(),
-			handlers: orchestrator.Handlers{
-				Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-				Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
-				Groups: []orchestrator.JobGroupHandler{nil},
+			handlers: orchestrator.OrbitalHandlers{
+				TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+				TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+				GroupHandlers: []orchestrator.OrbitalJobGroupHandler{nil},
 			},
 			wantErr: orchestrator.ErrGroupHandlerNil,
 		},
@@ -139,9 +139,9 @@ func TestOrchestratorRoutesJobHandler(t *testing.T) {
 	handler := &fakeJobHandler{jobType: "job.type"}
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:  []orchestrator.JobHandler{handler},
-			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{handler},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 		},
 	)
 	require.NoError(t, err)
@@ -168,9 +168,9 @@ func TestOrchestratorRoutesJobHandler(t *testing.T) {
 func TestOrchestratorUnknownJobTypeCancels(t *testing.T) {
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "known"}},
-			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "known"}},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
 		},
 	)
 	require.NoError(t, err)
@@ -193,10 +193,10 @@ func TestOrchestratorRoutesJobGroupHandler(t *testing.T) {
 	group := &fakeGroupHandler{groupType: "group.type"}
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
-			Groups: []orchestrator.JobGroupHandler{group},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			GroupHandlers: []orchestrator.OrbitalJobGroupHandler{group},
 		},
 	)
 	require.NoError(t, err)
@@ -218,10 +218,10 @@ func TestOrchestratorUnknownJobGroupTypeIsNoop(t *testing.T) {
 	group := &fakeGroupHandler{groupType: "known.group"}
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:   []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			Tasks:  []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "task.type"}},
-			Groups: []orchestrator.JobGroupHandler{group},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "task.type"}},
+			GroupHandlers: []orchestrator.OrbitalJobGroupHandler{group},
 		},
 	)
 	require.NoError(t, err)
@@ -238,9 +238,9 @@ func TestOrchestratorUnknownJobGroupTypeIsNoop(t *testing.T) {
 func TestStopReturnsErrorWhenOrbitalNotStarted(t *testing.T) {
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "activate"}},
 		},
 	)
 	require.NoError(t, err)

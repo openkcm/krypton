@@ -14,26 +14,26 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-// AnnounceJobHandler is the [JobHandler] for the announce-key job type.
+// AnnounceTaskResolver is the [OrbitalTaskResolver] for the announce-key job type.
 // It confirms the job by transitioning the key to in-progress and resolves
 // it into a single announce-key task.
-type AnnounceJobHandler struct {
+type AnnounceTaskResolver struct {
 	transactor store.Transactor
 }
 
-var _ JobHandler = &AnnounceJobHandler{}
+var _ OrbitalTaskResolver = &AnnounceTaskResolver{}
 
-func NewAnnounceJobHandler(transactor store.Transactor) *AnnounceJobHandler {
-	return &AnnounceJobHandler{
+func NewAnnounceTaskResolver(transactor store.Transactor) *AnnounceTaskResolver {
+	return &AnnounceTaskResolver{
 		transactor: transactor,
 	}
 }
 
-func (h *AnnounceJobHandler) JobType() string {
+func (h *AnnounceTaskResolver) JobType() string {
 	return AnnounceKey
 }
 
-func (h *AnnounceJobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
+func (h *AnnounceTaskResolver) ConfirmJob(ctx context.Context, job orbital.Job) (orbital.JobConfirmerResult, error) {
 	var key model.Key
 	if err := json.Unmarshal(job.Data, &key); err != nil {
 		return orbital.CancelJobConfirmer(fmt.Sprintf("invalid job data: %v", err)), nil
@@ -72,7 +72,7 @@ func (h *AnnounceJobHandler) ConfirmJob(ctx context.Context, job orbital.Job) (o
 	}
 }
 
-func (h *AnnounceJobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
+func (h *AnnounceTaskResolver) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
 	return orbital.CompleteTaskResolver().WithTaskInfo([]orbital.TaskInfo{{
 		Data:   job.Data,
 		Type:   AnnounceKey,
@@ -80,17 +80,17 @@ func (h *AnnounceJobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ 
 	}}), nil
 }
 
-func (h *AnnounceJobHandler) OnJobDone(ctx context.Context, job orbital.Job) error {
+func (h *AnnounceTaskResolver) OnJobDone(ctx context.Context, job orbital.Job) error {
 	slogctx.Info(ctx, "announce-key job done", "jobID", job.ID)
 	return nil
 }
 
-func (h *AnnounceJobHandler) OnJobFailed(ctx context.Context, job orbital.Job) error {
+func (h *AnnounceTaskResolver) OnJobFailed(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "announce-key job failed", "jobID", job.ID, "error", job.ErrorMessage)
 	return nil
 }
 
-func (h *AnnounceJobHandler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
+func (h *AnnounceTaskResolver) OnJobCanceled(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "announce-key job canceled", "jobID", job.ID)
 	return nil
 }

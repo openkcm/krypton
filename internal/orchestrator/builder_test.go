@@ -14,7 +14,7 @@ import (
 func TestTaskDispatchRoutesByType(t *testing.T) {
 	activate := &fakeTaskHandler{taskType: "activate"}
 	rotate := &fakeTaskHandler{taskType: "rotate"}
-	dispatch := orchestrator.NewTaskDispatch(map[string]orchestrator.TaskHandler{
+	dispatch := orchestrator.NewTaskDispatch(map[string]orchestrator.OrbitalTaskHandler{
 		"activate": activate,
 		"rotate":   rotate,
 	})
@@ -28,7 +28,7 @@ func TestTaskDispatchRoutesByType(t *testing.T) {
 }
 
 func TestTaskDispatchUnknownTypeFails(t *testing.T) {
-	dispatch := orchestrator.NewTaskDispatch(map[string]orchestrator.TaskHandler{
+	dispatch := orchestrator.NewTaskDispatch(map[string]orchestrator.OrbitalTaskHandler{
 		"activate": &fakeTaskHandler{taskType: "activate"},
 	})
 
@@ -42,9 +42,9 @@ func TestTaskDispatchUnknownTypeFails(t *testing.T) {
 func TestOrchestratorRegistersEmbeddedTarget(t *testing.T) {
 	orch, err := orchestrator.New(
 		t.Context(), newNoopRepo(),
-		orchestrator.Handlers{
-			Jobs:  []orchestrator.JobHandler{&fakeJobHandler{jobType: "job.type"}},
-			Tasks: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}},
+		orchestrator.OrbitalHandlers{
+			TaskResolvers: []orchestrator.OrbitalTaskResolver{&fakeJobHandler{jobType: "job.type"}},
+			TaskHandlers:  []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "activate"}},
 		},
 	)
 	require.NoError(t, err)
@@ -55,17 +55,17 @@ func TestOrchestratorRegistersEmbeddedTarget(t *testing.T) {
 func TestBuildTaskHandlerMap(t *testing.T) {
 	tests := []struct {
 		name     string
-		handlers []orchestrator.TaskHandler
+		handlers []orchestrator.OrbitalTaskHandler
 		wantErr  error
 		wantLen  int
 	}{
 		{name: "empty returns error", handlers: nil, wantErr: orchestrator.ErrTaskHandlerRequired},
-		{name: "single", handlers: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "activate"}}, wantLen: 1},
-		{name: "nil handler", handlers: []orchestrator.TaskHandler{nil}, wantErr: orchestrator.ErrTaskHandlerNil},
-		{name: "empty type", handlers: []orchestrator.TaskHandler{&fakeTaskHandler{}}, wantErr: orchestrator.ErrTaskTypeEmpty},
+		{name: "single", handlers: []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "activate"}}, wantLen: 1},
+		{name: "nil handler", handlers: []orchestrator.OrbitalTaskHandler{nil}, wantErr: orchestrator.ErrTaskHandlerNil},
+		{name: "empty type", handlers: []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{}}, wantErr: orchestrator.ErrTaskTypeEmpty},
 		{
 			name:     "duplicate",
-			handlers: []orchestrator.TaskHandler{&fakeTaskHandler{taskType: "dup"}, &fakeTaskHandler{taskType: "dup"}},
+			handlers: []orchestrator.OrbitalTaskHandler{&fakeTaskHandler{taskType: "dup"}, &fakeTaskHandler{taskType: "dup"}},
 			wantErr:  orchestrator.ErrTaskHandlerDuplicate,
 		},
 	}
@@ -86,17 +86,17 @@ func TestBuildTaskHandlerMap(t *testing.T) {
 func TestBuildGroupHandlerMap(t *testing.T) {
 	tests := []struct {
 		name     string
-		handlers []orchestrator.JobGroupHandler
+		handlers []orchestrator.OrbitalJobGroupHandler
 		wantErr  error
 		wantLen  int
 	}{
 		{name: "empty is ok", handlers: nil, wantLen: 0},
-		{name: "single", handlers: []orchestrator.JobGroupHandler{&fakeGroupHandler{groupType: "group"}}, wantLen: 1},
-		{name: "nil handler", handlers: []orchestrator.JobGroupHandler{nil}, wantErr: orchestrator.ErrGroupHandlerNil},
-		{name: "empty type", handlers: []orchestrator.JobGroupHandler{&fakeGroupHandler{}}, wantErr: orchestrator.ErrGroupTypeEmpty},
+		{name: "single", handlers: []orchestrator.OrbitalJobGroupHandler{&fakeGroupHandler{groupType: "group"}}, wantLen: 1},
+		{name: "nil handler", handlers: []orchestrator.OrbitalJobGroupHandler{nil}, wantErr: orchestrator.ErrGroupHandlerNil},
+		{name: "empty type", handlers: []orchestrator.OrbitalJobGroupHandler{&fakeGroupHandler{}}, wantErr: orchestrator.ErrGroupTypeEmpty},
 		{
 			name:     "duplicate",
-			handlers: []orchestrator.JobGroupHandler{&fakeGroupHandler{groupType: "dup"}, &fakeGroupHandler{groupType: "dup"}},
+			handlers: []orchestrator.OrbitalJobGroupHandler{&fakeGroupHandler{groupType: "dup"}, &fakeGroupHandler{groupType: "dup"}},
 			wantErr:  orchestrator.ErrGroupHandlerDuplicate,
 		},
 	}

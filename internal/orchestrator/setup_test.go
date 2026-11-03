@@ -367,7 +367,7 @@ func emptyRegistry(t *testing.T) *grpcconn.Registry {
 // Task runner
 // ---------------------------------------------------------------------------
 
-func runTask(t *testing.T, h orchestrator.TaskHandler, payload []byte) orbital.TaskResponse {
+func runTask(t *testing.T, h orchestrator.OrbitalTaskHandler, payload []byte) orbital.TaskResponse {
 	t.Helper()
 	return orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(h.Handle), orbital.TaskRequest{
 		TaskID: uuid.NewV7(),

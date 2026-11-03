@@ -18,19 +18,19 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-// KeyProcessOperator orchestrates key activation steps within a transaction.
-// Call [KeyProcessOperator.ResolveKeyAndVersions] first to populate Key, KeyVersion,
+// KeyOperator orchestrates key activation steps within a transaction.
+// Call [KeyOperator.ResolveKeyAndVersions] first to populate Key, KeyVersion,
 // and IsNewKV, then call the remaining methods in order.
-type KeyProcessOperator struct {
+type KeyOperator struct {
 	Key        *model.Key
 	KeyVersion *model.KeyVersion
 	IsNewKV    bool
-	cfg        KeyProcessOperatorConfig
+	cfg        KeyOperatorConfig
 }
 
-// KeyProcessOperatorConfig holds the dependencies injected into a
-// [KeyProcessOperator].
-type KeyProcessOperatorConfig struct {
+// KeyOperatorConfig holds the dependencies injected into a
+// [KeyOperator].
+type KeyOperatorConfig struct {
 	Manager    *keyprocessor.Manager
 	RootConfig *config.RootConfig
 	Registry   *grpcconn.Registry
@@ -43,18 +43,18 @@ var (
 	ErrInternal                = errors.New("internal error")
 )
 
-// NewKeyProcessOperator creates an operator with the given dependencies.
-func NewKeyProcessOperator(
-	cfg KeyProcessOperatorConfig,
-) *KeyProcessOperator {
-	return &KeyProcessOperator{
+// NewKeyOperator creates an operator with the given dependencies.
+func NewKeyOperator(
+	cfg KeyOperatorConfig,
+) *KeyOperator {
+	return &KeyOperator{
 		cfg: cfg,
 	}
 }
 
 // ResolveKeyAndVersions loads the key and resolves its current key version.
-// Must be called before GenerateAndSealSecret, UpsertRemote, or MarkKeyComplete.
-func (p *KeyProcessOperator) ResolveKeyAndVersions(ctx context.Context, kid KeyIdentifier) *OrbitalOperatorError {
+// Must be called before GenerateAndSealSecret, UpsertRemote, or MarkKeyCompleted.
+func (p *KeyOperator) ResolveKeyAndVersions(ctx context.Context, kid KeyIdentifier) *OrbitalOperatorError {
 	or := p.loadKey(ctx, kid)
 	if or != nil {
 		return or
@@ -70,7 +70,7 @@ func (p *KeyProcessOperator) ResolveKeyAndVersions(ctx context.Context, kid KeyI
 
 // MarkKeyFailed persists the key's processing state as failed in the DB,
 // then returns [OrbitalFail] with the original error.
-func (p *KeyProcessOperator) MarkKeyFailed(ctx context.Context, failedErr error) *OrbitalOperatorError {
+func (p *KeyOperator) MarkKeyFailed(ctx context.Context, failedErr error) *OrbitalOperatorError {
 	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternal))
 	}
@@ -96,7 +96,7 @@ func (p *KeyProcessOperator) MarkKeyFailed(ctx context.Context, failedErr error)
 
 // GenerateAndSealSecret generates and seals a secret for non-root, locally
 // managed keys that have a newly created key version.
-func (p *KeyProcessOperator) GenerateAndSealSecret(ctx context.Context) *OrbitalOperatorError {
+func (p *KeyOperator) GenerateAndSealSecret(ctx context.Context) *OrbitalOperatorError {
 	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternal))
 	}
@@ -143,7 +143,7 @@ func (p *KeyProcessOperator) GenerateAndSealSecret(ctx context.Context) *Orbital
 
 // UpsertRemote pushes the key and key version to the remote agent via gRPC.
 // Keys managed by the root are skipped.
-func (p *KeyProcessOperator) UpsertRemote(ctx context.Context) *OrbitalOperatorError {
+func (p *KeyOperator) UpsertRemote(ctx context.Context) *OrbitalOperatorError {
 	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternal))
 	}
@@ -178,8 +178,8 @@ func (p *KeyProcessOperator) UpsertRemote(ctx context.Context) *OrbitalOperatorE
 	return p.upsertRemoteKeyVersion(ctx, conn)
 }
 
-// MarkKeyComplete transitions the key's processing state to completed.
-func (p *KeyProcessOperator) MarkKeyComplete(ctx context.Context) *OrbitalOperatorError {
+// MarkKeyCompleted transitions the key's processing state to completed.
+func (p *KeyOperator) MarkKeyCompleted(ctx context.Context) *OrbitalOperatorError {
 	if p.Key == nil {
 		return OrbitalFail(fmt.Errorf("%w: key is nil", ErrInternal))
 	}
@@ -199,7 +199,7 @@ func (p *KeyProcessOperator) MarkKeyComplete(ctx context.Context) *OrbitalOperat
 	return nil
 }
 
-func (p *KeyProcessOperator) upsertRemoteKey(ctx context.Context, conn *grpc.ClientConn) *OrbitalOperatorError {
+func (p *KeyOperator) upsertRemoteKey(ctx context.Context, conn *grpc.ClientConn) *OrbitalOperatorError {
 	k := p.Key
 	var parentID string
 	if k.ParentID != nil {
@@ -227,7 +227,7 @@ func (p *KeyProcessOperator) upsertRemoteKey(ctx context.Context, conn *grpc.Cli
 	return p.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key to remote agent %s: %w", k.ManagedBy, err))
 }
 
-func (p *KeyProcessOperator) upsertRemoteKeyVersion(ctx context.Context, conn *grpc.ClientConn) *OrbitalOperatorError {
+func (p *KeyOperator) upsertRemoteKeyVersion(ctx context.Context, conn *grpc.ClientConn) *OrbitalOperatorError {
 	kv := p.KeyVersion
 	k := p.Key
 
@@ -262,7 +262,7 @@ func (p *KeyProcessOperator) upsertRemoteKeyVersion(ctx context.Context, conn *g
 	return p.MarkKeyFailed(ctx, fmt.Errorf("failed to upsert key version to remote agent %s: %w", k.ManagedBy, err))
 }
 
-func (p *KeyProcessOperator) isRootKey(ctx context.Context) (bool, *OrbitalOperatorError) {
+func (p *KeyOperator) isRootKey(ctx context.Context) (bool, *OrbitalOperatorError) {
 	key := p.Key
 	kspec, ok := p.cfg.RootConfig.Hierarchy.FindKeySpec(key.Kind)
 	if !ok {
@@ -271,7 +271,7 @@ func (p *KeyProcessOperator) isRootKey(ctx context.Context) (bool, *OrbitalOpera
 	return kspec.Role == spec.KeyRoleRoot, nil
 }
 
-func (p *KeyProcessOperator) loadKey(ctx context.Context, kid KeyIdentifier) *OrbitalOperatorError {
+func (p *KeyOperator) loadKey(ctx context.Context, kid KeyIdentifier) *OrbitalOperatorError {
 	key, err := p.cfg.Stores.Keys.GetKeyByID(ctx, kid.ID, kid.TenantID)
 	if err == nil {
 		p.Key = key
@@ -285,7 +285,7 @@ func (p *KeyProcessOperator) loadKey(ctx context.Context, kid KeyIdentifier) *Or
 	return OrbitalContinue(err)
 }
 
-func (p *KeyProcessOperator) resolveKeyVersions(ctx context.Context) *OrbitalOperatorError {
+func (p *KeyOperator) resolveKeyVersions(ctx context.Context) *OrbitalOperatorError {
 	kv, err := p.fetchAndUpdateExistingKeyVersion(ctx)
 	if err == nil {
 		p.KeyVersion = kv
@@ -310,7 +310,7 @@ func (p *KeyProcessOperator) resolveKeyVersions(ctx context.Context) *OrbitalOpe
 	return OrbitalContinue(err)
 }
 
-func (p *KeyProcessOperator) fetchAndUpdateExistingKeyVersion(ctx context.Context) (*model.KeyVersion, error) {
+func (p *KeyOperator) fetchAndUpdateExistingKeyVersion(ctx context.Context) (*model.KeyVersion, error) {
 	kvStore := p.cfg.Stores.KeyVersions
 	key := p.Key
 	// check if keyversion is already present
@@ -349,7 +349,7 @@ func (p *KeyProcessOperator) fetchAndUpdateExistingKeyVersion(ctx context.Contex
 	return &kv, nil
 }
 
-func (p *KeyProcessOperator) deriveKeyVersionFromParent(ctx context.Context) (*model.KeyVersion, error) {
+func (p *KeyOperator) deriveKeyVersionFromParent(ctx context.Context) (*model.KeyVersion, error) {
 	kvStore := p.cfg.Stores.KeyVersions
 	key := p.Key
 

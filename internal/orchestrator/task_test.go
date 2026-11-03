@@ -55,7 +55,7 @@ func TestActivate_Handler(t *testing.T) {
 	require.NoError(t, err)
 
 	// default handler: root-managed, with empty registry
-	subj := orchestrator.NewKeyProcessTaskHandler(
+	subj := orchestrator.NewTaskHandler(
 		orchestrator.ActivateHandlerConfig(),
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
@@ -64,14 +64,14 @@ func TestActivate_Handler(t *testing.T) {
 	)
 
 	// newHandler builds a TaskHandler with the given overrides.
-	newHandler := func(transactor store.Transactor, registry *grpcconn.Registry, manager *keyprocessor.Manager) *orchestrator.KeyProcessTaskHandler {
+	newHandler := func(transactor store.Transactor, registry *grpcconn.Registry, manager *keyprocessor.Manager) *orchestrator.TaskHandler {
 		if transactor == nil {
 			transactor = storesql.NewTransactor(rootDB)
 		}
 		if manager == nil {
 			manager = mgr
 		}
-		return orchestrator.NewKeyProcessTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, manager, validRootCfg)
+		return orchestrator.NewTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, manager, validRootCfg)
 	}
 
 	// ---- input validation ----

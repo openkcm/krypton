@@ -36,7 +36,7 @@ var (
 // buildTaskDispatch returns a single orbital.HandlerFunc that routes each task
 // request to the handler registered for its task type. An unregistered task
 // type fails the task rather than silently succeeding.
-func buildTaskDispatch(handlers map[string]TaskHandler) orbital.HandlerFunc {
+func buildTaskDispatch(handlers map[string]OrbitalTaskHandler) orbital.HandlerFunc {
 	return func(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
 		handler, ok := handlers[req.TaskType]
 		if !ok {
@@ -48,12 +48,12 @@ func buildTaskDispatch(handlers map[string]TaskHandler) orbital.HandlerFunc {
 	}
 }
 
-func buildTaskHandlerMap(handlers []TaskHandler) (map[string]TaskHandler, error) {
+func buildTaskHandlerMap(handlers []OrbitalTaskHandler) (map[string]OrbitalTaskHandler, error) {
 	if len(handlers) == 0 {
 		return nil, ErrTaskHandlerRequired
 	}
 
-	result := make(map[string]TaskHandler, len(handlers))
+	result := make(map[string]OrbitalTaskHandler, len(handlers))
 	for _, handler := range handlers {
 		if handler == nil {
 			return nil, ErrTaskHandlerNil
@@ -73,12 +73,12 @@ func buildTaskHandlerMap(handlers []TaskHandler) (map[string]TaskHandler, error)
 	return result, nil
 }
 
-func buildJobHandlerMap(handlers []JobHandler) (map[string]JobHandler, error) {
+func buildTaskResolverMap(handlers []OrbitalTaskResolver) (map[string]OrbitalTaskResolver, error) {
 	if len(handlers) == 0 {
 		return nil, ErrJobHandlerRequired
 	}
 
-	result := make(map[string]JobHandler, len(handlers))
+	result := make(map[string]OrbitalTaskResolver, len(handlers))
 	for _, handler := range handlers {
 		if handler == nil {
 			return nil, ErrJobHandlerNil
@@ -98,8 +98,8 @@ func buildJobHandlerMap(handlers []JobHandler) (map[string]JobHandler, error) {
 	return result, nil
 }
 
-func buildGroupHandlerMap(handlers []JobGroupHandler) (map[string]JobGroupHandler, error) {
-	result := make(map[string]JobGroupHandler, len(handlers))
+func buildGroupHandlerMap(handlers []OrbitalJobGroupHandler) (map[string]OrbitalJobGroupHandler, error) {
+	result := make(map[string]OrbitalJobGroupHandler, len(handlers))
 	for _, handler := range handlers {
 		if handler == nil {
 			return nil, ErrGroupHandlerNil

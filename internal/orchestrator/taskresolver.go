@@ -10,23 +10,23 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 )
 
-// KeyProcessJobHandler is a [JobHandler] that unpacks a [KeyLayer] from the
+// TaskResolver is a [OrbitalTaskResolver] that unpacks a [KeyLayer] from the
 // job data and fans out one task per key identifier.
-type KeyProcessJobHandler struct {
+type TaskResolver struct {
 	cfg HandlerConfig
 }
 
-var _ JobHandler = &KeyProcessJobHandler{}
+var _ OrbitalTaskResolver = &TaskResolver{}
 
-func NewKeyProcessJobHandler(cfg HandlerConfig) *KeyProcessJobHandler {
-	return &KeyProcessJobHandler{cfg: cfg}
+func NewTaskResolver(cfg HandlerConfig) *TaskResolver {
+	return &TaskResolver{cfg: cfg}
 }
 
-func (h *KeyProcessJobHandler) JobType() string {
+func (h *TaskResolver) JobType() string {
 	return h.cfg.handlerType
 }
 
-func (h *KeyProcessJobHandler) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
+func (h *TaskResolver) ResolveTasks(_ context.Context, job orbital.Job, _ orbital.TaskResolverCursor) (orbital.TaskResolverResult, error) {
 	var layer KeyLayer
 	if err := json.Unmarshal(job.Data, &layer); err != nil {
 		return orbital.CancelTaskResolver(fmt.Sprintf("invalid job data: %v", err)), nil
@@ -52,21 +52,21 @@ func (h *KeyProcessJobHandler) ResolveTasks(_ context.Context, job orbital.Job, 
 	return orbital.CompleteTaskResolver().WithTaskInfo(infos), nil
 }
 
-func (h *KeyProcessJobHandler) ConfirmJob(_ context.Context, _ orbital.Job) (orbital.JobConfirmerResult, error) {
+func (h *TaskResolver) ConfirmJob(_ context.Context, _ orbital.Job) (orbital.JobConfirmerResult, error) {
 	return orbital.CompleteJobConfirmer(), nil
 }
 
-func (h *KeyProcessJobHandler) OnJobCanceled(ctx context.Context, job orbital.Job) error {
+func (h *TaskResolver) OnJobCanceled(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "job canceled", "handler", h.cfg, "jobID", job.ID)
 	return nil
 }
 
-func (h *KeyProcessJobHandler) OnJobDone(ctx context.Context, job orbital.Job) error {
+func (h *TaskResolver) OnJobDone(ctx context.Context, job orbital.Job) error {
 	slogctx.Info(ctx, "job completed", "handler", h.cfg, "jobID", job.ID)
 	return nil
 }
 
-func (h *KeyProcessJobHandler) OnJobFailed(ctx context.Context, job orbital.Job) error {
+func (h *TaskResolver) OnJobFailed(ctx context.Context, job orbital.Job) error {
 	slogctx.Warn(ctx, "job failed", "handler", h.cfg, "jobID", job.ID, "error", job.ErrorMessage)
 	return nil
 }

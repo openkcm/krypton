@@ -18,7 +18,7 @@ func TestJobHandler_ConfirmJob_KeyExists_Completes(t *testing.T) {
 	rootDB := newRootDB(t)
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
-	handler := orchestrator.NewAnnounceJobHandler(storesql.NewTransactor(rootDB))
+	handler := orchestrator.NewAnnounceTaskResolver(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ConfirmJob(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
@@ -31,7 +31,7 @@ func TestJobHandler_ConfirmJob_KeyExists_Completes(t *testing.T) {
 func TestJobHandler_ConfirmJob_KeyMissing_Cancels(t *testing.T) {
 	rootDB := newRootDB(t)
 
-	handler := orchestrator.NewAnnounceJobHandler(storesql.NewTransactor(rootDB))
+	handler := orchestrator.NewAnnounceTaskResolver(storesql.NewTransactor(rootDB))
 
 	ghost := model.NewKey(uuid.New().String(), "ghost", "K0", nil, "agent", nil)
 	ghost.ID = uuid.New().String()
@@ -47,7 +47,7 @@ func TestJobHandler_ConfirmJob_KeyMissing_Cancels(t *testing.T) {
 func TestJobHandler_ConfirmJob_StoreError_Continues(t *testing.T) {
 	failing := &failingTransactor{err: errors.New("db down")}
 
-	handler := orchestrator.NewAnnounceJobHandler(failing)
+	handler := orchestrator.NewAnnounceTaskResolver(failing)
 
 	key := model.NewKey(uuid.New().String(), "any", "K0", nil, "agent", nil)
 	key.ID = uuid.New().String()
@@ -62,7 +62,7 @@ func TestJobHandler_ConfirmJob_StoreError_Continues(t *testing.T) {
 
 func TestJobHandler_ConfirmJob_InvalidPayload_Cancels(t *testing.T) {
 	rootDB := newRootDB(t)
-	handler := orchestrator.NewAnnounceJobHandler(storesql.NewTransactor(rootDB))
+	handler := orchestrator.NewAnnounceTaskResolver(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ConfirmJob(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
@@ -74,7 +74,7 @@ func TestJobHandler_ConfirmJob_InvalidPayload_Cancels(t *testing.T) {
 
 func TestJobHandlerAnnounce_ResolveTasks(t *testing.T) {
 	rootDB := newRootDB(t)
-	handler := orchestrator.NewAnnounceJobHandler(storesql.NewTransactor(rootDB))
+	handler := orchestrator.NewAnnounceTaskResolver(storesql.NewTransactor(rootDB))
 
 	res, err := handler.ResolveTasks(t.Context(), orbital.Job{
 		ID:   uuid.NewV7(),
@@ -85,21 +85,21 @@ func TestJobHandlerAnnounce_ResolveTasks(t *testing.T) {
 }
 
 func TestJobHandler_OnJobDone_NoOp(t *testing.T) {
-	handler := orchestrator.NewAnnounceJobHandler(nil)
+	handler := orchestrator.NewAnnounceTaskResolver(nil)
 	assert.NoError(t, handler.OnJobDone(t.Context(), orbital.Job{ID: uuid.NewV7()}))
 }
 
 func TestJobHandler_OnJobFailed_NoOp(t *testing.T) {
-	handler := orchestrator.NewAnnounceJobHandler(nil)
+	handler := orchestrator.NewAnnounceTaskResolver(nil)
 	assert.NoError(t, handler.OnJobFailed(t.Context(), orbital.Job{ID: uuid.NewV7(), ErrorMessage: "boom"}))
 }
 
 func TestJobHandler_OnJobCanceled_NoOp(t *testing.T) {
-	handler := orchestrator.NewAnnounceJobHandler(nil)
+	handler := orchestrator.NewAnnounceTaskResolver(nil)
 	assert.NoError(t, handler.OnJobCanceled(t.Context(), orbital.Job{ID: uuid.NewV7()}))
 }
 
 func TestJobHandlerAnnounce_JobType(t *testing.T) {
-	handler := orchestrator.NewAnnounceJobHandler(nil)
+	handler := orchestrator.NewAnnounceTaskResolver(nil)
 	assert.Equal(t, orchestrator.AnnounceKey, handler.JobType())
 }

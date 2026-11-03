@@ -41,8 +41,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 
 	t.Run("should create processor with zero-valued outputs", func(t *testing.T) {
 		// when
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -63,8 +63,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -94,8 +94,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 			kv.ProcessingState = model.KeyVersionReWrapping
 			kv.LifeCycleState = model.KeyLifeCycleSuspended
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -114,8 +114,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
 		// given
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
 			})
 
@@ -143,8 +143,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -162,8 +162,8 @@ func TestNewOrbitalOperator(t *testing.T) {
 
 	t.Run("should retry when loadKey returns an internal DB error", func(t *testing.T) {
 		// given — "non-uuid" triggers a SQL error (not ErrKeyNotFound)
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
 			})
 
@@ -223,10 +223,10 @@ func TestGenerateAndSealSecret(t *testing.T) {
 	require.NoError(t, err)
 
 	// helper: create a processor with key and key version loaded
-	loadProcessor := func(t *testing.T, manager *keyprocessor.Manager, key model.Key) *orchestrator.KeyProcessOperator {
+	loadProcessor := func(t *testing.T, manager *keyprocessor.Manager, key model.Key) *orchestrator.KeyOperator {
 		t.Helper()
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    manager,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -397,8 +397,8 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 		kv := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    mgr,
 				RootConfig: nil, // nil config
 				Registry:   nil,
@@ -421,8 +421,8 @@ func TestGenerateAndSealSecret(t *testing.T) {
 
 	t.Run("should fail if key is nil", func(t *testing.T) {
 		// given
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    mgr,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -445,8 +445,8 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    mgr,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -471,8 +471,8 @@ func TestGenerateAndSealSecret(t *testing.T) {
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
 		kv := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil, // nil manager
 				RootConfig: cfg,
 				Registry:   nil,
@@ -502,8 +502,8 @@ func TestMarkKeyFailed(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is nil", func(t *testing.T) {
 		// given
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -526,8 +526,8 @@ func TestMarkKeyFailed(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -559,8 +559,8 @@ func TestMarkKeyFailed(t *testing.T) {
 		require.NoError(t, err)
 
 		brokenStores := store.Stores{Keys: brokenKStore}
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -627,10 +627,10 @@ func TestUpsertRemote(t *testing.T) {
 	}
 
 	// helper: load processor with key and key version
-	loadProcessor := func(t *testing.T, key model.Key, registry *grpcconn.Registry) *orchestrator.KeyProcessOperator {
+	loadProcessor := func(t *testing.T, key model.Key, registry *grpcconn.Registry) *orchestrator.KeyOperator {
 		t.Helper()
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   registry,
@@ -663,8 +663,8 @@ func TestUpsertRemote(t *testing.T) {
 
 	t.Run("should fail if key is nil", func(t *testing.T) {
 		// given
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   emptyRegistry(t),
@@ -682,8 +682,8 @@ func TestUpsertRemote(t *testing.T) {
 	t.Run("should fail key if key version is nil", func(t *testing.T) {
 		// given
 		key := createRemoteKeyHierarchy(t)
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   emptyRegistry(t),
@@ -706,8 +706,8 @@ func TestUpsertRemote(t *testing.T) {
 		p := loadProcessor(t, key, emptyRegistry(t))
 		// loadProcessor used emptyRegistry but we need nil registry on the processor;
 		// we can't set it directly (unexported), so create a fresh processor with nil registry
-		p2 := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -731,8 +731,8 @@ func TestUpsertRemote(t *testing.T) {
 		p := loadProcessor(t, key, emptyRegistry(t))
 		// loadProcessor used emptyRegistry but we need nil registry on the processor;
 		// we can't set it directly (unexported), so create a fresh processor with nil registry
-		p2 := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: nil,
 				Registry:   emptyRegistry(t),
@@ -755,8 +755,8 @@ func TestUpsertRemote(t *testing.T) {
 		key := createRemoteKeyHierarchy(t)
 		p := loadProcessor(t, key, emptyRegistry(t))
 		// create a fresh processor with empty rootName but non-nil registry
-		p2 := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   emptyRegistry(t),
@@ -894,7 +894,7 @@ func TestUpsertRemote(t *testing.T) {
 	})
 }
 
-func TestMarkKeyComplete(t *testing.T) {
+func TestMarkKeyCompleted(t *testing.T) {
 	db := newRootDB(t)
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
@@ -905,8 +905,8 @@ func TestMarkKeyComplete(t *testing.T) {
 
 	t.Run("should return OrbitalFail when key is nil", func(t *testing.T) {
 		// given
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -914,7 +914,7 @@ func TestMarkKeyComplete(t *testing.T) {
 			})
 
 		// when
-		or := p.MarkKeyComplete(t.Context())
+		or := p.MarkKeyCompleted(t.Context())
 
 		// then
 		require.NotNil(t, or)
@@ -928,8 +928,8 @@ func TestMarkKeyComplete(t *testing.T) {
 			LifeCycleState:     model.KeyLifeCycleActive,
 			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 		})
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
 				RootConfig: cfg,
 				Registry:   nil,
@@ -938,7 +938,7 @@ func TestMarkKeyComplete(t *testing.T) {
 		p.Key = &key
 
 		// when
-		or := p.MarkKeyComplete(t.Context())
+		or := p.MarkKeyCompleted(t.Context())
 
 		// then
 		assert.Nil(t, or)
@@ -959,14 +959,14 @@ func TestMarkKeyComplete(t *testing.T) {
 		_, err := brokenDB.ExecContext(t.Context(), "ALTER TABLE keys RENAME TO keys_hidden")
 		require.NoError(t, err)
 
-		p := orchestrator.NewKeyProcessOperator(
-			orchestrator.KeyProcessOperatorConfig{
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
 				Manager: nil, RootConfig: cfg, Registry: nil, Stores: store.Stores{Keys: brokenKStore},
 			})
 		p.Key = &key
 
 		// when
-		or := p.MarkKeyComplete(t.Context())
+		or := p.MarkKeyCompleted(t.Context())
 
 		// then
 		require.NotNil(t, or)

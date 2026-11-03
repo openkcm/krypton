@@ -16,11 +16,11 @@ import (
 	"github.com/openkcm/krypton/pkg/store"
 )
 
-// KeyProcessTaskHandler is a [TaskHandler] that processes a single key within
+// TaskHandler is a [OrbitalTaskHandler] that processes a single key within
 // a transaction: it validates the tenant and key, resolves key versions,
 // generates and seals secrets, upserts to remote agents, and marks the key
 // complete.
-type KeyProcessTaskHandler struct {
+type TaskHandler struct {
 	handlerCfg HandlerConfig
 	transactor store.Transactor
 	registry   *grpcconn.Registry
@@ -28,16 +28,16 @@ type KeyProcessTaskHandler struct {
 	rootCfg    *config.RootConfig
 }
 
-var _ TaskHandler = &KeyProcessTaskHandler{}
+var _ OrbitalTaskHandler = &TaskHandler{}
 
-func NewKeyProcessTaskHandler(
+func NewTaskHandler(
 	handleCfg HandlerConfig,
 	transactor store.Transactor,
 	registry *grpcconn.Registry,
 	manager *keyprocessor.Manager,
 	rootCfg *config.RootConfig,
-) *KeyProcessTaskHandler {
-	return &KeyProcessTaskHandler{
+) *TaskHandler {
+	return &TaskHandler{
 		handlerCfg: handleCfg,
 		transactor: transactor,
 		registry:   registry,
@@ -47,12 +47,12 @@ func NewKeyProcessTaskHandler(
 }
 
 // TaskType implements [orchestrator.TaskHandler].
-func (h *KeyProcessTaskHandler) TaskType() string {
+func (h *TaskHandler) TaskType() string {
 	return h.handlerCfg.handlerType
 }
 
 // Handle implements [orchestrator.TaskHandler].
-func (h *KeyProcessTaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
+func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
 	var kid KeyIdentifier
 
 	err := json.Unmarshal(req.TaskData, &kid)
@@ -68,8 +68,8 @@ func (h *KeyProcessTaskHandler) Handle(ctx context.Context, req orbital.HandlerR
 				key.KeyProcessingState.Status == model.KeyProcessingPending
 		}),
 		func(ctx context.Context, stores store.Stores) error {
-			proc := NewKeyProcessOperator(
-				KeyProcessOperatorConfig{
+			proc := NewKeyOperator(
+				KeyOperatorConfig{
 					Manager:    h.manager,
 					RootConfig: h.rootCfg,
 					Registry:   h.registry,
@@ -92,7 +92,7 @@ func (h *KeyProcessTaskHandler) Handle(ctx context.Context, req orbital.HandlerR
 				return or.Apply(resp)
 			}
 
-			or = proc.MarkKeyComplete(ctx)
+			or = proc.MarkKeyCompleted(ctx)
 			if or != nil {
 				return or.Apply(resp)
 			}

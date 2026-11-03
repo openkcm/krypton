@@ -23,7 +23,7 @@ import (
 
 const retryBackoff = 2 * time.Second
 
-// AnnounceTaskHandler is the [TaskHandler] for the announce-key task type.
+// AnnounceTaskHandler is the [OrbitalTaskHandler] for the announce-key task type.
 // It validates the tenant, upserts the tenant and key to the remote agent,
 // and updates the key's processing state.
 type AnnounceTaskHandler struct {
@@ -32,7 +32,7 @@ type AnnounceTaskHandler struct {
 	rootName   string
 }
 
-var _ TaskHandler = &AnnounceTaskHandler{}
+var _ OrbitalTaskHandler = &AnnounceTaskHandler{}
 
 func NewAnnounceTaskHandler(transactor store.Transactor, registry *grpcconn.Registry, rootName string) *AnnounceTaskHandler {
 	return &AnnounceTaskHandler{
