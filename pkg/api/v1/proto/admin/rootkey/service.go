@@ -52,6 +52,7 @@ var (
 )
 
 // CreateProvider creates a provider binding for the specified root key.
+// TODO: Keep provider auth in securemem-backed buffers and wipe transient plaintext copies after use.
 func (s *Service) CreateProvider(ctx context.Context, req *CreateProviderRequest) (*CreateProviderResponse, error) {
 	if err := validateIDs(req.GetTenantId(), req.GetKeyId()); err != nil {
 		return nil, err
@@ -92,6 +93,7 @@ func (s *Service) CreateProvider(ctx context.Context, req *CreateProviderRequest
 }
 
 // RotateAuth updates the authentication for a root key's provider binding.
+// TODO: Keep provider auth in securemem-backed buffers and wipe transient plaintext copies after use.
 func (s *Service) RotateAuth(ctx context.Context, req *RotateAuthRequest) (*RotateAuthResponse, error) {
 	if err := validateIDs(req.GetTenantId(), req.GetKeyId()); err != nil {
 		return nil, err
