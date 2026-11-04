@@ -1,6 +1,7 @@
 package sealerprovider_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,13 @@ import (
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
+
+// errAuth is a test SealerAuth whose ValidateSealerAuth always fails.
+var errAuthFailed = errors.New("auth validation failed")
+
+type errAuth struct{}
+
+func (errAuth) ValidateSealerAuth() error { return errAuthFailed }
 
 func TestSpec_Validate(t *testing.T) {
 	tts := []struct {
@@ -47,6 +55,35 @@ func TestSpec_Validate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "should pass when auth validation succeeds",
+			spec: sealerprovider.Spec{
+				Name: "my-sealer",
+				Type: staticsecret.TypeStaticSecret,
+				Config: &staticsecret.Config{
+					Secret: secretprovider.Spec{
+						Type:   envvar.Type,
+						Config: &envvar.Config{Name: "MY_SECRET"},
+					},
+				},
+				Auth: &staticsecret.Auth{},
+			},
+		},
+		{
+			name: "should fail when auth validation fails",
+			spec: sealerprovider.Spec{
+				Name: "my-sealer",
+				Type: staticsecret.TypeStaticSecret,
+				Config: &staticsecret.Config{
+					Secret: secretprovider.Spec{
+						Type:   envvar.Type,
+						Config: &envvar.Config{Name: "MY_SECRET"},
+					},
+				},
+				Auth: errAuth{},
+			},
+			expErr: errAuthFailed,
+		},
 	}
 
 	for _, tt := range tts {
@@ -65,16 +102,17 @@ func TestSpec_Validate(t *testing.T) {
 }
 
 func TestSpec_UnmarshalYAML(t *testing.T) {
-	t.Run("should unmarshal staticsecret spec", func(t *testing.T) {
+	t.Run("should unmarshal staticsecret spec with auth", func(t *testing.T) {
 		// given
 		input := `
 name: root-sealer
 type: aes256gcm-staticsecret
+auth: {}
 config:
   secret:
     type: envvar
     config:
-      name: KRYPTON_ROOT_KEY
+      name: TEST_SEALER_KEY
 `
 		// when
 		var spec sealerprovider.Spec
@@ -85,6 +123,27 @@ config:
 		assert.Equal(t, "root-sealer", spec.Name)
 		assert.Equal(t, staticsecret.TypeStaticSecret, spec.Type)
 		assert.IsType(t, &staticsecret.Config{}, spec.Config)
+		assert.IsType(t, &staticsecret.Auth{}, spec.Auth)
+	})
+
+	t.Run("should populate auth even when auth block is absent", func(t *testing.T) {
+		// given
+		input := `
+name: root-sealer
+type: aes256gcm-staticsecret
+config:
+  secret:
+    type: envvar
+    config:
+      name: TEST_SEALER_KEY
+`
+		// when
+		var spec sealerprovider.Spec
+		err := yaml.Unmarshal([]byte(input), &spec)
+
+		// then
+		require.NoError(t, err)
+		assert.IsType(t, &staticsecret.Auth{}, spec.Auth)
 	})
 
 	t.Run("should return error for unknown sealer type", func(t *testing.T) {
@@ -100,6 +159,39 @@ config: {}
 
 		// then
 		assert.ErrorIs(t, err, sealer.ErrUnknownType)
+	})
+}
+
+func TestSpec_MarshalYAML(t *testing.T) {
+	t.Run("should round-trip auth and config", func(t *testing.T) {
+		// given
+		spec := sealerprovider.Spec{
+			Name: "root-sealer",
+			Type: staticsecret.TypeStaticSecret,
+			Auth: &staticsecret.Auth{},
+			Config: &staticsecret.Config{
+				Secret: secretprovider.Spec{
+					Type:   envvar.Type,
+					Config: &envvar.Config{Name: "TEST_SEALER_KEY"},
+				},
+			},
+		}
+
+		// when
+		out, err := yaml.Marshal(spec)
+		require.NoError(t, err)
+
+		// then
+		assert.Contains(t, string(out), "auth:")
+		assert.Contains(t, string(out), "config:")
+
+		// and round-trips back into an equivalent spec
+		var got sealerprovider.Spec
+		require.NoError(t, yaml.Unmarshal(out, &got))
+		assert.Equal(t, spec.Name, got.Name)
+		assert.Equal(t, spec.Type, got.Type)
+		assert.IsType(t, &staticsecret.Config{}, got.Config)
+		assert.IsType(t, &staticsecret.Auth{}, got.Auth)
 	})
 }
 

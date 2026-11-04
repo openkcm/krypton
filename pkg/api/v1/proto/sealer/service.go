@@ -9,9 +9,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
+	"github.com/openkcm/krypton/pkg/validator"
 )
 
 const (
@@ -72,6 +74,7 @@ func (s *SealerService) Seal(ctx context.Context, req *SealRequest) (*SealRespon
 			KeyVersion: int(req.GetKeyVersion()),
 			Plaintext:  sptxt,
 			AAD:        req.GetAad(),
+			Metadata:   req.GetMetadata(),
 		})
 		if err != nil {
 			slog.Error("failed to seal the plaintext", "error", err)
@@ -148,9 +151,17 @@ func (s *SealerService) Unseal(ctx context.Context, req *UnsealRequest) (*Unseal
 			KeyVersion: int(req.GetKeyVersion()),
 			Ciphertext: sctxt,
 			AAD:        req.GetAad(),
+			Metadata:   req.GetMetadata(),
 		})
 		if err != nil {
 			slog.Error("failed to unseal the ciphertext", "error", err)
+			if errors.Is(err, keylifecycle.ErrOperationNotAllowedInState) ||
+				errors.Is(err, validator.ErrKeyTransientState) {
+				return proto.ErrDetailsWithCode(
+					status.New(codes.FailedPrecondition, err.Error()),
+					proto.Code_ERROR_CODE_ABORT,
+				)
+			}
 			return proto.ErrDetailsWithCode(
 				status.New(codes.Internal, "failed to unseal the ciphertext"),
 				proto.Code_ERROR_CODE_ABORT,

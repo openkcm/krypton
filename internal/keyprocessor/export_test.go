@@ -13,7 +13,6 @@ import (
 
 type (
 	Processor            = processor
-	RootManager          = rootManager
 	CreateSecretRequest  = createSecretRequest
 	CreateSecretResponse = createSecretResponse
 	DeleteSecretRequest  = deleteSecretRequest
@@ -58,10 +57,17 @@ func NewTestManagerWithAlgorithms(s store.Key, kvs store.KeyVersion, processors 
 	return &Manager{store: s, versionStore: kvs, processors: processors, algorithms: algorithms}
 }
 
-func NewTestRootManager(s store.Key, slr sealer.Sealer) *rootManager {
-	return &rootManager{store: s, sealer: slr}
-}
-
 func NewTestRPCManager(client sealergrpc.ServiceClient) *RPCManager {
 	return &RPCManager{sealer: client}
+}
+
+// NewRootManagerWithVault builds a RootManager from an already-resolved vault,
+// letting tests inject a concrete or fault-injecting vault that a
+// vaultprovider.Spec cannot express.
+func NewRootManagerWithVault(transactor store.Transactor, v vault.Vault, allowed []sealer.Type) *RootManager {
+	m := make(map[sealer.Type]struct{}, len(allowed))
+	for _, t := range allowed {
+		m[t] = struct{}{}
+	}
+	return &RootManager{transactor: transactor, vault: v, allowed: m}
 }

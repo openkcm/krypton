@@ -81,7 +81,7 @@ agent:
 
 .PHONY: root
 root:
-	KRYPTON_ROOT_KEY="$(KRYPTON_ROOT_KEY)" ROOT_CONFIG_PATH="./examples/root.config.yaml" SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
+	ROOT_CONFIG_PATH="./examples/root.config.yaml" SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
 
 .PHONY: dev
 dev: postgres root
@@ -94,6 +94,7 @@ proto-gen:
 	./scripts/proto-gen.sh "api-specs/v1/proto/sealer"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/keys"
+	./scripts/proto-gen.sh "api-specs/v1/proto/admin/rootkey"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/actions"
 	./scripts/proto-gen.sh "api-specs/v1/proto"
 	$(MAKE) go-format
@@ -113,7 +114,6 @@ helm-template:
 
 ROOT_HELM_RELEASE := krypton-root
 ROOT_IMAGE := krypton-root:local
-KRYPTON_ROOT_KEY := $(shell openssl rand -base64 32)
 ROOT_DATABASE_URL := postgres://krypton:krypton@krypton-root-postgres:5432/krypton?sslmode=disable
 
 .PHONY: root-build
@@ -129,7 +129,7 @@ root-deploy: root-build deploy-postgres
 		--set image.tag=local \
 		--set image.pullPolicy=IfNotPresent \
 		--set-json 'image.pullSecrets=[]' \
-		--set-json 'extraEnvs=[{"name":"KRYPTON_ROOT_KEY","value":"$(KRYPTON_ROOT_KEY)"},{"name":"DATABASE_URL","value":"$(ROOT_DATABASE_URL)"}]'
+		--set-json 'extraEnvs=[{"name":"DATABASE_URL","value":"$(ROOT_DATABASE_URL)"}]'
 
 .PHONY: root-undeploy
 root-undeploy:

@@ -32,6 +32,7 @@ import (
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/inline"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
@@ -170,18 +171,35 @@ type parentChain struct {
 }
 
 // createParentChain creates the reusable K0 -> K1 parent hierarchy for tests
-// that exercise the upsertRemote code path.
-func createParentChain(t *testing.T, kStore store.Key, kvStore store.KeyVersion, tenantID, rootName string) parentChain {
+// that exercise the upsertRemote code path. K0 is provisioned through the
+// RootManager so that a provider spec and provider-key labeled version exist.
+func createParentChain(t *testing.T, rm *keyprocessor.RootManager, kStore store.Key, kvStore store.KeyVersion, tenantID, rootName string) parentChain {
 	t.Helper()
+	ctx := t.Context()
 	key0 := createKey(t, kStore, model.Key{
 		TenantID: tenantID, Kind: "K0", ManagedBy: rootName,
-		LifeCycleState:     model.KeyLifeCycleActive,
+		LifeCycleState:     model.KeyLifeCyclePreActivation,
 		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
 	})
-	kv0 := createKeyVersion(t, kvStore, tenantID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
-		kv.ProcessingState = model.KeyVersionUsable
-		kv.LifeCycleState = model.KeyLifeCycleActive
+	require.NoError(t, rm.CreateProvider(ctx, keyprocessor.CreateProviderInput{
+		TenantID:      tenantID,
+		KeyID:         key0.ID,
+		Spec:          newInlineStaticSecretSpec(t),
+		ProviderKeyID: "pk-1",
+	}))
+	require.NoError(t, kStore.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+		ID: key0.ID, TenantID: tenantID, NewState: model.KeyLifeCycleActive,
+	}))
+	// CreateProvider created version 1 (active/usable) carrying the provider-key label.
+	kvRes, err := kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
+		TenantID: tenantID, KeyID: key0.ID,
+		OrderBy: []store.KeyVersionOrder{store.KeyVersionOrderVersionDesc},
+		Limit:   1,
 	})
+	require.NoError(t, err)
+	require.Len(t, kvRes.KeyVersions, 1)
+	kv0 := kvRes.KeyVersions[0]
+
 	key1 := createKey(t, kStore, model.Key{
 		TenantID: tenantID, Kind: "K1", ParentID: new(key0.ID), ManagedBy: rootName,
 		LifeCycleState:     model.KeyLifeCycleActive,
@@ -192,6 +210,42 @@ func createParentChain(t *testing.T, kStore store.Key, kvStore store.KeyVersion,
 		kv.LifeCycleState = model.KeyLifeCycleActive
 	})
 	return parentChain{key0: key0, kv0: kv0, key1: key1, kv1: kv1}
+}
+
+// newTestRootManager builds a RootManager backed by the given DB and an
+// in-memory vault, allowing the static-secret provider.
+func newTestRootManager(t *testing.T, db *sql.DB) *keyprocessor.RootManager {
+	t.Helper()
+	rm, err := keyprocessor.NewRootManager(t.Context(), keyprocessor.RootManagerConfig{
+		Transactor: storesql.NewTransactor(db),
+		RootKey: spec.RootKeySpec{
+			AllowedProviders: []sealer.Type{staticsecret.TypeStaticSecret},
+			Vault:            vaultprovider.Spec{Name: "root-vault", Type: sqlitevault.TypeUnsafeMemory},
+		},
+	})
+	require.NoError(t, err)
+	return rm
+}
+
+// newInlineStaticSecretSpec returns a valid static-secret sealer spec backed by
+// an inline 32-byte key, avoiding any external secret source.
+func newInlineStaticSecretSpec(t *testing.T) sealerprovider.Spec {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+
+	return sealerprovider.Spec{
+		Name: "test-sealer",
+		Type: staticsecret.TypeStaticSecret,
+		Auth: &staticsecret.Auth{},
+		Config: &staticsecret.Config{
+			Secret: secretprovider.Spec{
+				Type:   inline.Type,
+				Config: &inline.Config{Secret: base64.StdEncoding.EncodeToString(key)},
+			},
+		},
+	}
 }
 
 // createRemoteKey creates a K2 (TEK) key managed by agentName, parented to parentKeyID.
@@ -245,6 +299,16 @@ func taskPayload(t *testing.T, key model.Key) []byte {
 	payload, err := json.Marshal(key)
 	require.NoError(t, err)
 	return payload
+}
+
+// activateRootKey transitions a key to the active lifecycle state.
+func activateRootKey(t *testing.T, kStore store.Key, key model.Key) {
+	t.Helper()
+	require.NoError(t, kStore.UpdateKeyLifeCycleState(t.Context(), store.UpdateKeyLifeCycleStateQuery{
+		ID:       key.ID,
+		TenantID: key.TenantID,
+		NewState: model.KeyLifeCycleActive,
+	}))
 }
 
 // ---------------------------------------------------------------------------

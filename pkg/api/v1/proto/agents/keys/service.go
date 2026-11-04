@@ -45,6 +45,12 @@ func (s *Service) UpsertKey(ctx context.Context, req *UpsertKeyRequest) (*Upsert
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
+	if err := validator.ValidateUserLabels(req.GetLabels()); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
 
 	newKey := newKey(req)
 	err = store.ChainTransaction(ctx, s.transactor,

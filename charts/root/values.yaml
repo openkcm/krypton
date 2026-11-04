@@ -14,7 +14,7 @@
 # Layout of this file:
 #   1. Names and labels
 #   2. Workload: replicas, image, pod and container settings, probes, resources
-#   3. Secrets: the PostgreSQL URL and the root key
+#   3. Secrets: the PostgreSQL URL
 #   4. Kubernetes API access: service account
 #   5. Networking: service, ports, network policy
 #   6. Extension points: extra containers, volumes and environment variables
@@ -244,13 +244,12 @@ hpa:
 ###############################################################################
 # 3. Secrets
 #
-# The root node reads two secrets from environment variables. Create the Secret before the
-# installation, for example:
+# The root node reads the PostgreSQL URL from an environment variable. Create the Secret
+# before the installation, for example:
 #   kubectl -n services create secret generic krypton-secret \
-#     --from-literal=database-url='postgres://krypton:<password>@postgresql.services:5432/krypton?sslmode=verify-full' \
-#     --from-literal=root-key="$(openssl rand -base64 32)"
-# Keep a backup of the root key: the root keys are sealed with it, and without it they
-# cannot be unsealed.
+#     --from-literal=database-url='postgres://krypton:<password>@postgresql.services:5432/krypton?sslmode=verify-full'
+# The root key's sealing secret is not configured here; it is supplied at runtime when the
+# root provider is created via the root key API.
 ###############################################################################
 
 database:
@@ -263,17 +262,6 @@ database:
   existingSecret: ""
   # -- Key of the URL in `database.existingSecret`.
   urlKey: database-url
-
-rootKey:
-  # -- Secret that holds the key that seals the root keys: 32 random bytes, base64-encoded
-  # (`openssl rand -base64 32`). The chart passes it as `KRYPTON_ROOT_KEY`, the variable
-  # that the sealer of the default `config.key_bindings.K0` reads (`secret.config.name`); the
-  # root node loads it at startup and exits if it is missing or not 32 bytes long.
-  # **Required** with the default configuration, unless `KRYPTON_ROOT_KEY` is set in
-  # `extraEnvs` or `extraEnvsFrom`.
-  existingSecret: ""
-  # -- Key of the root key in `rootKey.existingSecret`.
-  key: root-key
 
 ###############################################################################
 # 4. Kubernetes API access
@@ -463,8 +451,9 @@ config:
   role: root
 
   # -- Range of key kinds that the root node manages: from `start_kind`, the first kind of
-  # `hierarchy`, to `end_kind`. The last kind must not be a `tek`. Each kind in the range
-  # needs an entry in `key_bindings`, and no other kind may have one.
+  # `hierarchy`, to `end_kind`. The last kind must not be a `tek`. Every non-root kind in the
+  # range needs an entry in `key_bindings`, and no other kind may have one. The root kind
+  # (`start_kind`) is configured via `root_key` instead of `key_bindings`.
   segment:
     start_kind: K0
     end_kind: K2
@@ -475,23 +464,24 @@ config:
   selector_labels:
     environment: local
 
-  # -- How the keys of each kind of `segment` are protected and stored; see "Key bindings"
-  # above. The default protects K0 with the root key (`rootKey`) and keeps K1 and K2 in
-  # memory, for development. For keys that survive a restart, use an `unsafe-sqlite` vault
-  # on a persistent volume, or `openbao`:
+  # -- Configuration of the root key: the sealer providers allowed to seal it
+  # (`allowed_providers`) and the `vault` used to store the root key's provider bindings. The
+  # root provider itself is created at runtime via the root key API, so no sealing secret is
+  # configured here.
+  root_key:
+    allowed_providers:
+      - aes256gcm-staticsecret
+    vault:
+      name: credentials-vault
+      type: unsafe-sqlite-memory
+
+  # -- How the keys of each non-root kind of `segment` are protected and stored; see "Key
+  # bindings" above. The default keeps K1 and K2 in memory, for development. For keys that
+  # survive a restart, use an `unsafe-sqlite` vault on a persistent volume, or `openbao`:
   #   K1:
   #     crypto: { name: kek-crypto, type: aes256gcm }
   #     vault: { name: kek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/kek.db } }
   key_bindings:
-    K0:
-      sealer:
-        name: root-key-sealer
-        type: aes256gcm-staticsecret
-        config:
-          secret:
-            type: envvar
-            config:
-              name: KRYPTON_ROOT_KEY
     K1:
       crypto:
         name: kek-crypto

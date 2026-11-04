@@ -25,9 +25,10 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
-	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/inline"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
@@ -89,12 +90,12 @@ func setupServerAndClient(t *testing.T) *serviceSetup {
 
 func setupServerAndClientWithManager(t *testing.T, mgr *keyprocessor.Manager) *serviceSetup {
 	t.Helper()
-	return setupWithManagerFactory(t, func(_ context.Context, _ store.Key, _ store.KeyVersion) (*keyprocessor.Manager, error) {
+	return setupWithManagerFactory(t, func(_ context.Context, _ *sql.DB, _ store.Key, _ store.KeyVersion) (*keyprocessor.Manager, error) {
 		return mgr, nil
 	})
 }
 
-func setupWithManagerFactory(t *testing.T, factory func(ctx context.Context, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error)) *serviceSetup {
+func setupWithManagerFactory(t *testing.T, factory func(ctx context.Context, db *sql.DB, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error)) *serviceSetup {
 	t.Helper()
 	ctx := t.Context()
 
@@ -109,7 +110,7 @@ func setupWithManagerFactory(t *testing.T, factory func(ctx context.Context, ks 
 		kvStore:     storesql.NewKeyVersionStore(db),
 	}
 
-	mgr, err := factory(ctx, setup.keyStore, setup.kvStore)
+	mgr, err := factory(ctx, db, setup.keyStore, setup.kvStore)
 	require.NoError(t, err)
 
 	setup.manager = mgr
@@ -319,27 +320,6 @@ func renameTenantTable(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 }
 
-func newTestSealerSpec(t *testing.T) *sealerprovider.Spec {
-	t.Helper()
-	key := make([]byte, 32)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-
-	envName := "TEST_SEALER_KEY_" + uuid.New().String()[:8]
-	t.Setenv(envName, base64.StdEncoding.EncodeToString(key))
-
-	return &sealerprovider.Spec{
-		Name: "test-sealer",
-		Type: staticsecret.TypeStaticSecret,
-		Config: &staticsecret.Config{
-			Secret: secretprovider.Spec{
-				Type:   envvar.Type,
-				Config: &envvar.Config{Name: envName},
-			},
-		},
-	}
-}
-
 func newTestCryptorSpec() *cryptorprovider.Spec {
 	return &cryptorprovider.Spec{
 		Name:   "test-cryptor",
@@ -363,4 +343,69 @@ func testHierarchy() spec.KeyHierarchy {
 			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
 		},
 	}
+}
+
+// newTestRootManager builds a RootManager backed by the test DB and an
+// in-memory vault, allowing the static-secret provider. It is the sealer for
+// the root (K0) key.
+func newTestRootManager(t *testing.T, db *sql.DB) *keyprocessor.RootManager {
+	t.Helper()
+	rm, err := keyprocessor.NewRootManager(t.Context(), keyprocessor.RootManagerConfig{
+		Transactor: storesql.NewTransactor(db),
+		RootKey: spec.RootKeySpec{
+			AllowedProviders: []sealer.Type{staticsecret.TypeStaticSecret},
+			Vault:            vaultprovider.Spec{Name: "root-vault", Type: sqlitevault.TypeUnsafeMemory},
+		},
+	})
+	require.NoError(t, err)
+	return rm
+}
+
+// newInlineStaticSecretSpec returns a valid static-secret sealer spec backed by
+// an inline 32-byte key, avoiding any external secret source.
+func newInlineStaticSecretSpec(t *testing.T) sealerprovider.Spec {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+
+	return sealerprovider.Spec{
+		Name: "test-root-sealer",
+		Type: staticsecret.TypeStaticSecret,
+		Auth: &staticsecret.Auth{},
+		Config: &staticsecret.Config{
+			Secret: secretprovider.Spec{
+				Type:   inline.Type,
+				Config: &inline.Config{Secret: base64.StdEncoding.EncodeToString(key)},
+			},
+		},
+	}
+}
+
+// createActiveRootProvider creates a root (K0) key in pre-activation, binds a
+// static-secret provider to it via the RootManager, then activates it so it can
+// seal child keys. It returns the created root key.
+func createActiveRootProvider(t *testing.T, s store.Key, rm *keyprocessor.RootManager, tenantID string) model.Key {
+	t.Helper()
+	ctx := t.Context()
+
+	rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "root", nil)
+	rootKey.LifeCycleState = model.KeyLifeCyclePreActivation
+	rootKey.KeyProcessingState.Status = model.KeyProcessingCompleted
+	require.NoError(t, s.CreateKey(ctx, rootKey))
+
+	require.NoError(t, rm.CreateProvider(ctx, keyprocessor.CreateProviderInput{
+		TenantID:      tenantID,
+		KeyID:         rootKey.ID,
+		Spec:          newInlineStaticSecretSpec(t),
+		ProviderKeyID: "provider-key-" + uuid.New().String(),
+	}))
+
+	require.NoError(t, s.UpdateKeyLifeCycleState(ctx, store.UpdateKeyLifeCycleStateQuery{
+		ID:       rootKey.ID,
+		TenantID: tenantID,
+		NewState: model.KeyLifeCycleActive,
+	}))
+
+	return rootKey
 }

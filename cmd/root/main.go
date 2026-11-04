@@ -34,6 +34,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/rootkey"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
 	"github.com/openkcm/krypton/pkg/model"
@@ -85,6 +86,12 @@ func main() {
 	registry, err := grpcconn.NewRegistry(cfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	handleErr(err, "failed to create grpc connection registry")
 
+	rootMgr, err := keyprocessor.NewRootManager(context.Background(), keyprocessor.RootManagerConfig{
+		Transactor: transactor,
+		RootKey:    *cfg.RootKey,
+	})
+	handleErr(err, "failed to create root manager")
+
 	// initialization of keyprocessor manager
 	bindings := make(map[model.KeyKind]spec.KeyBinding, len(cfg.KeyBindings))
 	for kind, binding := range cfg.KeyBindings {
@@ -95,6 +102,7 @@ func main() {
 		KeyVersionStore: keyVersionStore,
 		Bindings:        bindings,
 		Hierarchy:       cfg.Hierarchy,
+		RootManager:     rootMgr,
 	})
 	handleErr(err, "failed to create key processor manager")
 
@@ -148,6 +156,9 @@ func main() {
 
 	// gRPC server setup for keys API
 	keypb.RegisterKeyServiceServer(grpcServer, keypb.NewKeyService(*cfg, transactor, keyStore, orch, kpMgr))
+
+	// gRPC server setup for root key provider API
+	rootkey.RegisterServiceServer(grpcServer, rootkey.NewService(rootMgr))
 
 	// gRPC server setup for actions API
 	actions.RegisterActionServiceServer(grpcServer, actions.NewService(orch))

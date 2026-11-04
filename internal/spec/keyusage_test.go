@@ -131,14 +131,24 @@ func TestKeyUsage(t *testing.T) {
 				exp:   "encrypt|decrypt|wrap",
 			},
 			{
+				name:  "should return 'link' if only the link flag is set",
+				input: spec.KeyUsageLink,
+				exp:   "link",
+			},
+			{
+				name:  "should return 'rotate' if only the rotate flag is set",
+				input: spec.KeyUsageRotate,
+				exp:   "rotate",
+			},
+			{
 				name:  "should return the valid flag names followed by unknown flags if there are extra flags set",
-				input: spec.KeyUsage(64),
-				exp:   "unknown(64)",
+				input: spec.KeyUsage(128),
+				exp:   "unknown(128)",
 			},
 			{
 				name:  "should return the valid flag names followed by unknown flags if there are valid and extra flags set",
-				input: spec.KeyUsage(32) | spec.KeyUsageEncrypt,
-				exp:   "encrypt|unknown(32)",
+				input: spec.KeyUsage(128) | spec.KeyUsageEncrypt,
+				exp:   "encrypt|unknown(128)",
 			},
 		}
 
@@ -159,8 +169,8 @@ func TestKeyUsage(t *testing.T) {
 		validUsageNames := spec.ValidKeyUsageNames
 
 		// then
-		assert.Len(t, validUsages, 4, "number of valid usage names should be 4")
-		assert.Len(t, validUsageNames, 4, "number of valid usage names should be 4")
+		assert.Len(t, validUsages, 6, "number of valid usage names should be 6")
+		assert.Len(t, validUsageNames, 6, "number of valid usage names should be 6")
 
 		for _, usage := range validUsages {
 			name, ok := validUsageNames[usage]

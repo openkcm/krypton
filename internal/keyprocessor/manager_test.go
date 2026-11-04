@@ -208,16 +208,16 @@ func TestManagerSeal(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		rootMgr := newTestRootManager(t, db)
+		rootKey, _ := createRootProvider(t, db, rootMgr, tenantID)
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		key := model.NewKey(tenantID, "enc-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
-		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, nil)
+		rootVersion := 1
+		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, &rootVersion)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
@@ -359,16 +359,16 @@ func TestManagerUnseal(t *testing.T) {
 		keyStore := storesql.NewKeyStore(db)
 		kvStore := storesql.NewKeyVersionStore(db)
 
-		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		rootMgr := newTestRootManager(t, db)
+		rootKey, _ := createRootProvider(t, db, rootMgr, tenantID)
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		key := model.NewKey(tenantID, "dec-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), key))
 		activateKey(t, db, key)
 
-		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, nil)
+		rootVersion := 1
+		kv := model.NewKeyVersion(tenantID, key.ID, 1, &rootKey.ID, &rootVersion)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: kv})
 		require.NoError(t, err)
 
@@ -402,87 +402,6 @@ func TestManagerUnseal(t *testing.T) {
 	})
 }
 
-func TestRootManager(t *testing.T) {
-	t.Run("should return error if store lookup fails", func(t *testing.T) {
-		// given
-		storeErr := errors.New("store unavailable")
-		ks := &keyStoreWrapper{}
-		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
-			return nil, storeErr
-		}
-		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
-
-		// when
-		resp, err := c.Seal(t.Context(), sealer.SealRequest{
-			TenantID:  uuid.New().String(),
-			KeyID:     uuid.New().String(),
-			Plaintext: newTestData(t, []byte("data")),
-		})
-
-		// then
-		assert.ErrorIs(t, err, storeErr)
-		assert.Equal(t, sealer.SealResponse{}, resp)
-	})
-
-	t.Run("should return error if key is not active", func(t *testing.T) {
-		// given
-		key := &model.Key{
-			ID:             uuid.New().String(),
-			TenantID:       uuid.New().String(),
-			LifeCycleState: model.KeyLifeCycleDeactivated,
-		}
-		ks := &keyStoreWrapper{}
-		ks.getKeyByIDFn = func(_ context.Context, _, _ string) (*model.Key, error) {
-			return key, nil
-		}
-		c := keyprocessor.NewTestRootManager(ks, newTestSealer(t))
-
-		// when
-		resp, err := c.Seal(t.Context(), sealer.SealRequest{
-			TenantID:  key.TenantID,
-			KeyID:     key.ID,
-			Plaintext: newTestData(t, []byte("data")),
-		})
-
-		// then
-		assert.ErrorIs(t, err, keyprocessor.ErrKeyNotActivated)
-		assert.Equal(t, sealer.SealResponse{}, resp)
-	})
-
-	t.Run("should seal and unseal successfully", func(t *testing.T) {
-		// given
-		db := createDatabase(t)
-		tenantID := createTenant(t, db)
-		keyStore := storesql.NewKeyStore(db)
-
-		key := model.NewKey(tenantID, "root-key-"+uuid.New().String(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), key))
-		activateKey(t, db, key)
-
-		c := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
-
-		// when
-		sealResp, err := c.Seal(t.Context(), sealer.SealRequest{
-			TenantID:  tenantID,
-			KeyID:     key.ID,
-			Plaintext: newTestData(t, []byte("root secret")),
-			AAD:       []byte("aad"),
-		})
-		assert.NoError(t, err)
-
-		unsealResp, err := c.Unseal(t.Context(), sealer.UnsealRequest{
-			TenantID:   tenantID,
-			KeyID:      key.ID,
-			Ciphertext: sealResp.Ciphertext,
-			AAD:        []byte("aad"),
-		})
-
-		// then
-		assert.NoError(t, err)
-		assert.Equal(t, []byte("root secret"), []byte(unsealResp.Plaintext.SecureBytes()))
-	})
-}
-
 func TestManagerHierarchy(t *testing.T) {
 	t.Run("should succeed for three-level chain round trip", func(t *testing.T) {
 		// given
@@ -492,16 +411,16 @@ func TestManagerHierarchy(t *testing.T) {
 		kvStore := storesql.NewKeyVersionStore(db)
 
 		// root level
-		rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
-		require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+		rootMgr := newTestRootManager(t, db)
+		rootKey, _ := createRootProvider(t, db, rootMgr, tenantID)
 		activateKey(t, db, rootKey)
-		rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 		// mid level
 		midKey := model.NewKey(tenantID, "mid-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 		require.NoError(t, keyStore.CreateKey(t.Context(), midKey))
 		activateKey(t, db, midKey)
-		midKV := model.NewKeyVersion(tenantID, midKey.ID, 1, &rootKey.ID, nil)
+		rootVersion := 1
+		midKV := model.NewKeyVersion(tenantID, midKey.ID, 1, &rootKey.ID, &rootVersion)
 		_, err := kvStore.CreateKeyVersion(t.Context(), store.CreateKeyVersionQuery{KeyVersion: midKV})
 		require.NoError(t, err)
 
@@ -546,63 +465,14 @@ func TestManagerHierarchy(t *testing.T) {
 }
 
 func TestNewManager(t *testing.T) {
-	t.Run("should return error when root binding has nil sealer spec", func(t *testing.T) {
-		// given
-		cfg := keyprocessor.ManagerConfig{
-			KeyStore:        &keyStoreWrapper{},
-			KeyVersionStore: &keyVersionStoreWrapper{},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "test",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K0", Role: spec.KeyRoleRoot},
-					{Kind: "K1", Role: spec.KeyRoleDek},
-				},
-			},
-			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K0": {SealerSpec: nil},
-				"K1": {},
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
-
-		// then
-		assert.Nil(t, mgr)
-		assert.ErrorIs(t, err, keyprocessor.ErrRootMissingSealerSpec)
-	})
-
-	t.Run("should return error when root sealer provider fails", func(t *testing.T) {
-		// given
-		cfg := keyprocessor.ManagerConfig{
-			KeyStore:        &keyStoreWrapper{},
-			KeyVersionStore: &keyVersionStoreWrapper{},
-			Hierarchy: spec.KeyHierarchy{
-				Name: "test",
-				KeySpecs: []spec.KeySpec{
-					{Kind: "K0", Role: spec.KeyRoleRoot},
-					{Kind: "K1", Role: spec.KeyRoleDek},
-				},
-			},
-			Bindings: map[model.KeyKind]spec.KeyBinding{
-				"K0": {SealerSpec: &sealerprovider.Spec{Name: "bad", Config: nil}},
-				"K1": {},
-			},
-		}
-
-		// when
-		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
-
-		// then
-		assert.Nil(t, mgr)
-		assert.ErrorIs(t, err, sealer.ErrUnknownType)
-	})
+	rootManager := &sealerWrapper{}
 
 	t.Run("should return error when non-root cryptor provider fails", func(t *testing.T) {
 		// given
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -630,6 +500,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -659,6 +530,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -690,6 +562,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        nil,
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -716,6 +589,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: nil,
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -737,11 +611,39 @@ func TestNewManager(t *testing.T) {
 		assert.ErrorIs(t, err, keyprocessor.ErrKeyVersionStoreMissing)
 	})
 
+	t.Run("should return error when root manager is nil", func(t *testing.T) {
+		// given
+		cfg := keyprocessor.ManagerConfig{
+			KeyStore:        &keyStoreWrapper{},
+			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     nil,
+			Hierarchy: spec.KeyHierarchy{
+				Name: "test",
+				KeySpecs: []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleDek},
+				},
+			},
+			Bindings: map[model.KeyKind]spec.KeyBinding{
+				"K0": {SealerSpec: newTestSealerSpec(t)},
+				"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
+			},
+		}
+
+		// when
+		mgr, err := keyprocessor.NewManager(t.Context(), cfg)
+
+		// then
+		assert.Nil(t, mgr)
+		assert.ErrorIs(t, err, keyprocessor.ErrRootManagerMissing)
+	})
+
 	t.Run("should construct manager for two-level hierarchy", func(t *testing.T) {
 		// given
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -771,6 +673,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -805,6 +708,7 @@ func TestNewManager(t *testing.T) {
 		cfg := keyprocessor.ManagerConfig{
 			KeyStore:        &keyStoreWrapper{},
 			KeyVersionStore: &keyVersionStoreWrapper{},
+			RootManager:     rootManager,
 			Hierarchy: spec.KeyHierarchy{
 				Name: "test",
 				KeySpecs: []spec.KeySpec{
@@ -836,6 +740,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -869,6 +774,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -918,6 +824,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -971,6 +878,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -1010,6 +918,7 @@ func TestNewManager(t *testing.T) {
 			cfg := keyprocessor.ManagerConfig{
 				KeyStore:        &keyStoreWrapper{},
 				KeyVersionStore: &keyVersionStoreWrapper{},
+				RootManager:     rootManager,
 				Hierarchy: spec.KeyHierarchy{
 					Name: "test",
 					KeySpecs: []spec.KeySpec{
@@ -1525,7 +1434,8 @@ func TestManagerExportSecret(t *testing.T) {
 	t.Run("should succeed with explicit version", func(t *testing.T) {
 		// given
 		es := setupExportStack(t)
-		kv := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
+		rootVer := 1
+		kv := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, &rootVer)
 		es.addKeyVersionWithSecret(t, kv)
 
 		// when
@@ -1568,10 +1478,11 @@ func TestManagerExportSecret(t *testing.T) {
 		// given
 		es := setupExportStack(t)
 
-		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
+		rootVer := 1
+		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, &rootVer)
 		es.addKeyVersionWithSecret(t, kv1)
 
-		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, nil)
+		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, &rootVer)
 		kv2.CreatedAt = kv1.CreatedAt + 1 // strictly later than version "1"
 		kv2.UpdatedAt = kv2.CreatedAt
 		es.addKeyVersionWithSecret(t, kv2)
@@ -1588,25 +1499,26 @@ func TestManagerExportSecret(t *testing.T) {
 		// given
 		es := setupExportStack(t)
 
-		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, nil)
+		rootVer := 1
+		kv1 := model.NewKeyVersion(es.tenantID, es.key.ID, 1, &es.rootKey.ID, &rootVer)
 		es.addKeyVersionWithSecret(t, kv1)
 
-		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, nil)
+		kv2 := model.NewKeyVersion(es.tenantID, es.key.ID, 2, &es.rootKey.ID, &rootVer)
 		kv2.CreatedAt = kv1.CreatedAt + 1 // strictly later than version "1"
 		kv2.UpdatedAt = kv2.CreatedAt
 		es.addKeyVersionWithSecret(t, kv2)
 
-		// version "3" is newest but not usable, so it must not be resolved
 		kv3 := model.KeyVersion{
-			TenantID:        es.tenantID,
-			KeyID:           es.key.ID,
-			Version:         3,
-			Revision:        0,
-			ParentKeyID:     &es.rootKey.ID,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionReWrapping,
-			CreatedAt:       kv2.CreatedAt + 1,
-			UpdatedAt:       kv2.CreatedAt + 1,
+			TenantID:         es.tenantID,
+			KeyID:            es.key.ID,
+			Version:          3,
+			Revision:         1,
+			ParentKeyID:      &es.rootKey.ID,
+			ParentKeyVersion: &rootVer,
+			LifeCycleState:   model.KeyLifeCycleActive,
+			ProcessingState:  model.KeyVersionReWrapping,
+			CreatedAt:        kv2.CreatedAt + 1,
+			UpdatedAt:        kv2.CreatedAt + 1,
 		}
 		es.addKeyVersionWithSecret(t, kv3)
 
@@ -1625,7 +1537,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		processor := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), newTestSealer(t), ps.sealer, newTestVault(t))
 		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{ps.parentKey.Kind: *processor})
 
-		childKV := model.NewKeyVersion(ps.tenantID, uuid.New().String(), 1, &ps.parentKey.ID, nil)
+		childKV := model.NewKeyVersion(ps.tenantID, uuid.New().String(), 1, &ps.parentKey.ID, &ps.parentVer)
 
 		// when
 		resp, err := mgr.GenerateAndSealSecret(t.Context(), keyprocessor.GenerateAndSealSecretRequest{
@@ -1656,10 +1568,9 @@ func setupExportStack(t *testing.T) *exportSetup {
 	keyStore := storesql.NewKeyStore(db)
 	kvStore := storesql.NewKeyVersionStore(db)
 
-	rootKey := model.NewKey(tenantID, "root-"+uuid.New().String(), "K0", nil, "test", nil)
-	require.NoError(t, keyStore.CreateKey(t.Context(), rootKey))
+	rootMgr := newTestRootManager(t, db)
+	rootKey, _ := createRootProvider(t, db, rootMgr, tenantID)
 	activateKey(t, db, rootKey)
-	rootMgr := keyprocessor.NewTestRootManager(keyStore, newTestSealer(t))
 
 	key := model.NewKey(tenantID, "exp-key-"+uuid.New().String(), "K1", &rootKey.ID, "test", nil)
 	require.NoError(t, keyStore.CreateKey(t.Context(), key))

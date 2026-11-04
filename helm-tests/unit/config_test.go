@@ -221,7 +221,7 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("address of the root: %q, want the Service krypton-root:8080", url)
 	}
 
-	if len(cfg.KeyBindings) != 3 || len(cfg.Topology.Segments) != 0 {
+	if len(cfg.KeyBindings) != 2 || len(cfg.Topology.Segments) != 0 {
 		t.Errorf("want the demo hierarchy K0 to K2 without agents, got %d key bindings, %d segments",
 			len(cfg.KeyBindings), len(cfg.Topology.Segments))
 	}

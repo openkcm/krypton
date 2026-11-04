@@ -20,6 +20,10 @@ const (
 	KeyUsageWrap
 	// KeyUsageUnwrap allows the key to be used for unwrapping (decrypting) other keys.
 	KeyUsageUnwrap
+	// KeyUsageLink allows binding a sealer provider to the key (pre-activation).
+	KeyUsageLink
+	// KeyUsageRotate allows rotating the key's auth or provider key (active).
+	KeyUsageRotate
 )
 
 // validKeyUsages defines the set of valid KeyUsage flags for iteration in the String() method.
@@ -28,6 +32,8 @@ var validKeyUsages = []KeyUsage{
 	KeyUsageDecrypt,
 	KeyUsageWrap,
 	KeyUsageUnwrap,
+	KeyUsageLink,
+	KeyUsageRotate,
 }
 
 // validKeyUsageNames maps each KeyUsage flag to its string representation for use in the String() method.
@@ -36,6 +42,8 @@ var validKeyUsageNames = map[KeyUsage]string{
 	KeyUsageDecrypt: "decrypt",
 	KeyUsageWrap:    "wrap",
 	KeyUsageUnwrap:  "unwrap",
+	KeyUsageLink:    "link",
+	KeyUsageRotate:  "rotate",
 }
 
 // Has reports whether all of the flags in usage are set in ku. Returns false if usage is zero.

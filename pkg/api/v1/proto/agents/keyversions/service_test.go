@@ -2,6 +2,7 @@ package keyversions_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"uuid"
 
@@ -29,6 +30,21 @@ func TestUpsertKeyVersion(t *testing.T) {
 		_, err := setup.cli.UpsertKeyVersion(ctx, &keyversions.UpsertKeyVersionRequest{})
 
 		// then
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return InvalidArgument when labels are reserved", func(t *testing.T) {
+		setup := setupServerAndClient(t)
+
+		req := validUpsertKeyVersionRequest(uuid.New().String(), uuid.New().String())
+		req.Labels = map[string]string{
+			model.ReservedLabelPrefix + "origin": "user",
+		}
+
+		_, err := setup.cli.UpsertKeyVersion(ctx, req)
+
 		require.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
@@ -247,20 +263,22 @@ func TestUpsertKeyVersion(t *testing.T) {
 	t.Run("should create key version and seal secret successfully", func(t *testing.T) {
 		// given
 		hierarchy := testHierarchy()
-		setup := setupWithManagerFactory(t, func(ctx context.Context, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error) {
+		var rootMgr *keyprocessor.RootManager
+		setup := setupWithManagerFactory(t, func(ctx context.Context, db *sql.DB, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error) {
+			rootMgr = newTestRootManager(t, db)
 			return keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 				KeyStore:        ks,
 				KeyVersionStore: kvs,
 				Bindings: map[model.KeyKind]spec.KeyBinding{
-					"K0": {SealerSpec: newTestSealerSpec(t)},
 					"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
 				},
-				Hierarchy: hierarchy,
+				Hierarchy:   hierarchy,
+				RootManager: rootMgr,
 			})
 		})
 
 		tenant := createTenant(t, setup.tenantStore)
-		key0 := createKeyWithKind(t, setup.keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive)
+		key0 := createActiveRootProvider(t, setup.keyStore, rootMgr, tenant.ID)
 		key1 := createKeyWithKind(t, setup.keyStore, tenant.ID, "K1", &key0.ID, model.KeyLifeCycleActive)
 		req := validUpsertKeyVersionRequest(tenant.ID, key1.ID)
 		req.ParentId = key0.ID
@@ -310,20 +328,22 @@ func TestUpsertKeyVersion(t *testing.T) {
 	t.Run("should update key version state without changing the secret", func(t *testing.T) {
 		// given
 		hierarchy := testHierarchy()
-		setup := setupWithManagerFactory(t, func(ctx context.Context, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error) {
+		var rootMgr *keyprocessor.RootManager
+		setup := setupWithManagerFactory(t, func(ctx context.Context, db *sql.DB, ks store.Key, kvs store.KeyVersion) (*keyprocessor.Manager, error) {
+			rootMgr = newTestRootManager(t, db)
 			return keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 				KeyStore:        ks,
 				KeyVersionStore: kvs,
 				Bindings: map[model.KeyKind]spec.KeyBinding{
-					"K0": {SealerSpec: newTestSealerSpec(t)},
 					"K1": {CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
 				},
-				Hierarchy: hierarchy,
+				Hierarchy:   hierarchy,
+				RootManager: rootMgr,
 			})
 		})
 
 		tenant := createTenant(t, setup.tenantStore)
-		key0 := createKeyWithKind(t, setup.keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive)
+		key0 := createActiveRootProvider(t, setup.keyStore, rootMgr, tenant.ID)
 		key1 := createKeyWithKind(t, setup.keyStore, tenant.ID, "K1", &key0.ID, model.KeyLifeCycleActive)
 
 		createReq := validUpsertKeyVersionRequest(tenant.ID, key1.ID)

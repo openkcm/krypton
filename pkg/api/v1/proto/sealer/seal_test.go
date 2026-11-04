@@ -24,6 +24,7 @@ func TestSealer(t *testing.T) {
 	expPlaintext := []byte("test plaintext")
 	expAad := []byte("test aad")
 	expRespBytes := []byte("actual ciphertext")
+	expMetadata := map[string]string{"purpose": "unit-test", "region": "eu10"}
 
 	t.Run("should seal plaintext successfully", func(t *testing.T) {
 		// given
@@ -60,6 +61,7 @@ func TestSealer(t *testing.T) {
 			KeyVersion: int32(expKeyVersion),
 			Plaintext:  expPlaintext,
 			Aad:        expAad,
+			Metadata:   expMetadata,
 		})
 
 		// then
@@ -71,6 +73,7 @@ func TestSealer(t *testing.T) {
 		assert.Equal(t, expKeyVersion, actReq.KeyVersion)
 		assert.Equal(t, expPlaintext, actReqPlaintext)
 		assert.Equal(t, expAad, actReq.AAD)
+		assert.Equal(t, expMetadata, actReq.Metadata)
 	})
 
 	t.Run("should destroy secure memory after RPC completes", func(t *testing.T) {

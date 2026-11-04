@@ -10,6 +10,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
+	"github.com/openkcm/krypton/internal/secret/inline"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
 )
 
@@ -47,6 +48,35 @@ func TestSpec_Validate(t *testing.T) {
 				Type: envvar.Type,
 				Config: &envvar.Config{
 					Name: "",
+				},
+			},
+			expErr: true,
+		},
+		{
+			name: "should pass for valid inline spec",
+			spec: secretprovider.Spec{
+				Type: inline.Type,
+				Config: &inline.Config{
+					Secret: testKeyBase64,
+				},
+			},
+		},
+		{
+			name: "should fail for inline spec with empty secret",
+			spec: secretprovider.Spec{
+				Type: inline.Type,
+				Config: &inline.Config{
+					Secret: "",
+				},
+			},
+			expErr: true,
+		},
+		{
+			name: "should fail for inline spec with invalid secret",
+			spec: secretprovider.Spec{
+				Type: inline.Type,
+				Config: &inline.Config{
+					Secret: "not-valid-base64!!!",
 				},
 			},
 			expErr: true,
@@ -112,6 +142,26 @@ config:
 		assert.Equal(t, "MY_SECRET_KEY", cfg.Name)
 	})
 
+	t.Run("should unmarshal valid inline spec", func(t *testing.T) {
+		// given
+		input := `
+type: inline
+config:
+  secret: ` + testKeyBase64 + `
+`
+		// when
+		var spec secretprovider.Spec
+		err := yaml.Unmarshal([]byte(input), &spec)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, inline.Type, spec.Type)
+
+		cfg, ok := spec.Config.(*inline.Config)
+		require.True(t, ok)
+		assert.Equal(t, testKeyBase64, cfg.Secret)
+	})
+
 	t.Run("should return error for unknown type", func(t *testing.T) {
 		// given
 		input := `
@@ -129,28 +179,55 @@ config:
 }
 
 func TestSpec_MarshalYAML(t *testing.T) {
-	// given
-	spec := secretprovider.Spec{
-		Type: envvar.Type,
-		Config: &envvar.Config{
-			Name: "MY_KEY",
-		},
-	}
+	t.Run("should round-trip envvar spec", func(t *testing.T) {
+		// given
+		spec := secretprovider.Spec{
+			Type: envvar.Type,
+			Config: &envvar.Config{
+				Name: "MY_KEY",
+			},
+		}
 
-	// when
-	data, err := yaml.Marshal(&spec)
+		// when
+		data, err := yaml.Marshal(&spec)
 
-	// then
-	require.NoError(t, err)
+		// then
+		require.NoError(t, err)
 
-	var roundTrip secretprovider.Spec
-	err = yaml.Unmarshal(data, &roundTrip)
-	require.NoError(t, err)
+		var roundTrip secretprovider.Spec
+		err = yaml.Unmarshal(data, &roundTrip)
+		require.NoError(t, err)
 
-	assert.Equal(t, spec.Type, roundTrip.Type)
-	cfg, ok := roundTrip.Config.(*envvar.Config)
-	require.True(t, ok)
-	assert.Equal(t, "MY_KEY", cfg.Name)
+		assert.Equal(t, spec.Type, roundTrip.Type)
+		cfg, ok := roundTrip.Config.(*envvar.Config)
+		require.True(t, ok)
+		assert.Equal(t, "MY_KEY", cfg.Name)
+	})
+
+	t.Run("should round-trip inline spec", func(t *testing.T) {
+		// given
+		spec := secretprovider.Spec{
+			Type: inline.Type,
+			Config: &inline.Config{
+				Secret: testKeyBase64,
+			},
+		}
+
+		// when
+		data, err := yaml.Marshal(&spec)
+
+		// then
+		require.NoError(t, err)
+
+		var roundTrip secretprovider.Spec
+		err = yaml.Unmarshal(data, &roundTrip)
+		require.NoError(t, err)
+
+		assert.Equal(t, spec.Type, roundTrip.Type)
+		cfg, ok := roundTrip.Config.(*inline.Config)
+		require.True(t, ok)
+		assert.Equal(t, testKeyBase64, cfg.Secret)
+	})
 }
 
 func TestGetSecret(t *testing.T) {
@@ -163,6 +240,25 @@ func TestGetSecret(t *testing.T) {
 			Type: envvar.Type,
 			Config: &envvar.Config{
 				Name: "TEST_PROVIDER_KEY",
+			},
+		}
+
+		// when
+		data, err := secretprovider.GetSecret(ctx, spec)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, testKey, []byte(data.SecureBytes()))
+		t.Cleanup(func() { _ = data.Destroy() })
+	})
+
+	t.Run("should load secret via inline loader", func(t *testing.T) {
+		// given
+		ctx := t.Context()
+		spec := secretprovider.Spec{
+			Type: inline.Type,
+			Config: &inline.Config{
+				Secret: testKeyBase64,
 			},
 		}
 

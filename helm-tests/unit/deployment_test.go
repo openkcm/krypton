@@ -241,14 +241,12 @@ func TestEnvironment(t *testing.T) {
 	t.Run("secrets", func(t *testing.T) {
 		_, c := rootContainer(t,
 			"--set", "database.existingSecret=krypton-secret",
-			"--set", "rootKey.existingSecret=krypton-secret",
 			"--set", "extraEnvs[0].name=BAO_TOKEN", "--set", "extraEnvs[0].value=test",
 		)
 
 		want := map[string]string{
 			"ROOT_CONFIG_PATH": "/etc/krypton/config.yaml",
 			"DATABASE_URL":     "secret krypton-secret/database-url",
-			"KRYPTON_ROOT_KEY": "secret krypton-secret/root-key",
 			"BAO_TOKEN":        "test",
 		}
 		if got := env(c); !maps.Equal(got, want) {

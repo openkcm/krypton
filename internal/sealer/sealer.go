@@ -20,6 +20,7 @@ type SealRequest struct {
 	KeyVersion int
 	Plaintext  *securemem.Data
 	AAD        []byte
+	Metadata   map[string]string
 }
 
 // SealResponse holds the sealed ciphertext.
@@ -34,6 +35,7 @@ type UnsealRequest struct {
 	KeyVersion int
 	Ciphertext *securemem.Data
 	AAD        []byte
+	Metadata   map[string]string
 }
 
 // UnsealResponse holds the unsealed plaintext.
@@ -50,4 +52,9 @@ type Sealer interface {
 // SealerConfig is implemented by sealer-specific configuration structs to support validation.
 type SealerConfig interface {
 	ValidateSealerConfig() error
+}
+
+// SealerAuth is implemented by sealer-specific auth/credential structs to support validation.
+type SealerAuth interface {
+	ValidateSealerAuth() error
 }

@@ -25,6 +25,8 @@ var allKeyOperations = []spec.KeyUsage{
 	spec.KeyUsageDecrypt,
 	spec.KeyUsageUnwrap,
 	spec.KeyUsageWrap,
+	spec.KeyUsageLink,
+	spec.KeyUsageRotate,
 }
 
 func TestKeyLifecycleStateTransitions(t *testing.T) {
@@ -137,11 +139,11 @@ func TestKeyLifecycleKeyUsages(t *testing.T) {
 	}{
 		{
 			state:           model.KeyLifeCyclePreActivation,
-			validOperations: spec.KeyUsageNone,
+			validOperations: spec.KeyUsageLink,
 		},
 		{
 			state:           model.KeyLifeCycleActive,
-			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageEncrypt | spec.KeyUsageWrap | spec.KeyUsageUnwrap,
+			validOperations: spec.KeyUsageDecrypt | spec.KeyUsageEncrypt | spec.KeyUsageWrap | spec.KeyUsageUnwrap | spec.KeyUsageRotate,
 		},
 		{
 			state:           model.KeyLifeCycleSuspended,

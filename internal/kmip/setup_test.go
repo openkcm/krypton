@@ -3,7 +3,6 @@ package kmip_test
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -15,10 +14,7 @@ import (
 	"github.com/openkcm/krypton/internal/cryptor/cryptorprovider"
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/sealer"
-	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
-	"github.com/openkcm/krypton/internal/secret/envvar"
-	"github.com/openkcm/krypton/internal/secret/secretprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault"
@@ -86,8 +82,6 @@ func newTestEnvWithAlgorithm(t *testing.T, tenantID, keyID string, alg cryptor.K
 	sealerKey := make([]byte, 32)
 	_, err := rand.Read(sealerKey)
 	require.NoError(t, err)
-	envName := "TEST_KMIP_SEALER_KEY"
-	t.Setenv(envName, base64.StdEncoding.EncodeToString(sealerKey))
 
 	env := &testEnv{
 		vaultPath: filepath.Join(t.TempDir(), "vault.db"),
@@ -99,6 +93,7 @@ func newTestEnvWithAlgorithm(t *testing.T, tenantID, keyID string, alg cryptor.K
 
 	rootKey := &model.Key{ID: env.rootKeyID, TenantID: tenantID, Kind: rootKind, LifeCycleState: model.KeyLifeCycleActive}
 	dekKey := &model.Key{ID: keyID, TenantID: tenantID, Kind: dekKind, LifeCycleState: model.KeyLifeCycleActive}
+	rootParentVersion := 1
 	env.keys = &keyStoreStub{getKeyByIDFn: func(_ context.Context, id, tid string) (*model.Key, error) {
 		if tid != tenantID {
 			return nil, store.ErrKeyNotFound
@@ -117,32 +112,28 @@ func newTestEnvWithAlgorithm(t *testing.T, tenantID, keyID string, alg cryptor.K
 			return store.ListKeyVersionsResult{}, nil
 		}
 		return store.ListKeyVersionsResult{KeyVersions: []model.KeyVersion{{
-			TenantID:        tenantID,
-			KeyID:           dekKey.ID,
-			Version:         1,
-			Revision:        0,
-			ParentKeyID:     &rootKey.ID,
-			LifeCycleState:  model.KeyLifeCycleActive,
-			ProcessingState: model.KeyVersionUsable,
+			TenantID:         tenantID,
+			KeyID:            dekKey.ID,
+			Version:          1,
+			Revision:         0,
+			ParentKeyID:      &rootKey.ID,
+			ParentKeyVersion: &rootParentVersion,
+			LifeCycleState:   model.KeyLifeCycleActive,
+			ProcessingState:  model.KeyVersionUsable,
 		}}}, nil
 	}}
+
+	// The root key is sealed by the RootManager. Inject a fake root sealer that
+	// uses the same static secret the tests seed with, so Unseal recovers it.
+	rootSealerKey := newSecureData(t, "root-sealer-key", env.sealerKey)
+	rootSealer, err := staticsecret.New("test-root-sealer", rootSealerKey)
+	require.NoError(t, err, "staticsecret.New root sealer")
 
 	env.mgr, err = keyprocessor.NewManager(t.Context(), keyprocessor.ManagerConfig{
 		KeyStore:        env.keys,
 		KeyVersionStore: env.kvs,
+		RootManager:     rootSealer,
 		Bindings: map[model.KeyKind]spec.KeyBinding{
-			rootKind: {
-				SealerSpec: &sealerprovider.Spec{
-					Name: "test-sealer",
-					Type: staticsecret.TypeStaticSecret,
-					Config: &staticsecret.Config{
-						Secret: secretprovider.Spec{
-							Type:   envvar.Type,
-							Config: &envvar.Config{Name: envName},
-						},
-					},
-				},
-			},
 			dekKind: {
 				CryptorSpec: &cryptorprovider.Spec{
 					Name:   "test-cryptor",

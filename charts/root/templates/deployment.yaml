@@ -88,13 +88,6 @@ spec:
                   name: {{ . }}
                   key: {{ $.Values.database.urlKey }}
             {{- end }}
-            {{- with .Values.rootKey.existingSecret }}
-            - name: KRYPTON_ROOT_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ . }}
-                  key: {{ $.Values.rootKey.key }}
-            {{- end }}
             {{- with .Values.extraEnvs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

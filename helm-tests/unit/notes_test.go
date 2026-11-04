@@ -59,10 +59,9 @@ func releaseNotes(t *testing.T, args ...string) string {
 	return cm.Data["notes"]
 }
 
-// Values with which the root node starts: its Secrets, a network policy and a file vault.
+// Values with which the root node starts: its Secret, a network policy and a file vault.
 var startingValues = []string{
 	"--set", "database.existingSecret=krypton-secret",
-	"--set", "rootKey.existingSecret=krypton-secret",
 	"--set", "networkPolicy.enabled=true",
 }
 
@@ -77,8 +76,7 @@ func TestReleaseNotes(t *testing.T) {
 			name: "defaults",
 			warnings: []string{
 				"DATABASE_URL is not set",
-				"KRYPTON_ROOT_KEY is not set",
-				"Development vaults in config.key_bindings: K1 (unsafe-sqlite-memory), K2 (unsafe-sqlite-memory)",
+				"Development vaults in config: root_key (unsafe-sqlite-memory), K1 (unsafe-sqlite-memory), K2 (unsafe-sqlite-memory)",
 				"config.auth is not set and networkPolicy.enabled is false",
 			},
 		},
@@ -91,17 +89,9 @@ func TestReleaseNotes(t *testing.T) {
 			name: "secrets from extraEnvs",
 			args: []string{
 				"--set", "extraEnvs[0].name=DATABASE_URL", "--set", "extraEnvs[0].value=postgres://db",
-				"--set", "extraEnvs[1].name=KRYPTON_ROOT_KEY", "--set", "extraEnvs[1].value=key",
 				"--set", "networkPolicy.enabled=true",
 			},
 			warnings: []string{"Development vaults"},
-		},
-		{
-			name: "another sealer variable",
-			args: append([]string{
-				"--set", "config.key_bindings.K0.sealer.config.secret.config.name=ROOT_SEAL_KEY",
-			}, startingValues...),
-			warnings: []string{"Development vaults", "ROOT_SEAL_KEY is not set"},
 		},
 		{
 			name:     "two pods with development vaults",
@@ -116,6 +106,7 @@ func TestReleaseNotes(t *testing.T) {
 		{
 			name: "no development vault",
 			args: append([]string{
+				"--set", "config.root_key.vault.type=openbao",
 				"--set", "config.key_bindings.K1.vault.type=openbao",
 				"--set", "config.key_bindings.K2.vault.type=openbao",
 				"--set", "replicaCount=2",

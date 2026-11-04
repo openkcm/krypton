@@ -5,16 +5,13 @@ segment:
   end_kind: K1
 selector_labels:
   environment: production
+root_key:
+  allowed_providers:
+   - aes256gcm-staticsecret
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
 key_bindings:
-  K0:
-    sealer:
-      name: root-key-sealer
-      type: aes256gcm-staticsecret
-      config:
-        secret:
-          type: envvar
-          config:
-            name: KRYPTON_ROOT_KEY
   K1:
     crypto:
       name: kek-crypto

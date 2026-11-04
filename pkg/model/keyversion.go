@@ -33,6 +33,7 @@ type KeyVersion struct {
 	ParentKeyVersion *int                      `json:"parent_key_version,omitempty"`
 	LifeCycleState   KeyLifeCycleState         `json:"life_cycle_state"`
 	ProcessingState  KeyVersionProcessingState `json:"processing_state"`
+	Labels           Labels                    `json:"labels,omitempty"`
 	CreatedAt        clock.UnixNano            `json:"created_at"`
 	UpdatedAt        clock.UnixNano            `json:"updated_at"`
 }
@@ -53,10 +54,13 @@ func NewKeyVersion(tenantID, keyID string, version int, parentKeyID *string, par
 	}
 }
 
-func (kv *KeyVersion) AAD() []byte {
-	if kv == nil {
-		return nil
-	}
+// WithLabels returns a copy of kv with the given labels.
+func (kv KeyVersion) WithLabels(ls Labels) KeyVersion {
+	kv.Labels = ls
+	return kv
+}
+
+func (kv KeyVersion) AAD() []byte {
 	return fmt.Appendf(nil, "%s:%s:%d:%d", kv.TenantID, kv.KeyID, kv.Version, kv.Revision)
 }
 

@@ -14,11 +14,8 @@ var (
 	ErrSegmentBindingsMissing         = errors.New("key binding missing for key kind in segment range")
 	ErrSegmentBindingsExtra           = errors.New("key binding found for key kind outside segment range")
 
-	ErrRootSegmentStartNotFirst        = errors.New("root segment must start at hierarchy's first key")
-	ErrRootSegmentEndIsTek             = errors.New("root segment end kind must not have role tek")
-	ErrRootBindingHasParentKeyProvider = errors.New("root key binding must not have a parent key provider")
-	ErrRootBindingMissingSealer        = errors.New("root key binding must have a sealer")
-	ErrRootBindingHasCryptor           = errors.New("root key binding must not have a cryptor")
+	ErrRootSegmentStartNotFirst = errors.New("root segment must start at hierarchy's first key")
+	ErrRootSegmentEndIsTek      = errors.New("root segment end kind must not have role tek")
 
 	ErrAgentSegmentStartNotTek                   = errors.New("agent segment must start with a tek role key")
 	ErrAgentSegmentEndIsTek                      = errors.New("agent segment end kind must not have role tek unless single-key segment")
@@ -36,6 +33,10 @@ var (
 
 // ValidateSegmentAgainstHierarchy checks that a segment's endpoints exist in the hierarchy are in the correct order, and that bindings cover exactly the segment range.
 func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding) error {
+	return validateSegmentAgainstHierarchy(h, seg, bindings, false)
+}
+
+func validateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding, exemptRoot bool) error {
 	startIdx := h.IndexOf(model.KeyKind(seg.StartKind))
 	if startIdx < 0 {
 		return fmt.Errorf("%w: %q", ErrSegmentStartKindNotInHierarchy, seg.StartKind)
@@ -54,6 +55,9 @@ func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindi
 	for _, ks := range kindsInRange {
 		kind := string(ks.Kind)
 		rangeSet[kind] = struct{}{}
+		if exemptRoot && ks.Role == KeyRoleRoot {
+			continue
+		}
 		if _, exists := bindings[kind]; !exists {
 			return fmt.Errorf("%w: %q", ErrSegmentBindingsMissing, kind)
 		}
@@ -70,7 +74,7 @@ func ValidateSegmentAgainstHierarchy(h KeyHierarchy, seg HierarchySegment, bindi
 
 // ValidateRootSegment validates the root's segment against the hierarchy, enforcing root-specific constraints.
 func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[string]KeyBinding) error {
-	if err := ValidateSegmentAgainstHierarchy(h, seg, bindings); err != nil {
+	if err := validateSegmentAgainstHierarchy(h, seg, bindings, true); err != nil {
 		return err
 	}
 
@@ -84,21 +88,6 @@ func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[stri
 		return ErrRootSegmentEndIsTek
 	}
 
-	rootBinding, exists := bindings[seg.StartKind]
-	if !exists {
-		return fmt.Errorf("%w: %q", ErrSegmentBindingsMissing, seg.StartKind)
-	}
-	if rootBinding.ParentKeyProvider != nil {
-		return ErrRootBindingHasParentKeyProvider
-	}
-	if rootBinding.SealerSpec == nil {
-		return ErrRootBindingMissingSealer
-	}
-	if rootBinding.CryptorSpec != nil {
-		return ErrRootBindingHasCryptor
-	}
-
-	// Non-root keys in root segment must have a cryptor
 	kindsInRange, err := h.KindsBetween(model.KeyKind(seg.StartKind), model.KeyKind(seg.EndKind))
 	if err != nil {
 		return err

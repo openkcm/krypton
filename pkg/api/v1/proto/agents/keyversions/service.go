@@ -48,6 +48,12 @@ func (s *Service) UpsertKeyVersion(ctx context.Context, req *UpsertKeyVersionReq
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
+	if err := validator.ValidateUserLabels(req.GetLabels()); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
 
 	rkv := newKeyVersion(req)
 	err = store.ChainTransaction(ctx, s.transactor,
@@ -159,6 +165,7 @@ func newKeyVersion(req *UpsertKeyVersionRequest) model.KeyVersion {
 		ParentKeyVersion: pv,
 		LifeCycleState:   model.KeyLifeCycleState(req.GetLifecycleState()),
 		ProcessingState:  model.KeyVersionProcessingState(req.GetProcessingState()),
+		Labels:           req.GetLabels(),
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}

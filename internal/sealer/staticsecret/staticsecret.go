@@ -28,6 +28,16 @@ func (c *Config) ValidateSealerConfig() error {
 	return c.Secret.Validate()
 }
 
+// Auth holds authentication for the static-secret cryptor; none is required since the key is embedded.
+type Auth struct{}
+
+var _ sealer.SealerAuth = (*Auth)(nil)
+
+// ValidateSealerAuth reports whether the auth is valid; always nil as no credentials are needed.
+func (a *Auth) ValidateSealerAuth() error {
+	return nil
+}
+
 // StaticSecret is a [cryptor.Sealer] that seals [aes256gcm.AES256GCM] with a pre-configured key,
 // so callers don't need to supply secrets per-request.
 //

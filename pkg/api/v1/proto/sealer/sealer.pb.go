@@ -29,6 +29,7 @@ type SealRequest struct {
 	KeyVersion    int32                  `protobuf:"varint,3,opt,name=key_version,json=keyVersion,proto3" json:"key_version,omitempty"`
 	Plaintext     []byte                 `protobuf:"bytes,4,opt,name=plaintext,proto3" json:"plaintext,omitempty"`
 	Aad           []byte                 `protobuf:"bytes,5,opt,name=aad,proto3" json:"aad,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,6 +99,13 @@ func (x *SealRequest) GetAad() []byte {
 	return nil
 }
 
+func (x *SealRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 type SealResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ciphertext    []byte                 `protobuf:"bytes,1,opt,name=ciphertext,proto3" json:"ciphertext,omitempty"`
@@ -149,6 +157,7 @@ type UnsealRequest struct {
 	KeyVersion    int32                  `protobuf:"varint,3,opt,name=key_version,json=keyVersion,proto3" json:"key_version,omitempty"`
 	Ciphertext    []byte                 `protobuf:"bytes,4,opt,name=ciphertext,proto3" json:"ciphertext,omitempty"`
 	Aad           []byte                 `protobuf:"bytes,5,opt,name=aad,proto3" json:"aad,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -218,6 +227,13 @@ func (x *UnsealRequest) GetAad() []byte {
 	return nil
 }
 
+func (x *UnsealRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 type UnsealResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Plaintext     []byte                 `protobuf:"bytes,1,opt,name=plaintext,proto3" json:"plaintext,omitempty"`
@@ -266,18 +282,22 @@ var File_sealer_proto protoreflect.FileDescriptor
 
 const file_sealer_proto_rawDesc = "" +
 	"\n" +
-	"\fsealer.proto\x12\x11krypton.v1.sealer\"\x92\x01\n" +
+	"\fsealer.proto\x12\x11krypton.v1.sealer\"\x99\x02\n" +
 	"\vSealRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x1f\n" +
 	"\vkey_version\x18\x03 \x01(\x05R\n" +
 	"keyVersion\x12\x1c\n" +
 	"\tplaintext\x18\x04 \x01(\fR\tplaintext\x12\x10\n" +
-	"\x03aad\x18\x05 \x01(\fR\x03aad\".\n" +
+	"\x03aad\x18\x05 \x01(\fR\x03aad\x12H\n" +
+	"\bmetadata\x18\x06 \x03(\v2,.krypton.v1.sealer.SealRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\".\n" +
 	"\fSealResponse\x12\x1e\n" +
 	"\n" +
 	"ciphertext\x18\x01 \x01(\fR\n" +
-	"ciphertext\"\x96\x01\n" +
+	"ciphertext\"\x9f\x02\n" +
 	"\rUnsealRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x1f\n" +
@@ -286,7 +306,11 @@ const file_sealer_proto_rawDesc = "" +
 	"\n" +
 	"ciphertext\x18\x04 \x01(\fR\n" +
 	"ciphertext\x12\x10\n" +
-	"\x03aad\x18\x05 \x01(\fR\x03aad\".\n" +
+	"\x03aad\x18\x05 \x01(\fR\x03aad\x12J\n" +
+	"\bmetadata\x18\x06 \x03(\v2..krypton.v1.sealer.UnsealRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\".\n" +
 	"\x0eUnsealResponse\x12\x1c\n" +
 	"\tplaintext\x18\x01 \x01(\fR\tplaintext2\xa1\x01\n" +
 	"\aService\x12G\n" +
@@ -305,23 +329,27 @@ func file_sealer_proto_rawDescGZIP() []byte {
 	return file_sealer_proto_rawDescData
 }
 
-var file_sealer_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_sealer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_sealer_proto_goTypes = []any{
 	(*SealRequest)(nil),    // 0: krypton.v1.sealer.SealRequest
 	(*SealResponse)(nil),   // 1: krypton.v1.sealer.SealResponse
 	(*UnsealRequest)(nil),  // 2: krypton.v1.sealer.UnsealRequest
 	(*UnsealResponse)(nil), // 3: krypton.v1.sealer.UnsealResponse
+	nil,                    // 4: krypton.v1.sealer.SealRequest.MetadataEntry
+	nil,                    // 5: krypton.v1.sealer.UnsealRequest.MetadataEntry
 }
 var file_sealer_proto_depIdxs = []int32{
-	0, // 0: krypton.v1.sealer.Service.Seal:input_type -> krypton.v1.sealer.SealRequest
-	2, // 1: krypton.v1.sealer.Service.Unseal:input_type -> krypton.v1.sealer.UnsealRequest
-	1, // 2: krypton.v1.sealer.Service.Seal:output_type -> krypton.v1.sealer.SealResponse
-	3, // 3: krypton.v1.sealer.Service.Unseal:output_type -> krypton.v1.sealer.UnsealResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	4, // 0: krypton.v1.sealer.SealRequest.metadata:type_name -> krypton.v1.sealer.SealRequest.MetadataEntry
+	5, // 1: krypton.v1.sealer.UnsealRequest.metadata:type_name -> krypton.v1.sealer.UnsealRequest.MetadataEntry
+	0, // 2: krypton.v1.sealer.Service.Seal:input_type -> krypton.v1.sealer.SealRequest
+	2, // 3: krypton.v1.sealer.Service.Unseal:input_type -> krypton.v1.sealer.UnsealRequest
+	1, // 4: krypton.v1.sealer.Service.Seal:output_type -> krypton.v1.sealer.SealResponse
+	3, // 5: krypton.v1.sealer.Service.Unseal:output_type -> krypton.v1.sealer.UnsealResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_sealer_proto_init() }
@@ -335,7 +363,7 @@ func file_sealer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sealer_proto_rawDesc), len(file_sealer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

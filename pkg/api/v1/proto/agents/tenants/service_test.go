@@ -78,6 +78,23 @@ func TestUpsertTenant(t *testing.T) {
 		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 	})
 
+	t.Run("should return InvalidArgument when labels are reserved", func(t *testing.T) {
+		ctx := t.Context()
+		setup := setupServerAndClient(t)
+
+		_, err := setup.cli.UpsertTenant(ctx, &tenants.UpsertTenantRequest{
+			Id:   uuid.New().String(),
+			Name: "name",
+			Labels: map[string]string{
+				model.ReservedLabelPrefix + "origin": "user",
+			},
+		})
+
+		require.Error(t, err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err), err.Error())
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
 	t.Run("should create a new tenant when it does not exist", func(t *testing.T) {
 		// given
 		ctx := t.Context()

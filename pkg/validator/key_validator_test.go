@@ -511,6 +511,76 @@ func TestValidator_ValidateTransition(t *testing.T) {
 	}
 }
 
+func TestValidator_ValidateKeyUsage(t *testing.T) {
+	errBoom := errors.New("boom")
+	tenantID := uuid.New().String()
+	keyID := uuid.New().String()
+
+	tests := []struct {
+		name      string
+		key       *model.Key
+		getKeyErr error
+		usage     spec.KeyUsage
+		wantErr   error
+	}{
+		{
+			name:      "key not found",
+			getKeyErr: store.ErrKeyNotFound,
+			usage:     spec.KeyUsageEncrypt,
+			wantErr:   store.ErrKeyNotFound,
+		},
+		{
+			name:      "generic store error",
+			getKeyErr: errBoom,
+			usage:     spec.KeyUsageEncrypt,
+			wantErr:   errBoom,
+		},
+		{
+			name: "key processing is not completed",
+			key: &model.Key{
+				LifeCycleState:     model.KeyLifeCycleActive,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+			},
+			usage:   spec.KeyUsageEncrypt,
+			wantErr: validator.ErrKeyTransientState,
+		},
+		{
+			name: "usage permitted in lifecycle state",
+			key: &model.Key{
+				LifeCycleState:     model.KeyLifeCycleActive,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+			},
+			usage: spec.KeyUsageEncrypt,
+		},
+		{
+			name: "usage denied in lifecycle state",
+			key: &model.Key{
+				LifeCycleState:     model.KeyLifeCycleActive,
+				KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+			},
+			usage:   spec.KeyUsageLink,
+			wantErr: keylifecycle.ErrOperationNotAllowedInState,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keys := &stubKeyStore{
+				getKeyByID: func(_ context.Context, id, gotTenantID string) (*model.Key, error) {
+					assert.Equal(t, keyID, id)
+					assert.Equal(t, tenantID, gotTenantID)
+					return tc.key, tc.getKeyErr
+				},
+			}
+
+			step := validator.ValidateKeyUsage(tenantID, keyID, tc.usage)
+			err := step(t.Context(), store.Stores{Keys: keys})
+
+			assert.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
 func TestValidator_ValidateKeyParents(t *testing.T) {
 	errBoom := errors.New("boom")
 

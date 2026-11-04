@@ -43,6 +43,8 @@ func TestActivate_Handler(t *testing.T) {
 		Hierarchy: validHierarchy,
 	}
 
+	rootMgr := newTestRootManager(t, rootDB)
+
 	mgr, err := keyprocessor.NewManager(ctx, keyprocessor.ManagerConfig{
 		KeyStore:        kStore,
 		KeyVersionStore: kvStore,
@@ -50,7 +52,8 @@ func TestActivate_Handler(t *testing.T) {
 			"K0": {SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
 			"K1": {SealerSpec: newTestSealerSpec(t), CryptorSpec: newTestCryptorSpec(), VaultSpec: newTestVaultSpec()},
 		},
-		Hierarchy: validHierarchy,
+		Hierarchy:   validHierarchy,
+		RootManager: rootMgr,
 	})
 	require.NoError(t, err)
 
@@ -228,7 +231,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should retry if secret generation fails", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key1 := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
@@ -252,7 +255,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should fail if registry is nil", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 
 		// when
@@ -265,7 +268,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should fail if agent is not in registry", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 
 		// when
@@ -280,7 +283,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should retry if upsertRemoteKey returns a retryable error", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 		agentSrv := startAgentServer(t, nil)
 		dropTenantTable(t, agentSrv.db) // generic DB error -> ERROR_CODE_RETRY
@@ -295,7 +298,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should fail key if upsertRemoteKey returns a non-retryable error", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 		agentSrv := startAgentServer(t, nil) // no tenant seeded -> ErrTenantNotFound -> ERROR_CODE_ABORT
 
@@ -311,7 +314,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should retry if upsertRemoteKeyVersion returns a retryable error", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 		agentSrv := startAgentServer(t, nil)
 		seedAgentTenant(t, agentSrv.db, tenant.ID)
@@ -346,7 +349,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should activate non-root key and create key version from parent", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key1 := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
@@ -365,7 +368,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should activate non-root key and update existing key version", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key1 := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K1", ParentID: new(pc.key0.ID), ManagedBy: rootName,
 			LifeCycleState:     model.KeyLifeCycleActive,
@@ -390,7 +393,7 @@ func TestActivate_Handler(t *testing.T) {
 
 	t.Run("should activate remote-managed key with RPC sealer", func(t *testing.T) {
 		// given
-		pc := createParentChain(t, kStore, kvStore, tenant.ID, rootName)
+		pc := createParentChain(t, rootMgr, kStore, kvStore, tenant.ID, rootName)
 		key2 := createRemoteKey(t, kStore, tenant.ID, pc.key1.ID, "agent-1")
 
 		rootSealerSrv := startAgentServerFromDB(t, newAgentDB(t), nil, newTestSealer(t))

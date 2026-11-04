@@ -391,8 +391,11 @@ func TestGetKeyVersion(t *testing.T) {
 	key := model.NewKey(tenant.ID, "kv-get-key-"+uuid.New().String(), "K1", nil, "root", nil)
 	require.NoError(t, keyStore.CreateKey(ctx, key))
 
-	// seed a key version
-	seeded := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil)
+	// seed a key version with system-assigned labels (reserved prefix allowed)
+	seeded := model.NewKeyVersion(tenant.ID, key.ID, 1, nil, nil).WithLabels(model.Labels{
+		"krypton:origin": "root",
+		"region":         "eu-west-1",
+	})
 	_, err = kvStore.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: seeded})
 	require.NoError(t, err)
 
@@ -408,6 +411,7 @@ func TestGetKeyVersion(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, seeded, result.KeyVersion)
+		assert.Equal(t, "root", result.KeyVersion.Labels["krypton:origin"])
 	})
 
 	t.Run("should return ErrKeyVersionNotFound when not found", func(t *testing.T) {
