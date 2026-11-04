@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 )
@@ -143,7 +143,7 @@ func TestGetAction_Success(t *testing.T) {
 		found: true,
 		group: orbital.JobGroup{
 			ID:        id,
-			Type:      announcekey.JobGroupType,
+			Type:      orchestrator.AnnounceKey,
 			Status:    orbital.JobGroupStatusProcessing,
 			CreatedAt: 100,
 			UpdatedAt: 200,
@@ -179,7 +179,7 @@ func TestGetAction_DefaultsWhenLabelsAbsent(t *testing.T) {
 		found: true,
 		group: orbital.JobGroup{
 			ID:     id,
-			Type:   announcekey.JobGroupType,
+			Type:   orchestrator.AnnounceKey,
 			Labels: orbital.Labels{actions.LabelKeyCascading: "notabool"},
 		},
 	}

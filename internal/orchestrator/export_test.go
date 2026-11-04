@@ -4,6 +4,9 @@ import (
 	"context"
 
 	"github.com/openkcm/orbital"
+
+	"github.com/openkcm/krypton/pkg/model"
+	"github.com/openkcm/krypton/pkg/store"
 )
 
 const (
@@ -61,4 +64,22 @@ func (o *Orchestrator) JobGroupFailed(ctx context.Context, group orbital.JobGrou
 
 func (o *Orchestrator) JobGroupCanceled(ctx context.Context, group orbital.JobGroup) error {
 	return o.jobGroupCanceled(ctx, group)
+}
+
+// NewAnnounceState creates a new instance of sharedState.
+var NewAnnounceState = newAnnounceState
+
+// UpdateKeyState updates the state of the key processing.
+func (h *AnnounceTaskHandler) UpdateKeyState(ctx context.Context, state *announceState, stores store.Stores, key model.Key) error {
+	return h.updateKeyState(ctx, state, stores, key)
+}
+
+// State returns the current state of the key processing.
+func (s *announceState) State() model.KeyProcessingStatus {
+	return s.state
+}
+
+// ErrorMessage returns the error message associated with the key processing, if any.
+func (s *announceState) ErrorMessage() string {
+	return s.errMsg
 }

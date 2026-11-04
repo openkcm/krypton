@@ -18,16 +18,8 @@ const (
 )
 
 var (
-	ErrRepositoryNil       = errors.New("orbital repository cannot be nil")
-	ErrJobHandlerRequired  = errors.New("at least one job handler is required")
-	ErrJobHandlerNil       = errors.New("job handler cannot be nil")
-	ErrJobTypeEmpty        = errors.New("job handler type cannot be empty")
-	ErrJobHandlerDuplicate = errors.New("duplicate job handler")
-	ErrJobHandlerNotFound  = errors.New(noJobHandlerRegisteredMessage)
-
-	ErrGroupHandlerNil       = errors.New("job group handler cannot be nil")
-	ErrGroupTypeEmpty        = errors.New("job group handler type cannot be empty")
-	ErrGroupHandlerDuplicate = errors.New("duplicate job group handler")
+	ErrRepositoryNil      = errors.New("orbital repository cannot be nil")
+	ErrJobHandlerNotFound = errors.New(noJobHandlerRegisteredMessage)
 )
 
 // Orchestrator owns the orbital manager lifecycle plus the embedded operator for
@@ -36,9 +28,9 @@ var (
 type Orchestrator struct {
 	repo           *orbital.Repository
 	orbitalManager *orbital.Manager
-	jobHandlers    map[string]JobHandler
-	groupHandlers  map[string]JobGroupHandler
-	taskHandlers   map[string]TaskHandler
+	jobHandlers    map[string]OrbitalTaskResolver
+	groupHandlers  map[string]OrbitalJobGroupHandler
+	taskHandlers   map[string]OrbitalTaskHandler
 	embeddedClient *embedded.Client
 
 	embeddedBufferSize     int
@@ -48,27 +40,27 @@ type Orchestrator struct {
 
 // New wires the registered handlers, the embedded operator, and orbital worker
 // config. At least one job handler and one task handler are required.
-func New(ctx context.Context, repo *orbital.Repository, handlers Handlers, opts ...Option) (*Orchestrator, error) {
+func New(ctx context.Context, repo *orbital.Repository, handlers OrbitalHandlers, opts ...Option) (*Orchestrator, error) {
 	if repo == nil {
 		return nil, ErrRepositoryNil
 	}
 
-	jobHandlers, err := buildJobHandlerMap(handlers.Jobs)
+	taskResolver, err := buildTaskResolverMap(handlers.TaskResolvers)
 	if err != nil {
 		return nil, err
 	}
-	groupHandlers, err := buildGroupHandlerMap(handlers.Groups)
+	groupHandlers, err := buildGroupHandlerMap(handlers.GroupHandlers)
 	if err != nil {
 		return nil, err
 	}
-	taskHandlers, err := buildTaskHandlerMap(handlers.Tasks)
+	taskHandlers, err := buildTaskHandlerMap(handlers.TaskHandlers)
 	if err != nil {
 		return nil, err
 	}
 
 	o := &Orchestrator{
 		repo:                   repo,
-		jobHandlers:            jobHandlers,
+		jobHandlers:            taskResolver,
 		groupHandlers:          groupHandlers,
 		taskHandlers:           taskHandlers,
 		embeddedBufferSize:     defaultEmbeddedBufferSize,
@@ -205,19 +197,19 @@ func (o *Orchestrator) jobCanceled(ctx context.Context, job orbital.Job) error {
 }
 
 func (o *Orchestrator) jobGroupDone(ctx context.Context, group orbital.JobGroup) error {
-	return o.dispatchGroupEvent(ctx, group, func(handler JobGroupHandler, resolved orbital.JobGroup) error {
+	return o.dispatchGroupEvent(ctx, group, func(handler OrbitalJobGroupHandler, resolved orbital.JobGroup) error {
 		return handler.OnJobGroupDone(ctx, resolved)
 	})
 }
 
 func (o *Orchestrator) jobGroupFailed(ctx context.Context, group orbital.JobGroup) error {
-	return o.dispatchGroupEvent(ctx, group, func(handler JobGroupHandler, resolved orbital.JobGroup) error {
+	return o.dispatchGroupEvent(ctx, group, func(handler OrbitalJobGroupHandler, resolved orbital.JobGroup) error {
 		return handler.OnJobGroupFailed(ctx, resolved)
 	})
 }
 
 func (o *Orchestrator) jobGroupCanceled(ctx context.Context, group orbital.JobGroup) error {
-	return o.dispatchGroupEvent(ctx, group, func(handler JobGroupHandler, resolved orbital.JobGroup) error {
+	return o.dispatchGroupEvent(ctx, group, func(handler OrbitalJobGroupHandler, resolved orbital.JobGroup) error {
 		return handler.OnJobGroupCanceled(ctx, resolved)
 	})
 }
@@ -225,7 +217,7 @@ func (o *Orchestrator) jobGroupCanceled(ctx context.Context, group orbital.JobGr
 // dispatchGroupEvent refetches the group (orbital's event callback omits the
 // Jobs slice) and hands it to the registered handler. An unregistered group
 // type is a no-op.
-func (o *Orchestrator) dispatchGroupEvent(ctx context.Context, group orbital.JobGroup, fn func(JobGroupHandler, orbital.JobGroup) error) error {
+func (o *Orchestrator) dispatchGroupEvent(ctx context.Context, group orbital.JobGroup, fn func(OrbitalJobGroupHandler, orbital.JobGroup) error) error {
 	handler, ok := o.groupHandlers[group.Type]
 	if !ok {
 		return nil
@@ -243,50 +235,4 @@ func (o *Orchestrator) dispatchGroupEvent(ctx context.Context, group orbital.Job
 
 func jobHandlerNotFoundError(jobType string) error {
 	return fmt.Errorf("%w: %s", ErrJobHandlerNotFound, jobType)
-}
-
-func buildJobHandlerMap(handlers []JobHandler) (map[string]JobHandler, error) {
-	if len(handlers) == 0 {
-		return nil, ErrJobHandlerRequired
-	}
-
-	result := make(map[string]JobHandler, len(handlers))
-	for _, handler := range handlers {
-		if handler == nil {
-			return nil, ErrJobHandlerNil
-		}
-
-		jobType := handler.JobType()
-		if jobType == "" {
-			return nil, ErrJobTypeEmpty
-		}
-
-		if _, ok := result[jobType]; ok {
-			return nil, fmt.Errorf("%w: %s", ErrJobHandlerDuplicate, jobType)
-		}
-		result[jobType] = handler
-	}
-
-	return result, nil
-}
-
-func buildGroupHandlerMap(handlers []JobGroupHandler) (map[string]JobGroupHandler, error) {
-	result := make(map[string]JobGroupHandler, len(handlers))
-	for _, handler := range handlers {
-		if handler == nil {
-			return nil, ErrGroupHandlerNil
-		}
-
-		groupType := handler.JobGroupType()
-		if groupType == "" {
-			return nil, ErrGroupTypeEmpty
-		}
-
-		if _, ok := result[groupType]; ok {
-			return nil, fmt.Errorf("%w: %s", ErrGroupHandlerDuplicate, groupType)
-		}
-		result[groupType] = handler
-	}
-
-	return result, nil
 }

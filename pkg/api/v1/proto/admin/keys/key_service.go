@@ -11,11 +11,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/handler/activatekey"
-	"github.com/openkcm/krypton/internal/handler/announcekey"
-	"github.com/openkcm/krypton/internal/handler/suspendkey"
 	"github.com/openkcm/krypton/internal/keyoperator"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/actions"
 	"github.com/openkcm/krypton/pkg/model"
@@ -28,7 +26,7 @@ type KeyService struct {
 
 	transactor store.Transactor
 	keyStore   store.Key
-	preparer   keyoperator.JobGroupPreparer
+	preparer   orchestrator.JobGroupPreparer
 	manager    *keyprocessor.Manager
 	config     config.RootConfig
 }
@@ -90,11 +88,11 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 		validator.ValidateTenant(tenantID),
 		validator.ValidateKeyParents(tenantID, keyID),
 		func(ctx context.Context, stores store.Stores) error {
-			grp, err := keyoperator.ApplyKeyAction(ctx, stores, s.preparer, keyoperator.ApplyKeyActionRequest{
-				TenantID: tenantID,
-				KeyID:    keyID,
-				ToState:  model.KeyLifeCycleActive,
-				KeyFilters: []keyoperator.KeyFilter{
+			grp, err := orchestrator.ApplyKeyAction(ctx, stores, s.preparer, orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         keyID,
+				HandlerConfig: orchestrator.ActivateHandlerConfig(),
+				KeyFilters: []orchestrator.KeyFilter{
 					{
 						LifeCycleState: model.KeyLifeCycleActive,
 						Status: []model.KeyProcessingStatus{
@@ -115,9 +113,7 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 						},
 					},
 				},
-				JobType:      activatekey.JobType,
-				JobGroupType: activatekey.JobGroupType,
-				Cascading:    req.GetCascading(),
+				Cascading: req.GetCascading(),
 			})
 			if err != nil {
 				return err
@@ -150,11 +146,11 @@ func (s *KeyService) SuspendKey(ctx context.Context, req *SuspendKeyRequest) (*S
 	err := store.ChainTransaction(ctx, s.transactor,
 		validator.ValidateTenant(tenantID),
 		func(ctx context.Context, stores store.Stores) error {
-			grp, err := keyoperator.ApplyKeyAction(ctx, stores, s.preparer, keyoperator.ApplyKeyActionRequest{
-				TenantID: tenantID,
-				KeyID:    keyID,
-				ToState:  model.KeyLifeCycleSuspended,
-				KeyFilters: []keyoperator.KeyFilter{
+			grp, err := orchestrator.ApplyKeyAction(ctx, stores, s.preparer, orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         keyID,
+				HandlerConfig: orchestrator.SuspendHandlerConfig(),
+				KeyFilters: []orchestrator.KeyFilter{
 					{
 						LifeCycleState: model.KeyLifeCycleSuspended,
 						Status: []model.KeyProcessingStatus{
@@ -169,10 +165,8 @@ func (s *KeyService) SuspendKey(ctx context.Context, req *SuspendKeyRequest) (*S
 						},
 					},
 				},
-				JobType:      suspendkey.JobType,
-				JobGroupType: suspendkey.JobGroupType,
-				Cascading:    req.GetCascading(),
-				BottomUp:     true,
+				Cascading: req.GetCascading(),
+				BottomUp:  true,
 			})
 			if err != nil {
 				return err
@@ -308,8 +302,8 @@ func (s *KeyService) prepareAnnounceJobGroup(newKey *model.Key) func(ctx context
 			return err
 		}
 
-		job := orbital.NewJob(announcekey.JobType, data).WithExternalID(newKey.Name)
-		jobGroup := orbital.NewJobGroup(announcekey.JobGroupType, job).WithLabels(orbital.Labels{
+		job := orbital.NewJob(orchestrator.AnnounceKey, data).WithExternalID(newKey.Name)
+		jobGroup := orbital.NewJobGroup(orchestrator.AnnounceKey, job).WithLabels(orbital.Labels{
 			actions.LabelKeyTargetType: actions.TargetType_TARGET_TYPE_KEY.String(),
 			actions.LabelKeyTargetID:   newKey.TenantID + ":" + newKey.ID,
 			actions.LabelKeyCascading:  "false",

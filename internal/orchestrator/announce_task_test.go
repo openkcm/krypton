@@ -1,4 +1,4 @@
-package announcekey_test
+package orchestrator_test
 
 import (
 	"context"
@@ -9,22 +9,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-const rootName = "root"
-
 func TestTaskHandler_HappyPath_NonRootTarget(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 	seedAgentTenant(t, agent.db, key.TenantID)
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -47,7 +45,7 @@ func TestTaskHandler_HappyPath_RootTarget(t *testing.T) {
 	rootDB := newRootDB(t)
 	key := seedRootTenantAndKey(t, rootDB, rootName)
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
 		rootName,
@@ -63,11 +61,11 @@ func TestTaskHandler_HappyPath_RootTarget(t *testing.T) {
 
 func TestTaskHandler_RegistryMiss_TerminalFail(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "unknown-agent")
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "some-other-agent", agent),
 		rootName,
@@ -84,11 +82,11 @@ func TestTaskHandler_RegistryMiss_TerminalFail(t *testing.T) {
 
 func TestTaskHandler_TenantAutoUpsertedOnAgent_Success(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -104,11 +102,11 @@ func TestTaskHandler_TenantAutoUpsertedOnAgent_Success(t *testing.T) {
 
 func TestTaskHandler_RPCTransient_AgentDown_Retries(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -129,13 +127,13 @@ func TestTaskHandler_RPCTransient_AgentDown_Retries(t *testing.T) {
 func TestTaskHandler_ValidateTransition_KeyNotFound_TerminalFail(t *testing.T) {
 	rootDB := newRootDB(t)
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
 		rootName,
 	)
 
-	ghost := model.NewKey(createTenant(t, rootDB).Tenant.ID, "ghost", "K0", nil, rootName, nil)
+	ghost := model.NewKey(createTenant(t, rootDB).ID, "ghost", "K0", nil, rootName, nil)
 	ghost.ID = uuid.New().String()
 
 	resp := runTask(t, handler, taskPayload(t, ghost))
@@ -146,7 +144,7 @@ func TestTaskHandler_ValidateTransition_KeyNotFound_TerminalFail(t *testing.T) {
 func TestTaskHandler_TenantNotFound_TerminalFail(t *testing.T) {
 	rootDB := newRootDB(t)
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
 		rootName,
@@ -161,13 +159,13 @@ func TestTaskHandler_TenantNotFound_TerminalFail(t *testing.T) {
 
 func TestTaskHandler_TenantFetching_Error_Continue(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
 	dropTenantTable(t, rootDB) // simulate transient error on root
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -183,7 +181,7 @@ func TestTaskHandler_TenantFetching_Error_Continue(t *testing.T) {
 
 func TestTaskHandler_TenantUpsert_ReturnTerminalUpsert_Fail(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
@@ -196,7 +194,7 @@ func TestTaskHandler_TenantUpsert_ReturnTerminalUpsert_Fail(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -216,11 +214,11 @@ func TestTaskHandler_TenantUpsert_ReturnTerminalUpsert_Fail(t *testing.T) {
 
 func TestTaskHandler_TenantUpsert_In_Agent(t *testing.T) {
 	rootDB := newRootDB(t)
-	agent := startAgentServer(t)
+	agent := startAgentServer(t, nil)
 
 	key := seedRootTenantAndKey(t, rootDB, "agent")
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		newRegistry(t, "agent", agent),
 		rootName,
@@ -259,7 +257,7 @@ func TestTaskHandler_ValidateTransition_InvalidTransition_TerminalFail(t *testin
 		NewState: model.KeyLifeCycleActive,
 	}))
 
-	handler := announcekey.NewTaskHandler(
+	handler := orchestrator.NewAnnounceTaskHandler(
 		storesql.NewTransactor(rootDB),
 		emptyRegistry(t),
 		rootName,
@@ -279,13 +277,13 @@ func TestTaskHandler_UpdateKeyState_Fail_ForEmptyState(t *testing.T) {
 
 	transactor := storesql.NewTransactor(rootDB)
 
-	subj := announcekey.NewTaskHandler(
+	subj := orchestrator.NewAnnounceTaskHandler(
 		transactor,
 		nil,
 		rootName,
 	)
 
-	state := announcekey.NewSharedState() // empty state, no status or lifecycle set
+	state := orchestrator.NewAnnounceState() // empty state, no status or lifecycle set
 	transactionErr := transactor.Transaction(ctx, func(ctx context.Context, stores store.Stores) error {
 		return subj.UpdateKeyState(ctx, state, stores, key)
 	})
@@ -300,7 +298,7 @@ func TestTaskHandler_UpdateKeyState_Fail_ForEmptyState(t *testing.T) {
 }
 
 func TestTaskHandler_CorruptPayload_TerminalFail(t *testing.T) {
-	handler := announcekey.NewTaskHandler(nil, nil, rootName)
+	handler := orchestrator.NewAnnounceTaskHandler(nil, nil, rootName)
 
 	resp := runTask(t, handler, []byte("not-json"))
 	assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
@@ -308,6 +306,6 @@ func TestTaskHandler_CorruptPayload_TerminalFail(t *testing.T) {
 }
 
 func TestTaskHandler_TaskType(t *testing.T) {
-	handler := announcekey.NewTaskHandler(nil, nil, rootName)
-	assert.Equal(t, announcekey.TaskType, handler.TaskType())
+	handler := orchestrator.NewAnnounceTaskHandler(nil, nil, rootName)
+	assert.Equal(t, orchestrator.AnnounceKey, handler.TaskType())
 }

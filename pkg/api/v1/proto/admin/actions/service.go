@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/openkcm/krypton/internal/handler/announcekey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 )
 
@@ -24,7 +24,7 @@ const (
 
 // actionTypeByJobGroupType maps an orbital JobGroup.Type to an ActionType.
 var actionTypeByJobGroupType = map[string]ActionType{
-	announcekey.JobGroupType: ActionType_ANNOUNCE_KEY,
+	orchestrator.AnnounceKey: ActionType_ANNOUNCE_KEY,
 }
 
 // JobGroupStore retrieves orbital job groups backing actions.

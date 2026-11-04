@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/openkcm/krypton/internal/config"
-	"github.com/openkcm/krypton/internal/handler/suspendkey"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
@@ -425,9 +425,9 @@ func TestSuspendKey(t *testing.T) {
 
 		// verify 1 job was created (child only, root skipped)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, suspendkey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 1)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, child.ID)
 		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
@@ -563,11 +563,11 @@ func TestSuspendKey(t *testing.T) {
 
 		// verify 3 jobs: layer 0 (K0), layer 1 (K1a only), layer 2 (K2a only)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, suspendkey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 3)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[0].Type)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[1].Type)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[2].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[2].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k2a.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1a.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k0.ID)
@@ -610,9 +610,9 @@ func TestSuspendKey(t *testing.T) {
 
 		// verify a job group was prepared with one job
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, suspendkey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 1)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[0].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
 		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 	})
@@ -673,10 +673,10 @@ func TestSuspendKey(t *testing.T) {
 
 		// verify 2 jobs were created (one per suspendable layer)
 		require.Len(t, spy.groups, 1)
-		assert.Equal(t, suspendkey.JobGroupType, spy.groups[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Type)
 		require.Len(t, spy.groups[0].Jobs, 2)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[0].Type)
-		assert.Equal(t, suspendkey.JobType, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.SuspendKey, spy.groups[0].Jobs[1].Type)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k1.ID)
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k0.ID)
 		for _, job := range spy.groups[0].Jobs {

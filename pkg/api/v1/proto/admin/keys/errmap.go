@@ -8,6 +8,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/keylifecycle"
 	"github.com/openkcm/krypton/internal/keyoperator"
+	"github.com/openkcm/krypton/internal/orchestrator"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
 	"github.com/openkcm/krypton/pkg/validator"
@@ -26,7 +27,7 @@ func mapToProtoErr(err error) error {
 		)
 	case errorIsOneOf(err,
 		store.ErrKeyNotFound,
-		keyoperator.ErrNoKeysFound):
+		orchestrator.ErrNoKeysFound):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "key not found"),
 			proto.Code_ERROR_CODE_ABORT,
@@ -85,12 +86,12 @@ func mapToProtoErr(err error) error {
 			status.New(codes.Internal, keyoperator.ErrGenerateAndSealKeyMaterial.Error()),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-	case errors.Is(err, keyoperator.ErrNoEligibleKeys):
+	case errors.Is(err, orchestrator.ErrNoEligibleKeys):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, "key is already at the target state"),
 			proto.Code_ERROR_CODE_ABORT,
 		)
-	case errors.Is(err, keyoperator.ErrInternal):
+	case errors.Is(err, orchestrator.ErrInternal):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.Internal, err.Error()),
 			proto.Code_ERROR_CODE_ABORT,
