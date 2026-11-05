@@ -127,20 +127,88 @@ func TestDeactivateKey(t *testing.T) {
 
 	t.Run("should return error if key state transition is not valid", func(t *testing.T) {
 		tts := []struct {
-			name  string
-			state model.KeyLifeCycleState
+			name    string
+			state   model.KeyLifeCycleState
+			status  model.KeyProcessingStatus
+			expCode codes.Code
 		}{
 			{
-				name:  "preactive to deactivated",
-				state: model.KeyLifeCyclePreActivation,
+				name:    "preactive completed to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
 			},
 			{
-				name:  "compromised to deactivated",
-				state: model.KeyLifeCycleCompromised,
+				name:    "preactive pending to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
 			},
 			{
-				name:  "destroyed to deactivated",
-				state: model.KeyLifeCycleDestroyed,
+				name:    "preactive failed to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed completed to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed pending to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed failed to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised completed to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised pending to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised failed to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "active pending to deactivated",
+				state:   model.KeyLifeCycleActive,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "active failed to deactivated",
+				state:   model.KeyLifeCycleActive,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "deactive completed to deactivated",
+				state:   model.KeyLifeCycleDeactivated,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.FailedPrecondition,
+			},
+			{
+				name:    "deactive pending to deactivated",
+				state:   model.KeyLifeCycleDeactivated,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
 			},
 		}
 		for _, tt := range tts {
@@ -166,7 +234,7 @@ func TestDeactivateKey(t *testing.T) {
 					"K0",
 					nil,
 					tt.state,
-					model.KeyProcessingCompleted,
+					tt.status,
 				)
 
 				// when
@@ -178,75 +246,61 @@ func TestDeactivateKey(t *testing.T) {
 				// then
 				require.Error(t, err)
 				assert.Nil(t, res)
-				assert.Equal(t, codes.NotFound, status.Code(err))
+				assert.Equal(t, tt.expCode, status.Code(err))
 				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
 			})
 		}
 	})
 
-	t.Run("should return error if no keys are eligible for deactivation", func(t *testing.T) {
+	t.Run("should deactivate key and create job group", func(t *testing.T) {
+		// given
+
+		tenant := createTenant(t, tenantStore)
+
 		tts := []struct {
-			name             string
-			processingStatus model.KeyProcessingStatus
-			keyState         model.KeyLifeCycleState
+			name                string
+			fromState           model.KeyLifeCycleState
+			fromProcessingState model.KeyProcessingStatus
 		}{
 			{
-				name:             "key processing is pending and key is active",
-				processingStatus: model.KeyProcessingPending,
-				keyState:         model.KeyLifeCycleActive,
+				name:                "from active and completed",
+				fromState:           model.KeyLifeCycleActive,
+				fromProcessingState: model.KeyProcessingCompleted,
 			},
 			{
-				name:             "key processing is in-progress and key is active",
-				processingStatus: model.KeyProcessingInProgress,
-				keyState:         model.KeyLifeCycleActive,
+				name:                "from suspended and completed",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingCompleted,
 			},
 			{
-				name:             "key processing is failed and key is active",
-				processingStatus: model.KeyProcessingFailed,
-				keyState:         model.KeyLifeCycleActive,
+				name:                "from suspended and failed",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingFailed,
 			},
 			{
-				name:             "key processing is pending and key is suspended",
-				processingStatus: model.KeyProcessingPending,
-				keyState:         model.KeyLifeCycleSuspended,
+				name:                "from suspended and pending",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingPending,
 			},
 			{
-				name:             "key processing is in-progress and key is suspended",
-				processingStatus: model.KeyProcessingInProgress,
-				keyState:         model.KeyLifeCycleSuspended,
-			},
-			{
-				name:             "key processing is failed and key is suspended",
-				processingStatus: model.KeyProcessingFailed,
-				keyState:         model.KeyLifeCycleSuspended,
-			},
-			{
-				name:             "key processing is pending and key is deactivated",
-				processingStatus: model.KeyProcessingPending,
-				keyState:         model.KeyLifeCycleDeactivated,
-			},
-			{
-				name:             "key processing is in-progress and key is deactivated",
-				processingStatus: model.KeyProcessingInProgress,
-				keyState:         model.KeyLifeCycleDeactivated,
+				name:                "from deactivated and failed",
+				fromState:           model.KeyLifeCycleDeactivated,
+				fromProcessingState: model.KeyProcessingFailed,
 			},
 		}
+
 		for _, tt := range tts {
 			t.Run(tt.name, func(t *testing.T) {
 				// given
-				tenant := createTenant(t, tenantStore)
-
-				// create a key whose lifecycle+processing combination does not
-				// match any KeyFilter, so the selector excludes it
-				key := newTestKey(
-					t,
+				spy := &spyJobGroupPreparer{}
+				svc := keypb.NewKeyService(
+					config.RootConfig{},
+					storesql.NewTransactor(db),
 					keyStore,
-					tenant.ID,
-					"K0",
+					spy,
 					nil,
-					tt.keyState,
-					tt.processingStatus,
 				)
+				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, tt.fromState, tt.fromProcessingState)
 
 				// when
 				res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
@@ -255,14 +309,26 @@ func TestDeactivateKey(t *testing.T) {
 				})
 
 				// then
-				require.Error(t, err)
-				assert.Nil(t, res)
-				assert.Equal(t, codes.NotFound, status.Code(err))
-				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				assert.NotEmpty(t, res.GetJobGroupId())
+
+				// verify the key state was updated
+				updatedKey, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+				require.NoError(t, err)
+				assert.Equal(t, model.KeyLifeCycleDeactivated, updatedKey.LifeCycleState)
+				assert.Equal(t, model.KeyProcessingPending, updatedKey.KeyProcessingState.Status)
+
+				// verify a job group was prepared with one job
+				require.Len(t, spy.groups, 1)
+				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+				require.Len(t, spy.groups[0].Jobs, 1)
+				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+				assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
+				assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
 			})
 		}
 	})
-
 	t.Run("should return error if UpdateKeyStates fails", func(t *testing.T) {
 		// given
 		errInjected := errors.New("injected update-key-states failure")
@@ -584,72 +650,6 @@ func TestDeactivateKey(t *testing.T) {
 		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k0.ID)
 		for _, job := range spy.groups[0].Jobs {
 			assertJobDataTenantID(t, job.Data, tenant.ID)
-		}
-	})
-
-	t.Run("should deactivate key and create job group", func(t *testing.T) {
-		// given
-
-		tenant := createTenant(t, tenantStore)
-
-		tts := []struct {
-			name                string
-			fromState           model.KeyLifeCycleState
-			fromProcessingState model.KeyProcessingStatus
-		}{
-			{
-				name:                "from active and completed",
-				fromState:           model.KeyLifeCycleActive,
-				fromProcessingState: model.KeyProcessingCompleted,
-			}, {
-				name:                "from suspended and completed",
-				fromState:           model.KeyLifeCycleSuspended,
-				fromProcessingState: model.KeyProcessingCompleted,
-			}, {
-				name:                "from deactivated and failed",
-				fromState:           model.KeyLifeCycleDeactivated,
-				fromProcessingState: model.KeyProcessingFailed,
-			},
-		}
-
-		for _, tt := range tts {
-			t.Run(tt.name, func(t *testing.T) {
-				// given
-				spy := &spyJobGroupPreparer{}
-				svc := keypb.NewKeyService(
-					config.RootConfig{},
-					storesql.NewTransactor(db),
-					keyStore,
-					spy,
-					nil,
-				)
-				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, tt.fromState, tt.fromProcessingState)
-
-				// when
-				res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
-					TenantId: tenant.ID,
-					Id:       key.ID,
-				})
-
-				// then
-				require.NoError(t, err)
-				require.NotNil(t, res)
-				assert.NotEmpty(t, res.GetJobGroupId())
-
-				// verify the key state was updated
-				updatedKey, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
-				require.NoError(t, err)
-				assert.Equal(t, model.KeyLifeCycleDeactivated, updatedKey.LifeCycleState)
-				assert.Equal(t, model.KeyProcessingPending, updatedKey.KeyProcessingState.Status)
-
-				// verify a job group was prepared with one job
-				require.Len(t, spy.groups, 1)
-				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
-				require.Len(t, spy.groups[0].Jobs, 1)
-				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
-				assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
-				assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
-			})
 		}
 	})
 

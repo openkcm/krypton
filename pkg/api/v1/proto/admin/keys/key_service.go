@@ -168,6 +168,8 @@ func (s *KeyService) DeactivateKey(ctx context.Context, req *DeactivateKeyReques
 						LifeCycleState: model.KeyLifeCycleSuspended,
 						Status: []model.KeyProcessingStatus{
 							model.KeyProcessingCompleted,
+							model.KeyProcessingPending,
+							model.KeyProcessingFailed,
 						},
 					},
 				},
