@@ -5,12 +5,16 @@ segment:
   end_kind: K1
 selector_labels:
   environment: production
-root_key:
-  allowed_providers:
-   - aes256gcm-staticsecret
-  vault:
-    name: credentials-vault
+byok:
+  key_material_vault: # when admin manages key material via kr byok import
+    name: root-key-material
     type: unsafe-sqlite-memory
+  providers:
+    allowed: 
+      - aws-kms
+    auth_vault: 
+      name: auth
+      type: unsafe-sqlite-memory
 key_bindings:
   K1:
     crypto:
