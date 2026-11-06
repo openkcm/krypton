@@ -24,6 +24,7 @@ const (
 	KeyService_ActivateKey_FullMethodName       = "/krypton.v1.admin.keys.KeyService/ActivateKey"
 	KeyService_DeactivateKey_FullMethodName     = "/krypton.v1.admin.keys.KeyService/DeactivateKey"
 	KeyService_SuspendKey_FullMethodName        = "/krypton.v1.admin.keys.KeyService/SuspendKey"
+	KeyService_CompromiseKey_FullMethodName     = "/krypton.v1.admin.keys.KeyService/CompromiseKey"
 	KeyService_GetKey_FullMethodName            = "/krypton.v1.admin.keys.KeyService/GetKey"
 	KeyService_GetParentKeys_FullMethodName     = "/krypton.v1.admin.keys.KeyService/GetParentKeys"
 	KeyService_GetDescendantKeys_FullMethodName = "/krypton.v1.admin.keys.KeyService/GetDescendantKeys"
@@ -38,6 +39,7 @@ type KeyServiceClient interface {
 	ActivateKey(ctx context.Context, in *ActivateKeyRequest, opts ...grpc.CallOption) (*ActivateKeyResponse, error)
 	DeactivateKey(ctx context.Context, in *DeactivateKeyRequest, opts ...grpc.CallOption) (*DeactivateKeyResponse, error)
 	SuspendKey(ctx context.Context, in *SuspendKeyRequest, opts ...grpc.CallOption) (*SuspendKeyResponse, error)
+	CompromiseKey(ctx context.Context, in *CompromiseKeyRequest, opts ...grpc.CallOption) (*CompromiseKeyResponse, error)
 	GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error)
 	GetParentKeys(ctx context.Context, in *GetParentKeysRequest, opts ...grpc.CallOption) (*GetParentKeysResponse, error)
 	GetDescendantKeys(ctx context.Context, in *GetDescendantKeysRequest, opts ...grpc.CallOption) (*GetDescendantKeysResponse, error)
@@ -92,6 +94,16 @@ func (c *keyServiceClient) SuspendKey(ctx context.Context, in *SuspendKeyRequest
 	return out, nil
 }
 
+func (c *keyServiceClient) CompromiseKey(ctx context.Context, in *CompromiseKeyRequest, opts ...grpc.CallOption) (*CompromiseKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompromiseKeyResponse)
+	err := c.cc.Invoke(ctx, KeyService_CompromiseKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *keyServiceClient) GetKey(ctx context.Context, in *GetKeyRequest, opts ...grpc.CallOption) (*GetKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetKeyResponse)
@@ -140,6 +152,7 @@ type KeyServiceServer interface {
 	ActivateKey(context.Context, *ActivateKeyRequest) (*ActivateKeyResponse, error)
 	DeactivateKey(context.Context, *DeactivateKeyRequest) (*DeactivateKeyResponse, error)
 	SuspendKey(context.Context, *SuspendKeyRequest) (*SuspendKeyResponse, error)
+	CompromiseKey(context.Context, *CompromiseKeyRequest) (*CompromiseKeyResponse, error)
 	GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error)
 	GetParentKeys(context.Context, *GetParentKeysRequest) (*GetParentKeysResponse, error)
 	GetDescendantKeys(context.Context, *GetDescendantKeysRequest) (*GetDescendantKeysResponse, error)
@@ -165,6 +178,9 @@ func (UnimplementedKeyServiceServer) DeactivateKey(context.Context, *DeactivateK
 }
 func (UnimplementedKeyServiceServer) SuspendKey(context.Context, *SuspendKeyRequest) (*SuspendKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SuspendKey not implemented")
+}
+func (UnimplementedKeyServiceServer) CompromiseKey(context.Context, *CompromiseKeyRequest) (*CompromiseKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompromiseKey not implemented")
 }
 func (UnimplementedKeyServiceServer) GetKey(context.Context, *GetKeyRequest) (*GetKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetKey not implemented")
@@ -271,6 +287,24 @@ func _KeyService_SuspendKey_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KeyService_CompromiseKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompromiseKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KeyServiceServer).CompromiseKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KeyService_CompromiseKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KeyServiceServer).CompromiseKey(ctx, req.(*CompromiseKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _KeyService_GetKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetKeyRequest)
 	if err := dec(in); err != nil {
@@ -365,6 +399,10 @@ var KeyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SuspendKey",
 			Handler:    _KeyService_SuspendKey_Handler,
+		},
+		{
+			MethodName: "CompromiseKey",
+			Handler:    _KeyService_CompromiseKey_Handler,
 		},
 		{
 			MethodName: "GetKey",

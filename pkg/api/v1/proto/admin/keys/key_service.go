@@ -243,6 +243,80 @@ func (s *KeyService) SuspendKey(ctx context.Context, req *SuspendKeyRequest) (*S
 	return &SuspendKeyResponse{JobGroupId: group.ID.String()}, nil
 }
 
+func (s *KeyService) CompromiseKey(ctx context.Context, req *CompromiseKeyRequest) (*CompromiseKeyResponse, error) {
+	tenantID := req.GetTenantId()
+	keyID := req.GetId()
+
+	if err := validator.ValidateKeyRequest(validator.KeyIdentifierInput{
+		TenantID: tenantID, KeyID: keyID,
+	}); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
+
+	var group orbital.JobGroup
+	err := store.ChainTransaction(ctx, s.transactor,
+		validator.ValidateTenant(tenantID),
+		func(ctx context.Context, stores store.Stores) error {
+			grp, err := orchestrator.ApplyKeyAction(ctx, stores, s.preparer, orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         keyID,
+				HandlerConfig: orchestrator.CompromiseHandlerConfig(),
+				KeyFilters: []orchestrator.KeyFilter{
+					{
+						LifeCycleState: model.KeyLifeCycleCompromised,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingFailed,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCyclePreActivation,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleActive,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleDeactivated,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingPending,
+							model.KeyProcessingFailed,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleSuspended,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingPending,
+							model.KeyProcessingFailed,
+						},
+					},
+				},
+				Cascading: req.GetCascading(),
+				BottomUp:  true,
+			})
+			if err != nil {
+				return err
+			}
+			group = grp
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, mappedOrInternal(err)
+	}
+	return &CompromiseKeyResponse{JobGroupId: group.ID.String()}, nil
+}
+
 func (s *KeyService) GetKey(ctx context.Context, req *GetKeyRequest) (*GetKeyResponse, error) {
 	key, err := s.keyStore.GetKeyByID(ctx, req.GetId(), req.GetTenantId())
 	if err != nil {
