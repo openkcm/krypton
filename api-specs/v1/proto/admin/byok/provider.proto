@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package krypton.v1.admin.byok;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/admin/byok";
+
+service ProviderService {
+  rpc Bind(BindRequest) returns (BindResponse);
+  rpc RotateProviderKey(RotateProviderKeyRequest) returns (RotateProviderKeyResponse);
+  rpc RotateAuth(RotateAuthRequest) returns (RotateAuthResponse);
+  rpc Unbind(UnbindRequest) returns (UnbindResponse);
+}
+
+message BindRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  Config config = 3;
+  Auth auth = 4;
+  ProviderKeyID provider_key_id = 5;
+}
+
+message BindResponse {}
+
+message RotateProviderKeyRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  ProviderKeyID provider_key_id = 3;
+}
+
+message RotateProviderKeyResponse {}
+
+message RotateAuthRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  Auth auth = 3;
+}
+
+message RotateAuthResponse {}
+
+message UnbindRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+}
+
+message UnbindResponse {}
+
+message Config {
+  oneof provider {
+    AwsKmsConfig aws_kms = 1;
+  }
+}
+
+message AwsKmsConfig {
+  string region = 1;
+}
+
+message Auth {
+  oneof provider {
+    AwsKmsAuth aws_kms = 1;
+  }
+}
+
+message AwsKmsAuth {
+  oneof credentials {
+    AwsRoleCredentials role = 1;
+    AwsStaticCredentials static = 2;
+  }
+}
+
+message AwsRoleCredentials {
+  string role_arn = 1;
+  string external_id = 2;
+}
+
+message AwsStaticCredentials {
+  string access_key_id = 1;
+  bytes secret_access_key = 2;
+  bytes session_token = 3;
+}
+
+message ProviderKeyID {
+  oneof provider {
+    AwsKmsKey aws_kms = 1;
+  }
+}
+
+message AwsKmsKey {
+  string key_arn = 1;
+}
