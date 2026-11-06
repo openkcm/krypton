@@ -37,9 +37,10 @@ import (
 )
 
 const (
-	AnnounceKey = "announce-key"
-	ActivateKey = "activate-key"
-	SuspendKey  = "suspend-key"
+	AnnounceKey   = "announce-key"
+	ActivateKey   = "activate-key"
+	SuspendKey    = "suspend-key"
+	DeactivateKey = "deactivate-key"
 )
 
 type (
@@ -67,6 +68,13 @@ func SuspendHandlerConfig() HandlerConfig {
 	return HandlerConfig{
 		handlerType: SuspendKey,
 		toState:     model.KeyLifeCycleSuspended,
+	}
+}
+
+func DeactivateHandlerConfig() HandlerConfig {
+	return HandlerConfig{
+		handlerType: DeactivateKey,
+		toState:     model.KeyLifeCycleDeactivated,
 	}
 }
 

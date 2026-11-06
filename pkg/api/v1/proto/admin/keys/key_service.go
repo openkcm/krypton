@@ -129,6 +129,67 @@ func (s *KeyService) ActivateKey(ctx context.Context, req *ActivateKeyRequest) (
 	return &ActivateKeyResponse{JobGroupId: group.ID.String()}, nil
 }
 
+func (s *KeyService) DeactivateKey(ctx context.Context, req *DeactivateKeyRequest) (*DeactivateKeyResponse, error) {
+	tenantID := req.GetTenantId()
+	keyID := req.GetId()
+
+	if err := validator.ValidateKeyRequest(validator.KeyIdentifierInput{
+		TenantID: tenantID, KeyID: keyID,
+	}); err != nil {
+		return nil, proto.ErrDetailsWithCode(
+			status.New(codes.InvalidArgument, err.Error()),
+			proto.Code_ERROR_CODE_ABORT,
+		)
+	}
+
+	var group orbital.JobGroup
+	err := store.ChainTransaction(ctx, s.transactor,
+		validator.ValidateTenant(tenantID),
+		func(ctx context.Context, stores store.Stores) error {
+			grp, err := orchestrator.ApplyKeyAction(ctx, stores, s.preparer, orchestrator.ApplyKeyActionRequest{
+				TenantID:      tenantID,
+				KeyID:         keyID,
+				HandlerConfig: orchestrator.DeactivateHandlerConfig(),
+				KeyFilters: []orchestrator.KeyFilter{
+					{
+						LifeCycleState: model.KeyLifeCycleDeactivated,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingFailed,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleActive,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+						},
+					},
+					{
+						LifeCycleState: model.KeyLifeCycleSuspended,
+						Status: []model.KeyProcessingStatus{
+							model.KeyProcessingCompleted,
+							model.KeyProcessingPending,
+							model.KeyProcessingFailed,
+						},
+					},
+				},
+				Cascading: req.GetCascading(),
+				BottomUp:  true,
+			})
+			if err != nil {
+				return err
+			}
+			group = grp
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, mappedOrInternal(err)
+	}
+
+	return &DeactivateKeyResponse{JobGroupId: group.ID.String()}, nil
+}
+
 func (s *KeyService) SuspendKey(ctx context.Context, req *SuspendKeyRequest) (*SuspendKeyResponse, error) {
 	tenantID := req.GetTenantId()
 	keyID := req.GetId()

@@ -1,0 +1,975 @@
+package keys_test
+
+import (
+	"errors"
+	"testing"
+	"uuid"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/openkcm/krypton/internal/config"
+	"github.com/openkcm/krypton/internal/orchestrator"
+	"github.com/openkcm/krypton/pkg/api/v1/proto"
+	keypb "github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
+	"github.com/openkcm/krypton/pkg/model"
+	storesql "github.com/openkcm/krypton/pkg/store/sql"
+)
+
+func TestDeactivateKey(t *testing.T) {
+	// given
+	ctx := t.Context()
+	db := createDatabase(t)
+	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
+	keyStore := storesql.NewKeyStore(db)
+	tenantStore := storesql.NewTenantStore(db)
+	svc := keypb.NewKeyService(
+		config.RootConfig{},
+		storesql.NewTransactor(db),
+		keyStore,
+		&noopJobGroupPreparer{},
+		nil,
+	)
+
+	t.Run("should return error if input is not valid", func(t *testing.T) {
+		// given
+		svc := keypb.NewKeyService(config.RootConfig{}, nil, nil, nil, nil)
+
+		tts := []struct {
+			name  string
+			input *keypb.DeactivateKeyRequest
+		}{
+			{
+				name:  "invalid uuid tenant id",
+				input: &keypb.DeactivateKeyRequest{TenantId: "invalid", Id: uuid.New().String()},
+			},
+			{
+				name:  "empty tenant id",
+				input: &keypb.DeactivateKeyRequest{TenantId: "", Id: uuid.New().String()},
+			},
+			{
+				name:  "invalid uuid key id",
+				input: &keypb.DeactivateKeyRequest{TenantId: uuid.New().String(), Id: "invalid"},
+			},
+			{
+				name:  "empty key id",
+				input: &keypb.DeactivateKeyRequest{TenantId: uuid.New().String(), Id: ""},
+			},
+			{
+				name:  "both tenant id and key id are invalid",
+				input: &keypb.DeactivateKeyRequest{TenantId: "not-a-uuid", Id: "also-not-a-uuid"},
+			},
+		}
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// when
+				res, err := svc.DeactivateKey(ctx, tt.input)
+
+				// then
+				require.Error(t, err)
+				assert.Nil(t, res)
+				assert.Equal(t, codes.InvalidArgument, status.Code(err))
+				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+			})
+		}
+	})
+
+	t.Run("should return error if tenant is not found", func(t *testing.T) {
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: uuid.New().String(),
+			Id:       uuid.New().String(),
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return error if key ID is not found", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       uuid.New().String(),
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.NotFound, status.Code(err), err)
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return error if key ID is not found for cascading", func(t *testing.T) {
+		// given
+		tenant := createTenant(t, tenantStore)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        uuid.New().String(),
+			Cascading: true,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.NotFound, status.Code(err), err)
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+	})
+
+	t.Run("should return error if key state transition is not valid", func(t *testing.T) {
+		tts := []struct {
+			name    string
+			state   model.KeyLifeCycleState
+			status  model.KeyProcessingStatus
+			expCode codes.Code
+		}{
+			{
+				name:    "preactive completed to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "preactive pending to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "preactive failed to deactivated",
+				state:   model.KeyLifeCyclePreActivation,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed completed to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed pending to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "destroyed failed to deactivated",
+				state:   model.KeyLifeCycleDestroyed,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised completed to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised pending to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "compromised failed to deactivated",
+				state:   model.KeyLifeCycleCompromised,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "active pending to deactivated",
+				state:   model.KeyLifeCycleActive,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "active failed to deactivated",
+				state:   model.KeyLifeCycleActive,
+				status:  model.KeyProcessingFailed,
+				expCode: codes.NotFound,
+			},
+			{
+				name:    "deactive completed to deactivated",
+				state:   model.KeyLifeCycleDeactivated,
+				status:  model.KeyProcessingCompleted,
+				expCode: codes.FailedPrecondition,
+			},
+			{
+				name:    "deactive pending to deactivated",
+				state:   model.KeyLifeCycleDeactivated,
+				status:  model.KeyProcessingPending,
+				expCode: codes.NotFound,
+			},
+		}
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// given
+				keyStore := storesql.NewKeyStore(db)
+				tenantStore := storesql.NewTenantStore(db)
+				svc := keypb.NewKeyService(
+					config.RootConfig{},
+					storesql.NewTransactor(db),
+					keyStore,
+					&noopJobGroupPreparer{},
+					nil,
+				)
+
+				tenant := createTenant(t, tenantStore)
+
+				// insert a key directly in a state that cannot transition to deactivate
+				key := newTestKey(
+					t,
+					keyStore,
+					tenant.ID,
+					"K0",
+					nil,
+					tt.state,
+					tt.status,
+				)
+
+				// when
+				res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+					TenantId: tenant.ID,
+					Id:       key.ID,
+				})
+
+				// then
+				require.Error(t, err)
+				assert.Nil(t, res)
+				assert.Equal(t, tt.expCode, status.Code(err))
+				assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+			})
+		}
+	})
+
+	t.Run("should deactivate key and create job group", func(t *testing.T) {
+		// given
+
+		tenant := createTenant(t, tenantStore)
+
+		tts := []struct {
+			name                string
+			fromState           model.KeyLifeCycleState
+			fromProcessingState model.KeyProcessingStatus
+		}{
+			{
+				name:                "from active and completed",
+				fromState:           model.KeyLifeCycleActive,
+				fromProcessingState: model.KeyProcessingCompleted,
+			},
+			{
+				name:                "from suspended and completed",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingCompleted,
+			},
+			{
+				name:                "from suspended and failed",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingFailed,
+			},
+			{
+				name:                "from suspended and pending",
+				fromState:           model.KeyLifeCycleSuspended,
+				fromProcessingState: model.KeyProcessingPending,
+			},
+			{
+				name:                "from deactivated and failed",
+				fromState:           model.KeyLifeCycleDeactivated,
+				fromProcessingState: model.KeyProcessingFailed,
+			},
+		}
+
+		for _, tt := range tts {
+			t.Run(tt.name, func(t *testing.T) {
+				// given
+				spy := &spyJobGroupPreparer{}
+				svc := keypb.NewKeyService(
+					config.RootConfig{},
+					storesql.NewTransactor(db),
+					keyStore,
+					spy,
+					nil,
+				)
+				key := newTestKey(t, keyStore, tenant.ID, "K0", nil, tt.fromState, tt.fromProcessingState)
+
+				// when
+				res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+					TenantId: tenant.ID,
+					Id:       key.ID,
+				})
+
+				// then
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				assert.NotEmpty(t, res.GetJobGroupId())
+
+				// verify the key state was updated
+				updatedKey, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+				require.NoError(t, err)
+				assert.Equal(t, model.KeyLifeCycleDeactivated, updatedKey.LifeCycleState)
+				assert.Equal(t, model.KeyProcessingPending, updatedKey.KeyProcessingState.Status)
+
+				// verify a job group was prepared with one job
+				require.Len(t, spy.groups, 1)
+				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+				require.Len(t, spy.groups[0].Jobs, 1)
+				assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+				assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, key.ID)
+				assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
+			})
+		}
+	})
+	t.Run("should return error if UpdateKeyStates fails", func(t *testing.T) {
+		// given
+		errInjected := errors.New("injected update-key-states failure")
+		transactor := &failingKeyTx{
+			Transactor: storesql.NewTransactor(db),
+			err:        errInjected,
+		}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			transactor,
+			keyStore,
+			&noopJobGroupPreparer{},
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// create a root key in active + completed so it passes
+		// all validators and the selector, reaching UpdateKeyStates
+		key := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       key.ID,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
+	})
+
+	t.Run("should return error if PrepareJobGroup fails", func(t *testing.T) {
+		// given
+		errInjected := errors.New("injected preparer failure")
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			&spyJobGroupPreparer{err: errInjected},
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// create a root key in active + completed so it passes
+		// all validators, the selector, and UpdateKeyStates, reaching PrepareJobGroup
+		key := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       key.ID,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_RETRY, err)
+	})
+
+	t.Run("should return error if key is already deactivated and completed", func(t *testing.T) {
+		// given — key is already deactivated + completed; no transition needed.
+		tenant := createTenant(t, tenantStore)
+		key := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleDeactivated,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       key.ID,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+
+		// verify the key state was not modified
+		unchanged, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, unchanged.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchanged.KeyProcessingState.Status)
+	})
+
+	t.Run("should skip already deactivated root and deactivate children with cascading", func(t *testing.T) {
+		// given — root is already deactivated + completed, child is active + completed.
+		//
+		//   K0 (deactivated + completed) ← skipped (already in target state)
+		//     └── K1 (active + completed) ← can be deactivated
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+		root := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleDeactivated,
+			model.KeyProcessingCompleted,
+		)
+		rootID := root.ID
+		child := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K1",
+			&rootID,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        root.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify root was not modified (already deactivated + completed)
+		unchangedRoot, err := keyStore.GetKeyByID(ctx, root.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, unchangedRoot.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedRoot.KeyProcessingState.Status)
+
+		// verify child was deactivated
+		updatedChild, err := keyStore.GetKeyByID(ctx, child.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedChild.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedChild.KeyProcessingState.Status)
+
+		// verify 1 job was created (child only, root skipped)
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, child.ID)
+		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
+	})
+
+	t.Run("should exclude root with invalid transition and cascade exclude children", func(t *testing.T) {
+		// given — root is preactive (cannot transition to deactivated),
+		// child is active + completed (would be deactivated on its own).
+		// Because the parent is excluded, the child is also excluded.
+		//
+		//   K0 (preactive + completed) ← excluded (preactive → deactive is invalid)
+		//     └── K1 (active + completed) ← excluded (parent excluded)
+		tenant := createTenant(t, tenantStore)
+		root := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCyclePreActivation,
+			model.KeyProcessingCompleted,
+		)
+		rootID := root.ID
+		child := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K1",
+			&rootID,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        root.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+
+		// verify neither key was modified
+		unchangedRoot, err := keyStore.GetKeyByID(ctx, root.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, unchangedRoot.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedRoot.KeyProcessingState.Status)
+
+		unchangedChild, err := keyStore.GetKeyByID(ctx, child.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleActive, unchangedChild.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedChild.KeyProcessingState.Status)
+	})
+
+	t.Run("should deactivate valid branch and ignore invalid branch with cascading", func(t *testing.T) {
+		// given — root with two branches:
+		//
+		//              K0 (active + completed)             ← deactivateable
+		//              /                               \
+		//   K1a (deactivated + failed)     K1b (preactive + completed)
+		//        |                                      |
+		//   K2a (suspended + completed)     K2b (active + completed)
+		//
+		// Branch A (K1a, K2a): fully deactivatable.
+		// Branch B: K1b is preactive (cannot transition to deactivate),
+		//   so K1b and K2b are excluded via cascading parent exclusion.
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// layer 0: root
+		k0 := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+		k0ID := k0.ID
+
+		// layer 1: two branches
+		k1a := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleDeactivated, model.KeyProcessingFailed)
+		k1b := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+		k1aID := k1a.ID
+		k1bID := k1b.ID
+
+		// layer 2: grandchildren
+		k2a := newTestKey(t, keyStore, tenant.ID, "K2", &k1aID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
+		k2b := newTestKey(t, keyStore, tenant.ID, "K2", &k1bID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify branch A was deactivated (K0, K1a, K2a)
+		updatedK0, err := keyStore.GetKeyByID(ctx, k0.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK0.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK0.KeyProcessingState.Status)
+
+		updatedK1a, err := keyStore.GetKeyByID(ctx, k1a.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK1a.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK1a.KeyProcessingState.Status)
+
+		updatedK2a, err := keyStore.GetKeyByID(ctx, k2a.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK2a.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK2a.KeyProcessingState.Status)
+
+		// verify branch B was not modified (K1b, K2b)
+		unchangedK1b, err := keyStore.GetKeyByID(ctx, k1b.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, unchangedK1b.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedK1b.KeyProcessingState.Status)
+
+		unchangedK2b, err := keyStore.GetKeyByID(ctx, k2b.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleActive, unchangedK2b.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedK2b.KeyProcessingState.Status)
+
+		// verify 3 jobs: layer 0 (K0), layer 1 (K1a only), layer 2 (K2a only)
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 3)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[1].Type)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[2].Type)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k2a.ID)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k1a.ID)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[2].Data, k0.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
+	})
+
+	t.Run("should deactivate 2 layers out of 3 and create 2 jobs", func(t *testing.T) {
+		// given
+		//   K0 (active + completed) ← deactivateable
+		//     └── K1 (suspended + completed) ← deactivateable
+		//           └── K2 (preactive + completed) ← excluded (cannot transition to deactivated)
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// layer 0: root key
+		k0 := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+
+		// layer 1: child key
+		k0ID := k0.ID
+		k1 := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
+
+		// layer 2: grandchild key — preactive, cannot transition to deactivated
+		k1ID := k1.ID
+		k2 := newTestKey(t, keyStore, tenant.ID, "K2", &k1ID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
+
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify K0 and K1 are deactivated
+		updatedK0, err := keyStore.GetKeyByID(ctx, k0.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK0.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK0.KeyProcessingState.Status)
+
+		updatedK1, err := keyStore.GetKeyByID(ctx, k1.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK1.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK1.KeyProcessingState.Status)
+
+		// verify K2 was not deactivated (still preactive)
+		updatedK2, err := keyStore.GetKeyByID(ctx, k2.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCyclePreActivation, updatedK2.LifeCycleState)
+
+		// verify 2 jobs were created (one per deactivable layer)
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 2)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[1].Type)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k1.ID)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k0.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
+	})
+
+	t.Run("should ignore deactivated and completed keys in the tree path", func(t *testing.T) {
+		// given
+		//   K0 (active + completed) ← deactivateable
+		//     └── K1 (deactive + completed) ← should ignore this
+		//           └── K2 (suspended + completed) ← should not ignore this
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// layer 0: root key
+		k0 := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+
+		// layer 1: child key
+		k0ID := k0.ID
+		k1 := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
+
+		// layer 2: grandchild key — suspended, can transition to deactivated
+		k1ID := k1.ID
+		k2 := newTestKey(t, keyStore, tenant.ID, "K2", &k1ID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
+
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify K0 and K1 are deactivated
+		updatedK0, err := keyStore.GetKeyByID(ctx, k0.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK0.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK0.KeyProcessingState.Status)
+
+		updatedK1, err := keyStore.GetKeyByID(ctx, k1.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK1.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, updatedK1.KeyProcessingState.Status)
+
+		// verify K2 was deactivated
+		updatedK2, err := keyStore.GetKeyByID(ctx, k2.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedK2.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedK2.KeyProcessingState.Status)
+
+		// verify 2 jobs were created (one per deactivable layer)
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 2)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[0].Type)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Jobs[1].Type)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k2.ID)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k0.ID)
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
+	})
+
+	t.Run("should return error if all descendants are already deactivated and completed with cascading", func(t *testing.T) {
+		// given — entire tree is already at the target state (deactivated + completed).
+		// All keys are skipped during iteration → ErrNoEligibleKeys → FailedPrecondition.
+		//
+		//   K0 (deactivated + completed) ← skipped
+		//     └── K1 (deactivated + completed) ← skipped
+		tenant := createTenant(t, tenantStore)
+		root := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleDeactivated,
+			model.KeyProcessingCompleted,
+		)
+		rootID := root.ID
+		child := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K1",
+			&rootID,
+			model.KeyLifeCycleDeactivated,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        root.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.Error(t, err)
+		assert.Nil(t, res)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+		assertErrorDetails(t, proto.Code_ERROR_CODE_ABORT, err)
+
+		// verify neither key was modified
+		unchangedRoot, err := keyStore.GetKeyByID(ctx, root.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, unchangedRoot.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedRoot.KeyProcessingState.Status)
+
+		unchangedChild, err := keyStore.GetKeyByID(ctx, child.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, unchangedChild.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedChild.KeyProcessingState.Status)
+	})
+
+	t.Run("should not deactivate children when cascading is false", func(t *testing.T) {
+		// given — root is active + completed, child is active + completed.
+		// Only the root should be deactivated; the child must remain untouched.
+		//
+		//   K0 (active + completed) ← deactivated
+		//     └── K1 (active + completed) ← should remain active
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+		root := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K0",
+			nil,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+		rootID := root.ID
+		child := newTestKey(
+			t,
+			keyStore,
+			tenant.ID,
+			"K1",
+			&rootID,
+			model.KeyLifeCycleActive,
+			model.KeyProcessingCompleted,
+		)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId: tenant.ID,
+			Id:       root.ID,
+			// Cascading is false (default)
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify root was deactivated
+		updatedRoot, err := keyStore.GetKeyByID(ctx, root.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleDeactivated, updatedRoot.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingPending, updatedRoot.KeyProcessingState.Status)
+
+		// verify child was NOT deactivated
+		unchangedChild, err := keyStore.GetKeyByID(ctx, child.ID, tenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, model.KeyLifeCycleActive, unchangedChild.LifeCycleState)
+		assert.Equal(t, model.KeyProcessingCompleted, unchangedChild.KeyProcessingState.Status)
+
+		// verify only 1 job was created for the root
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 1)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, root.ID)
+		assertJobDataTenantID(t, spy.groups[0].Jobs[0].Data, tenant.ID)
+	})
+
+	t.Run("should deactivate multiple siblings in same layer into a single job with cascading", func(t *testing.T) {
+		// given — root with three eligible children at the same layer.
+		// All children should appear in a single job; root in another.
+		//
+		//            K0 (active + completed)
+		//          /          |            \
+		//   K1a (active)  K1b (suspended)  K1c (active)   ← all completed, all eligible
+		//
+		// Bottom-up: job[0] = [K1a, K1b, K1c], job[1] = [K0]
+		spy := &spyJobGroupPreparer{}
+		svc := keypb.NewKeyService(
+			config.RootConfig{},
+			storesql.NewTransactor(db),
+			keyStore,
+			spy,
+			nil,
+		)
+
+		tenant := createTenant(t, tenantStore)
+
+		// layer 0: root
+		k0 := newTestKey(t, keyStore, tenant.ID, "K0", nil, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+		k0ID := k0.ID
+
+		// layer 1: three siblings
+		k1a := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+		k1b := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
+		k1c := newTestKey(t, keyStore, tenant.ID, "K1", &k0ID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
+
+		// when
+		res, err := svc.DeactivateKey(ctx, &keypb.DeactivateKeyRequest{
+			TenantId:  tenant.ID,
+			Id:        k0.ID,
+			Cascading: true,
+		})
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.GetJobGroupId())
+
+		// verify all keys were deactivated
+		for _, key := range []model.Key{k0, k1a, k1b, k1c} {
+			updated, err := keyStore.GetKeyByID(ctx, key.ID, tenant.ID)
+			require.NoError(t, err)
+			assert.Equal(t, model.KeyLifeCycleDeactivated, updated.LifeCycleState, "key %s should be deactivated", key.ID)
+			assert.Equal(t, model.KeyProcessingPending, updated.KeyProcessingState.Status, "key %s should be pending", key.ID)
+		}
+
+		// verify 2 jobs: job[0] = siblings (bottom-up), job[1] = root
+		require.Len(t, spy.groups, 1)
+		assert.Equal(t, orchestrator.DeactivateKey, spy.groups[0].Type)
+		require.Len(t, spy.groups[0].Jobs, 2)
+
+		// job[0] should contain all three siblings (order-independent)
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[0].Data, k1a.ID, k1b.ID, k1c.ID)
+
+		// job[1] should contain the root
+		assertJobDataContainsKeys(t, spy.groups[0].Jobs[1].Data, k0.ID)
+
+		for _, job := range spy.groups[0].Jobs {
+			assertJobDataTenantID(t, job.Data, tenant.ID)
+		}
+	})
+}
