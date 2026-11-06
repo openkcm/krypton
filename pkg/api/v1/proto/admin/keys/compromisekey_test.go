@@ -237,16 +237,6 @@ func TestCompromise(t *testing.T) {
 				fromProcessingState: model.KeyProcessingCompleted,
 			},
 			{
-				name:                "from active and pending",
-				fromState:           model.KeyLifeCycleActive,
-				fromProcessingState: model.KeyProcessingPending,
-			},
-			{
-				name:                "from active and failed",
-				fromState:           model.KeyLifeCycleActive,
-				fromProcessingState: model.KeyProcessingFailed,
-			},
-			{
 				name:                "from deactive and completed",
 				fromState:           model.KeyLifeCycleDeactivated,
 				fromProcessingState: model.KeyProcessingCompleted,

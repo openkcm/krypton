@@ -282,8 +282,6 @@ func (s *KeyService) CompromiseKey(ctx context.Context, req *CompromiseKeyReques
 						LifeCycleState: model.KeyLifeCycleActive,
 						Status: []model.KeyProcessingStatus{
 							model.KeyProcessingCompleted,
-							model.KeyProcessingPending,
-							model.KeyProcessingFailed,
 						},
 					},
 					{
