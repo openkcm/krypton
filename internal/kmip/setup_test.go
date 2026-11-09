@@ -181,12 +181,12 @@ func (env *testEnv) seedSecret(t *testing.T, material []byte) {
 
 	v, err := sqlitevault.NewUnsafe(ctx, "seed-vault", sqlitevault.FileSource(env.vaultPath))
 	require.NoError(t, err, "open seed vault")
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    env.tenantID,
-		KeyID:       env.keyID,
-		KeyVersion:  1,
-		KeyRevision: 0,
-		KeyMaterial: sealed.Ciphertext,
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: env.tenantID,
+		ID:       env.keyID,
+		Version:  1,
+		Revision: 0,
+		Secret:   sealed.Ciphertext,
 	})
 	require.NoError(t, err, "import seed material")
 }

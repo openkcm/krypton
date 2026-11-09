@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
@@ -14,7 +15,8 @@ import (
 func newTestUnsafeVault(t *testing.T) *sqlitevault.Unsafe {
 	t.Helper()
 	v, err := sqlitevault.NewUnsafe(t.Context(), "test", sqlitevault.MemorySource)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	require.NotNil(t, v)
 	t.Cleanup(func() {
 		_ = v.Close()
 	})
@@ -23,8 +25,8 @@ func newTestUnsafeVault(t *testing.T) *sqlitevault.Unsafe {
 
 func newTestSecureData(t *testing.T, data []byte) *securemem.Data {
 	t.Helper()
-	d, err := securemem.NewData("test-key", len(data))
-	assert.NoError(t, err)
+	d, err := securemem.NewData("test-secret", len(data))
+	require.NoError(t, err)
 	copy(d.SecureBytes(), data)
 	t.Cleanup(func() {
 		_ = d.Destroy()
@@ -32,157 +34,157 @@ func newTestSecureData(t *testing.T, data []byte) *securemem.Data {
 	return d
 }
 
-func TestUnsafe_ImportAndExportKey(t *testing.T) {
+func TestUnsafe_ImportAndExportSecret(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
-	keyBytes := []byte("this-is-a-32-byte-test-key-mat!")
-	aad := []byte("additional-authenticated-data")
+	secretBytes := []byte("this-is-a-test-secret")
+	metadata := []byte("metadata")
 
 	// when
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyMaterial: newTestSecureData(t, keyBytes),
-		AAD:         aad,
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Secret:   newTestSecureData(t, secretBytes),
+		Metadata: metadata,
 	})
 
 	// then
 	assert.NoError(t, err)
 
 	// when
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, keyBytes, []byte(resp.KeyMaterial.SecureBytes()))
-	assert.Equal(t, aad, resp.AAD)
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, secretBytes, []byte(resp.Secret.SecureBytes()))
+	assert.Equal(t, metadata, resp.Metadata)
+	_ = resp.Secret.Destroy()
 }
 
-func TestUnsafe_ImportKeyErrors(t *testing.T) {
+func TestUnsafe_ImportSecretErrors(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Secret:   newTestSecureData(t, []byte("secret")),
 	})
 	assert.NoError(t, err)
 
 	tests := []struct {
 		name string
-		req  vault.ImportKeyRequest
+		req  vault.ImportSecretRequest
 	}{
 		{
 			name: "empty tenant ID",
-			req: vault.ImportKeyRequest{
-				TenantID:    "",
-				KeyID:       "key-1",
-				KeyVersion:  1,
-				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
+			req: vault.ImportSecretRequest{
+				TenantID: "",
+				ID:       "secret-1",
+				Version:  1,
+				Secret:   newTestSecureData(t, []byte("secret")),
 			},
 		},
 		{
-			name: "empty key ID",
-			req: vault.ImportKeyRequest{
-				TenantID:    "tenant-1",
-				KeyID:       "",
-				KeyVersion:  1,
-				KeyMaterial: newTestSecureData(t, []byte("key-material-32-bytes-padding!!")),
+			name: "empty secret ID",
+			req: vault.ImportSecretRequest{
+				TenantID: "tenant-1",
+				ID:       "",
+				Version:  1,
+				Secret:   newTestSecureData(t, []byte("secret")),
 			},
 		},
 		{
-			name: "nil key material",
-			req: vault.ImportKeyRequest{
-				TenantID:   "tenant-1",
-				KeyID:      "key-2",
-				KeyVersion: 1,
+			name: "nil secret",
+			req: vault.ImportSecretRequest{
+				TenantID: "tenant-1",
+				ID:       "secret-2",
+				Version:  1,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := v.ImportKey(ctx, tt.req)
+			_, err := v.ImportSecret(ctx, tt.req)
 			assert.Error(t, err)
 		})
 	}
 }
 
-func TestUnsafe_ImportDuplicateKey(t *testing.T) {
+func TestUnsafe_ImportDuplicateSecret(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	keyMaterial1 := newTestSecureData(t, []byte("key-material-1"))
-	keyMaterial2 := newTestSecureData(t, []byte("key-material-2"))
-	aad1 := []byte("aad-1")
-	aad2 := []byte("aad-2")
+	secret1 := newTestSecureData(t, []byte("secret-1"))
+	secret2 := newTestSecureData(t, []byte("secret-2"))
+	metadata1 := []byte("metadata-1")
+	metadata2 := []byte("metadata-2")
 
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
-		KeyMaterial: keyMaterial1,
-		AAD:         aad1,
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
+		Secret:   secret1,
+		Metadata: metadata1,
 	})
 	assert.NoError(t, err)
 
-	key1, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
+	exported1, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
 	})
 	assert.NoError(t, err)
 	t.Cleanup(func() {
-		_ = key1.KeyMaterial.Destroy()
+		_ = exported1.Secret.Destroy()
 	})
 
-	// when - import the same key again
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
-		KeyMaterial: keyMaterial2,
-		AAD:         aad2,
+	// when - import the same secret again
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
+		Secret:   secret2,
+		Metadata: metadata2,
 	})
-	assert.NoError(t, err) // In this unsafe implementation, importing a duplicate key overwrites the existing one without error.
+	assert.NoError(t, err) // In this unsafe implementation, importing a duplicate secret overwrites the existing one.
 
-	key2, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
+	exported2, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
 	})
 
 	// then
 	assert.NoError(t, err)
 
 	t.Cleanup(func() {
-		_ = key2.KeyMaterial.Destroy()
+		_ = exported2.Secret.Destroy()
 	})
 
-	assert.NotEqual(t, key1.KeyMaterial.SecureBytes(), key2.KeyMaterial.SecureBytes())
-	assert.Equal(t, keyMaterial1.SecureBytes(), key1.KeyMaterial.SecureBytes())
-	assert.Equal(t, keyMaterial2.SecureBytes(), key2.KeyMaterial.SecureBytes())
-	assert.NotEqual(t, key1.AAD, key2.AAD)
-	assert.Equal(t, aad1, key1.AAD)
-	assert.Equal(t, aad2, key2.AAD)
+	assert.NotEqual(t, exported1.Secret.SecureBytes(), exported2.Secret.SecureBytes())
+	assert.Equal(t, secret1.SecureBytes(), exported1.Secret.SecureBytes())
+	assert.Equal(t, secret2.SecureBytes(), exported2.Secret.SecureBytes())
+	assert.NotEqual(t, exported1.Metadata, exported2.Metadata)
+	assert.Equal(t, metadata1, exported1.Metadata)
+	assert.Equal(t, metadata2, exported2.Metadata)
 }
 
-func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {
+func TestUnsafe_ExportSecretLatestVersion(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
@@ -191,143 +193,143 @@ func TestUnsafe_ExportKeyLatestVersion(t *testing.T) {
 		version int
 		data    []byte
 	}{
-		{1, []byte("key-material-version-1-padding!")},
-		{2, []byte("key-material-version-2-padding!")},
-		{3, []byte("key-material-version-3-padding!")},
+		{1, []byte("secret-version-1")},
+		{2, []byte("secret-version-2")},
+		{3, []byte("secret-version-3")},
 	}
 
 	for _, ver := range versions {
-		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    "tenant-1",
-			KeyID:       "key-1",
-			KeyVersion:  ver.version,
-			KeyMaterial: newTestSecureData(t, ver.data),
-			AAD:         []byte("aad"),
+		_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: "tenant-1",
+			ID:       "secret-1",
+			Version:  ver.version,
+			Secret:   newTestSecureData(t, ver.data),
+			Metadata: []byte("metadata"),
 		})
 		assert.NoError(t, err)
 	}
 
 	// when
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: versions[2].version,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  versions[2].version,
 	})
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, versions[2].data, []byte(resp.KeyMaterial.SecureBytes()))
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, versions[2].data, []byte(resp.Secret.SecureBytes()))
+	_ = resp.Secret.Destroy()
 }
 
-func TestUnsafe_ExportKeySpecificVersion(t *testing.T) {
+func TestUnsafe_ExportSecretSpecificVersion(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	v1Data := []byte("key-material-version-1-padding!")
-	v2Data := []byte("key-material-version-2-padding!")
+	v1Data := []byte("secret-version-1")
+	v2Data := []byte("secret-version-2")
 
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyMaterial: newTestSecureData(t, v1Data),
-		AAD:         []byte("aad-v1"),
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Secret:   newTestSecureData(t, v1Data),
+		Metadata: []byte("metadata-v1"),
 	})
 	assert.NoError(t, err)
 
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  2,
-		KeyMaterial: newTestSecureData(t, v2Data),
-		AAD:         []byte("aad-v2"),
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  2,
+		Secret:   newTestSecureData(t, v2Data),
+		Metadata: []byte("metadata-v2"),
 	})
 	assert.NoError(t, err)
 
 	// when
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, v1Data, []byte(resp.KeyMaterial.SecureBytes()))
-	assert.Equal(t, []byte("aad-v1"), resp.AAD)
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, v1Data, []byte(resp.Secret.SecureBytes()))
+	assert.Equal(t, []byte("metadata-v1"), resp.Metadata)
+	_ = resp.Secret.Destroy()
 }
 
-func TestUnsafe_ExportKeyNotFound(t *testing.T) {
+func TestUnsafe_ExportSecretNotFound(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
 	// when
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
 
 	// then
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+	assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	assert.Nil(t, resp)
 }
 
-func TestUnsafe_DestroyKey(t *testing.T) {
+func TestUnsafe_DestroySecret(t *testing.T) {
 	// given
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	v1Data := []byte("key-material-version-1-padding!")
-	v2Data := []byte("key-material-version-2-padding!")
+	v1Data := []byte("secret-version-1")
+	v2Data := []byte("secret-version-2")
 
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyMaterial: newTestSecureData(t, v1Data),
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Secret:   newTestSecureData(t, v1Data),
 	})
 	assert.NoError(t, err)
 
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  2,
-		KeyMaterial: newTestSecureData(t, v2Data),
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  2,
+		Secret:   newTestSecureData(t, v2Data),
 	})
 	assert.NoError(t, err)
 
 	// when
-	_, err = v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	_, err = v.DestroySecret(ctx, vault.DestroySecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
 
 	// then
 	assert.NoError(t, err)
 
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+	assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	assert.Nil(t, resp)
 
 	// v2 should still exist
-	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 2,
+	resp, err = v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  2,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, v2Data, []byte(resp.KeyMaterial.SecureBytes()))
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, v2Data, []byte(resp.Secret.SecureBytes()))
+	_ = resp.Secret.Destroy()
 }
 
 func TestUnsafe_RevisionCoexistence(t *testing.T) {
@@ -335,86 +337,86 @@ func TestUnsafe_RevisionCoexistence(t *testing.T) {
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	rev0Data := []byte("key-material-revision-0-padded!")
-	rev1Data := []byte("key-material-revision-1-padded!")
+	rev0Data := []byte("secret-revision-0")
+	rev1Data := []byte("secret-revision-1")
 
-	_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 0,
-		KeyMaterial: newTestSecureData(t, rev0Data),
-		AAD:         []byte("aad-rev-0"),
+	_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 0,
+		Secret:   newTestSecureData(t, rev0Data),
+		Metadata: []byte("metadata-rev-0"),
 	})
 	assert.NoError(t, err)
 
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
-		KeyMaterial: newTestSecureData(t, rev1Data),
-		AAD:         []byte("aad-rev-1"),
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
+		Secret:   newTestSecureData(t, rev1Data),
+		Metadata: []byte("metadata-rev-1"),
 	})
 	assert.NoError(t, err)
 
 	// when - export revision 0
-	resp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 0,
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 0,
 	})
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, rev0Data, []byte(resp.KeyMaterial.SecureBytes()))
-	assert.Equal(t, []byte("aad-rev-0"), resp.AAD)
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, rev0Data, []byte(resp.Secret.SecureBytes()))
+	assert.Equal(t, []byte("metadata-rev-0"), resp.Metadata)
+	_ = resp.Secret.Destroy()
 
 	// when - export revision 1
-	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
+	resp, err = v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
 	})
 
 	// then
 	assert.NoError(t, err)
-	assert.Equal(t, rev1Data, []byte(resp.KeyMaterial.SecureBytes()))
-	assert.Equal(t, []byte("aad-rev-1"), resp.AAD)
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, rev1Data, []byte(resp.Secret.SecureBytes()))
+	assert.Equal(t, []byte("metadata-rev-1"), resp.Metadata)
+	_ = resp.Secret.Destroy()
 
 	// when - destroy revision 0 only
-	_, err = v.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 0,
+	_, err = v.DestroySecret(ctx, vault.DestroySecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 0,
 	})
 	assert.NoError(t, err)
 
 	// then - revision 0 is gone
-	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 0,
+	resp, err = v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 0,
 	})
-	assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+	assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	assert.Nil(t, resp)
 
 	// then - revision 1 still exists
-	resp, err = v.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyRevision: 1,
+	resp, err = v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Revision: 1,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, rev1Data, []byte(resp.KeyMaterial.SecureBytes()))
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, rev1Data, []byte(resp.Secret.SecureBytes()))
+	_ = resp.Secret.Destroy()
 }
 
 func TestUnsafe_Info(t *testing.T) {
@@ -434,7 +436,7 @@ func TestUnsafe_Info(t *testing.T) {
 		// given
 		dbPath := filepath.Join(t.TempDir(), "test.db")
 		v, err := sqlitevault.NewUnsafe(t.Context(), "file-vault", sqlitevault.FileSource(dbPath))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		t.Cleanup(func() {
 			_ = v.Close()
 		})
@@ -452,39 +454,39 @@ func TestUnsafe_FileSourcePersistence(t *testing.T) {
 	// given
 	dbPath := filepath.Join(t.TempDir(), "persistent.db")
 	ctx := t.Context()
-	keyBytes := []byte("persistent-key-material-32byte!")
-	aad := []byte("persistent-aad")
+	secretBytes := []byte("persistent-secret")
+	metadata := []byte("persistent-metadata")
 
 	v, err := sqlitevault.NewUnsafe(ctx, "persist-test", sqlitevault.FileSource(dbPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    "tenant-1",
-		KeyID:       "key-1",
-		KeyVersion:  1,
-		KeyMaterial: newTestSecureData(t, keyBytes),
-		AAD:         aad,
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
+		Secret:   newTestSecureData(t, secretBytes),
+		Metadata: metadata,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NoError(t, v.Close())
 
 	// when - reopen the same file source
 	v2, err := sqlitevault.NewUnsafe(ctx, "persist-test", sqlitevault.FileSource(dbPath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = v2.Close()
 	})
 
 	// then
-	resp, err := v2.ExportKey(ctx, vault.ExportKeyRequest{
-		TenantID:   "tenant-1",
-		KeyID:      "key-1",
-		KeyVersion: 1,
+	resp, err := v2.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: "tenant-1",
+		ID:       "secret-1",
+		Version:  1,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, keyBytes, []byte(resp.KeyMaterial.SecureBytes()))
-	assert.Equal(t, aad, resp.AAD)
-	_ = resp.KeyMaterial.Destroy()
+	assert.Equal(t, secretBytes, []byte(resp.Secret.SecureBytes()))
+	assert.Equal(t, metadata, resp.Metadata)
+	_ = resp.Secret.Destroy()
 }
 
 func TestPrepareTenant(t *testing.T) {
@@ -508,13 +510,13 @@ func TestDestroyTenant(t *testing.T) {
 	v := newTestUnsafeVault(t)
 	ctx := t.Context()
 
-	t.Run("destroy tenant with keys", func(t *testing.T) {
+	t.Run("destroy tenant with secrets", func(t *testing.T) {
 		// given
-		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    "tenant-1",
-			KeyID:       "key-1",
-			KeyVersion:  1,
-			KeyMaterial: newTestSecureData(t, []byte("key-material")),
+		_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: "tenant-1",
+			ID:       "secret-1",
+			Version:  1,
+			Secret:   newTestSecureData(t, []byte("secret")),
 		})
 		assert.NoError(t, err)
 
@@ -527,17 +529,17 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
 
-		// verify keys are deleted
-		exportResp, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: 1,
+		// verify secrets are deleted
+		exportResp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: "tenant-1",
+			ID:       "secret-1",
+			Version:  1,
 		})
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, exportResp)
 	})
 
-	t.Run("destroy tenant without keys", func(t *testing.T) {
+	t.Run("destroy tenant without secrets", func(t *testing.T) {
 		// when
 		resp, err := v.DestroyTenant(ctx, vault.DestroyTenantRequest{
 			TenantID: "tenant-2",
@@ -548,21 +550,21 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
-	t.Run("should destroy only keys of the specified tenant", func(t *testing.T) {
+	t.Run("should destroy only secrets of the specified tenant", func(t *testing.T) {
 		// given
-		_, err := v.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    "tenant-1",
-			KeyID:       "key-1",
-			KeyVersion:  1,
-			KeyMaterial: newTestSecureData(t, []byte("key-material-1")),
+		_, err := v.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: "tenant-1",
+			ID:       "secret-1",
+			Version:  1,
+			Secret:   newTestSecureData(t, []byte("secret-1")),
 		})
 		assert.NoError(t, err)
 
-		_, err = v.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    "tenant-2",
-			KeyID:       "key-2",
-			KeyVersion:  1,
-			KeyMaterial: newTestSecureData(t, []byte("key-material-2")),
+		_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: "tenant-2",
+			ID:       "secret-2",
+			Version:  1,
+			Secret:   newTestSecureData(t, []byte("secret-2")),
 		})
 		assert.NoError(t, err)
 
@@ -575,23 +577,23 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
 
-		// verify keys of tenant-1 are deleted
-		exportResp1, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   "tenant-1",
-			KeyID:      "key-1",
-			KeyVersion: 1,
+		// verify secrets of tenant-1 are deleted
+		exportResp1, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: "tenant-1",
+			ID:       "secret-1",
+			Version:  1,
 		})
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, exportResp1)
 
-		// verify keys of tenant-2 still exist
-		exportResp2, err := v.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   "tenant-2",
-			KeyID:      "key-2",
-			KeyVersion: 1,
+		// verify secrets of tenant-2 still exist
+		exportResp2, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: "tenant-2",
+			ID:       "secret-2",
+			Version:  1,
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, []byte("key-material-2"), []byte(exportResp2.KeyMaterial.SecureBytes()))
-		_ = exportResp2.KeyMaterial.Destroy()
+		assert.Equal(t, []byte("secret-2"), []byte(exportResp2.Secret.SecureBytes()))
+		_ = exportResp2.Secret.Destroy()
 	})
 }

@@ -17,21 +17,21 @@ import (
 const MemorySource DataSource = "file::memory:?cache=shared"
 
 const initDB = `
-CREATE TABLE IF NOT EXISTS keys (
+CREATE TABLE IF NOT EXISTS secrets (
 	tenant_id TEXT NOT NULL CHECK(tenant_id != ''),
-	key_id TEXT NOT NULL CHECK(key_id != ''),
-	key_version INTEGER NOT NULL DEFAULT 0,
-	key_revision INTEGER NOT NULL DEFAULT 0,
-	key_material BLOB NOT NULL,
-	aad BLOB,
+	id TEXT NOT NULL CHECK(id != ''),
+	version INTEGER NOT NULL DEFAULT 0,
+	revision INTEGER NOT NULL DEFAULT 0,
+	secret BLOB NOT NULL,
+	metadata BLOB,
 	created_at INTEGER NOT NULL,
-	PRIMARY KEY(tenant_id, key_id, key_version, key_revision)
+	PRIMARY KEY(tenant_id, id, version, revision)
 )
 `
 
 type (
 	// Unsafe is a SQLite Vault implementation backed by an unencrypted SQLite database.
-	// It stores key material in plaintext and is intended for local development and
+	// It stores secrets in plaintext and is intended for local development and
 	// testing only. Do not use in production.
 	Unsafe struct {
 		info vault.Info
@@ -87,10 +87,10 @@ func (u *Unsafe) PrepareTenant(ctx context.Context, req vault.PrepareTenantReque
 	return &vault.PrepareTenantResponse{}, nil
 }
 
-// DestroyTenant removes all keys associated with the given tenant from the vault.
+// DestroyTenant removes all secrets associated with the given tenant from the vault.
 func (u *Unsafe) DestroyTenant(ctx context.Context, req vault.DestroyTenantRequest) (*vault.DestroyTenantResponse, error) {
 	_, err := u.db.ExecContext(ctx,
-		"DELETE FROM keys WHERE tenant_id = ?",
+		"DELETE FROM secrets WHERE tenant_id = ?",
 		req.TenantID,
 	)
 	if err != nil {
@@ -99,57 +99,57 @@ func (u *Unsafe) DestroyTenant(ctx context.Context, req vault.DestroyTenantReque
 	return &vault.DestroyTenantResponse{}, nil
 }
 
-func (u *Unsafe) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
-	if req.KeyMaterial == nil {
+func (u *Unsafe) ImportSecret(ctx context.Context, req vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
+	if req.Secret == nil {
 		return nil, vault.ErrInvalidRequest
 	}
 	_, err := u.db.ExecContext(ctx,
-		`INSERT INTO keys (tenant_id, key_id, key_version, key_revision, key_material, aad, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (tenant_id, key_id, key_version, key_revision) DO UPDATE SET key_material = excluded.key_material, aad = excluded.aad, created_at = excluded.created_at `,
-		req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision, []byte(req.KeyMaterial.SecureBytes()), req.AAD, int64(clock.Now()),
+		`INSERT INTO secrets (tenant_id, id, version, revision, secret, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (tenant_id, id, version, revision) DO UPDATE SET secret = excluded.secret, metadata = excluded.metadata, created_at = excluded.created_at `,
+		req.TenantID, req.ID, req.Version, req.Revision, []byte(req.Secret.SecureBytes()), req.Metadata, int64(clock.Now()),
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &vault.ImportKeyResponse{}, nil
+	return &vault.ImportSecretResponse{}, nil
 }
 
-func (u *Unsafe) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	query := "SELECT key_material, aad FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ? AND key_revision = ?"
-	args := []any{req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision}
+func (u *Unsafe) ExportSecret(ctx context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+	query := "SELECT secret, metadata FROM secrets WHERE tenant_id = ? AND id = ? AND version = ? AND revision = ?"
+	args := []any{req.TenantID, req.ID, req.Version, req.Revision}
 
-	var rawKey []byte
-	var aad []byte
-	err := u.db.QueryRowContext(ctx, query, args...).Scan(&rawKey, &aad)
+	var rawSecret []byte
+	var metadata []byte
+	err := u.db.QueryRowContext(ctx, query, args...).Scan(&rawSecret, &metadata)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, vault.ErrKeyNotFound
+			return nil, vault.ErrSecretNotFound
 		}
 		return nil, err
 	}
 
-	data, err := securemem.NewData("", len(rawKey))
+	data, err := securemem.NewData("secret", len(rawSecret))
 	if err != nil {
 		return nil, err
 	}
-	copy(data.SecureBytes(), rawKey)
+	copy(data.SecureBytes(), rawSecret)
 
-	return &vault.ExportKeyResponse{
-		KeyMaterial: data,
-		AAD:         aad,
+	return &vault.ExportSecretResponse{
+		Secret:   data,
+		Metadata: metadata,
 	}, nil
 }
 
-func (u *Unsafe) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
+func (u *Unsafe) DestroySecret(ctx context.Context, req vault.DestroySecretRequest) (*vault.DestroySecretResponse, error) {
 	_, err := u.db.ExecContext(ctx,
-		"DELETE FROM keys WHERE tenant_id = ? AND key_id = ? AND key_version = ? AND key_revision = ?",
-		req.TenantID, req.KeyID, req.KeyVersion, req.KeyRevision,
+		"DELETE FROM secrets WHERE tenant_id = ? AND id = ? AND version = ? AND revision = ?",
+		req.TenantID, req.ID, req.Version, req.Revision,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &vault.DestroyKeyResponse{}, nil
+	return &vault.DestroySecretResponse{}, nil
 }
 
 func (u *Unsafe) Info() vault.Info {

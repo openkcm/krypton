@@ -271,33 +271,33 @@ func (rm *RootManager) importSpec(ctx context.Context, tenantID, keyID string, s
 	defer d.Destroy()
 	copy(d.SecureBytes(), b)
 
-	_, err = rm.vault.ImportKey(ctx, vault.ImportKeyRequest{
-		TenantID:    tenantID,
-		KeyID:       keyID,
-		KeyMaterial: d,
+	_, err = rm.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: tenantID,
+		ID:       keyID,
+		Secret:   d,
 	})
 	return err
 }
 
 func (rm *RootManager) exportSpec(ctx context.Context, tenantID, keyID string) (sealerprovider.Spec, error) {
-	resp, err := rm.vault.ExportKey(ctx, vault.ExportKeyRequest{
+	resp, err := rm.vault.ExportSecret(ctx, vault.ExportSecretRequest{
 		TenantID: tenantID,
-		KeyID:    keyID,
+		ID:       keyID,
 	})
 	if err != nil {
 		return sealerprovider.Spec{}, err
 	}
-	defer resp.KeyMaterial.Destroy()
+	defer resp.Secret.Destroy()
 
 	spec := sealerprovider.Spec{}
-	err = yaml.Unmarshal(resp.KeyMaterial.SecureBytes(), &spec)
+	err = yaml.Unmarshal(resp.Secret.SecureBytes(), &spec)
 	return spec, err
 }
 
 func (rm *RootManager) destroySpec(ctx context.Context, tenantID, keyID string) error {
-	_, err := rm.vault.DestroyKey(ctx, vault.DestroyKeyRequest{
+	_, err := rm.vault.DestroySecret(ctx, vault.DestroySecretRequest{
 		TenantID: tenantID,
-		KeyID:    keyID,
+		ID:       keyID,
 	})
 	return err
 }

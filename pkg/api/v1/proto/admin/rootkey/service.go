@@ -247,7 +247,7 @@ func mapToProtoErr(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, store.ErrKeyNotFound), errors.Is(err, vault.ErrKeyNotFound):
+	case errors.Is(err, store.ErrKeyNotFound), errors.Is(err, vault.ErrSecretNotFound):
 		return proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "key not found"),
 			proto.Code_ERROR_CODE_ABORT,
