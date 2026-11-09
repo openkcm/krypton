@@ -199,9 +199,9 @@ func TestCreateSecret(t *testing.T) {
 		childKeyID := uuid.New().String()
 		childKV := model.NewKeyVersion(ps.tenantID, childKeyID, 1, &ps.parentKey.ID, &ps.parentVer)
 		v := &vaultWrapper{Vault: newTestVault(t)}
-		v.importKeyFn = func(_ context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
+		v.importSecretFn = func(_ context.Context, req vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
 			assert.Equal(t, ps.tenantID, req.TenantID)
-			assert.Equal(t, childKeyID, req.KeyID)
+			assert.Equal(t, childKeyID, req.ID)
 			return nil, importErr
 		}
 		processor := keyprocessor.NewProcessor(gen, newTestCryptor(), nil, ps.sealer, v)
@@ -276,7 +276,7 @@ func TestResolveSecret(t *testing.T) {
 		sec, err := processor.ResolveSecret(t.Context(), model.NewKeyVersion(uuid.New().String(), uuid.New().String(), 1, &parentKeyID, nil))
 
 		// then
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Equal(t, cryptor.Secret{}, sec)
 	})
 
@@ -294,9 +294,9 @@ func TestResolveSecret(t *testing.T) {
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
-		v.exportKeyFn = func(_ context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
+		v.exportSecretFn = func(_ context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
-			assert.Equal(t, keyID, req.KeyID)
+			assert.Equal(t, keyID, req.ID)
 			return nil, exportErr
 		}
 
@@ -320,10 +320,10 @@ func TestResolveSecret(t *testing.T) {
 		assert.NoError(t, err)
 
 		var exportSec *securemem.Data
-		v.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			resp, err := v.Vault.ExportKey(ctx, req)
+		v.exportSecretFn = func(ctx context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+			resp, err := v.Vault.ExportSecret(ctx, req)
 			if err == nil {
-				exportSec = resp.KeyMaterial
+				exportSec = resp.Secret
 			}
 			return resp, err
 		}
@@ -360,10 +360,10 @@ func TestResolveSecret(t *testing.T) {
 		assert.NoError(t, err)
 
 		var exportSec *securemem.Data
-		v.exportKeyFn = func(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-			resp, err := v.Vault.ExportKey(ctx, req)
+		v.exportSecretFn = func(ctx context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+			resp, err := v.Vault.ExportSecret(ctx, req)
 			if err == nil {
-				exportSec = resp.KeyMaterial
+				exportSec = resp.Secret
 			}
 			return resp, err
 		}
@@ -561,9 +561,9 @@ func TestDeleteSecret(t *testing.T) {
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
-		v.destroyKeyFn = func(_ context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
+		v.destroySecretFn = func(_ context.Context, req vault.DestroySecretRequest) (*vault.DestroySecretResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
-			assert.Equal(t, keyID, req.KeyID)
+			assert.Equal(t, keyID, req.ID)
 			return nil, destroyErr
 		}
 
@@ -587,10 +587,10 @@ func TestDeleteSecret(t *testing.T) {
 		_, err := processor.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{KeyVersion: kv})
 		assert.NoError(t, err)
 
-		v.destroyKeyFn = func(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
+		v.destroySecretFn = func(ctx context.Context, req vault.DestroySecretRequest) (*vault.DestroySecretResponse, error) {
 			assert.Equal(t, tenantID, req.TenantID)
-			assert.Equal(t, keyID, req.KeyID)
-			return v.Vault.DestroyKey(ctx, req)
+			assert.Equal(t, keyID, req.ID)
+			return v.Vault.DestroySecret(ctx, req)
 		}
 
 		// when
@@ -605,31 +605,31 @@ func TestDeleteSecret(t *testing.T) {
 type vaultWrapper struct {
 	vault.Vault
 
-	importKeyFn  func(context.Context, vault.ImportKeyRequest) (*vault.ImportKeyResponse, error)
-	exportKeyFn  func(context.Context, vault.ExportKeyRequest) (*vault.ExportKeyResponse, error)
-	destroyKeyFn func(context.Context, vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error)
-	infoFn       func() vault.Info
+	importSecretFn  func(context.Context, vault.ImportSecretRequest) (*vault.ImportSecretResponse, error)
+	exportSecretFn  func(context.Context, vault.ExportSecretRequest) (*vault.ExportSecretResponse, error)
+	destroySecretFn func(context.Context, vault.DestroySecretRequest) (*vault.DestroySecretResponse, error)
+	infoFn          func() vault.Info
 }
 
-func (w *vaultWrapper) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
-	if w.importKeyFn != nil {
-		return w.importKeyFn(ctx, req)
+func (w *vaultWrapper) ImportSecret(ctx context.Context, req vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
+	if w.importSecretFn != nil {
+		return w.importSecretFn(ctx, req)
 	}
-	return w.Vault.ImportKey(ctx, req)
+	return w.Vault.ImportSecret(ctx, req)
 }
 
-func (w *vaultWrapper) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	if w.exportKeyFn != nil {
-		return w.exportKeyFn(ctx, req)
+func (w *vaultWrapper) ExportSecret(ctx context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+	if w.exportSecretFn != nil {
+		return w.exportSecretFn(ctx, req)
 	}
-	return w.Vault.ExportKey(ctx, req)
+	return w.Vault.ExportSecret(ctx, req)
 }
 
-func (w *vaultWrapper) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
-	if w.destroyKeyFn != nil {
-		return w.destroyKeyFn(ctx, req)
+func (w *vaultWrapper) DestroySecret(ctx context.Context, req vault.DestroySecretRequest) (*vault.DestroySecretResponse, error) {
+	if w.destroySecretFn != nil {
+		return w.destroySecretFn(ctx, req)
 	}
-	return w.Vault.DestroyKey(ctx, req)
+	return w.Vault.DestroySecret(ctx, req)
 }
 
 func (w *vaultWrapper) Info() vault.Info {

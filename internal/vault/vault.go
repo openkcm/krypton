@@ -8,20 +8,23 @@ import (
 )
 
 var (
-	// ErrKeyNotFound is returned when a key or key version does not exist in the vault.
-	ErrKeyNotFound = errors.New("key not found")
+	// ErrSecretNotFound is returned when a secret does not exist.
+	ErrSecretNotFound = errors.New("secret not found")
 	// ErrInvalidRequest is returned when a request contains invalid or missing parameters.
 	ErrInvalidRequest = errors.New("invalid request")
 	// ErrUnknownType is returned when the vault type is not recognized.
 	ErrUnknownType = errors.New("unknown vault type")
 )
 
-// Vault provides secure storage and retrieval of versioned key material.
+// Vault stores secrets.
+//
+// A secret is identified by tenant and ID, optionally qualified by version and
+// revision. A revision always belongs to a version.
 type Vault interface {
 	PrepareTenant(ctx context.Context, req PrepareTenantRequest) (*PrepareTenantResponse, error)
-	ImportKey(ctx context.Context, req ImportKeyRequest) (*ImportKeyResponse, error)
-	ExportKey(ctx context.Context, req ExportKeyRequest) (*ExportKeyResponse, error)
-	DestroyKey(ctx context.Context, req DestroyKeyRequest) (*DestroyKeyResponse, error)
+	ImportSecret(ctx context.Context, req ImportSecretRequest) (*ImportSecretResponse, error)
+	ExportSecret(ctx context.Context, req ExportSecretRequest) (*ExportSecretResponse, error)
+	DestroySecret(ctx context.Context, req DestroySecretRequest) (*DestroySecretResponse, error)
 	DestroyTenant(ctx context.Context, req DestroyTenantRequest) (*DestroyTenantResponse, error)
 	Info() Info
 }
@@ -44,45 +47,45 @@ type PrepareTenantRequest struct {
 type PrepareTenantResponse struct {
 }
 
-// ImportKeyRequest contains parameters for storing key material in the vault.
-type ImportKeyRequest struct {
-	TenantID    string
-	KeyID       string
-	KeyVersion  int
-	KeyRevision int
-	KeyMaterial *securemem.Data
-	AAD         []byte
+// ImportSecretRequest contains parameters for storing a secret and its metadata in the vault.
+type ImportSecretRequest struct {
+	TenantID string
+	ID       string
+	Version  int
+	Revision int
+	Secret   *securemem.Data
+	Metadata []byte
 }
 
-// ImportKeyResponse holds the result of an import operation.
-type ImportKeyResponse struct {
+// ImportSecretResponse holds the result of an import operation.
+type ImportSecretResponse struct {
 	// Empty for now, success indicated by nil error
 }
 
-// ExportKeyRequest contains parameters for retrieving key material from the vault.
-type ExportKeyRequest struct {
-	TenantID    string
-	KeyID       string
-	KeyVersion  int
-	KeyRevision int
+// ExportSecretRequest contains parameters for retrieving a secret from the vault.
+type ExportSecretRequest struct {
+	TenantID string
+	ID       string
+	Version  int
+	Revision int
 }
 
-// ExportKeyResponse holds the retrieved key material and its associated authenticated data.
-type ExportKeyResponse struct {
-	KeyMaterial *securemem.Data
-	AAD         []byte
+// ExportSecretResponse holds the retrieved secret and its metadata.
+type ExportSecretResponse struct {
+	Secret   *securemem.Data
+	Metadata []byte
 }
 
-// DestroyKeyRequest contains parameters for destroying a specific key version.
-type DestroyKeyRequest struct {
-	TenantID    string
-	KeyID       string
-	KeyVersion  int
-	KeyRevision int
+// DestroySecretRequest contains parameters for destroying a secret.
+type DestroySecretRequest struct {
+	TenantID string
+	ID       string
+	Version  int
+	Revision int
 }
 
-// DestroyKeyResponse holds the result of a version destruction operation.
-type DestroyKeyResponse struct {
+// DestroySecretResponse holds the result of a destruction operation.
+type DestroySecretResponse struct {
 	// Empty for now, success indicated by nil error
 }
 

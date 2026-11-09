@@ -103,13 +103,13 @@ func (p *processor) createSecret(ctx context.Context, req createSecretRequest) (
 		}
 		defer parentSealed.Destroy()
 
-		_, err = p.vault.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    req.KeyVersion.TenantID,
-			KeyID:       req.KeyVersion.KeyID,
-			KeyVersion:  req.KeyVersion.Version,
-			KeyRevision: req.KeyVersion.Revision,
-			KeyMaterial: parentSealed,
-			AAD:         req.AAD,
+		_, err = p.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: req.KeyVersion.TenantID,
+			ID:       req.KeyVersion.KeyID,
+			Version:  req.KeyVersion.Version,
+			Revision: req.KeyVersion.Revision,
+			Secret:   parentSealed,
+			Metadata: req.AAD,
 		})
 		return err
 	})
@@ -165,11 +165,11 @@ func (p *processor) decrypt(ctx context.Context, req cryptor.DecryptRequest) (*c
 
 // deleteSecret removes a secret from the vault.
 func (p *processor) deleteSecret(ctx context.Context, req deleteSecretRequest) (deleteSecretResponse, error) {
-	_, err := p.vault.DestroyKey(ctx, vault.DestroyKeyRequest{
-		TenantID:    req.KeyVersion.TenantID,
-		KeyID:       req.KeyVersion.KeyID,
-		KeyVersion:  req.KeyVersion.Version,
-		KeyRevision: req.KeyVersion.Revision,
+	_, err := p.vault.DestroySecret(ctx, vault.DestroySecretRequest{
+		TenantID: req.KeyVersion.TenantID,
+		ID:       req.KeyVersion.KeyID,
+		Version:  req.KeyVersion.Version,
+		Revision: req.KeyVersion.Revision,
 	})
 	if err != nil {
 		return deleteSecretResponse{}, err
@@ -181,24 +181,24 @@ func (p *processor) deleteSecret(ctx context.Context, req deleteSecretRequest) (
 // resolveSecret retrieves and unseals the secret for the given key version.
 func (p *processor) resolveSecret(ctx context.Context, kv model.KeyVersion) (cryptor.Secret, error) {
 	resp, err := securemem.Run(ctx, func(ctx context.Context, sreq *securemem.HandlerRequest) error {
-		exported, err := p.vault.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:    kv.TenantID,
-			KeyID:       kv.KeyID,
-			KeyVersion:  kv.Version,
-			KeyRevision: kv.Revision,
+		exported, err := p.vault.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: kv.TenantID,
+			ID:       kv.KeyID,
+			Version:  kv.Version,
+			Revision: kv.Revision,
 		})
 		if err != nil {
 			return err
 		}
-		defer exported.KeyMaterial.Destroy()
+		defer exported.Secret.Destroy()
 
-		parentUnsealed, err := p.parentUnseal(ctx, kv, exported.KeyMaterial, exported.AAD)
+		parentUnsealed, err := p.parentUnseal(ctx, kv, exported.Secret, exported.Metadata)
 		if err != nil {
 			return err
 		}
 		defer parentUnsealed.Destroy()
 
-		transUnsealed, err := p.transportUnseal(ctx, kv, parentUnsealed, exported.AAD)
+		transUnsealed, err := p.transportUnseal(ctx, kv, parentUnsealed, exported.Metadata)
 		if err != nil {
 			return err
 		}

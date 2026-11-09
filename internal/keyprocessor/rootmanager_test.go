@@ -180,10 +180,10 @@ func TestRootManagerCreateProvider(t *testing.T) {
 		require.NoError(t, err)
 
 		// spec blob persisted and decodes to the static-secret type
-		exp, err := vlt.ExportKey(t.Context(), vault.ExportKeyRequest{TenantID: tenantID, KeyID: rootKey.ID})
+		exp, err := vlt.ExportSecret(t.Context(), vault.ExportSecretRequest{TenantID: tenantID, ID: rootKey.ID})
 		require.NoError(t, err)
 		var spec sealerprovider.Spec
-		require.NoError(t, yaml.Unmarshal(exp.KeyMaterial.SecureBytes(), &spec))
+		require.NoError(t, yaml.Unmarshal(exp.Secret.SecureBytes(), &spec))
 		assert.Equal(t, staticsecret.TypeStaticSecret, spec.Type)
 
 		// version 1 carries the provider-key label
@@ -201,7 +201,7 @@ func TestRootManagerCreateProvider(t *testing.T) {
 		kvStore := storesql.NewKeyVersionStore(db)
 
 		vlt := &vaultWrapper{Vault: newTestVault(t)}
-		vlt.importKeyFn = func(context.Context, vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
+		vlt.importSecretFn = func(context.Context, vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
 			return nil, errAssertImport
 		}
 
@@ -319,7 +319,7 @@ func TestRootManagerRotateProviderKey(t *testing.T) {
 			Type:          staticsecret.TypeStaticSecret,
 			ProviderKeyID: "pk-2",
 		})
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	})
 
 	t.Run("should create a new labeled version", func(t *testing.T) {
@@ -391,8 +391,8 @@ func TestRootManagerRemoveProvider(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = vlt.ExportKey(t.Context(), vault.ExportKeyRequest{TenantID: tenantID, KeyID: rootKey.ID})
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		_, err = vlt.ExportSecret(t.Context(), vault.ExportSecretRequest{TenantID: tenantID, ID: rootKey.ID})
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	})
 }
 
@@ -435,7 +435,7 @@ func TestRootManagerSealUnseal(t *testing.T) {
 			KeyVersion: 1,
 			Plaintext:  newTestData(t, []byte("data")),
 		})
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	})
 
 	t.Run("should reject sealing when key is not active", func(t *testing.T) {

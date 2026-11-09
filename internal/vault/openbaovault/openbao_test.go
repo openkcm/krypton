@@ -173,7 +173,7 @@ func TestPrepareTenant(t *testing.T) {
 	})
 }
 
-func TestImportKey(t *testing.T) {
+func TestImportSecret(t *testing.T) {
 	// given
 	ctx := t.Context()
 
@@ -197,10 +197,10 @@ func TestImportKey(t *testing.T) {
 	})
 	copy(secretData.SecureBytes(), []byte("sm"))
 
-	t.Run("should successfully import key", func(t *testing.T) {
+	t.Run("should successfully import secret", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -208,12 +208,12 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, tResp)
 
 		// when
-		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		resp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 
 		// then
@@ -221,10 +221,10 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
-	t.Run("should successfully import key for nil aad", func(t *testing.T) {
+	t.Run("should successfully import secret without metadata", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -232,11 +232,11 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, tResp)
 
 		// when
-		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
+		resp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
 		})
 
 		// then
@@ -244,14 +244,14 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
-	t.Run("should fail to import key with nil key material", func(t *testing.T) {
+	t.Run("should fail to import a nil secret", func(t *testing.T) {
 		// given
 		// when
-		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:   uuid.New().String(),
-			KeyID:      uuid.New().String(),
-			KeyVersion: 1,
-			AAD:        []byte{4, 3, 2, 1},
+		resp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: uuid.New().String(),
+			ID:       uuid.New().String(),
+			Version:  1,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 
 		// then
@@ -260,35 +260,35 @@ func TestImportKey(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
-	t.Run("should be idempotent when importing the same key", func(t *testing.T) {
+	t.Run("should be idempotent when importing the same secret", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
 		require.NoError(t, err)
 		assert.NotNil(t, tResp)
 
-		// first call to import key
-		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		// first call to import the secret
+		resp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
 
 		// when
-		// second call to import the same key
-		resp, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		// second call to import the same secret
+		resp, err = cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 
 		// then
@@ -296,18 +296,18 @@ func TestImportKey(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
-	t.Run("should fail to import key for non-prepared tenant", func(t *testing.T) {
+	t.Run("should fail to import secret for non-prepared tenant", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// when
-		resp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		resp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 
 		// then
@@ -316,7 +316,7 @@ func TestImportKey(t *testing.T) {
 	})
 }
 
-func TestExportKey(t *testing.T) {
+func TestExportSecret(t *testing.T) {
 	// given
 	ctx := t.Context()
 
@@ -340,97 +340,97 @@ func TestExportKey(t *testing.T) {
 	})
 	copy(secretData.SecureBytes(), []byte("sm"))
 
-	t.Run("should successfully export key", func(t *testing.T) {
+	t.Run("should successfully export secret", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
 		require.NoError(t, err)
 		assert.NotNil(t, tResp)
 
-		// import key first
-		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		// import the secret first
+		iResp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, iResp)
 
 		// when
-		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Equal(t, secretData.SecureBytes(), resp.KeyMaterial.SecureBytes())
-		assert.Equal(t, []byte{4, 3, 2, 1}, resp.AAD)
+		assert.Equal(t, secretData.SecureBytes(), resp.Secret.SecureBytes())
+		assert.Equal(t, []byte{4, 3, 2, 1}, resp.Metadata)
 	})
 
-	t.Run("should successfully export key for nil aad", func(t *testing.T) {
+	t.Run("should successfully export secret without metadata", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
 		require.NoError(t, err)
 		assert.NotNil(t, tResp)
 
-		// import key first
-		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
+		// import the secret first
+		iResp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, iResp)
 
 		// when
-		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Equal(t, secretData.SecureBytes(), resp.KeyMaterial.SecureBytes())
-		assert.Equal(t, []byte{}, resp.AAD)
+		assert.Equal(t, secretData.SecureBytes(), resp.Secret.SecureBytes())
+		assert.Equal(t, []byte{}, resp.Metadata)
 	})
 
-	t.Run("should fail to export key for non-prepared tenant", func(t *testing.T) {
+	t.Run("should fail to export secret for non-prepared tenant", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// when
-		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
 		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, resp)
 	})
 
-	t.Run("should fail to export key for non-existing key", func(t *testing.T) {
+	t.Run("should fail to export a non-existing secret", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -438,20 +438,20 @@ func TestExportKey(t *testing.T) {
 		assert.NotNil(t, tResp)
 
 		// when
-		resp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
 		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, resp)
 	})
 }
 
-func TestDestroyKey(t *testing.T) {
+func TestDestroySecret(t *testing.T) {
 	// given
 	ctx := t.Context()
 
@@ -475,69 +475,69 @@ func TestDestroyKey(t *testing.T) {
 	})
 	copy(secretData.SecureBytes(), []byte("sm"))
 
-	t.Run("should successfully destroy key version", func(t *testing.T) {
+	t.Run("should successfully destroy secret version", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
 		require.NoError(t, err)
 		assert.NotNil(t, tResp)
 
-		// import key first
-		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       keyID,
-			KeyVersion:  1,
-			KeyMaterial: secretData,
-			AAD:         []byte{4, 3, 2, 1},
+		// import the secret first
+		iResp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
+			Secret:   secretData,
+			Metadata: []byte{4, 3, 2, 1},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, iResp)
 
-		// verify that the key version is saved
-		eResp, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		// verify that the secret version is saved
+		eResp, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, eResp)
-		assert.Equal(t, secretData.SecureBytes(), eResp.KeyMaterial.SecureBytes())
+		assert.Equal(t, secretData.SecureBytes(), eResp.Secret.SecureBytes())
 
 		// when
-		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.DestroySecret(ctx, vault.DestroySecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
 
-		// verify that the key version is destroyed
-		eResp, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		// verify that the secret version is destroyed
+		eResp, err = cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, eResp)
 	})
 
-	t.Run("should not return error when destroying key version for non-prepared tenant", func(t *testing.T) {
+	t.Run("should not return error when destroying secret version for non-prepared tenant", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// when
-		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.DestroySecret(ctx, vault.DestroySecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
@@ -545,10 +545,10 @@ func TestDestroyKey(t *testing.T) {
 		assert.NotNil(t, resp)
 	})
 
-	t.Run("should not return error when destroying key version for non-existing key", func(t *testing.T) {
+	t.Run("should not return error when destroying a non-existing secret version", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
-		keyID := uuid.New().String()
+		secretID := uuid.New().String()
 
 		// prepare tenant first
 		tResp, err := cli.PrepareTenant(ctx, vault.PrepareTenantRequest{TenantID: tenantID, Name: "Test Tenant"})
@@ -556,10 +556,10 @@ func TestDestroyKey(t *testing.T) {
 		assert.NotNil(t, tResp)
 
 		// when
-		resp, err := cli.DestroyKey(ctx, vault.DestroyKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      keyID,
-			KeyVersion: 1,
+		resp, err := cli.DestroySecret(ctx, vault.DestroySecretRequest{
+			TenantID: tenantID,
+			ID:       secretID,
+			Version:  1,
 		})
 
 		// then
@@ -615,7 +615,7 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("should successfully destroy tenant with keys", func(t *testing.T) {
+	t.Run("should successfully destroy tenant with secrets", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
 		kID := uuid.New().String()
@@ -625,12 +625,12 @@ func TestDestroyTenant(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, tResp)
 
-		iResp, err := cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID,
-			KeyID:       kID,
-			KeyVersion:  1,
-			KeyMaterial: km,
-			AAD:         []byte{},
+		iResp, err := cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID,
+			ID:       kID,
+			Version:  1,
+			Secret:   km,
+			Metadata: []byte{},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, iResp)
@@ -645,16 +645,16 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NotNil(t, resp)
 
 		// verify that the tenant is destroyed
-		_, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID,
-			KeyID:      kID,
-			KeyVersion: 1,
+		_, err = cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID,
+			ID:       kID,
+			Version:  1,
 		})
 		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 	})
 
-	t.Run("should successfully destroy tenant with no keys", func(t *testing.T) {
+	t.Run("should successfully destroy tenant with no secrets", func(t *testing.T) {
 		// given
 		tenantID := uuid.New().String()
 
@@ -711,13 +711,13 @@ func TestDestroyTenant(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, tResp1)
 
-		// import a key for tenant 1
-		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID1,
-			KeyID:       kID,
-			KeyVersion:  1,
-			KeyMaterial: km,
-			AAD:         []byte{},
+		// import a secret for tenant 1
+		_, err = cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID1,
+			ID:       kID,
+			Version:  1,
+			Secret:   km,
+			Metadata: []byte{},
 		})
 		require.NoError(t, err)
 
@@ -726,13 +726,13 @@ func TestDestroyTenant(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, tResp2)
 
-		// import a key for tenant 2
-		_, err = cli.ImportKey(ctx, vault.ImportKeyRequest{
-			TenantID:    tenantID2,
-			KeyID:       kID,
-			KeyVersion:  1,
-			KeyMaterial: km,
-			AAD:         []byte{},
+		// import a secret for tenant 2
+		_, err = cli.ImportSecret(ctx, vault.ImportSecretRequest{
+			TenantID: tenantID2,
+			ID:       kID,
+			Version:  1,
+			Secret:   km,
+			Metadata: []byte{},
 		})
 		require.NoError(t, err)
 
@@ -746,24 +746,24 @@ func TestDestroyTenant(t *testing.T) {
 		assert.NotNil(t, resp)
 
 		// verify that tenant 1 is destroyed
-		eRep, err := cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID1,
-			KeyID:      kID,
-			KeyVersion: 1,
+		eRep, err := cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID1,
+			ID:       kID,
+			Version:  1,
 		})
 		require.Error(t, err)
-		assert.ErrorIs(t, err, vault.ErrKeyNotFound)
+		assert.ErrorIs(t, err, vault.ErrSecretNotFound)
 		assert.Nil(t, eRep)
 
 		// verify that tenant 2 is still accessible
-		eRep, err = cli.ExportKey(ctx, vault.ExportKeyRequest{
-			TenantID:   tenantID2,
-			KeyID:      kID,
-			KeyVersion: 1,
+		eRep, err = cli.ExportSecret(ctx, vault.ExportSecretRequest{
+			TenantID: tenantID2,
+			ID:       kID,
+			Version:  1,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, eRep)
-		assert.Equal(t, km.SecureBytes(), eRep.KeyMaterial.SecureBytes())
+		assert.Equal(t, km.SecureBytes(), eRep.Secret.SecureBytes())
 	})
 }
 

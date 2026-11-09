@@ -18,7 +18,7 @@ import (
 
 const kvSecretName = "kv-secrets"
 
-const securememImportKey = "key_material"
+const securememImportSecret = "secret"
 
 // Options is a function type that can be used to configure the OpenBao client.
 type Options func(*openbao.Client) error
@@ -30,8 +30,8 @@ type Vault struct {
 }
 
 type data struct {
-	KeyMaterial string `mapstructure:"key_material"`
-	AAD         string `mapstructure:"aad"`
+	Secret   string `mapstructure:"secret"`
+	Metadata string `mapstructure:"metadata"`
 }
 
 var kvCreateRequest = map[string]any{
@@ -101,36 +101,36 @@ func (v *Vault) DestroyTenant(ctx context.Context, req vault.DestroyTenantReques
 	return &vault.DestroyTenantResponse{}, nil
 }
 
-// ImportKey stores the key material in the vault.
-func (v *Vault) ImportKey(ctx context.Context, req vault.ImportKeyRequest) (*vault.ImportKeyResponse, error) {
-	if req.KeyMaterial == nil {
+// ImportSecret stores the secret in the vault.
+func (v *Vault) ImportSecret(ctx context.Context, req vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
+	if req.Secret == nil {
 		return nil, vault.ErrInvalidRequest
 	}
 	_, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
-		data, err := toKvData(data{KeyMaterial: base64Encode(req.KeyMaterial.SecureBytes()), AAD: base64Encode(req.AAD)})
+		data, err := toKvData(data{Secret: base64Encode(req.Secret.SecureBytes()), Metadata: base64Encode(req.Metadata)})
 		if err != nil {
 			return err
 		}
 		return v.cli.KVv1(kvMountPath(req.TenantID)).
 			Put(
 				ctx,
-				kvPath(req.KeyID, req.KeyVersion, req.KeyRevision),
+				kvPath(req.ID, req.Version, req.Revision),
 				data,
 			)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &vault.ImportKeyResponse{}, nil
+	return &vault.ImportSecretResponse{}, nil
 }
 
-// ExportKey retrieves the key material from the vault.
-func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vault.ExportKeyResponse, error) {
-	var aad []byte
+// ExportSecret retrieves the secret from the vault.
+func (v *Vault) ExportSecret(ctx context.Context, req vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+	var metadata []byte
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hreq *securemem.HandlerRequest) error {
 		data, err := v.cli.KVv1(kvMountPath(req.TenantID)).
-			Get(ctx, kvPath(req.KeyID, req.KeyVersion, req.KeyRevision))
+			Get(ctx, kvPath(req.ID, req.Version, req.Revision))
 		if err != nil {
 			return err
 		}
@@ -140,33 +140,33 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 			return err
 		}
 
-		b64Km, err := base64Decode(kvData.KeyMaterial)
+		decodedSecret, err := base64Decode(kvData.Secret)
 		if err != nil {
 			return err
 		}
 
 		// clear the temporary buffer to avoid leaving sensitive data in memory
-		defer securemem.Zero(b64Km)
+		defer securemem.Zero(decodedSecret)
 
-		sKm, err := hreq.PersistentVault().Reserve(securememImportKey, len(b64Km))
+		secureSecret, err := hreq.PersistentVault().Reserve(securememImportSecret, len(decodedSecret))
 		if err != nil {
 			return err
 		}
 
-		copy(sKm, b64Km)
+		copy(secureSecret, decodedSecret)
 
-		aad, err = base64Decode(kvData.AAD)
+		metadata, err = base64Decode(kvData.Metadata)
 		return err
 	})
 
 	if err != nil {
 		if errors.Is(err, openbao.ErrSecretNotFound) {
-			return nil, vault.ErrKeyNotFound
+			return nil, vault.ErrSecretNotFound
 		}
 		return nil, err
 	}
 
-	data, ok := resp.MemVault().Get(securememImportKey)
+	data, ok := resp.MemVault().Get(securememImportSecret)
 	if !ok {
 		err := resp.MemVault().DestroyAll()
 		if err != nil {
@@ -175,20 +175,20 @@ func (v *Vault) ExportKey(ctx context.Context, req vault.ExportKeyRequest) (*vau
 		return nil, errAllocatedDataNotFound
 	}
 
-	return &vault.ExportKeyResponse{
-		KeyMaterial: data,
-		AAD:         aad,
+	return &vault.ExportSecretResponse{
+		Secret:   data,
+		Metadata: metadata,
 	}, nil
 }
 
-// DestroyKey removes the key material from the vault.
-func (v *Vault) DestroyKey(ctx context.Context, req vault.DestroyKeyRequest) (*vault.DestroyKeyResponse, error) {
+// DestroySecret removes the secret from the vault.
+func (v *Vault) DestroySecret(ctx context.Context, req vault.DestroySecretRequest) (*vault.DestroySecretResponse, error) {
 	err := v.cli.KVv1(kvMountPath(req.TenantID)).
-		Delete(ctx, kvPath(req.KeyID, req.KeyVersion, req.KeyRevision))
+		Delete(ctx, kvPath(req.ID, req.Version, req.Revision))
 	if err != nil && !isKVPathDeleted(err) {
 		return nil, err
 	}
-	return &vault.DestroyKeyResponse{}, nil
+	return &vault.DestroySecretResponse{}, nil
 }
 
 // Info returns the vault information.
@@ -246,8 +246,8 @@ func kvMountPath(tenantID string) string {
 	return fmt.Sprintf("%s/%s", tenantID, kvSecretName)
 }
 
-func kvPath(keyID string, keyVersion, keyRevision int) string {
-	return fmt.Sprintf("%s/%d/%d", keyID, keyVersion, keyRevision)
+func kvPath(id string, version, revision int) string {
+	return fmt.Sprintf("%s/%d/%d", id, version, revision)
 }
 
 func kvSecretPath(tenantID string) string {
