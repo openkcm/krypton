@@ -22,6 +22,12 @@ var (
 	JobHandlerNotFoundError = jobHandlerNotFoundError
 )
 
+// OperatorStepFunc is an exported alias for operatorStepFunc.
+type OperatorStepFunc = operatorStepFunc
+
+// OperatorPipelineFunc is an exported alias for operatorPipelineFunc.
+type OperatorPipelineFunc = operatorPipelineFunc
+
 func (o *Orchestrator) OrbitalManager() *orbital.Manager {
 	return o.orbitalManager
 }
@@ -82,4 +88,12 @@ func (s *announceState) State() model.KeyProcessingStatus {
 // ErrorMessage returns the error message associated with the key processing, if any.
 func (s *announceState) ErrorMessage() string {
 	return s.errMsg
+}
+
+func ToHandlerState(cfg HandlerConfig) model.KeyLifeCycleState {
+	return cfg.toState
+}
+
+func HandlerType(cfg HandlerConfig) string {
+	return cfg.handlerType
 }

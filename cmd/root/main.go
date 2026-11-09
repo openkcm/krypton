@@ -113,14 +113,23 @@ func main() {
 		TaskResolvers: []orchestrator.OrbitalTaskResolver{
 			orchestrator.NewAnnounceTaskResolver(transactor),
 			orchestrator.NewTaskResolver(orchestrator.ActivateHandlerConfig()),
+			orchestrator.NewTaskResolver(orchestrator.DeactivateHandlerConfig()),
+			orchestrator.NewTaskResolver(orchestrator.SuspendHandlerConfig()),
+			orchestrator.NewTaskResolver(orchestrator.CompromiseHandlerConfig()),
 		},
 		GroupHandlers: []orchestrator.OrbitalJobGroupHandler{
 			orchestrator.NewJobGroupHandler(orchestrator.AnnounceHandlerConfig()),
 			orchestrator.NewJobGroupHandler(orchestrator.ActivateHandlerConfig()),
+			orchestrator.NewJobGroupHandler(orchestrator.DeactivateHandlerConfig()),
+			orchestrator.NewJobGroupHandler(orchestrator.SuspendHandlerConfig()),
+			orchestrator.NewJobGroupHandler(orchestrator.CompromiseHandlerConfig()),
 		},
 		TaskHandlers: []orchestrator.OrbitalTaskHandler{
 			orchestrator.NewAnnounceTaskHandler(transactor, registry, cfg.Name),
 			orchestrator.NewTaskHandler(orchestrator.ActivateHandlerConfig(), transactor, registry, kpMgr, cfg),
+			orchestrator.NewTaskHandler(orchestrator.DeactivateHandlerConfig(), transactor, registry, kpMgr, cfg),
+			orchestrator.NewTaskHandler(orchestrator.SuspendHandlerConfig(), transactor, registry, kpMgr, cfg),
+			orchestrator.NewTaskHandler(orchestrator.CompromiseHandlerConfig(), transactor, registry, kpMgr, cfg),
 		},
 	}, orchestratorOpts...)
 	handleErr(err, "failed to create orchestrator")

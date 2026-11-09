@@ -44,12 +44,11 @@ const (
 	CompromiseKey = "compromise-key"
 )
 
-type (
-	HandlerConfig struct {
-		handlerType string
-		toState     model.KeyLifeCycleState
-	}
-)
+type HandlerConfig struct {
+	handlerType      string
+	toState          model.KeyLifeCycleState
+	operatorPipeline operatorPipelineFunc
+}
 
 func AnnounceHandlerConfig() HandlerConfig {
 	return HandlerConfig{
@@ -62,27 +61,48 @@ func ActivateHandlerConfig() HandlerConfig {
 	return HandlerConfig{
 		handlerType: ActivateKey,
 		toState:     model.KeyLifeCycleActive,
+		operatorPipeline: func(op *KeyOperator) []operatorStepFunc {
+			return []operatorStepFunc{
+				op.LoadKey,
+				op.ResolveKeyVersions,
+				op.GenerateAndSealLocalSecret,
+				op.UpsertRemoteKey,
+				op.UpsertRemoteKeyVersion,
+				op.MarkKeyCompleted,
+			}
+		},
 	}
 }
 
 func SuspendHandlerConfig() HandlerConfig {
 	return HandlerConfig{
-		handlerType: SuspendKey,
-		toState:     model.KeyLifeCycleSuspended,
+		handlerType:      SuspendKey,
+		toState:          model.KeyLifeCycleSuspended,
+		operatorPipeline: keyUpsertPipeline,
 	}
 }
 
 func DeactivateHandlerConfig() HandlerConfig {
 	return HandlerConfig{
-		handlerType: DeactivateKey,
-		toState:     model.KeyLifeCycleDeactivated,
+		handlerType:      DeactivateKey,
+		toState:          model.KeyLifeCycleDeactivated,
+		operatorPipeline: keyUpsertPipeline,
 	}
 }
 
 func CompromiseHandlerConfig() HandlerConfig {
 	return HandlerConfig{
-		handlerType: CompromiseKey,
-		toState:     model.KeyLifeCycleCompromised,
+		handlerType:      CompromiseKey,
+		toState:          model.KeyLifeCycleCompromised,
+		operatorPipeline: keyUpsertPipeline,
+	}
+}
+
+func keyUpsertPipeline(op *KeyOperator) []operatorStepFunc {
+	return []operatorStepFunc{
+		op.LoadKey,
+		op.UpsertRemoteKey,
+		op.MarkKeyCompleted,
 	}
 }
 

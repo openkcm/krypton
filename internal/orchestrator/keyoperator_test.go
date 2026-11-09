@@ -1,6 +1,7 @@
 package orchestrator_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"uuid"
@@ -20,16 +21,14 @@ import (
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
 )
 
-func TestNewOrbitalOperator(t *testing.T) {
+func TestNewKeyOperator(t *testing.T) {
 	db := newRootDB(t)
-	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
 	kvStore := storesql.NewKeyVersionStore(db)
 	stores := store.Stores{Keys: kStore, KeyVersions: kvStore, Tenants: storesql.NewTenantStore(db)}
 
-	rootName := "test-root"
 	cfg := &config.RootConfig{
-		Name: rootName,
+		Name: "test-root",
 		Hierarchy: spec.KeyHierarchy{
 			Name: "test-hierarchy",
 			KeySpecs: []spec.KeySpec{
@@ -55,8 +54,120 @@ func TestNewOrbitalOperator(t *testing.T) {
 		assert.Nil(t, p.KeyVersion)
 		assert.False(t, p.IsNewKV)
 	})
+}
 
-	t.Run("should load key and create new key version for root key", func(t *testing.T) {
+func TestLoadKey(t *testing.T) {
+	db := newRootDB(t)
+	tenant := createTenant(t, db)
+	kStore := storesql.NewKeyStore(db)
+	kvStore := storesql.NewKeyVersionStore(db)
+	stores := store.Stores{Keys: kStore, KeyVersions: kvStore, Tenants: storesql.NewTenantStore(db)}
+
+	rootName := "test-root"
+	cfg := &config.RootConfig{
+		Name: rootName,
+		Hierarchy: spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+		},
+	}
+
+	t.Run("should return error if KID is nil", func(t *testing.T) {
+		// given
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: cfg,
+				Registry:   nil,
+				Stores:     stores,
+				KID:        nil,
+			})
+
+		// when
+		or := p.LoadKey(t.Context())
+
+		// then
+		assert.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+	})
+
+	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
+		// given
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
+				KID: &orchestrator.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID},
+			})
+
+		// when
+		or := p.LoadKey(t.Context())
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+	})
+
+	t.Run("should retry when LoadKey returns an internal DB error", func(t *testing.T) {
+		// given — "non-uuid" triggers a SQL error (not ErrKeyNotFound)
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
+				KID: &orchestrator.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID},
+			})
+
+		// when
+		or := p.LoadKey(t.Context())
+
+		// then
+		require.NotNil(t, or)
+		resp := applyResponse(t, or)
+		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
+		assert.Positive(t, resp.ReconcileAfterSec)
+	})
+}
+
+func TestResolveKeyVersions(t *testing.T) {
+	db := newRootDB(t)
+	tenant := createTenant(t, db)
+	kStore := storesql.NewKeyStore(db)
+	kvStore := storesql.NewKeyVersionStore(db)
+	stores := store.Stores{Keys: kStore, KeyVersions: kvStore, Tenants: storesql.NewTenantStore(db)}
+
+	rootName := "test-root"
+	cfg := &config.RootConfig{
+		Name: rootName,
+		Hierarchy: spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+		},
+	}
+
+	t.Run("should return error if key is nil", func(t *testing.T) {
+		// given
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: cfg,
+				Registry:   nil,
+				Stores:     stores,
+				KID:        nil,
+			})
+
+		// when
+		or := p.ResolveKeyVersions(t.Context())
+
+		// then
+		assert.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+	})
+
+	t.Run("should create new key version for root key", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
@@ -69,10 +180,14 @@ func TestNewOrbitalOperator(t *testing.T) {
 				RootConfig: cfg,
 				Registry:   nil,
 				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID},
 			})
+		ctx := t.Context()
 
 		// when
-		or := p.ResolveKeyAndVersions(t.Context(), orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID})
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
 
 		// then
 		assert.Nil(t, or)
@@ -83,7 +198,7 @@ func TestNewOrbitalOperator(t *testing.T) {
 		assert.True(t, p.IsNewKV)
 	})
 
-	t.Run("should load key and update existing key version", func(t *testing.T) {
+	t.Run("should update existing key version", func(t *testing.T) {
 		// given
 		key := createKey(t, kStore, model.Key{
 			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
@@ -100,31 +215,21 @@ func TestNewOrbitalOperator(t *testing.T) {
 				RootConfig: cfg,
 				Registry:   nil,
 				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID},
 			})
 
+		ctx := t.Context()
+
 		// when
-		or := p.ResolveKeyAndVersions(t.Context(), orchestrator.KeyIdentifier{ID: key.ID, TenantID: tenant.ID})
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
 
 		// then
 		assert.Nil(t, or)
 		require.NotNil(t, p.KeyVersion)
 		assert.Equal(t, model.KeyVersionUsable, p.KeyVersion.ProcessingState)
 		assert.False(t, p.IsNewKV)
-	})
-
-	t.Run("should return OrbitalFail when key is not found", func(t *testing.T) {
-		// given
-		p := orchestrator.NewKeyOperator(
-			orchestrator.KeyOperatorConfig{
-				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
-			})
-
-		// when
-		or := p.ResolveKeyAndVersions(t.Context(), orchestrator.KeyIdentifier{ID: uuid.New().String(), TenantID: tenant.ID})
-
-		// then
-		require.NotNil(t, or)
-		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
 	})
 
 	t.Run("should fail key when parent key version is not found", func(t *testing.T) {
@@ -149,36 +254,24 @@ func TestNewOrbitalOperator(t *testing.T) {
 				RootConfig: cfg,
 				Registry:   nil,
 				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key1.ID, TenantID: tenant.ID},
 			})
 
+		ctx := t.Context()
+
 		// when
-		or := p.ResolveKeyAndVersions(t.Context(), orchestrator.KeyIdentifier{ID: key1.ID, TenantID: tenant.ID})
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
 
 		// then
 		require.NotNil(t, or)
 		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
 		assertKeyState(t, kStore, key1, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
-
-	t.Run("should retry when loadKey returns an internal DB error", func(t *testing.T) {
-		// given — "non-uuid" triggers a SQL error (not ErrKeyNotFound)
-		p := orchestrator.NewKeyOperator(
-			orchestrator.KeyOperatorConfig{
-				Manager: nil, RootConfig: cfg, Registry: nil, Stores: stores,
-			})
-
-		// when
-		or := p.ResolveKeyAndVersions(t.Context(), orchestrator.KeyIdentifier{ID: "non-uuid", TenantID: tenant.ID})
-
-		// then
-		require.NotNil(t, or)
-		resp := applyResponse(t, or)
-		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
-		assert.Positive(t, resp.ReconcileAfterSec)
-	})
 }
 
-func TestGenerateAndSealSecret(t *testing.T) {
+func TestGenerateAndSealLocalSecret(t *testing.T) {
 	db := newRootDB(t)
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
@@ -235,8 +328,12 @@ func TestGenerateAndSealSecret(t *testing.T) {
 				RootConfig: cfg,
 				Registry:   nil,
 				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID},
 			})
-		or := p.ResolveKeyAndVersions(ctx, orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
+		// when
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
 		require.Nil(t, or)
 		return p
 	}
@@ -261,7 +358,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		require.True(t, p.IsNewKV) // new KV, but should still skip
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then — nil means generation was skipped (manager would fail for K2)
 		assert.Nil(t, or)
@@ -278,7 +375,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		require.True(t, p.IsNewKV)
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		assert.Nil(t, or)
@@ -309,7 +406,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		require.False(t, p.IsNewKV)
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		assert.Nil(t, or)
@@ -340,7 +437,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		require.True(t, p.IsNewKV) // new KV created from parent
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		assert.Nil(t, or)
@@ -373,7 +470,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		require.True(t, p.IsNewKV)
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -390,7 +487,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		p := loadProcessor(t, mgr, key)
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -418,7 +515,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		p.IsNewKV = true
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -440,7 +537,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		// Key is nil (LoadKeyAndVersions not called)
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -464,7 +561,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		p.Key = &key // set key but leave KeyVersion nil
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -491,7 +588,7 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		p.KeyVersion = &kv
 
 		// when
-		or := p.GenerateAndSealSecret(ctx)
+		or := p.GenerateAndSealLocalSecret(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -586,7 +683,7 @@ func TestMarkKeyFailed(t *testing.T) {
 	})
 }
 
-func TestUpsertRemote(t *testing.T) {
+func TestUpsertRemoteKey(t *testing.T) {
 	db := newRootDB(t)
 	tenant := createTenant(t, db)
 	kStore := storesql.NewKeyStore(db)
@@ -644,8 +741,11 @@ func TestUpsertRemote(t *testing.T) {
 				RootConfig: cfg,
 				Registry:   registry,
 				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID},
 			})
-		or := p.ResolveKeyAndVersions(ctx, orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID})
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
 		require.Nil(t, or)
 		return p
 	}
@@ -662,7 +762,7 @@ func TestUpsertRemote(t *testing.T) {
 		p := loadProcessor(t, key, emptyRegistry(t))
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKey(ctx)
 
 		// then
 		assert.Nil(t, or)
@@ -681,7 +781,266 @@ func TestUpsertRemote(t *testing.T) {
 			})
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+	})
+
+	t.Run("should fail key if registry is nil", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		p := loadProcessor(t, key, emptyRegistry(t))
+		// loadProcessor used emptyRegistry but we need nil registry on the processor;
+		// we can't set it directly (unexported), so create a fresh processor with nil registry
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: cfg,
+				Registry:   nil,
+				Stores:     stores,
+			})
+		p2.Key = p.Key
+
+		// when
+		or := p2.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should fail key if root config is nil", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		p := loadProcessor(t, key, emptyRegistry(t))
+		// loadProcessor used emptyRegistry but we need nil registry on the processor;
+		// we can't set it directly (unexported), so create a fresh processor with nil registry
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: nil,
+				Registry:   emptyRegistry(t),
+				Stores:     stores,
+			})
+		p2.Key = p.Key
+
+		// when
+		or := p2.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should fail key if root name is empty", func(t *testing.T) {
+		// given — empty root name means no key is considered "managed by root",
+		// so the agent-managed key proceeds to registry lookup and fails.
+		key := createRemoteKeyHierarchy(t)
+		p := loadProcessor(t, key, emptyRegistry(t))
+		p2 := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: &config.RootConfig{Name: "", Hierarchy: cfg.Hierarchy},
+				Registry:   emptyRegistry(t),
+				Stores:     stores,
+			})
+		p2.Key = p.Key
+
+		// when
+		or := p2.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- agent not found ----
+
+	t.Run("should fail key if agent is not in registry", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		p := loadProcessor(t, key, emptyRegistry(t))
+
+		// when
+		or := p.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- upsertRemoteKey ----
+
+	t.Run("should retry if grpc returns a retryable error", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		agentSrv := startAgentServer(t, nil)
+		dropTenantTable(t, agentSrv.db) // generic DB error -> ERROR_CODE_RETRY
+		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
+
+		// when
+		or := p.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		resp := applyResponse(t, or)
+		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
+		assert.Positive(t, resp.ReconcileAfterSec)
+		assertKeyState(t, kStore, key, model.KeyProcessingPending, model.KeyLifeCycleActive)
+	})
+
+	t.Run("should fail key if grpc returns a non-retryable error", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		agentSrv := startAgentServer(t, nil) // no tenant seeded -> ErrTenantNotFound -> ERROR_CODE_ABORT
+		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
+
+		// when
+		or := p.UpsertRemoteKey(ctx)
+
+		// then
+		require.NotNil(t, or)
+		assert.Equal(t, string(orbital.TaskStatusFailed), applyResponse(t, or).Status)
+		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
+	})
+
+	// ---- happy path ----
+
+	t.Run("should upsert key to agent", func(t *testing.T) {
+		// given
+		key := createRemoteKeyHierarchy(t)
+		agentSrv := startAgentServer(t, nil)
+		seedAgentTenant(t, agentSrv.db, tenant.ID)
+
+		// pre-seed key and KV in agent DB so UpsertKeyVersion takes the update
+		// path (skips generateAndSealSecret which needs a non-nil manager)
+		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
+		agentKey := *p.Key
+		agentKey.KeyProcessingState = model.KeyProcessingState{Status: model.KeyProcessingCompleted}
+		require.NoError(t, agentSrv.keyStore.CreateKey(ctx, agentKey))
+		createKeyVersion(t, agentSrv.kvStore, key.TenantID, key.ID, p.KeyVersion.Version,
+			p.KeyVersion.ParentKeyID, p.KeyVersion.ParentKeyVersion, func(kv *model.KeyVersion) {
+				kv.ProcessingState = model.KeyVersionReWrapping
+				kv.LifeCycleState = model.KeyLifeCycleSuspended
+			})
+
+		// when
+		or := p.UpsertRemoteKey(ctx)
+
+		// then
+		assert.Nil(t, or)
+
+		// verify agent DB: key upserted
+		assertKeyState(t, agentSrv.keyStore, key, model.KeyProcessingCompleted, model.KeyLifeCycleActive)
+	})
+}
+
+func TestUpsertRemoteKeyVersion(t *testing.T) {
+	db := newRootDB(t)
+	tenant := createTenant(t, db)
+	kStore := storesql.NewKeyStore(db)
+	kvStore := storesql.NewKeyVersionStore(db)
+	stores := store.Stores{Keys: kStore, KeyVersions: kvStore, Tenants: storesql.NewTenantStore(db)}
+
+	ctx := t.Context()
+	rootName := "test-root"
+	cfg := &config.RootConfig{
+		Name: rootName,
+		Hierarchy: spec.KeyHierarchy{
+			Name: "test-hierarchy",
+			KeySpecs: []spec.KeySpec{
+				{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
+				{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
+			},
+		},
+	}
+
+	// helper: create K0 -> K1 parent chain with key versions, then K2 managed by agent
+	createRemoteKeyHierarchy := func(t *testing.T) model.Key {
+		t.Helper()
+		key0 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+		})
+		kv0 := createKeyVersion(t, kvStore, tenant.ID, key0.ID, 100, nil, nil, func(kv *model.KeyVersion) {
+			kv.ProcessingState = model.KeyVersionUsable
+			kv.LifeCycleState = model.KeyLifeCycleActive
+		})
+		key1 := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K1", ParentID: new(key0.ID), ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingCompleted},
+		})
+		createKeyVersion(t, kvStore, tenant.ID, key1.ID, 100, &key0.ID, &kv0.Version, func(kv *model.KeyVersion) {
+			kv.ProcessingState = model.KeyVersionUsable
+			kv.LifeCycleState = model.KeyLifeCycleActive
+		})
+		return createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K2", ParentID: new(key1.ID), ManagedBy: "agent-1",
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+	}
+
+	// helper: load processor with key and key version
+	loadProcessor := func(t *testing.T, key model.Key, registry *grpcconn.Registry) *orchestrator.KeyOperator {
+		t.Helper()
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: cfg,
+				Registry:   registry,
+				Stores:     stores,
+				KID:        &orchestrator.KeyIdentifier{ID: key.ID, TenantID: key.TenantID},
+			})
+		or := p.LoadKey(ctx)
+		assert.Nil(t, or)
+		or = p.ResolveKeyVersions(ctx)
+		require.Nil(t, or)
+		return p
+	}
+
+	// ---- skip ----
+
+	t.Run("should skip if key is managed by root", func(t *testing.T) {
+		// given
+		key := createKey(t, kStore, model.Key{
+			TenantID: tenant.ID, Kind: "K0", ManagedBy: rootName,
+			LifeCycleState:     model.KeyLifeCycleActive,
+			KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
+		})
+		p := loadProcessor(t, key, emptyRegistry(t))
+
+		// when
+		or := p.UpsertRemoteKeyVersion(ctx)
+
+		// then
+		assert.Nil(t, or)
+	})
+
+	// ---- nil/empty guards ----
+
+	t.Run("should fail if key is nil", func(t *testing.T) {
+		// given
+		p := orchestrator.NewKeyOperator(
+			orchestrator.KeyOperatorConfig{
+				Manager:    nil,
+				RootConfig: cfg,
+				Registry:   emptyRegistry(t),
+				Stores:     stores,
+			})
+		p.Key = nil
+
+		// when
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -701,7 +1060,7 @@ func TestUpsertRemote(t *testing.T) {
 		p.Key = &key
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -726,7 +1085,7 @@ func TestUpsertRemote(t *testing.T) {
 		p2.KeyVersion = p.KeyVersion
 
 		// when
-		or := p2.UpsertRemote(ctx)
+		or := p2.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -751,7 +1110,7 @@ func TestUpsertRemote(t *testing.T) {
 		p2.KeyVersion = p.KeyVersion
 
 		// when
-		or := p2.UpsertRemote(ctx)
+		or := p2.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -760,14 +1119,14 @@ func TestUpsertRemote(t *testing.T) {
 	})
 
 	t.Run("should fail key if root name is empty", func(t *testing.T) {
-		// given
+		// given — empty root name means no key is considered "managed by root",
+		// so the agent-managed key proceeds to registry lookup and fails.
 		key := createRemoteKeyHierarchy(t)
 		p := loadProcessor(t, key, emptyRegistry(t))
-		// create a fresh processor with empty rootName but non-nil registry
 		p2 := orchestrator.NewKeyOperator(
 			orchestrator.KeyOperatorConfig{
 				Manager:    nil,
-				RootConfig: cfg,
+				RootConfig: &config.RootConfig{Name: "", Hierarchy: cfg.Hierarchy},
 				Registry:   emptyRegistry(t),
 				Stores:     stores,
 			})
@@ -775,7 +1134,7 @@ func TestUpsertRemote(t *testing.T) {
 		p2.KeyVersion = p.KeyVersion
 
 		// when
-		or := p2.UpsertRemote(ctx)
+		or := p2.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -791,7 +1150,7 @@ func TestUpsertRemote(t *testing.T) {
 		p := loadProcessor(t, key, emptyRegistry(t))
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -799,34 +1158,14 @@ func TestUpsertRemote(t *testing.T) {
 		assertKeyState(t, kStore, key, model.KeyProcessingFailed, model.KeyLifeCycleActive)
 	})
 
-	// ---- upsertRemoteKey ----
-
-	t.Run("should retry if upsertRemoteKey returns a retryable error", func(t *testing.T) {
-		// given
-		key := createRemoteKeyHierarchy(t)
-		agentSrv := startAgentServer(t, nil)
-		dropTenantTable(t, agentSrv.db) // generic DB error -> ERROR_CODE_RETRY
-		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
-
-		// when
-		or := p.UpsertRemote(ctx)
-
-		// then
-		require.NotNil(t, or)
-		resp := applyResponse(t, or)
-		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
-		assert.Positive(t, resp.ReconcileAfterSec)
-		assertKeyState(t, kStore, key, model.KeyProcessingPending, model.KeyLifeCycleActive)
-	})
-
-	t.Run("should fail key if upsertRemoteKey returns a non-retryable error", func(t *testing.T) {
+	t.Run("should fail key if grpc returns a non-retryable error", func(t *testing.T) {
 		// given
 		key := createRemoteKeyHierarchy(t)
 		agentSrv := startAgentServer(t, nil) // no tenant seeded -> ErrTenantNotFound -> ERROR_CODE_ABORT
 		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -836,16 +1175,15 @@ func TestUpsertRemote(t *testing.T) {
 
 	// ---- upsertRemoteKeyVersion ----
 
-	t.Run("should retry if upsertRemoteKeyVersion returns a retryable error", func(t *testing.T) {
+	t.Run("should retry if grpc returns a retryable error", func(t *testing.T) {
 		// given
 		key := createRemoteKeyHierarchy(t)
 		agentSrv := startAgentServer(t, nil)
-		seedAgentTenant(t, agentSrv.db, tenant.ID)
-		dropKeyVersionsTable(t, agentSrv.db) // upsertRemoteKey succeeds, KV table missing -> ERROR_CODE_RETRY
+		dropTenantTable(t, agentSrv.db) // generic DB error -> ERROR_CODE_RETRY
 		p := loadProcessor(t, key, newRegistry(t, "agent-1", agentSrv))
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		require.NotNil(t, or)
@@ -857,7 +1195,7 @@ func TestUpsertRemote(t *testing.T) {
 
 	// ---- happy path ----
 
-	t.Run("should upsert key and key version to agent", func(t *testing.T) {
+	t.Run("should upsert key version to agent", func(t *testing.T) {
 		// given
 		key := createRemoteKeyHierarchy(t)
 		agentSrv := startAgentServer(t, nil)
@@ -876,19 +1214,10 @@ func TestUpsertRemote(t *testing.T) {
 			})
 
 		// when
-		or := p.UpsertRemote(ctx)
+		or := p.UpsertRemoteKeyVersion(ctx)
 
 		// then
 		assert.Nil(t, or)
-
-		// verify agent DB: key upserted
-		agentFetchedKey, err := agentSrv.keyStore.GetKeyByID(ctx, key.ID, key.TenantID)
-		require.NoError(t, err)
-		assert.Equal(t, key.ID, agentFetchedKey.ID)
-		assert.Equal(t, key.TenantID, agentFetchedKey.TenantID)
-		assert.Equal(t, key.Kind, agentFetchedKey.Kind)
-		assert.Equal(t, model.KeyLifeCycleActive, agentFetchedKey.LifeCycleState)
-		assert.Equal(t, model.KeyProcessingCompleted, agentFetchedKey.KeyProcessingState.Status)
 
 		// verify agent DB: key version updated
 		agentKVs, err := agentSrv.kvStore.ListKeyVersions(ctx, store.ListKeyVersionsQuery{
@@ -980,5 +1309,111 @@ func TestMarkKeyCompleted(t *testing.T) {
 		// then
 		require.NotNil(t, or)
 		assert.Equal(t, string(orbital.TaskStatusProcessing), applyResponse(t, or).Status)
+	})
+}
+
+func TestExecuteKeyOperator(t *testing.T) {
+	p := orchestrator.NewKeyOperator(orchestrator.KeyOperatorConfig{})
+
+	// helper: run Execute inside an orbital handler and return the task response.
+	executeWith := func(t *testing.T, pipeline orchestrator.OperatorPipelineFunc) (orbital.TaskResponse, error) {
+		t.Helper()
+		var execErr error
+		resp := orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(
+			func(ctx context.Context, _ orbital.HandlerRequest, r *orbital.HandlerResponse) {
+				execErr = p.Execute(ctx, pipeline, r)
+			},
+		), orbital.TaskRequest{TaskID: uuid.New(), Type: "test"})
+		return resp, execErr
+	}
+
+	t.Run("should complete when all steps succeed", func(t *testing.T) {
+		// given
+		var called []int
+		pipeline := func(_ *orchestrator.KeyOperator) []orchestrator.OperatorStepFunc {
+			return []orchestrator.OperatorStepFunc{
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 1); return nil },
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 2); return nil },
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 3); return nil },
+			}
+		}
+
+		// when
+		resp, err := executeWith(t, pipeline)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
+		assert.Equal(t, []int{1, 2, 3}, called)
+	})
+
+	t.Run("should fail when pipelineFunc is nil", func(t *testing.T) {
+		// given
+		// when
+		resp, err := executeWith(t, nil)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
+	})
+
+	t.Run("should complete with empty pipeline", func(t *testing.T) {
+		// given
+		pipeline := func(_ *orchestrator.KeyOperator) []orchestrator.OperatorStepFunc {
+			return nil
+		}
+
+		// when
+		resp, err := executeWith(t, pipeline)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, string(orbital.TaskStatusDone), resp.Status)
+	})
+
+	t.Run("should fail when first step returns OrbitalFail", func(t *testing.T) {
+		// given
+		var called []int
+		pipeline := func(_ *orchestrator.KeyOperator) []orchestrator.OperatorStepFunc {
+			return []orchestrator.OperatorStepFunc{
+				func(_ context.Context) *orchestrator.OrbitalOperatorError {
+					called = append(called, 1)
+					return orchestrator.OrbitalFail(errors.New("step 1 failed"))
+				},
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 2); return nil },
+			}
+		}
+
+		// when
+		resp, err := executeWith(t, pipeline)
+
+		// then
+		require.NoError(t, err) // OrbitalFail applies to resp, returns nil
+		assert.Equal(t, string(orbital.TaskStatusFailed), resp.Status)
+		assert.Equal(t, []int{1}, called, "second step should not run")
+	})
+
+	t.Run("should retry when middle step returns OrbitalContinue", func(t *testing.T) {
+		// given
+		var called []int
+		pipeline := func(_ *orchestrator.KeyOperator) []orchestrator.OperatorStepFunc {
+			return []orchestrator.OperatorStepFunc{
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 1); return nil },
+				func(_ context.Context) *orchestrator.OrbitalOperatorError {
+					called = append(called, 2)
+					return orchestrator.OrbitalContinue(errors.New("transient"))
+				},
+				func(_ context.Context) *orchestrator.OrbitalOperatorError { called = append(called, 3); return nil },
+			}
+		}
+
+		// when
+		resp, err := executeWith(t, pipeline)
+
+		// then
+		require.Error(t, err) // OrbitalContinue propagates the error
+		assert.Equal(t, string(orbital.TaskStatusProcessing), resp.Status)
+		assert.Positive(t, resp.ReconcileAfterSec)
+		assert.Equal(t, []int{1, 2}, called, "third step should not run")
 	})
 }

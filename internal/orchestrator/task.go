@@ -21,83 +21,62 @@ import (
 // generates and seals secrets, upserts to remote agents, and marks the key
 // complete.
 type TaskHandler struct {
-	handlerCfg HandlerConfig
+	cfg        HandlerConfig
+	rootCfg    *config.RootConfig
 	transactor store.Transactor
 	registry   *grpcconn.Registry
 	manager    *keyprocessor.Manager
-	rootCfg    *config.RootConfig
 }
 
 var _ OrbitalTaskHandler = &TaskHandler{}
 
 func NewTaskHandler(
-	handleCfg HandlerConfig,
+	handlerCfg HandlerConfig,
 	transactor store.Transactor,
 	registry *grpcconn.Registry,
 	manager *keyprocessor.Manager,
 	rootCfg *config.RootConfig,
 ) *TaskHandler {
 	return &TaskHandler{
-		handlerCfg: handleCfg,
+		cfg:        handlerCfg,
+		rootCfg:    rootCfg,
 		transactor: transactor,
 		registry:   registry,
 		manager:    manager,
-		rootCfg:    rootCfg,
 	}
 }
 
-// TaskType implements [orchestrator.TaskHandler].
-func (h *TaskHandler) TaskType() string {
-	return h.handlerCfg.handlerType
+// TaskType implements [OrbitalTaskHandler].
+func (m *TaskHandler) TaskType() string {
+	return m.cfg.handlerType
 }
 
-// Handle implements [orchestrator.TaskHandler].
-func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
+// Handle implements [OrbitalTaskHandler].
+func (m *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, resp *orbital.HandlerResponse) {
 	var kid KeyIdentifier
 
 	err := json.Unmarshal(req.TaskData, &kid)
 	if err != nil {
-		resp.Fail(fmt.Sprintf("handler %v failed to unmarshal task data: %v", h.handlerCfg, err))
+		resp.Fail(fmt.Sprintf("handler %v failed to unmarshal task data: %v", m.cfg, err))
 		return
 	}
 
-	err = store.ChainTransaction(ctx, h.transactor,
+	err = store.ChainTransaction(ctx, m.transactor,
 		ValidateTenantID(kid.TenantID),
 		EnsureKey(kid, func(key *model.Key) bool {
-			return key.LifeCycleState == h.handlerCfg.toState &&
+			return key.LifeCycleState == m.cfg.toState &&
 				key.KeyProcessingState.Status == model.KeyProcessingPending
 		}),
 		func(ctx context.Context, stores store.Stores) error {
-			proc := NewKeyOperator(
+			o := NewKeyOperator(
 				KeyOperatorConfig{
-					Manager:    h.manager,
-					RootConfig: h.rootCfg,
-					Registry:   h.registry,
+					Manager:    m.manager,
+					RootConfig: m.rootCfg,
+					Registry:   m.registry,
 					Stores:     stores,
-				},
-			)
-
-			or := proc.ResolveKeyAndVersions(ctx, kid)
-			if or != nil {
-				return or.Apply(resp)
-			}
-
-			or = proc.GenerateAndSealSecret(ctx)
-			if or != nil {
-				return or.Apply(resp)
-			}
-
-			or = proc.UpsertRemote(ctx)
-			if or != nil {
-				return or.Apply(resp)
-			}
-
-			or = proc.MarkKeyCompleted(ctx)
-			if or != nil {
-				return or.Apply(resp)
-			}
-
-			return markComplete(resp)
+					KID:        &kid,
+				})
+			return o.Execute(ctx, m.cfg.operatorPipeline, resp)
 		},
 	)
 	if err != nil {
@@ -106,12 +85,7 @@ func (h *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 			_ = r.Apply(resp)
 			return
 		}
-		slog.Error("task failed", "handler", h.handlerCfg, "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
+		slog.Error("task failed", "handler", m.cfg, "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
 		resp.ContinueAndWaitFor(RetryBackoff)
 	}
-}
-
-func markComplete(resp *orbital.HandlerResponse) error {
-	resp.Complete()
-	return nil
 }
