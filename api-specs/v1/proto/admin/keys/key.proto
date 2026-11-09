@@ -10,6 +10,7 @@ service KeyService {
   rpc ActivateKey(ActivateKeyRequest) returns (ActivateKeyResponse);
   rpc DeactivateKey(DeactivateKeyRequest) returns (DeactivateKeyResponse);
   rpc SuspendKey(SuspendKeyRequest) returns (SuspendKeyResponse);
+  rpc CompromiseKey(CompromiseKeyRequest) returns (CompromiseKeyResponse);
   rpc GetKey(GetKeyRequest) returns (GetKeyResponse);
   rpc GetParentKeys(GetParentKeysRequest) returns (GetParentKeysResponse);
   rpc GetDescendantKeys(GetDescendantKeysRequest) returns (GetDescendantKeysResponse);
@@ -69,6 +70,15 @@ message DeactivateKeyResponse {
   string job_group_id = 1;
 }
 
+message CompromiseKeyRequest {
+  string id = 1;
+  string tenant_id = 2;
+  bool cascading = 3;
+}
+
+message CompromiseKeyResponse {
+  string job_group_id = 1;
+}
 
 message SuspendKeyRequest {
   string id = 1;

@@ -41,6 +41,7 @@ const (
 	ActivateKey   = "activate-key"
 	SuspendKey    = "suspend-key"
 	DeactivateKey = "deactivate-key"
+	CompromiseKey = "compromise-key"
 )
 
 type (
@@ -75,6 +76,13 @@ func DeactivateHandlerConfig() HandlerConfig {
 	return HandlerConfig{
 		handlerType: DeactivateKey,
 		toState:     model.KeyLifeCycleDeactivated,
+	}
+}
+
+func CompromiseHandlerConfig() HandlerConfig {
+	return HandlerConfig{
+		handlerType: CompromiseKey,
+		toState:     model.KeyLifeCycleCompromised,
 	}
 }
 
