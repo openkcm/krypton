@@ -210,7 +210,7 @@ func (rm *RootManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer
 			if req.Metadata == nil {
 				req.Metadata = map[string]string{}
 			}
-			req.Metadata[providerKeyLabel(sp.Type)] = label
+			req.Metadata[sealer.ProviderKeyMetadataKey(sp.Type)] = label
 
 			resp, err = s.Seal(ctx, req)
 			return err
@@ -248,7 +248,7 @@ func (rm *RootManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (se
 			if req.Metadata == nil {
 				req.Metadata = map[string]string{}
 			}
-			req.Metadata[providerKeyLabel(sp.Type)] = label
+			req.Metadata[sealer.ProviderKeyMetadataKey(sp.Type)] = label
 
 			resp, err = s.Unseal(ctx, req)
 			return err
@@ -337,7 +337,7 @@ func (p providerKeyVersions) resolveLabel(ctx context.Context, version int, t se
 	if err != nil {
 		return "", err
 	}
-	label, ok := kv.Labels[providerKeyLabel(t)]
+	label, ok := kv.Labels[sealer.ProviderKeyMetadataKey(t)]
 	if !ok || label == "" {
 		return "", ErrProviderKeyLabelEmpty
 	}
@@ -346,13 +346,9 @@ func (p providerKeyVersions) resolveLabel(ctx context.Context, version int, t se
 
 func (p providerKeyVersions) create(ctx context.Context, version int, t sealer.Type, providerKeyID string) error {
 	labels := map[string]string{
-		providerKeyLabel(t): providerKeyID,
+		sealer.ProviderKeyMetadataKey(t): providerKeyID,
 	}
 	v := model.NewKeyVersion(p.tenantID, p.keyID, version, nil, nil).WithLabels(labels)
 	_, err := p.versions.CreateKeyVersion(ctx, store.CreateKeyVersionQuery{KeyVersion: v})
 	return err
-}
-
-func providerKeyLabel(t sealer.Type) string {
-	return model.ReservedLabelPrefix + string(t) + ":provider-key"
 }
