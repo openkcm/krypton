@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/openkcm/krypton/internal/securemem"
+	"github.com/openkcm/krypton/pkg/model"
 )
 
 // ErrUnknownType is returned when sealer type is unknown.
@@ -12,6 +13,11 @@ var ErrUnknownType = errors.New("unknown sealer type")
 
 // Type identifies a sealer implementation for configuration deserialization.
 type Type string
+
+// ProviderKeyMetadataKey returns the metadata key for a provider type.
+func ProviderKeyMetadataKey(t Type) string {
+	return model.ReservedLabelPrefix + string(t) + ":provider-key"
+}
 
 // SealRequest identifies a key version and provides the plaintext and AAD to seal.
 type SealRequest struct {
