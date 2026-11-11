@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package krypton.v1.test.provider;
+
+option go_package = "github.com/openkcm/krypton/pkg/api/v1/proto/test/provider";
+
+// Service simulates an external key provider for testing only.
+// The root server registers it only when ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT.
+service Service {
+  rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse);
+  rpc RotateAuth(RotateAuthRequest) returns (RotateAuthResponse);
+  rpc RotateKey(RotateKeyRequest) returns (RotateKeyResponse);
+  rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
+}
+
+message CreateKeyRequest {}
+
+message KeyRef {
+  string key_id = 1;
+  int32 key_version = 2;
+}
+
+message CreateKeyResponse {
+  KeyRef key_ref = 1;
+  string access_token = 2;
+}
+
+message RotateAuthRequest {
+  string key_id = 1;
+}
+
+message RotateAuthResponse {
+  string access_token = 1;
+}
+
+message RotateKeyRequest {
+  string key_id = 1;
+}
+
+message RotateKeyResponse {
+  KeyRef key_ref = 1;
+}
+
+message DestroyKeyRequest {
+  string key_id = 1;
+}
+
+message DestroyKeyResponse {}

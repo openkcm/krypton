@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/orchestrator"
+	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
@@ -37,6 +39,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/rootkey"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/test/provider"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -175,6 +178,10 @@ func main() {
 	// grpc server setup for sealer
 	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
+	cleanupTestProvider, err := registerUnsafeTestProvider(context.Background(), grpcServer)
+	handleErr(err, "failed to register unsafe test provider")
+	defer cleanupTestProvider()
+
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
 
@@ -229,6 +236,35 @@ func loadConfig() *config.RootConfig {
 	handleErr(err, "failed to load root config from "+path)
 
 	return rCfg
+}
+
+const (
+	unsafeTestProviderEnv = "ENABLE_UNSAFE_TEST_PROVIDER"
+	unsafeTestProviderAck = "I_ACCEPT"
+)
+
+func registerUnsafeTestProvider(ctx context.Context, registrar grpc.ServiceRegistrar) (func(), error) {
+	value, set := os.LookupEnv(unsafeTestProviderEnv)
+	if !set {
+		return func() {}, nil
+	}
+	if value != unsafeTestProviderAck {
+		return nil, fmt.Errorf("%s must be set to %s", unsafeTestProviderEnv, unsafeTestProviderAck)
+	}
+
+	prov, err := providertest.New(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	provider.RegisterServiceServer(registrar, provider.NewService(prov))
+	log.Print("WARNING: unsafe test provider API is enabled")
+
+	return func() {
+		if err := prov.Close(); err != nil {
+			log.Printf("failed to close unsafe test provider: %v", err)
+		}
+	}, nil
 }
 
 // Worker to periodically check agent heartbeats and update their registration status accordingly.
