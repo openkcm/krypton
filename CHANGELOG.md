@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.2.0 (2026-11-11)
+
+## What's Changed
+* chore(deps): bump github.com/moby/go-archive from 0.2.0 to 0.3.0 in the go_modules group across 1 directory by @dependabot[bot] in https://github.com/openkcm/krypton/pull/223
+* feat: chain transaction steps by @fabenan-f in https://github.com/openkcm/krypton/pull/217
+* feat: auth mtls config by @jithinkunjachan in https://github.com/openkcm/krypton/pull/225
+* fix: remove sonar workflow (temporarily) by @fabenan-f in https://github.com/openkcm/krypton/pull/229
+* chore(deps): bump google.golang.org/protobuf from 1.36.11 to 1.36.12 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/215
+* chore(deps): bump github.com/testcontainers/testcontainers-go/modules/postgres from 0.43.0 to 0.44.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/212
+* chore(deps): bump github.com/openkcm/orbital from 0.6.0 to 0.6.1 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/210
+* chore(deps): bump modernc.org/sqlite from 1.55.0 to 1.56.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/209
+* feat: enable no-dump for secure memory in agent and root by @jithinkunjachan in https://github.com/openkcm/krypton/pull/228
+* chore(deps): bump google.golang.org/grpc from 1.83.0 to 1.83.1 in the go_modules group across 1 directory by @dependabot[bot] in https://github.com/openkcm/krypton/pull/226
+* feat: resolve and include mTLS identity configs in agent registration by @jithinkunjachan in https://github.com/openkcm/krypton/pull/227
+* chore: update go version to 1.27.1 by @NamanBalaji in https://github.com/openkcm/krypton/pull/216
+* feat: add connection configs to agent registration by @jithinkunjachan in https://github.com/openkcm/krypton/pull/235
+* feat: add action status info to cli by @fabenan-f in https://github.com/openkcm/krypton/pull/236
+* feat: add per-RPC secure memory vault lifecycle handler by @jithinkunjachan in https://github.com/openkcm/krypton/pull/240
+* feat: add orchestrator package an abstraction layer for orbital by @NamanBalaji in https://github.com/openkcm/krypton/pull/239
+* feat: implement sealer gRPC service with secure memory vault tracking by @jithinkunjachan in https://github.com/openkcm/krypton/pull/238
+* feat: root to agent upsert key rpc by @fabenan-f in https://github.com/openkcm/krypton/pull/243
+* fix: add sql migrate node flag by @fabenan-f in https://github.com/openkcm/krypton/pull/244
+* feat: add RPCManager for remote parent key provider seal/unseal over … by @jithinkunjachan in https://github.com/openkcm/krypton/pull/245
+* feat: add agent tenant upsert gRPC service by @jithinkunjachan in https://github.com/openkcm/krypton/pull/246
+* feat: announce key handlers by @fabenan-f in https://github.com/openkcm/krypton/pull/248
+* feat: add announcekeyv2 handler with agent tenant auto-upsert by @jithinkunjachan in https://github.com/openkcm/krypton/pull/249
+* feat: migrate announce-key workflow to the new orchestrator by @fabenan-f in https://github.com/openkcm/krypton/pull/250
+* chore(deps): bump github.com/moby/moby/api from 1.55.0 to 1.56.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/234
+* chore(deps): bump golang.org/x/sys from 0.47.0 to 0.48.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/237
+* fix: replace announcekey pkg and delete reconciler pkg by @fabenan-f in https://github.com/openkcm/krypton/pull/252
+* feat: separate tenant validation from upsert in announce-key handler by @jithinkunjachan in https://github.com/openkcm/krypton/pull/253
+* feat: add integration announce tenant creation by @jithinkunjachan in https://github.com/openkcm/krypton/pull/254
+* feat: implement action service by @fabenan-f in https://github.com/openkcm/krypton/pull/255
+* chore(deps): bump golang.org/x/term from 0.45.0 to 0.46.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/241
+* chore(deps): bump github.com/openbao/openbao/api/v2 from 2.6.0 to 2.7.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/242
+* chore(deps): bump modernc.org/sqlite from 1.58.0 to 1.60.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/258
+* refactor: replace inline gRPC dial in RPCManager with grpcconn.Registry by @jithinkunjachan in https://github.com/openkcm/krypton/pull/256
+* fix: uniform key cli output by @fabenan-f in https://github.com/openkcm/krypton/pull/259
+* chore(deps): bump google.golang.org/grpc from 1.83.2 to 1.84.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/257
+* fix: extract sealer into its own pkg by @fabenan-f in https://github.com/openkcm/krypton/pull/268
+* chore(deps): bump golang.org/x/term from 0.46.0 to 0.47.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/266
+* chore(deps): bump github.com/moby/moby/api from 1.56.0 to 1.56.1 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/262
+* chore(deps): bump modernc.org/sqlite from 1.60.0 to 1.60.1 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/260
+* feat(store): filter GetDescendantKeys by LifeCycleState and Status by @jithinkunjachan in https://github.com/openkcm/krypton/pull/263
+* feat: add api specs for sealer router by @fabenan-f in https://github.com/openkcm/krypton/pull/267
+* feat: add cascading key tree activation with FilterKeyTree, UpdateKey by @jithinkunjachan in https://github.com/openkcm/krypton/pull/264
+* chore(deps): bump github.com/openbao/openbao/api/v2 from 2.7.0 to 2.7.1 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/261
+* fix: update the chart and add unit tests for it by @nnicora in https://github.com/openkcm/krypton/pull/269
+* feat add cascading 3 by @jithinkunjachan in https://github.com/openkcm/krypton/pull/270
+* feat: add api spec for root key service by @fabenan-f in https://github.com/openkcm/krypton/pull/273
+* add: Activate key job Handler  by @jithinkunjachan in https://github.com/openkcm/krypton/pull/274
+* feat: add SuspendKey gRPC endpoint with bottom-up cascading support by @jithinkunjachan in https://github.com/openkcm/krypton/pull/275
+* ref: extract all handler to orchestrator by @jithinkunjachan in https://github.com/openkcm/krypton/pull/277
+* feat: add root key service implementation by @fabenan-f in https://github.com/openkcm/krypton/pull/278
+* chore(deps): bump google.golang.org/grpc from 1.84.0 to 1.85.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/276
+* chore(deps): bump github.com/go-jose/go-jose/v4 from 4.1.5 to 4.1.6 in the go_modules group across 1 directory by @dependabot[bot] in https://github.com/openkcm/krypton/pull/279
+* chore(deps): bump modernc.org/sqlite from 1.60.1 to 1.61.1 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/280
+* feat: add admin deactivate a key by @jithinkunjachan in https://github.com/openkcm/krypton/pull/281
+* feature: add compromise keys handler by @jithinkunjachan in https://github.com/openkcm/krypton/pull/283
+* fix: make vault terms more standardized by @fabenan-f in https://github.com/openkcm/krypton/pull/286
+* feat: add task handlers by @jithinkunjachan in https://github.com/openkcm/krypton/pull/287
+
+
+**Full Changelog**: https://github.com/openkcm/krypton/compare/v0.1.0...v0.2.0
+
 ## [0.1.0](https://github.com/openkcm/krypton/compare/v0.0.1...v0.1.0) (2026-08-28)
 
 
