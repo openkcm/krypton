@@ -79,7 +79,7 @@ func TestKeyRef(t *testing.T) {
 func TestClient(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 
@@ -142,7 +142,7 @@ func TestClient(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 
@@ -175,7 +175,7 @@ func TestRoundTrip(t *testing.T) {
 func TestKeyVersions(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 
@@ -207,7 +207,7 @@ func TestKeyVersions(t *testing.T) {
 func TestKeyRotation(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 
@@ -278,7 +278,7 @@ func TestKeyRotation(t *testing.T) {
 func TestAuthRotation(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 
@@ -328,7 +328,7 @@ func TestAuthRotation(t *testing.T) {
 func TestDestroyKey(t *testing.T) {
 	ctx := t.Context()
 
-	provider, err := providertest.NewProvider(ctx)
+	provider, err := providertest.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = provider.Close() })
 

@@ -22,7 +22,7 @@ import (
 )
 
 // TypeProviderTest identifies the test provider.
-const TypeProviderTest sealer.Type = "aes256gcm-providertest"
+const TypeProviderTest sealer.Type = "providertest"
 
 const providerID = "providertest"
 
@@ -46,8 +46,8 @@ type KeyRef struct {
 }
 
 // String returns the string representation of the key reference.
-func (k KeyRef) String() string {
-	return k.TenantID + ":" + k.KeyID + ":" + strconv.Itoa(k.Version)
+func (m KeyRef) String() string {
+	return m.TenantID + ":" + m.KeyID + ":" + strconv.Itoa(m.Version)
 }
 
 // ParseKeyRef parses a key reference string.
@@ -86,8 +86,8 @@ type Auth struct {
 var _ sealer.SealerAuth = (*Auth)(nil)
 
 // ValidateSealerAuth validates the auth.
-func (a *Auth) ValidateSealerAuth() error {
-	if a == nil || a.Token == "" {
+func (m *Auth) ValidateSealerAuth() error {
+	if m == nil || m.Token == "" {
 		return ErrAccessTokenMissing
 	}
 	return nil
@@ -99,7 +99,7 @@ type Config struct{}
 var _ sealer.SealerConfig = (*Config)(nil)
 
 // ValidateSealerConfig validates the configuration.
-func (c *Config) ValidateSealerConfig() error {
+func (m *Config) ValidateSealerConfig() error {
 	return nil
 }
 
@@ -110,8 +110,8 @@ type Provider struct {
 	latest map[string]int
 }
 
-// NewProvider opens the shared in-memory provider.
-func NewProvider(ctx context.Context) (*Provider, error) {
+// New opens the shared in-memory provider.
+func New(ctx context.Context) (*Provider, error) {
 	v, err := sqlitevault.NewUnsafe(ctx, providerID, sqlitevault.MemorySource)
 	if err != nil {
 		return nil, err
@@ -124,14 +124,14 @@ func NewProvider(ctx context.Context) (*Provider, error) {
 }
 
 // Close closes the provider.
-func (p *Provider) Close() error {
-	return p.vault.Close()
+func (m *Provider) Close() error {
+	return m.vault.Close()
 }
 
 // CreateKey creates a key and its auth.
-func (p *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (m *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	keyID := uuid.New().String()
 
@@ -147,7 +147,7 @@ func (p *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
 	}
 	defer authSecret.Destroy()
 
-	_, err = p.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
 		TenantID: providerID,
 		ID:       keySecretID(keyID),
 		Version:  1,
@@ -157,7 +157,7 @@ func (p *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
 		return Auth{}, KeyRef{}, err
 	}
 
-	_, err = p.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
 		TenantID: providerID,
 		ID:       authSecretID(keyID),
 		Secret:   authSecret,
@@ -171,17 +171,17 @@ func (p *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
 		KeyID:    keyID,
 		Version:  1,
 	}
-	p.latest[keyID] = keyRef.Version
+	m.latest[keyID] = keyRef.Version
 
 	return newAuth(authSecret), keyRef, nil
 }
 
 // RotateAuth replaces the auth for a key.
-func (p *Provider) RotateAuth(ctx context.Context, keyID string) (Auth, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (m *Provider) RotateAuth(ctx context.Context, keyID string) (Auth, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	current, err := p.vault.ExportSecret(ctx, vault.ExportSecretRequest{
+	current, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
 		TenantID: providerID,
 		ID:       authSecretID(keyID),
 	})
@@ -199,7 +199,7 @@ func (p *Provider) RotateAuth(ctx context.Context, keyID string) (Auth, error) {
 	}
 	defer secret.Destroy()
 
-	_, err = p.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
 		TenantID: providerID,
 		ID:       authSecretID(keyID),
 		Secret:   secret,
@@ -212,11 +212,11 @@ func (p *Provider) RotateAuth(ctx context.Context, keyID string) (Auth, error) {
 }
 
 // RotateKey creates the next version of a key.
-func (p *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (m *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	current, ok := p.latest[keyID]
+	current, ok := m.latest[keyID]
 	if !ok {
 		return KeyRef{}, ErrKeyNotFound
 	}
@@ -228,7 +228,7 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) 
 	}
 	defer keyMaterial.Destroy()
 
-	_, err = p.vault.ImportSecret(ctx, vault.ImportSecretRequest{
+	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
 		TenantID: providerID,
 		ID:       keySecretID(keyID),
 		Version:  next,
@@ -237,7 +237,7 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) 
 	if err != nil {
 		return KeyRef{}, err
 	}
-	p.latest[keyID] = next
+	m.latest[keyID] = next
 
 	return KeyRef{
 		TenantID: providerID,
@@ -247,17 +247,17 @@ func (p *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) 
 }
 
 // DestroyKey removes a key, its versions, and auth.
-func (p *Provider) DestroyKey(ctx context.Context, keyID string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (m *Provider) DestroyKey(ctx context.Context, keyID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	latest, ok := p.latest[keyID]
+	latest, ok := m.latest[keyID]
 	if !ok {
 		return ErrKeyNotFound
 	}
 
 	for version := 1; version <= latest; version++ {
-		_, err := p.vault.DestroySecret(ctx, vault.DestroySecretRequest{
+		_, err := m.vault.DestroySecret(ctx, vault.DestroySecretRequest{
 			TenantID: providerID,
 			ID:       keySecretID(keyID),
 			Version:  version,
@@ -267,7 +267,7 @@ func (p *Provider) DestroyKey(ctx context.Context, keyID string) error {
 		}
 	}
 
-	_, err := p.vault.DestroySecret(ctx, vault.DestroySecretRequest{
+	_, err := m.vault.DestroySecret(ctx, vault.DestroySecretRequest{
 		TenantID: providerID,
 		ID:       authSecretID(keyID),
 	})
@@ -275,7 +275,7 @@ func (p *Provider) DestroyKey(ctx context.Context, keyID string) error {
 		return err
 	}
 
-	delete(p.latest, keyID)
+	delete(m.latest, keyID)
 	return nil
 }
 
@@ -307,28 +307,28 @@ func NewClient(ctx context.Context, auth Auth) (*Client, error) {
 }
 
 // Close closes the client.
-func (c *Client) Close() error {
-	return c.vault.Close()
+func (m *Client) Close() error {
+	return m.vault.Close()
 }
 
 // Seal encrypts plaintext with a provider key.
-func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
+func (m *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
 	keyRef, err := ParseKeyRef(req.Metadata[sealer.ProviderKeyMetadataKey(TypeProviderTest)])
 	if err != nil {
 		return sealer.SealResponse{}, err
 	}
 
-	if err := c.authenticate(ctx, keyRef); err != nil {
+	if err := m.authenticate(ctx, keyRef); err != nil {
 		return sealer.SealResponse{}, err
 	}
 
-	keyMaterial, err := c.exportKeyMaterial(ctx, keyRef)
+	keyMaterial, err := m.exportKeyMaterial(ctx, keyRef)
 	if err != nil {
 		return sealer.SealResponse{}, err
 	}
 	defer keyMaterial.Destroy()
 
-	resp, err := c.cryptor.Encrypt(ctx, cryptor.EncryptRequest{
+	resp, err := m.cryptor.Encrypt(ctx, cryptor.EncryptRequest{
 		Secret: cryptor.Secret{
 			Data:      keyMaterial,
 			Algorithm: cryptor.KeyAlgorithmAES256,
@@ -346,23 +346,23 @@ func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealR
 }
 
 // Unseal decrypts ciphertext with a provider key.
-func (c *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
+func (m *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
 	keyRef, err := ParseKeyRef(req.Metadata[sealer.ProviderKeyMetadataKey(TypeProviderTest)])
 	if err != nil {
 		return sealer.UnsealResponse{}, err
 	}
 
-	if err := c.authenticate(ctx, keyRef); err != nil {
+	if err := m.authenticate(ctx, keyRef); err != nil {
 		return sealer.UnsealResponse{}, err
 	}
 
-	keyMaterial, err := c.exportKeyMaterial(ctx, keyRef)
+	keyMaterial, err := m.exportKeyMaterial(ctx, keyRef)
 	if err != nil {
 		return sealer.UnsealResponse{}, err
 	}
 	defer keyMaterial.Destroy()
 
-	resp, err := c.cryptor.Decrypt(ctx, cryptor.DecryptRequest{
+	resp, err := m.cryptor.Decrypt(ctx, cryptor.DecryptRequest{
 		Secret: cryptor.Secret{
 			Data:      keyMaterial,
 			Algorithm: cryptor.KeyAlgorithmAES256,
@@ -379,8 +379,8 @@ func (c *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.U
 	}, nil
 }
 
-func (c *Client) exportKeyMaterial(ctx context.Context, keyRef KeyRef) (*securemem.Data, error) {
-	resp, err := c.vault.ExportSecret(ctx, vault.ExportSecretRequest{
+func (m *Client) exportKeyMaterial(ctx context.Context, keyRef KeyRef) (*securemem.Data, error) {
+	resp, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
 		TenantID: keyRef.TenantID,
 		ID:       keySecretID(keyRef.KeyID),
 		Version:  keyRef.Version,
@@ -392,8 +392,8 @@ func (c *Client) exportKeyMaterial(ctx context.Context, keyRef KeyRef) (*securem
 	return resp.Secret, nil
 }
 
-func (c *Client) authenticate(ctx context.Context, keyRef KeyRef) error {
-	resp, err := c.vault.ExportSecret(ctx, vault.ExportSecretRequest{
+func (m *Client) authenticate(ctx context.Context, keyRef KeyRef) error {
+	resp, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
 		TenantID: keyRef.TenantID,
 		ID:       authSecretID(keyRef.KeyID),
 	})
@@ -405,7 +405,7 @@ func (c *Client) authenticate(ctx context.Context, keyRef KeyRef) error {
 	}
 	defer resp.Secret.Destroy()
 
-	provided, err := base64.RawURLEncoding.DecodeString(string(c.auth.Token))
+	provided, err := base64.RawURLEncoding.DecodeString(string(m.auth.Token))
 	if err != nil {
 		return ErrUnauthorized
 	}
