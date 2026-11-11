@@ -31,10 +31,7 @@ func TestTaskHandler_HappyPath_NonRootTarget(t *testing.T) {
 	resp := runTask(t, handler, taskPayload(t, key))
 	assert.Equal(t, string(orbital.TaskStatusDone), resp.Status, "got %q: %s", resp.Status, resp.ErrorMessage)
 
-	got, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
-	require.NoError(t, err)
-	assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
-	assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+	assertKeyState(t, storesql.NewKeyStore(rootDB), key, model.KeyProcessingCompleted, model.KeyLifeCyclePreActivation)
 
 	agentKey, err := agent.keyStore.GetKeyByID(t.Context(), key.ID, key.TenantID)
 	require.NoError(t, err)
@@ -231,10 +228,7 @@ func TestTaskHandler_TenantUpsert_In_Agent(t *testing.T) {
 	resp := runTask(t, handler, taskPayload(t, key))
 	assert.Equal(t, string(orbital.TaskStatusDone), resp.Status, "got %q: %s", resp.Status, resp.ErrorMessage)
 
-	got, err := storesql.NewKeyStore(rootDB).GetKeyByID(t.Context(), key.ID, key.TenantID)
-	require.NoError(t, err)
-	assert.Equal(t, model.KeyProcessingCompleted, got.KeyProcessingState.Status)
-	assert.Equal(t, model.KeyLifeCyclePreActivation, got.LifeCycleState)
+	assertKeyState(t, storesql.NewKeyStore(rootDB), key, model.KeyProcessingCompleted, model.KeyLifeCyclePreActivation)
 
 	agentKey, err := agent.keyStore.GetKeyByID(t.Context(), key.ID, key.TenantID)
 	require.NoError(t, err)

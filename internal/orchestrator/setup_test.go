@@ -248,12 +248,11 @@ func newInlineStaticSecretSpec(t *testing.T) sealerprovider.Spec {
 	}
 }
 
-// createRemoteKey creates a K2 (TEK) key managed by agentName, parented to parentKeyID.
-func createRemoteKey(t *testing.T, kStore store.Key, tenantID, parentKeyID, agentName string) model.Key {
+func createKeyWithState(t *testing.T, kStore store.Key, tenantID, parentKeyID, agentName string, state model.KeyLifeCycleState) model.Key {
 	t.Helper()
 	return createKey(t, kStore, model.Key{
 		TenantID: tenantID, Kind: "K2", ParentID: new(parentKeyID), ManagedBy: agentName,
-		LifeCycleState:     model.KeyLifeCycleActive,
+		LifeCycleState:     state,
 		KeyProcessingState: model.KeyProcessingState{Status: model.KeyProcessingPending},
 	})
 }
@@ -435,7 +434,6 @@ func runTask(t *testing.T, h orchestrator.OrbitalTaskHandler, payload []byte) or
 	t.Helper()
 	return orbital.ExecuteHandler(t.Context(), orbital.HandlerFunc(h.Handle), orbital.TaskRequest{
 		TaskID: uuid.NewV7(),
-		Type:   orchestrator.ActivateKey,
 		Data:   payload,
 	})
 }
@@ -460,12 +458,14 @@ func assertTaskRetry(t *testing.T, resp orbital.TaskResponse) {
 	assert.Positive(t, resp.ReconcileAfterSec)
 }
 
-func assertKeyState(t *testing.T, s store.Key, k model.Key, wantProcessing model.KeyProcessingStatus, wantLifecycle model.KeyLifeCycleState) {
+func assertKeyState(t *testing.T, s store.Key, k model.Key, wantProcessing model.KeyProcessingStatus, wantLifecycle model.KeyLifeCycleState) model.Key {
 	t.Helper()
 	key, err := s.GetKeyByID(t.Context(), k.ID, k.TenantID)
 	require.NoError(t, err)
+	assert.Equal(t, k.Kind, key.Kind)
 	assert.Equal(t, wantProcessing, key.KeyProcessingState.Status)
 	assert.Equal(t, wantLifecycle, key.LifeCycleState)
+	return *key
 }
 
 func assertKeyVersionCreated(t *testing.T, s store.KeyVersion, tenantID, keyID string) model.KeyVersion {
