@@ -19,4 +19,4 @@ version: 0.1.0
 # release-please updates it in each release pull request (marker on the line). Increase
 # `version` in the same pull request, otherwise the chart release workflow skips the
 # already-published chart version.
-appVersion: "v0.1.0" # x-release-please-version
+appVersion: "v0.2.0" # x-release-please-version
