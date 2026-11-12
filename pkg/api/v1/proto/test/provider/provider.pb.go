@@ -21,26 +21,27 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type CreateKeyRequest struct {
+type UpsertInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateKeyRequest) Reset() {
-	*x = CreateKeyRequest{}
+func (x *UpsertInstanceRequest) Reset() {
+	*x = UpsertInstanceRequest{}
 	mi := &file_provider_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateKeyRequest) String() string {
+func (x *UpsertInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateKeyRequest) ProtoMessage() {}
+func (*UpsertInstanceRequest) ProtoMessage() {}
 
-func (x *CreateKeyRequest) ProtoReflect() protoreflect.Message {
+func (x *UpsertInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -52,33 +53,38 @@ func (x *CreateKeyRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateKeyRequest.ProtoReflect.Descriptor instead.
-func (*CreateKeyRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertInstanceRequest.ProtoReflect.Descriptor instead.
+func (*UpsertInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{0}
 }
 
-type KeyRef struct {
+func (x *UpsertInstanceRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+type UpsertInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
-	KeyVersion    int32                  `protobuf:"varint,2,opt,name=key_version,json=keyVersion,proto3" json:"key_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *KeyRef) Reset() {
-	*x = KeyRef{}
+func (x *UpsertInstanceResponse) Reset() {
+	*x = UpsertInstanceResponse{}
 	mi := &file_provider_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *KeyRef) String() string {
+func (x *UpsertInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*KeyRef) ProtoMessage() {}
+func (*UpsertInstanceResponse) ProtoMessage() {}
 
-func (x *KeyRef) ProtoReflect() protoreflect.Message {
+func (x *UpsertInstanceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -90,47 +96,33 @@ func (x *KeyRef) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use KeyRef.ProtoReflect.Descriptor instead.
-func (*KeyRef) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertInstanceResponse.ProtoReflect.Descriptor instead.
+func (*UpsertInstanceResponse) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *KeyRef) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
-	}
-	return ""
-}
-
-func (x *KeyRef) GetKeyVersion() int32 {
-	if x != nil {
-		return x.KeyVersion
-	}
-	return 0
-}
-
-type CreateKeyResponse struct {
+type UpsertKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyRef        *KeyRef                `protobuf:"bytes,1,opt,name=key_ref,json=keyRef,proto3" json:"key_ref,omitempty"`
-	AccessToken   string                 `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateKeyResponse) Reset() {
-	*x = CreateKeyResponse{}
+func (x *UpsertKeyRequest) Reset() {
+	*x = UpsertKeyRequest{}
 	mi := &file_provider_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateKeyResponse) String() string {
+func (x *UpsertKeyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateKeyResponse) ProtoMessage() {}
+func (*UpsertKeyRequest) ProtoMessage() {}
 
-func (x *CreateKeyResponse) ProtoReflect() protoreflect.Message {
+func (x *UpsertKeyRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -142,46 +134,45 @@ func (x *CreateKeyResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateKeyResponse.ProtoReflect.Descriptor instead.
-func (*CreateKeyResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertKeyRequest.ProtoReflect.Descriptor instead.
+func (*UpsertKeyRequest) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CreateKeyResponse) GetKeyRef() *KeyRef {
+func (x *UpsertKeyRequest) GetInstanceId() string {
 	if x != nil {
-		return x.KeyRef
-	}
-	return nil
-}
-
-func (x *CreateKeyResponse) GetAccessToken() string {
-	if x != nil {
-		return x.AccessToken
+		return x.InstanceId
 	}
 	return ""
 }
 
-type RotateAuthRequest struct {
+func (x *UpsertKeyRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+type UpsertKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RotateAuthRequest) Reset() {
-	*x = RotateAuthRequest{}
+func (x *UpsertKeyResponse) Reset() {
+	*x = UpsertKeyResponse{}
 	mi := &file_provider_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RotateAuthRequest) String() string {
+func (x *UpsertKeyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RotateAuthRequest) ProtoMessage() {}
+func (*UpsertKeyResponse) ProtoMessage() {}
 
-func (x *RotateAuthRequest) ProtoReflect() protoreflect.Message {
+func (x *UpsertKeyResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -193,39 +184,34 @@ func (x *RotateAuthRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RotateAuthRequest.ProtoReflect.Descriptor instead.
-func (*RotateAuthRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertKeyResponse.ProtoReflect.Descriptor instead.
+func (*UpsertKeyResponse) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *RotateAuthRequest) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
-	}
-	return ""
-}
-
-type RotateAuthResponse struct {
+type UpsertKeyAuthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	AccessToken   string                 `protobuf:"bytes,3,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RotateAuthResponse) Reset() {
-	*x = RotateAuthResponse{}
+func (x *UpsertKeyAuthRequest) Reset() {
+	*x = UpsertKeyAuthRequest{}
 	mi := &file_provider_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RotateAuthResponse) String() string {
+func (x *UpsertKeyAuthRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RotateAuthResponse) ProtoMessage() {}
+func (*UpsertKeyAuthRequest) ProtoMessage() {}
 
-func (x *RotateAuthResponse) ProtoReflect() protoreflect.Message {
+func (x *UpsertKeyAuthRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -237,39 +223,52 @@ func (x *RotateAuthResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RotateAuthResponse.ProtoReflect.Descriptor instead.
-func (*RotateAuthResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertKeyAuthRequest.ProtoReflect.Descriptor instead.
+func (*UpsertKeyAuthRequest) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *RotateAuthResponse) GetAccessToken() string {
+func (x *UpsertKeyAuthRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *UpsertKeyAuthRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *UpsertKeyAuthRequest) GetAccessToken() string {
 	if x != nil {
 		return x.AccessToken
 	}
 	return ""
 }
 
-type RotateKeyRequest struct {
+type UpsertKeyAuthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RotateKeyRequest) Reset() {
-	*x = RotateKeyRequest{}
+func (x *UpsertKeyAuthResponse) Reset() {
+	*x = UpsertKeyAuthResponse{}
 	mi := &file_provider_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RotateKeyRequest) String() string {
+func (x *UpsertKeyAuthResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RotateKeyRequest) ProtoMessage() {}
+func (*UpsertKeyAuthResponse) ProtoMessage() {}
 
-func (x *RotateKeyRequest) ProtoReflect() protoreflect.Message {
+func (x *UpsertKeyAuthResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -281,39 +280,32 @@ func (x *RotateKeyRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RotateKeyRequest.ProtoReflect.Descriptor instead.
-func (*RotateKeyRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use UpsertKeyAuthResponse.ProtoReflect.Descriptor instead.
+func (*UpsertKeyAuthResponse) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *RotateKeyRequest) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
-	}
-	return ""
-}
-
-type RotateKeyResponse struct {
+type DeleteInstanceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyRef        *KeyRef                `protobuf:"bytes,1,opt,name=key_ref,json=keyRef,proto3" json:"key_ref,omitempty"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RotateKeyResponse) Reset() {
-	*x = RotateKeyResponse{}
+func (x *DeleteInstanceRequest) Reset() {
+	*x = DeleteInstanceRequest{}
 	mi := &file_provider_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RotateKeyResponse) String() string {
+func (x *DeleteInstanceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RotateKeyResponse) ProtoMessage() {}
+func (*DeleteInstanceRequest) ProtoMessage() {}
 
-func (x *RotateKeyResponse) ProtoReflect() protoreflect.Message {
+func (x *DeleteInstanceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_provider_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -325,83 +317,39 @@ func (x *RotateKeyResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RotateKeyResponse.ProtoReflect.Descriptor instead.
-func (*RotateKeyResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteInstanceRequest.ProtoReflect.Descriptor instead.
+func (*DeleteInstanceRequest) Descriptor() ([]byte, []int) {
 	return file_provider_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *RotateKeyResponse) GetKeyRef() *KeyRef {
+func (x *DeleteInstanceRequest) GetInstanceId() string {
 	if x != nil {
-		return x.KeyRef
-	}
-	return nil
-}
-
-type DestroyKeyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DestroyKeyRequest) Reset() {
-	*x = DestroyKeyRequest{}
-	mi := &file_provider_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DestroyKeyRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DestroyKeyRequest) ProtoMessage() {}
-
-func (x *DestroyKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_provider_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DestroyKeyRequest.ProtoReflect.Descriptor instead.
-func (*DestroyKeyRequest) Descriptor() ([]byte, []int) {
-	return file_provider_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *DestroyKeyRequest) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
+		return x.InstanceId
 	}
 	return ""
 }
 
-type DestroyKeyResponse struct {
+type DeleteInstanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DestroyKeyResponse) Reset() {
-	*x = DestroyKeyResponse{}
-	mi := &file_provider_proto_msgTypes[8]
+func (x *DeleteInstanceResponse) Reset() {
+	*x = DeleteInstanceResponse{}
+	mi := &file_provider_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DestroyKeyResponse) String() string {
+func (x *DeleteInstanceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DestroyKeyResponse) ProtoMessage() {}
+func (*DeleteInstanceResponse) ProtoMessage() {}
 
-func (x *DestroyKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_provider_proto_msgTypes[8]
+func (x *DeleteInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_provider_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -412,42 +360,40 @@ func (x *DestroyKeyResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DestroyKeyResponse.ProtoReflect.Descriptor instead.
-func (*DestroyKeyResponse) Descriptor() ([]byte, []int) {
-	return file_provider_proto_rawDescGZIP(), []int{8}
+// Deprecated: Use DeleteInstanceResponse.ProtoReflect.Descriptor instead.
+func (*DeleteInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_provider_proto_rawDescGZIP(), []int{7}
 }
 
 var File_provider_proto protoreflect.FileDescriptor
 
 const file_provider_proto_rawDesc = "" +
 	"\n" +
-	"\x0eprovider.proto\x12\x18krypton.v1.test.provider\"\x12\n" +
-	"\x10CreateKeyRequest\"@\n" +
-	"\x06KeyRef\x12\x15\n" +
-	"\x06key_id\x18\x01 \x01(\tR\x05keyId\x12\x1f\n" +
-	"\vkey_version\x18\x02 \x01(\x05R\n" +
-	"keyVersion\"q\n" +
-	"\x11CreateKeyResponse\x129\n" +
-	"\akey_ref\x18\x01 \x01(\v2 .krypton.v1.test.provider.KeyRefR\x06keyRef\x12!\n" +
-	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\"*\n" +
-	"\x11RotateAuthRequest\x12\x15\n" +
-	"\x06key_id\x18\x01 \x01(\tR\x05keyId\"7\n" +
-	"\x12RotateAuthResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\")\n" +
-	"\x10RotateKeyRequest\x12\x15\n" +
-	"\x06key_id\x18\x01 \x01(\tR\x05keyId\"N\n" +
-	"\x11RotateKeyResponse\x129\n" +
-	"\akey_ref\x18\x01 \x01(\v2 .krypton.v1.test.provider.KeyRefR\x06keyRef\"*\n" +
-	"\x11DestroyKeyRequest\x12\x15\n" +
-	"\x06key_id\x18\x01 \x01(\tR\x05keyId\"\x14\n" +
-	"\x12DestroyKeyResponse2\xa7\x03\n" +
-	"\aService\x12d\n" +
-	"\tCreateKey\x12*.krypton.v1.test.provider.CreateKeyRequest\x1a+.krypton.v1.test.provider.CreateKeyResponse\x12g\n" +
-	"\n" +
-	"RotateAuth\x12+.krypton.v1.test.provider.RotateAuthRequest\x1a,.krypton.v1.test.provider.RotateAuthResponse\x12d\n" +
-	"\tRotateKey\x12*.krypton.v1.test.provider.RotateKeyRequest\x1a+.krypton.v1.test.provider.RotateKeyResponse\x12g\n" +
-	"\n" +
-	"DestroyKey\x12+.krypton.v1.test.provider.DestroyKeyRequest\x1a,.krypton.v1.test.provider.DestroyKeyResponseB;Z9github.com/openkcm/krypton/pkg/api/v1/proto/test/providerb\x06proto3"
+	"\x0eprovider.proto\x12\x18krypton.v1.test.provider\"8\n" +
+	"\x15UpsertInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\x18\n" +
+	"\x16UpsertInstanceResponse\"J\n" +
+	"\x10UpsertKeyRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\"\x13\n" +
+	"\x11UpsertKeyResponse\"q\n" +
+	"\x14UpsertKeyAuthRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12!\n" +
+	"\faccess_token\x18\x03 \x01(\tR\vaccessToken\"\x17\n" +
+	"\x15UpsertKeyAuthResponse\"8\n" +
+	"\x15DeleteInstanceRequest\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"\x18\n" +
+	"\x16DeleteInstanceResponse2\xcb\x03\n" +
+	"\aService\x12s\n" +
+	"\x0eUpsertInstance\x12/.krypton.v1.test.provider.UpsertInstanceRequest\x1a0.krypton.v1.test.provider.UpsertInstanceResponse\x12d\n" +
+	"\tUpsertKey\x12*.krypton.v1.test.provider.UpsertKeyRequest\x1a+.krypton.v1.test.provider.UpsertKeyResponse\x12p\n" +
+	"\rUpsertKeyAuth\x12..krypton.v1.test.provider.UpsertKeyAuthRequest\x1a/.krypton.v1.test.provider.UpsertKeyAuthResponse\x12s\n" +
+	"\x0eDeleteInstance\x12/.krypton.v1.test.provider.DeleteInstanceRequest\x1a0.krypton.v1.test.provider.DeleteInstanceResponseB;Z9github.com/openkcm/krypton/pkg/api/v1/proto/test/providerb\x06proto3"
 
 var (
 	file_provider_proto_rawDescOnce sync.Once
@@ -461,34 +407,31 @@ func file_provider_proto_rawDescGZIP() []byte {
 	return file_provider_proto_rawDescData
 }
 
-var file_provider_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_provider_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_provider_proto_goTypes = []any{
-	(*CreateKeyRequest)(nil),   // 0: krypton.v1.test.provider.CreateKeyRequest
-	(*KeyRef)(nil),             // 1: krypton.v1.test.provider.KeyRef
-	(*CreateKeyResponse)(nil),  // 2: krypton.v1.test.provider.CreateKeyResponse
-	(*RotateAuthRequest)(nil),  // 3: krypton.v1.test.provider.RotateAuthRequest
-	(*RotateAuthResponse)(nil), // 4: krypton.v1.test.provider.RotateAuthResponse
-	(*RotateKeyRequest)(nil),   // 5: krypton.v1.test.provider.RotateKeyRequest
-	(*RotateKeyResponse)(nil),  // 6: krypton.v1.test.provider.RotateKeyResponse
-	(*DestroyKeyRequest)(nil),  // 7: krypton.v1.test.provider.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil), // 8: krypton.v1.test.provider.DestroyKeyResponse
+	(*UpsertInstanceRequest)(nil),  // 0: krypton.v1.test.provider.UpsertInstanceRequest
+	(*UpsertInstanceResponse)(nil), // 1: krypton.v1.test.provider.UpsertInstanceResponse
+	(*UpsertKeyRequest)(nil),       // 2: krypton.v1.test.provider.UpsertKeyRequest
+	(*UpsertKeyResponse)(nil),      // 3: krypton.v1.test.provider.UpsertKeyResponse
+	(*UpsertKeyAuthRequest)(nil),   // 4: krypton.v1.test.provider.UpsertKeyAuthRequest
+	(*UpsertKeyAuthResponse)(nil),  // 5: krypton.v1.test.provider.UpsertKeyAuthResponse
+	(*DeleteInstanceRequest)(nil),  // 6: krypton.v1.test.provider.DeleteInstanceRequest
+	(*DeleteInstanceResponse)(nil), // 7: krypton.v1.test.provider.DeleteInstanceResponse
 }
 var file_provider_proto_depIdxs = []int32{
-	1, // 0: krypton.v1.test.provider.CreateKeyResponse.key_ref:type_name -> krypton.v1.test.provider.KeyRef
-	1, // 1: krypton.v1.test.provider.RotateKeyResponse.key_ref:type_name -> krypton.v1.test.provider.KeyRef
-	0, // 2: krypton.v1.test.provider.Service.CreateKey:input_type -> krypton.v1.test.provider.CreateKeyRequest
-	3, // 3: krypton.v1.test.provider.Service.RotateAuth:input_type -> krypton.v1.test.provider.RotateAuthRequest
-	5, // 4: krypton.v1.test.provider.Service.RotateKey:input_type -> krypton.v1.test.provider.RotateKeyRequest
-	7, // 5: krypton.v1.test.provider.Service.DestroyKey:input_type -> krypton.v1.test.provider.DestroyKeyRequest
-	2, // 6: krypton.v1.test.provider.Service.CreateKey:output_type -> krypton.v1.test.provider.CreateKeyResponse
-	4, // 7: krypton.v1.test.provider.Service.RotateAuth:output_type -> krypton.v1.test.provider.RotateAuthResponse
-	6, // 8: krypton.v1.test.provider.Service.RotateKey:output_type -> krypton.v1.test.provider.RotateKeyResponse
-	8, // 9: krypton.v1.test.provider.Service.DestroyKey:output_type -> krypton.v1.test.provider.DestroyKeyResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: krypton.v1.test.provider.Service.UpsertInstance:input_type -> krypton.v1.test.provider.UpsertInstanceRequest
+	2, // 1: krypton.v1.test.provider.Service.UpsertKey:input_type -> krypton.v1.test.provider.UpsertKeyRequest
+	4, // 2: krypton.v1.test.provider.Service.UpsertKeyAuth:input_type -> krypton.v1.test.provider.UpsertKeyAuthRequest
+	6, // 3: krypton.v1.test.provider.Service.DeleteInstance:input_type -> krypton.v1.test.provider.DeleteInstanceRequest
+	1, // 4: krypton.v1.test.provider.Service.UpsertInstance:output_type -> krypton.v1.test.provider.UpsertInstanceResponse
+	3, // 5: krypton.v1.test.provider.Service.UpsertKey:output_type -> krypton.v1.test.provider.UpsertKeyResponse
+	5, // 6: krypton.v1.test.provider.Service.UpsertKeyAuth:output_type -> krypton.v1.test.provider.UpsertKeyAuthResponse
+	7, // 7: krypton.v1.test.provider.Service.DeleteInstance:output_type -> krypton.v1.test.provider.DeleteInstanceResponse
+	4, // [4:8] is the sub-list for method output_type
+	0, // [0:4] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_provider_proto_init() }
@@ -502,7 +445,7 @@ func file_provider_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_provider_proto_rawDesc), len(file_provider_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

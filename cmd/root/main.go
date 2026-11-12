@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -178,9 +177,8 @@ func main() {
 	// grpc server setup for sealer
 	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
-	cleanupTestProvider, err := registerUnsafeTestProvider(context.Background(), grpcServer)
+	err = registerUnsafeTestProvider(grpcServer)
 	handleErr(err, "failed to register unsafe test provider")
-	defer cleanupTestProvider()
 
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
@@ -238,33 +236,20 @@ func loadConfig() *config.RootConfig {
 	return rCfg
 }
 
-const (
-	unsafeTestProviderEnv = "ENABLE_UNSAFE_TEST_PROVIDER"
-	unsafeTestProviderAck = "I_ACCEPT"
-)
-
-func registerUnsafeTestProvider(ctx context.Context, registrar grpc.ServiceRegistrar) (func(), error) {
-	value, set := os.LookupEnv(unsafeTestProviderEnv)
-	if !set {
-		return func() {}, nil
-	}
-	if value != unsafeTestProviderAck {
-		return nil, fmt.Errorf("%s must be set to %s", unsafeTestProviderEnv, unsafeTestProviderAck)
+func registerUnsafeTestProvider(registrar grpc.ServiceRegistrar) error {
+	if !providertest.IsEnabled() {
+		return nil
 	}
 
-	prov, err := providertest.New(ctx)
+	prov, err := providertest.New()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	provider.RegisterServiceServer(registrar, provider.NewService(prov))
 	log.Print("WARNING: unsafe test provider API is enabled")
 
-	return func() {
-		if err := prov.Close(); err != nil {
-			log.Printf("failed to close unsafe test provider: %v", err)
-		}
-	}, nil
+	return nil
 }
 
 // Worker to periodically check agent heartbeats and update their registration status accordingly.

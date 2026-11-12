@@ -19,10 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Service_CreateKey_FullMethodName  = "/krypton.v1.test.provider.Service/CreateKey"
-	Service_RotateAuth_FullMethodName = "/krypton.v1.test.provider.Service/RotateAuth"
-	Service_RotateKey_FullMethodName  = "/krypton.v1.test.provider.Service/RotateKey"
-	Service_DestroyKey_FullMethodName = "/krypton.v1.test.provider.Service/DestroyKey"
+	Service_UpsertInstance_FullMethodName = "/krypton.v1.test.provider.Service/UpsertInstance"
+	Service_UpsertKey_FullMethodName      = "/krypton.v1.test.provider.Service/UpsertKey"
+	Service_UpsertKeyAuth_FullMethodName  = "/krypton.v1.test.provider.Service/UpsertKeyAuth"
+	Service_DeleteInstance_FullMethodName = "/krypton.v1.test.provider.Service/DeleteInstance"
 )
 
 // ServiceClient is the client API for Service service.
@@ -30,12 +30,13 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Service simulates an external key provider for testing only.
-// The root server registers it only when ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT.
+// The root server registers it only when ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT,
+// and it also requires UNSAFE_TEST_PROVIDER_DIR to be set.
 type ServiceClient interface {
-	CreateKey(ctx context.Context, in *CreateKeyRequest, opts ...grpc.CallOption) (*CreateKeyResponse, error)
-	RotateAuth(ctx context.Context, in *RotateAuthRequest, opts ...grpc.CallOption) (*RotateAuthResponse, error)
-	RotateKey(ctx context.Context, in *RotateKeyRequest, opts ...grpc.CallOption) (*RotateKeyResponse, error)
-	DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error)
+	UpsertInstance(ctx context.Context, in *UpsertInstanceRequest, opts ...grpc.CallOption) (*UpsertInstanceResponse, error)
+	UpsertKey(ctx context.Context, in *UpsertKeyRequest, opts ...grpc.CallOption) (*UpsertKeyResponse, error)
+	UpsertKeyAuth(ctx context.Context, in *UpsertKeyAuthRequest, opts ...grpc.CallOption) (*UpsertKeyAuthResponse, error)
+	DeleteInstance(ctx context.Context, in *DeleteInstanceRequest, opts ...grpc.CallOption) (*DeleteInstanceResponse, error)
 }
 
 type serviceClient struct {
@@ -46,40 +47,40 @@ func NewServiceClient(cc grpc.ClientConnInterface) ServiceClient {
 	return &serviceClient{cc}
 }
 
-func (c *serviceClient) CreateKey(ctx context.Context, in *CreateKeyRequest, opts ...grpc.CallOption) (*CreateKeyResponse, error) {
+func (c *serviceClient) UpsertInstance(ctx context.Context, in *UpsertInstanceRequest, opts ...grpc.CallOption) (*UpsertInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateKeyResponse)
-	err := c.cc.Invoke(ctx, Service_CreateKey_FullMethodName, in, out, cOpts...)
+	out := new(UpsertInstanceResponse)
+	err := c.cc.Invoke(ctx, Service_UpsertInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) RotateAuth(ctx context.Context, in *RotateAuthRequest, opts ...grpc.CallOption) (*RotateAuthResponse, error) {
+func (c *serviceClient) UpsertKey(ctx context.Context, in *UpsertKeyRequest, opts ...grpc.CallOption) (*UpsertKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RotateAuthResponse)
-	err := c.cc.Invoke(ctx, Service_RotateAuth_FullMethodName, in, out, cOpts...)
+	out := new(UpsertKeyResponse)
+	err := c.cc.Invoke(ctx, Service_UpsertKey_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) RotateKey(ctx context.Context, in *RotateKeyRequest, opts ...grpc.CallOption) (*RotateKeyResponse, error) {
+func (c *serviceClient) UpsertKeyAuth(ctx context.Context, in *UpsertKeyAuthRequest, opts ...grpc.CallOption) (*UpsertKeyAuthResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RotateKeyResponse)
-	err := c.cc.Invoke(ctx, Service_RotateKey_FullMethodName, in, out, cOpts...)
+	out := new(UpsertKeyAuthResponse)
+	err := c.cc.Invoke(ctx, Service_UpsertKeyAuth_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) DestroyKey(ctx context.Context, in *DestroyKeyRequest, opts ...grpc.CallOption) (*DestroyKeyResponse, error) {
+func (c *serviceClient) DeleteInstance(ctx context.Context, in *DeleteInstanceRequest, opts ...grpc.CallOption) (*DeleteInstanceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DestroyKeyResponse)
-	err := c.cc.Invoke(ctx, Service_DestroyKey_FullMethodName, in, out, cOpts...)
+	out := new(DeleteInstanceResponse)
+	err := c.cc.Invoke(ctx, Service_DeleteInstance_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,12 +92,13 @@ func (c *serviceClient) DestroyKey(ctx context.Context, in *DestroyKeyRequest, o
 // for forward compatibility.
 //
 // Service simulates an external key provider for testing only.
-// The root server registers it only when ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT.
+// The root server registers it only when ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT,
+// and it also requires UNSAFE_TEST_PROVIDER_DIR to be set.
 type ServiceServer interface {
-	CreateKey(context.Context, *CreateKeyRequest) (*CreateKeyResponse, error)
-	RotateAuth(context.Context, *RotateAuthRequest) (*RotateAuthResponse, error)
-	RotateKey(context.Context, *RotateKeyRequest) (*RotateKeyResponse, error)
-	DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error)
+	UpsertInstance(context.Context, *UpsertInstanceRequest) (*UpsertInstanceResponse, error)
+	UpsertKey(context.Context, *UpsertKeyRequest) (*UpsertKeyResponse, error)
+	UpsertKeyAuth(context.Context, *UpsertKeyAuthRequest) (*UpsertKeyAuthResponse, error)
+	DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error)
 	mustEmbedUnimplementedServiceServer()
 }
 
@@ -107,17 +109,17 @@ type ServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedServiceServer struct{}
 
-func (UnimplementedServiceServer) CreateKey(context.Context, *CreateKeyRequest) (*CreateKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateKey not implemented")
+func (UnimplementedServiceServer) UpsertInstance(context.Context, *UpsertInstanceRequest) (*UpsertInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertInstance not implemented")
 }
-func (UnimplementedServiceServer) RotateAuth(context.Context, *RotateAuthRequest) (*RotateAuthResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RotateAuth not implemented")
+func (UnimplementedServiceServer) UpsertKey(context.Context, *UpsertKeyRequest) (*UpsertKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertKey not implemented")
 }
-func (UnimplementedServiceServer) RotateKey(context.Context, *RotateKeyRequest) (*RotateKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RotateKey not implemented")
+func (UnimplementedServiceServer) UpsertKeyAuth(context.Context, *UpsertKeyAuthRequest) (*UpsertKeyAuthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertKeyAuth not implemented")
 }
-func (UnimplementedServiceServer) DestroyKey(context.Context, *DestroyKeyRequest) (*DestroyKeyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DestroyKey not implemented")
+func (UnimplementedServiceServer) DeleteInstance(context.Context, *DeleteInstanceRequest) (*DeleteInstanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteInstance not implemented")
 }
 func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
 func (UnimplementedServiceServer) testEmbeddedByValue()                 {}
@@ -140,74 +142,74 @@ func RegisterServiceServer(s grpc.ServiceRegistrar, srv ServiceServer) {
 	s.RegisterService(&Service_ServiceDesc, srv)
 }
 
-func _Service_CreateKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateKeyRequest)
+func _Service_UpsertInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).CreateKey(ctx, in)
+		return srv.(ServiceServer).UpsertInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_CreateKey_FullMethodName,
+		FullMethod: Service_UpsertInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).CreateKey(ctx, req.(*CreateKeyRequest))
+		return srv.(ServiceServer).UpsertInstance(ctx, req.(*UpsertInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_RotateAuth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RotateAuthRequest)
+func _Service_UpsertKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertKeyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).RotateAuth(ctx, in)
+		return srv.(ServiceServer).UpsertKey(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_RotateAuth_FullMethodName,
+		FullMethod: Service_UpsertKey_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).RotateAuth(ctx, req.(*RotateAuthRequest))
+		return srv.(ServiceServer).UpsertKey(ctx, req.(*UpsertKeyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_RotateKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RotateKeyRequest)
+func _Service_UpsertKeyAuth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertKeyAuthRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).RotateKey(ctx, in)
+		return srv.(ServiceServer).UpsertKeyAuth(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_RotateKey_FullMethodName,
+		FullMethod: Service_UpsertKeyAuth_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).RotateKey(ctx, req.(*RotateKeyRequest))
+		return srv.(ServiceServer).UpsertKeyAuth(ctx, req.(*UpsertKeyAuthRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_DestroyKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DestroyKeyRequest)
+func _Service_DeleteInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).DestroyKey(ctx, in)
+		return srv.(ServiceServer).DeleteInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Service_DestroyKey_FullMethodName,
+		FullMethod: Service_DeleteInstance_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).DestroyKey(ctx, req.(*DestroyKeyRequest))
+		return srv.(ServiceServer).DeleteInstance(ctx, req.(*DeleteInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -220,20 +222,20 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateKey",
-			Handler:    _Service_CreateKey_Handler,
+			MethodName: "UpsertInstance",
+			Handler:    _Service_UpsertInstance_Handler,
 		},
 		{
-			MethodName: "RotateAuth",
-			Handler:    _Service_RotateAuth_Handler,
+			MethodName: "UpsertKey",
+			Handler:    _Service_UpsertKey_Handler,
 		},
 		{
-			MethodName: "RotateKey",
-			Handler:    _Service_RotateKey_Handler,
+			MethodName: "UpsertKeyAuth",
+			Handler:    _Service_UpsertKeyAuth_Handler,
 		},
 		{
-			MethodName: "DestroyKey",
-			Handler:    _Service_DestroyKey_Handler,
+			MethodName: "DeleteInstance",
+			Handler:    _Service_DeleteInstance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

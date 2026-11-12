@@ -1,330 +1,176 @@
-// Package providertest provides an opinionated AES-256-GCM provider with key-scoped
-// access-token auth backed by unsafe in-memory SQLite. It is for testing only.
+// Package providertest provides an AES-256-GCM provider with key-scoped
+// access-token auth backed by unsafe file-based SQLite. It is for testing only.
 package providertest
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
-	"strconv"
-	"strings"
-	"sync"
-	"uuid"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/openkcm/krypton/internal/cryptor"
 	"github.com/openkcm/krypton/internal/cryptor/aes256gcm"
-	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 )
 
-// TypeProviderTest identifies the test provider.
-const TypeProviderTest sealer.Type = "providertest"
+const singleTenantID = "providertest"
 
-const providerID = "providertest"
-
-var (
-	ErrAccessTokenMissing = errors.New("access token is missing")
-	ErrAuthNotFound       = errors.New("provider auth not found")
-	ErrUnauthorized       = errors.New("invalid access token")
-	ErrInvalidKeyRef      = errors.New("invalid provider key reference, expected <tenant-id>:<key-id>:<version>")
-	ErrKeyRefMissing      = errors.New("provider key reference is missing")
-	ErrKeyNotFound        = errors.New("provider key not found")
+// Environment variables that enable and configure the unsafe test provider.
+const (
+	EnableEnv    = "ENABLE_UNSAFE_TEST_PROVIDER"
+	EnableAck    = "I_ACCEPT"
+	DirectoryEnv = "UNSAFE_TEST_PROVIDER_DIR"
 )
 
-// AccessToken authenticates a provider client.
+var (
+	ErrAccessTokenMissing      = errors.New("access token is missing")
+	ErrAuthNotFound            = errors.New("provider auth not found")
+	ErrInstanceIDMissing       = errors.New("provider instance ID is missing")
+	ErrInstanceNotFound        = errors.New("provider instance not found")
+	ErrKeyIDMissing            = errors.New("provider key ID is missing")
+	ErrKeyNotFound             = errors.New("provider key not found")
+	ErrProviderDisabled        = errors.New("unsafe test provider is disabled")
+	ErrStorageDirectoryMissing = errors.New("provider storage directory is missing")
+	ErrUnauthorized            = errors.New("invalid access token")
+)
+
+// AccessToken authenticates a client for one provider key.
 type AccessToken string
 
-// KeyRef identifies one version of a provider key.
-type KeyRef struct {
-	TenantID string
-	KeyID    string
-	Version  int
-}
-
-// String returns the string representation of the key reference.
-func (m KeyRef) String() string {
-	return m.TenantID + ":" + m.KeyID + ":" + strconv.Itoa(m.Version)
-}
-
-// ParseKeyRef parses a key reference string.
-func ParseKeyRef(value string) (KeyRef, error) {
-	if value == "" {
-		return KeyRef{}, ErrKeyRefMissing
-	}
-
-	tenantID, remainder, ok := strings.Cut(value, ":")
-	if !ok || tenantID != providerID {
-		return KeyRef{}, ErrInvalidKeyRef
-	}
-
-	keyID, rawVersion, ok := strings.Cut(remainder, ":")
-	if !ok || keyID == "" {
-		return KeyRef{}, ErrInvalidKeyRef
-	}
-
-	version, err := strconv.Atoi(rawVersion)
-	if err != nil || version < 1 {
-		return KeyRef{}, ErrInvalidKeyRef
-	}
-
-	return KeyRef{
-		TenantID: tenantID,
-		KeyID:    keyID,
-		Version:  version,
-	}, nil
-}
-
-// Auth contains provider client auth.
-type Auth struct {
-	Token AccessToken `yaml:"access_token"`
-}
-
-var _ sealer.SealerAuth = (*Auth)(nil)
-
-// ValidateSealerAuth validates the auth.
-func (m *Auth) ValidateSealerAuth() error {
-	if m == nil || m.Token == "" {
-		return ErrAccessTokenMissing
-	}
-	return nil
-}
-
-// Config configures the test provider.
-type Config struct{}
-
-var _ sealer.SealerConfig = (*Config)(nil)
-
-// ValidateSealerConfig validates the configuration.
-func (m *Config) ValidateSealerConfig() error {
-	return nil
-}
-
-// Provider manages test keys and auth.
+// Provider manages provider instances, keys, authentication, and encryption.
 type Provider struct {
-	vault  *sqlitevault.Unsafe
-	mu     sync.Mutex
-	latest map[string]int
+	dir       string
+	cryptor   *aes256gcm.AES256GCM
+	generator cryptor.SecretGenerator
 }
 
-// New opens the shared in-memory provider.
-func New(ctx context.Context) (*Provider, error) {
-	v, err := sqlitevault.NewUnsafe(ctx, providerID, sqlitevault.MemorySource)
+// IsEnabled reports whether unsafe test-provider registration was requested.
+func IsEnabled() bool {
+	_, set := os.LookupEnv(EnableEnv)
+	return set
+}
+
+// New creates a provider from the unsafe test-provider environment settings.
+func New() (*Provider, error) {
+	dir, err := loadDirectory()
 	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 
 	return &Provider{
-		vault:  v,
-		latest: make(map[string]int),
+		dir:       dir,
+		cryptor:   aes256gcm.New(singleTenantID),
+		generator: cryptor.NewAES256SecretGenerator(),
 	}, nil
 }
 
-// Close closes the provider.
-func (m *Provider) Close() error {
-	return m.vault.Close()
+// UpsertInstance creates an instance database if it does not exist.
+func (m *Provider) UpsertInstance(ctx context.Context, instanceID string) error {
+	v, err := m.openOrCreateInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	return v.Close()
 }
 
-// CreateKey creates a key and its auth.
-func (m *Provider) CreateKey(ctx context.Context) (Auth, KeyRef, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	keyID := uuid.New().String()
-
-	keyMaterial, err := randomData("providertest-key", aes256gcm.KeySize)
-	if err != nil {
-		return Auth{}, KeyRef{}, err
+// UpsertKey generates and stores AES-256 material in an existing instance.
+func (m *Provider) UpsertKey(ctx context.Context, instanceID, keyID string) error {
+	if keyID == "" {
+		return ErrKeyIDMissing
 	}
-	defer keyMaterial.Destroy()
 
-	authSecret, err := randomData("providertest-access-token", 32)
+	v, err := m.openInstance(ctx, instanceID)
 	if err != nil {
-		return Auth{}, KeyRef{}, err
+		return err
 	}
-	defer authSecret.Destroy()
+	defer v.Close()
 
-	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
-		TenantID: providerID,
+	generated, err := m.generator.GenerateSecret(ctx)
+	if err != nil {
+		return err
+	}
+	defer generated.Secret.Destroy()
+
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: singleTenantID,
 		ID:       keySecretID(keyID),
-		Version:  1,
-		Secret:   keyMaterial,
+		Secret:   generated.Secret,
 	})
-	if err != nil {
-		return Auth{}, KeyRef{}, err
-	}
-
-	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
-		TenantID: providerID,
-		ID:       authSecretID(keyID),
-		Secret:   authSecret,
-	})
-	if err != nil {
-		return Auth{}, KeyRef{}, err
-	}
-
-	keyRef := KeyRef{
-		TenantID: providerID,
-		KeyID:    keyID,
-		Version:  1,
-	}
-	m.latest[keyID] = keyRef.Version
-
-	return newAuth(authSecret), keyRef, nil
+	return err
 }
 
-// RotateAuth replaces the auth for a key.
-func (m *Provider) RotateAuth(ctx context.Context, keyID string) (Auth, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	current, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
-		TenantID: providerID,
-		ID:       authSecretID(keyID),
-	})
-	if errors.Is(err, vault.ErrSecretNotFound) {
-		return Auth{}, ErrAuthNotFound
+// UpsertKeyAuth stores key-bound authentication in an existing instance.
+func (m *Provider) UpsertKeyAuth(ctx context.Context, instanceID, keyID string, token AccessToken) error {
+	if keyID == "" {
+		return ErrKeyIDMissing
 	}
-	if err != nil {
-		return Auth{}, err
+	if token == "" {
+		return ErrAccessTokenMissing
 	}
-	defer current.Secret.Destroy()
 
-	secret, err := randomData("providertest-access-token", 32)
+	v, err := m.openInstance(ctx, instanceID)
 	if err != nil {
-		return Auth{}, err
+		return err
+	}
+	defer v.Close()
+
+	secret, err := securemem.NewData("providertest-access-token", len(token))
+	if err != nil {
+		return err
 	}
 	defer secret.Destroy()
+	copy(secret.SecureBytes(), string(token))
 
-	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
-		TenantID: providerID,
+	_, err = v.ImportSecret(ctx, vault.ImportSecretRequest{
+		TenantID: singleTenantID,
 		ID:       authSecretID(keyID),
 		Secret:   secret,
 	})
-	if err != nil {
-		return Auth{}, err
-	}
-
-	return newAuth(secret), nil
+	return err
 }
 
-// RotateKey creates the next version of a key.
-func (m *Provider) RotateKey(ctx context.Context, keyID string) (KeyRef, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	current, ok := m.latest[keyID]
-	if !ok {
-		return KeyRef{}, ErrKeyNotFound
-	}
-	next := current + 1
-
-	keyMaterial, err := randomData("providertest-key", aes256gcm.KeySize)
-	if err != nil {
-		return KeyRef{}, err
-	}
-	defer keyMaterial.Destroy()
-
-	_, err = m.vault.ImportSecret(ctx, vault.ImportSecretRequest{
-		TenantID: providerID,
-		ID:       keySecretID(keyID),
-		Version:  next,
-		Secret:   keyMaterial,
-	})
-	if err != nil {
-		return KeyRef{}, err
-	}
-	m.latest[keyID] = next
-
-	return KeyRef{
-		TenantID: providerID,
-		KeyID:    keyID,
-		Version:  next,
-	}, nil
-}
-
-// DestroyKey removes a key, its versions, and auth.
-func (m *Provider) DestroyKey(ctx context.Context, keyID string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	latest, ok := m.latest[keyID]
-	if !ok {
-		return ErrKeyNotFound
-	}
-
-	for version := 1; version <= latest; version++ {
-		_, err := m.vault.DestroySecret(ctx, vault.DestroySecretRequest{
-			TenantID: providerID,
-			ID:       keySecretID(keyID),
-			Version:  version,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err := m.vault.DestroySecret(ctx, vault.DestroySecretRequest{
-		TenantID: providerID,
-		ID:       authSecretID(keyID),
-	})
+// DeleteInstance removes an instance database.
+func (m *Provider) DeleteInstance(instanceID string) error {
+	path, err := m.instancePath(instanceID)
 	if err != nil {
 		return err
 	}
 
-	delete(m.latest, keyID)
-	return nil
-}
-
-// Client seals data with authenticated provider keys.
-type Client struct {
-	vault   *sqlitevault.Unsafe
-	auth    Auth
-	cryptor *aes256gcm.AES256GCM
-}
-
-var _ sealer.Sealer = (*Client)(nil)
-
-// NewClient opens an authenticated provider client.
-func NewClient(ctx context.Context, auth Auth) (*Client, error) {
-	if err := auth.ValidateSealerAuth(); err != nil {
-		return nil, err
+	if err := os.Remove(path); errors.Is(err, os.ErrNotExist) {
+		return ErrInstanceNotFound
+	} else {
+		return err
 	}
+}
 
-	v, err := sqlitevault.NewUnsafe(ctx, providerID, sqlitevault.MemorySource)
+type sealParams struct {
+	instanceID string
+	keyID      string
+	token      AccessToken
+	plaintext  *securemem.Data
+	aad        []byte
+}
+
+type unsealParams struct {
+	instanceID string
+	keyID      string
+	token      AccessToken
+	ciphertext *securemem.Data
+	aad        []byte
+}
+
+func (m *Provider) seal(ctx context.Context, p sealParams) (*securemem.Data, error) {
+	keyMaterial, err := m.loadKeyMaterial(ctx, p.instanceID, p.keyID, p.token)
 	if err != nil {
 		return nil, err
-	}
-
-	return &Client{
-		vault:   v,
-		auth:    auth,
-		cryptor: aes256gcm.New(providerID),
-	}, nil
-}
-
-// Close closes the client.
-func (m *Client) Close() error {
-	return m.vault.Close()
-}
-
-// Seal encrypts plaintext with a provider key.
-func (m *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
-	keyRef, err := ParseKeyRef(req.Metadata[sealer.ProviderKeyMetadataKey(TypeProviderTest)])
-	if err != nil {
-		return sealer.SealResponse{}, err
-	}
-
-	if err := m.authenticate(ctx, keyRef); err != nil {
-		return sealer.SealResponse{}, err
-	}
-
-	keyMaterial, err := m.exportKeyMaterial(ctx, keyRef)
-	if err != nil {
-		return sealer.SealResponse{}, err
 	}
 	defer keyMaterial.Destroy()
 
@@ -333,32 +179,19 @@ func (m *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealR
 			Data:      keyMaterial,
 			Algorithm: cryptor.KeyAlgorithmAES256,
 		},
-		Plaintext: req.Plaintext,
-		AAD:       req.AAD,
+		Plaintext: p.plaintext,
+		AAD:       p.aad,
 	})
 	if err != nil {
-		return sealer.SealResponse{}, err
+		return nil, err
 	}
-
-	return sealer.SealResponse{
-		Ciphertext: resp.Ciphertext,
-	}, nil
+	return resp.Ciphertext, nil
 }
 
-// Unseal decrypts ciphertext with a provider key.
-func (m *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.UnsealResponse, error) {
-	keyRef, err := ParseKeyRef(req.Metadata[sealer.ProviderKeyMetadataKey(TypeProviderTest)])
+func (m *Provider) unseal(ctx context.Context, p unsealParams) (*securemem.Data, error) {
+	keyMaterial, err := m.loadKeyMaterial(ctx, p.instanceID, p.keyID, p.token)
 	if err != nil {
-		return sealer.UnsealResponse{}, err
-	}
-
-	if err := m.authenticate(ctx, keyRef); err != nil {
-		return sealer.UnsealResponse{}, err
-	}
-
-	keyMaterial, err := m.exportKeyMaterial(ctx, keyRef)
-	if err != nil {
-		return sealer.UnsealResponse{}, err
+		return nil, err
 	}
 	defer keyMaterial.Destroy()
 
@@ -367,77 +200,125 @@ func (m *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.U
 			Data:      keyMaterial,
 			Algorithm: cryptor.KeyAlgorithmAES256,
 		},
-		Ciphertext: req.Ciphertext,
-		AAD:        req.AAD,
-	})
-	if err != nil {
-		return sealer.UnsealResponse{}, err
-	}
-
-	return sealer.UnsealResponse{
-		Plaintext: resp.Plaintext,
-	}, nil
-}
-
-func (m *Client) exportKeyMaterial(ctx context.Context, keyRef KeyRef) (*securemem.Data, error) {
-	resp, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
-		TenantID: keyRef.TenantID,
-		ID:       keySecretID(keyRef.KeyID),
-		Version:  keyRef.Version,
+		Ciphertext: p.ciphertext,
+		AAD:        p.aad,
 	})
 	if err != nil {
 		return nil, err
 	}
+	return resp.Plaintext, nil
+}
 
+func (m *Provider) loadKeyMaterial(ctx context.Context, instanceID, keyID string, token AccessToken) (*securemem.Data, error) {
+	v, err := m.authenticate(ctx, instanceID, keyID, token)
+	if err != nil {
+		return nil, err
+	}
+	defer v.Close()
+
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: singleTenantID,
+		ID:       keySecretID(keyID),
+	})
+	if errors.Is(err, vault.ErrSecretNotFound) {
+		return nil, ErrKeyNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
 	return resp.Secret, nil
 }
 
-func (m *Client) authenticate(ctx context.Context, keyRef KeyRef) error {
-	resp, err := m.vault.ExportSecret(ctx, vault.ExportSecretRequest{
-		TenantID: keyRef.TenantID,
-		ID:       authSecretID(keyRef.KeyID),
-	})
-	if errors.Is(err, vault.ErrSecretNotFound) {
-		return ErrAuthNotFound
-	}
-	if err != nil {
-		return err
-	}
-	defer resp.Secret.Destroy()
-
-	provided, err := base64.RawURLEncoding.DecodeString(string(m.auth.Token))
-	if err != nil {
-		return ErrUnauthorized
-	}
-	defer securemem.Zero(provided)
-
-	if subtle.ConstantTimeCompare(resp.Secret.SecureBytes(), provided) != 1 {
-		return ErrUnauthorized
-	}
-
-	return nil
-}
-
-func newAuth(secret *securemem.Data) Auth {
-	return Auth{
-		Token: AccessToken(base64.RawURLEncoding.EncodeToString(secret.SecureBytes())),
-	}
-}
-
-func randomData(name string, size int) (*securemem.Data, error) {
-	data, err := securemem.NewData(name, size)
+func (m *Provider) authenticate(ctx context.Context, instanceID, keyID string, token AccessToken) (*sqlitevault.Unsafe, error) {
+	v, err := m.openInstance(ctx, instanceID)
 	if err != nil {
 		return nil, err
 	}
 
-	rand.Read(data.SecureBytes())
-	return data, nil
+	resp, err := v.ExportSecret(ctx, vault.ExportSecretRequest{
+		TenantID: singleTenantID,
+		ID:       authSecretID(keyID),
+	})
+	if errors.Is(err, vault.ErrSecretNotFound) {
+		_ = v.Close()
+		return nil, ErrAuthNotFound
+	}
+	if err != nil {
+		_ = v.Close()
+		return nil, err
+	}
+	defer resp.Secret.Destroy()
+
+	provided := []byte(token)
+	defer securemem.Zero(provided)
+	if subtle.ConstantTimeCompare(resp.Secret.SecureBytes(), provided) != 1 {
+		_ = v.Close()
+		return nil, ErrUnauthorized
+	}
+	return v, nil
 }
 
-func keySecretID(id string) string {
-	return "key:" + id
+func loadDirectory() (string, error) {
+	value, set := os.LookupEnv(EnableEnv)
+	if !set {
+		return "", ErrProviderDisabled
+	}
+	if value != EnableAck {
+		return "", fmt.Errorf("%s must be set to %s", EnableEnv, EnableAck)
+	}
+
+	dir := os.Getenv(DirectoryEnv)
+	if dir == "" {
+		return "", ErrStorageDirectoryMissing
+	}
+	return dir, nil
 }
 
-func authSecretID(id string) string {
-	return "auth:" + id
+func (m *Provider) openOrCreateInstance(ctx context.Context, instanceID string) (*sqlitevault.Unsafe, error) {
+	path, err := m.instancePath(instanceID)
+	if err != nil {
+		return nil, err
+	}
+	return openVault(ctx, instanceID, path)
+}
+
+func (m *Provider) openInstance(ctx context.Context, instanceID string) (*sqlitevault.Unsafe, error) {
+	path, err := m.resolveInstancePath(instanceID)
+	if err != nil {
+		return nil, err
+	}
+	return openVault(ctx, instanceID, path)
+}
+
+func (m *Provider) resolveInstancePath(instanceID string) (string, error) {
+	path, err := m.instancePath(instanceID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return "", ErrInstanceNotFound
+	} else if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func (m *Provider) instancePath(instanceID string) (string, error) {
+	if instanceID == "" {
+		return "", ErrInstanceIDMissing
+	}
+	filename := base64.RawURLEncoding.EncodeToString([]byte(instanceID))
+	return filepath.Join(m.dir, filename+".db"), nil
+}
+
+func openVault(ctx context.Context, instanceID, path string) (*sqlitevault.Unsafe, error) {
+	return sqlitevault.NewUnsafe(ctx, instanceID, sqlitevault.FileSource(path))
+}
+
+func keySecretID(keyID string) string {
+	return "key:" + keyID
+}
+
+func authSecretID(keyID string) string {
+	return "auth:" + keyID
 }

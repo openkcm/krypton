@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"errors"
-	"uuid"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,95 +25,58 @@ func NewService(provider *providertest.Provider) *Service {
 
 var _ ServiceServer = (*Service)(nil)
 
-// CreateKey creates a provider key and its access token.
-func (m *Service) CreateKey(ctx context.Context, _ *CreateKeyRequest) (*CreateKeyResponse, error) {
-	auth, ref, err := m.provider.CreateKey(ctx)
+// UpsertInstance creates a provider instance if it does not exist.
+func (m *Service) UpsertInstance(ctx context.Context, req *UpsertInstanceRequest) (*UpsertInstanceResponse, error) {
+	if err := m.provider.UpsertInstance(ctx, req.GetInstanceId()); err != nil {
+		return nil, mapToProtoErr(err)
+	}
+	return &UpsertInstanceResponse{}, nil
+}
+
+// UpsertKey generates key material in a provider instance.
+func (m *Service) UpsertKey(ctx context.Context, req *UpsertKeyRequest) (*UpsertKeyResponse, error) {
+	if err := m.provider.UpsertKey(ctx, req.GetInstanceId(), req.GetKeyId()); err != nil {
+		return nil, mapToProtoErr(err)
+	}
+	return &UpsertKeyResponse{}, nil
+}
+
+// UpsertKeyAuth stores key-bound auth for a provider instance.
+func (m *Service) UpsertKeyAuth(ctx context.Context, req *UpsertKeyAuthRequest) (*UpsertKeyAuthResponse, error) {
+	err := m.provider.UpsertKeyAuth(ctx, req.GetInstanceId(), req.GetKeyId(), providertest.AccessToken(req.GetAccessToken()))
 	if err != nil {
 		return nil, mapToProtoErr(err)
 	}
-
-	return &CreateKeyResponse{
-		KeyRef:      toProtoKeyRef(ref),
-		AccessToken: string(auth.Token),
-	}, nil
+	return &UpsertKeyAuthResponse{}, nil
 }
 
-// RotateAuth replaces the access token for a provider key.
-func (m *Service) RotateAuth(ctx context.Context, req *RotateAuthRequest) (*RotateAuthResponse, error) {
-	if err := validateKeyID(req.GetKeyId()); err != nil {
-		return nil, err
-	}
-
-	auth, err := m.provider.RotateAuth(ctx, req.GetKeyId())
-	if err != nil {
+// DeleteInstance removes a provider instance.
+func (m *Service) DeleteInstance(_ context.Context, req *DeleteInstanceRequest) (*DeleteInstanceResponse, error) {
+	if err := m.provider.DeleteInstance(req.GetInstanceId()); err != nil {
 		return nil, mapToProtoErr(err)
 	}
-
-	return &RotateAuthResponse{AccessToken: string(auth.Token)}, nil
-}
-
-// RotateKey creates the next version of a provider key.
-func (m *Service) RotateKey(ctx context.Context, req *RotateKeyRequest) (*RotateKeyResponse, error) {
-	if err := validateKeyID(req.GetKeyId()); err != nil {
-		return nil, err
-	}
-
-	ref, err := m.provider.RotateKey(ctx, req.GetKeyId())
-	if err != nil {
-		return nil, mapToProtoErr(err)
-	}
-
-	return &RotateKeyResponse{KeyRef: toProtoKeyRef(ref)}, nil
-}
-
-// DestroyKey removes a provider key, all its versions, and its access token.
-func (m *Service) DestroyKey(ctx context.Context, req *DestroyKeyRequest) (*DestroyKeyResponse, error) {
-	if err := validateKeyID(req.GetKeyId()); err != nil {
-		return nil, err
-	}
-
-	if err := m.provider.DestroyKey(ctx, req.GetKeyId()); err != nil {
-		return nil, mapToProtoErr(err)
-	}
-
-	return &DestroyKeyResponse{}, nil
-}
-
-func toProtoKeyRef(ref providertest.KeyRef) *KeyRef {
-	return &KeyRef{
-		KeyId:      ref.KeyID,
-		KeyVersion: int32(ref.Version),
-	}
-}
-
-func validateKeyID(keyID string) error {
-	if _, err := uuid.Parse(keyID); err != nil {
-		return proto.ErrDetailsWithCode(
-			status.New(codes.InvalidArgument, "key ID must be a valid UUID"),
-			proto.Code_ERROR_CODE_ABORT,
-		)
-	}
-	return nil
+	return &DeleteInstanceResponse{}, nil
 }
 
 func mapToProtoErr(err error) error {
 	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, providertest.ErrAuthNotFound):
-		return proto.ErrDetailsWithCode(
-			status.New(codes.NotFound, providertest.ErrAuthNotFound.Error()),
-			proto.Code_ERROR_CODE_ABORT,
-		)
-	case errors.Is(err, providertest.ErrKeyNotFound):
-		return proto.ErrDetailsWithCode(
-			status.New(codes.NotFound, providertest.ErrKeyNotFound.Error()),
-			proto.Code_ERROR_CODE_ABORT,
-		)
+	case errors.Is(err, providertest.ErrInstanceNotFound):
+		return abort(codes.NotFound, err.Error())
+	case errors.Is(err, providertest.ErrInstanceIDMissing),
+		errors.Is(err, providertest.ErrKeyIDMissing),
+		errors.Is(err, providertest.ErrAccessTokenMissing):
+		return abort(codes.InvalidArgument, err.Error())
 	default:
 		return proto.ErrDetailsWithCode(
 			status.New(codes.Internal, "internal error"),
 			proto.Code_ERROR_CODE_RETRY,
 		)
 	}
+}
+
+func abort(code codes.Code, message string) error {
+	return proto.ErrDetailsWithCode(
+		status.New(code, message),
+		proto.Code_ERROR_CODE_ABORT,
+	)
 }
