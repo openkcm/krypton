@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 (2026-11-12)
+
+## What's Changed
+* feat: add a test provider for testing purposes by @fabenan-f in https://github.com/openkcm/krypton/pull/290
+* fix: adds support for windows version of kr by @apatsap in https://github.com/openkcm/krypton/pull/293
+* fix: db isolation to read committed by @jithinkunjachan in https://github.com/openkcm/krypton/pull/294
+* fix(chart): update Dockerfile.krypton to use release image's entrypoint by @nnicora in https://github.com/openkcm/krypton/pull/295
+
+## New Contributors
+* @apatsap made their first contribution in https://github.com/openkcm/krypton/pull/293
+
+**Full Changelog**: https://github.com/openkcm/krypton/compare/v0.2.0...v0.3.0
+
 ## 0.2.0 (2026-11-11)
 
 ## What's Changed
