@@ -491,21 +491,21 @@ config:
   #   K1:
   #     crypto: { name: kek-crypto, type: aes256gcm }
   #     vault: { name: kek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/kek.db } }
-  key_bindings:
-    K1:
-      crypto:
-        name: kek-crypto
-        type: aes256gcm
-      vault:
-        name: kek-vault
-        type: unsafe-sqlite-memory
-    K2:
-      crypto:
-        name: dek-crypto
-        type: aes256gcm
-      vault:
-        name: dek-vault
-        type: unsafe-sqlite-memory
+  key_bindings: {}
+#    K1:
+#      crypto:
+#        name: kek-crypto
+#        type: aes256gcm
+#      vault:
+#        name: kek-vault
+#        type: unsafe-sqlite-memory
+#    K2:
+#      crypto:
+#        name: dek-crypto
+#        type: aes256gcm
+#      vault:
+#        name: dek-vault
+#        type: unsafe-sqlite-memory
 
   # -- Key hierarchy: a `name` and the key kinds from the top (`key_specs`). Each kind has a
   # `kind`, a `role` (`root` first, `dek` last, `kek` or `tek` between), an `algorithm`
@@ -515,24 +515,24 @@ config:
   #     requirements:
   #       tenant: { is_required: true, validator: { type: regex, params: { pattern: "^[a-z0-9-]+$" } } }
   #       tier: { is_required: false, validator: { type: enum, params: { values: "gold,silver" } } }
-  hierarchy:
-    name: demo-hierarchy
-    key_specs:
-      - kind: K0
-        role: root
-        algorithm: AES256
-        labels_spec:
-          allow_user_labels: true
-      - kind: K1
-        role: kek
-        algorithm: AES256
-        labels_spec:
-          allow_user_labels: true
-      - kind: K2
-        role: dek
-        algorithm: AES256
-        labels_spec:
-          allow_user_labels: true
+  hierarchy: {}
+#    name: demo-hierarchy
+#    key_specs:
+#      - kind: K0
+#        role: root
+#        algorithm: AES256
+#        labels_spec:
+#          allow_user_labels: true
+#      - kind: K1
+#        role: kek
+#        algorithm: AES256
+#        labels_spec:
+#          allow_user_labels: true
+#      - kind: K2
+#        role: dek
+#        algorithm: AES256
+#        labels_spec:
+#          allow_user_labels: true
 
   # -- Krypton agents and the key kinds they manage. Empty: the root node manages the whole
   # hierarchy. Each segment has a `name`, a `segment` range starting with a `tek` kind, its
