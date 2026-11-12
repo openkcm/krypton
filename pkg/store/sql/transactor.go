@@ -36,7 +36,7 @@ func NewTransactor(db *sql.DB) *Transactor {
 
 func (t *Transactor) Transaction(ctx context.Context, fn store.TransactionFunc) error {
 	tx, err := t.db.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelSerializable,
+		Isolation: sql.LevelReadCommitted,
 	})
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
