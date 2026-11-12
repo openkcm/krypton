@@ -174,11 +174,16 @@ func TestCommand(t *testing.T) {
 		args    []string
 		command []string
 	}{
-		// The release images do not start the binary with their own command.
-		{name: "default: the amd64 binary of the release image", command: []string{"/root/root.linux-amd64"}},
-		{name: "arm64", args: []string{"--set-json", `image.command=["/root/root.linux-arm64"]`}, command: []string{"/root/root.linux-arm64"}},
-		{name: "a string", args: []string{"--set", "image.command=/bin/krypton-root"}, command: []string{"/bin/krypton-root"}},
-		{name: "empty: the image's command", args: []string{"--set-json", "image.command=[]"}},
+		// The release image's own entrypoint is /app/root and starts the binary on every
+		// architecture, so the chart sets no command. This used to default to
+		// /root/root.linux-amd64, back when the image copied the binary to /<component>: for the
+		// 'root' component that is the base image's own 0700 root-owned /root directory, so the
+		// binary ended up inside it and a pod running as 65532 with all capabilities dropped
+		// could not even stat it. Nothing here may reintroduce an architecture-specific default.
+		{name: "default: none, the release image's entrypoint starts the binary"},
+		{name: "empty: the image's entrypoint", args: []string{"--set-json", "image.command=[]"}},
+		{name: "a list override", args: []string{"--set-json", `image.command=["/bin/krypton-root"]`}, command: []string{"/bin/krypton-root"}},
+		{name: "a string override", args: []string{"--set", "image.command=/bin/krypton-root"}, command: []string{"/bin/krypton-root"}},
 	}
 
 	for _, tt := range tests {
