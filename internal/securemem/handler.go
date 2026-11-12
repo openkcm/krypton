@@ -1,5 +1,17 @@
 package securemem
 
+// handler.go requires GOEXPERIMENT=runtimesecret to be enabled.
+//
+// If you see a build error about runtime/secret, build with:
+//
+//	GOEXPERIMENT=runtimesecret go build
+//
+// Or use the Makefile which sets this automatically:
+//
+//	make test
+//	make cli
+//
+
 import (
 	"context"
 	"log/slog"
