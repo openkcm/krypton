@@ -35,7 +35,7 @@ The Service name is part of the root node's address, which the agents use.
 - PostgreSQL. The root node creates its tables at startup, so its database user needs to own
   the database or have `CREATE` on its schema.
 - A Secret with the PostgreSQL URL.
-- amd64 nodes, or set `image.command` for arm64 nodes (see [Image](#image)).
+- amd64 or arm64 nodes; no architecture-specific values are needed.
 
 ## Install
 
@@ -124,7 +124,7 @@ before it opens the port.
 | Value | Default | Description |
 | --- | --- | --- |
 | `image.tag` / `image.digest` | chart's `appVersion` | The Krypton version to deploy |
-| `image.command` | `[/root/root.linux-amd64]` | The binary in the release image (see [Image](#image)) |
+| `image.command` | `[]` | Empty: the release image's entrypoint starts the binary (see [Image](#image)) |
 | `database.existingSecret` | `""` | Secret with the PostgreSQL URL (`DATABASE_URL`). Required |
 | `config.root_key` | static-secret provider allowed, credentials vault in memory | The root key's allowed providers and provider-binding vault |
 | `config.key_bindings` | K1 and K2 in memory | How the keys of each non-root kind are protected and stored |
@@ -140,16 +140,18 @@ before it opens the port.
 ## Image
 
 Release images are published as `ghcr.io/openkcm/krypton/images/root`, for amd64 and arm64.
-They contain the binary at `/root/root.linux-<architecture>`, and their own command does not
-start it. The chart therefore sets `image.command` to the amd64 binary. On arm64 nodes set:
+They contain the binary at `/app/root` and their entrypoint starts it, so `image.command` is
+empty by default and the same values work on both architectures.
 
-```yaml
-image:
-  command: [/root/root.linux-arm64]
-```
+Earlier images put the binary at `/root/root.linux-<architecture>` with an entrypoint of `/root`,
+so `image.command` had to name the architecture-specific path. That path was in fact unusable:
+`/root` exists in the base image as a `0700` root-owned directory, and the pod runs as uid 65532
+with all capabilities dropped, so it has no `CAP_DAC_OVERRIDE` to compensate for the missing
+search bit and the container failed at init with
+`stat ./root/root.linux-amd64: permission denied`. If you pinned `image.command` to that path,
+remove it.
 
-or pin the pod to amd64 nodes with `pod.nodeSelector: { kubernetes.io/arch: amd64 }`. For an
-image built from `cmd/root/Dockerfile`, set `image.command: [/bin/krypton-root]`.
+For an image built from `cmd/root/Dockerfile`, set `image.command: [/bin/krypton-root]`.
 
 ## Key storage
 
@@ -224,7 +226,7 @@ know: check the spelling of the keys against values.yaml.
 
 | Change | Action |
 | --- | --- |
-| The default image is `ghcr.io/openkcm/krypton/images/root` with the tag from the chart's `appVersion`, started with `/root/root.linux-amd64` (was `images/krypton-root:latest` with `/bin/krypton-root`) | If you set `image.*` yourself, check them; on arm64 nodes set `image.command` |
+| The default image is `ghcr.io/openkcm/krypton/images/root` with the tag from the chart's `appVersion`, started by its own entrypoint `/app/root` (was `images/krypton-root:latest` with `/bin/krypton-root`) | If you set `image.*` yourself, check them; `image.command` is no longer needed on any architecture |
 | `extraPorts` is now `ports`, and `image.pullSecrets` is now `imagePullSecrets` (default empty, was `registry-access`) | Move your values; the chart stops with an error while the old keys are set |
 | The PostgreSQL URL can come from `database.existingSecret` | Optional: `DATABASE_URL` in `extraEnvs` still works |
 | `config.connections` has an entry for the root node (`krypton-root:8080`). Krypton releases after v0.1.0 require it | If you replace `config.connections`, keep an entry named like `config.name` |
@@ -251,8 +253,8 @@ configuration works with v0.1.0 as well. When you move from v0.1.0 to a later re
 
 | Symptom | Cause |
 | --- | --- |
-| The container does not start and the error names `/root` | `image.command` is empty: the release image's own command does not start the binary |
-| `exec format error` | The binary of `image.command` does not match the node's architecture |
+| Container init fails with `stat ./root/root.linux-amd64: permission denied` | `image.command` still points into `/root`, which the base image ships as a `0700` root-owned directory. Clear `image.command` and use an image of this chart's `appVersion` or later |
+| `exec format error` | `image.command` is set to a binary that does not match the node's architecture. Clear it and let the image's entrypoint pick the right one |
 | Pod exits with `DATABASE_URL environment variable is required` | `database.existingSecret` is not set |
 | Pod exits with `failed to run migrations` | PostgreSQL is not reachable with the URL, or the user may not create tables |
 | Pod exits with `no connection config for root "root"` | `config.connections` has no entry for the root node |

@@ -17,3 +17,4 @@ includes:
 
       IMG_COMPONENTS: 'agent root'
       CLI_COMPONENTS: './cli:kr'
+      DOCKER_FILE_IDENTIFIER: krypton

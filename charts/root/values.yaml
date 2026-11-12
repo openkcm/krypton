@@ -86,14 +86,24 @@ image:
   # -- Kubernetes image pull policy: `IfNotPresent`, `Always` or `Never`.
   pullPolicy: IfNotPresent
 
-  # -- Container command, as a list or a single string. The release images contain the
-  # binary at `/root/root.linux-<architecture>` and their own command (`/root`) does not
-  # start it, so the chart sets the binary of amd64 nodes. On arm64 nodes use
-  # `["/root/root.linux-arm64"]`, or pin the pods to amd64 nodes with
-  # `pod.nodeSelector: { kubernetes.io/arch: amd64 }`. For an image built from
-  # `cmd/root/Dockerfile`, use `["/bin/krypton-root"]`.
-  command:
-    - /root/root.linux-amd64
+  # -- Container command, as a list or a single string. Empty by default: the release image's
+  # own ENTRYPOINT is `/app/root` and starts the binary correctly on every architecture, so
+  # nothing needs to be set here.
+  #
+  # It used to be pinned to `/root/root.linux-amd64`, because the image was built from
+  # hack/common's Dockerfile.single, which copies the binary to `/<component>` -- and for the
+  # `root` component `/root` is an existing 0700 root-owned directory in the distroless base
+  # image, so the binary ended up *inside* it and the ENTRYPOINT pointed at a directory. The pod
+  # runs as 65532 with `capabilities: drop: [ALL]` (see `securityContext` below) and so has no
+  # CAP_DAC_OVERRIDE to make up for the missing search bit on `/root`, which made even that
+  # command unusable:
+  #   exec: "./root/root.linux-amd64": stat ./root/root.linux-amd64: permission denied
+  # The image is now built from Dockerfile.krypton, which uses `/app/<component>`. That also
+  # removes the old architecture coupling -- the path no longer contains the platform, so arm64
+  # nodes need no override and the pods need no `kubernetes.io/arch` nodeSelector.
+  #
+  # For an image built from `cmd/root/Dockerfile` instead, use `["/bin/krypton-root"]`.
+  command: []
 
   # -- Arguments passed to the root node. It has no command-line flags; everything is
   # configured through `config` and the environment variables of `extraEnvs`.
