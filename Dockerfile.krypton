@@ -1,0 +1,35 @@
+# Release image for krypton's components, selected by DOCKER_FILE_IDENTIFIER in Taskfile.yaml.
+# hack/common's build picks this file up because it sits at the repository root and is named after
+# that identifier; '<component>' is substituted with the component's binary name during the build.
+#
+# Use distroless as minimal base image to package the component binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:e8a4044e0b4ae4257efa45fc026c0bc30ad320d43bd4c1a7d5271bd241e386d0
+ARG TARGETOS
+ARG TARGETARCH
+ARG COMPONENT
+WORKDIR /
+# Identical to hack/common's docker/Dockerfile.single apart from the destination: /app/<component>
+# rather than /<component>. krypton builds a component named 'root', and /root already exists in
+# the base image as a 0700 root-owned directory. A COPY whose destination is an existing directory
+# copies *into* that directory instead of creating a file, so with Dockerfile.single the binary
+# landed at /root/root.$TARGETOS-$TARGETARCH and ENTRYPOINT ["/root"] pointed at a directory. The
+# pod runs as 65532 with 'capabilities: drop: [ALL]' (charts/root/values.yaml), so it has no
+# CAP_DAC_OVERRIDE to make up for the missing search bit on /root, and container init failed with
+#   exec: "./root/root.linux-amd64": stat ./root/root.linux-amd64: permission denied
+# followed by CrashLoopBackOff. This reproduces only with capabilities dropped: plain 'docker run'
+# grants CAP_DAC_OVERRIDE and runs the binary fine, which is how it reached the cluster unnoticed.
+#
+# /app is absent from the base image, so Docker creates it 0755 and the binary stays a 0755 file,
+# traversable and executable by any uid with no capabilities at all. Verified against this exact
+# base image digest with --cap-drop=ALL and --read-only.
+#
+# Dockerfile.single is deliberately left alone upstream: several other repos' charts hardcode its
+# '/<component>' path as their container command. Because the binary is named after the component
+# rather than the platform, charts/root/values.yaml needs no image.command and no architecture
+# override -- keep it that way if you change this path.
+COPY bin/$COMPONENT.$TARGETOS-$TARGETARCH /app/<component>
+USER 65532:65532
+
+# docker doesn't substitue args in ENTRYPOINT, so we replace this during the build script
+ENTRYPOINT ["/app/<component>"]

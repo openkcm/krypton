@@ -14,9 +14,9 @@ keywords:
   - kmip
 # Version of the chart. Increment it for every change to the chart.
 # Versions follow Semantic Versioning (https://semver.org/).
-version: 0.1.0
+version: 0.1.1
 # Krypton release this chart deploys by default: the tag of its image (default of image.tag).
 # release-please updates it in each release pull request (marker on the line). Increase
 # `version` in the same pull request, otherwise the chart release workflow skips the
 # already-published chart version.
-appVersion: "v0.2.0" # x-release-please-version
+appVersion: "v0.2.1" # x-release-please-version
