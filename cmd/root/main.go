@@ -191,8 +191,9 @@ func main() {
 
 	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
 	var kmipSrv *kmip.Server
-	if cfg.KMIP != nil {
-		kmipSrv, err = kmip.NewServer(*cfg.KMIP, kpMgr)
+	kpc, ok := cfg.KMIPs.ByName(cfg.Name)
+	if ok {
+		kmipSrv, err = kmip.NewServer(kpc, kpMgr)
 		handleErr(err, "failed to create kmip server")
 		go func() {
 			log.Printf("KMIP server listening on %s", kmipSrv.Addr())

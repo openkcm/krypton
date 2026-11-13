@@ -51,10 +51,55 @@ func TestRegister(t *testing.T) {
 		parentAgentName, ok := rootCfg.Topology.ParentName(expAgentName)
 		require.True(t, ok, "expected parent agent to be found for agent %s", expAgentName)
 
-		ccs, err := rootCfg.Connections.ByNames(parentAgentName)
+		conn, err := rootCfg.Connections.ByNames(parentAgentName)
 		require.NoError(t, err, "expected connection config to be found for agent %s", expAgentName)
 
-		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities, ccs), *actConfig)
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities, conn, nil), *actConfig)
+
+		result, err := agentStore.Get(ctx, store.GetAgentQuery{
+			Name:       expAgentName,
+			InstanceID: expInstanceID,
+		})
+		assert.NoError(t, err)
+
+		assert.Equal(t, core.AgentRegistration{
+			Name:          expAgentName,
+			InstanceID:    expInstanceID,
+			Status:        core.AgentRegistrationStatusRegistered,
+			LastHeartbeat: result.Registration.LastHeartbeat,
+			CreatedAt:     result.Registration.CreatedAt,
+			UpdatedAt:     result.Registration.UpdatedAt,
+		}, result.Registration)
+	})
+
+	t.Run("should include KMIP config when agent has a matching KMIP entry", func(t *testing.T) {
+		// given
+		expInstanceID := uuid.New().String()
+		rootCfg := validRootConfigWithAgentKMIP(expAgentName)
+		cli := setupServerAndClient(t, agentStore, rootCfg)
+
+		// when
+		resp, err := cli.Register(ctx, &agents.RegisterAgentRequest{
+			AgentName:  expAgentName,
+			InstanceId: expInstanceID,
+		})
+
+		// then
+		assert.NoError(t, err)
+
+		actConfig, err := config.UnmarshalAgentConfig(resp.GetConfig())
+		require.NoError(t, err)
+
+		identities, err := rootCfg.AgentIdentities(expAgentName)
+		require.NoError(t, err)
+
+		parentAgentName, ok := rootCfg.Topology.ParentName(expAgentName)
+		require.True(t, ok, "expected parent agent to be found for agent %s", expAgentName)
+
+		conn, err := rootCfg.Connections.ByNames(parentAgentName)
+		require.NoError(t, err, "expected connection config to be found for agent %s", expAgentName)
+
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], identities, conn, &rootCfg.KMIPs[0]), *actConfig)
 
 		result, err := agentStore.Get(ctx, store.GetAgentQuery{
 			Name:       expAgentName,
@@ -119,10 +164,10 @@ func TestRegister(t *testing.T) {
 		parentAgentName, ok := rootCfg.Topology.ParentName(expAgentName)
 		require.True(t, ok, "expected parent agent to be found for agent %s", expAgentName)
 
-		ccs, err := rootCfg.Connections.ByNames(parentAgentName)
+		conn, err := rootCfg.Connections.ByNames(parentAgentName)
 		require.NoError(t, err)
 
-		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], config.IdentityConfigs{}, ccs), *actConfig)
+		assert.Equal(t, config.NewAgentConfig(rootCfg.Hierarchy, rootCfg.Topology.Segments[0], config.IdentityConfigs{}, conn, nil), *actConfig)
 	})
 
 	t.Run("should update registration if agent registers two times", func(t *testing.T) {
