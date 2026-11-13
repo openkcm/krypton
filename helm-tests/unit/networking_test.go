@@ -49,8 +49,8 @@ func TestService(t *testing.T) {
 // TestKMIPPortExamples renders the port examples of values.yaml for the KMIP server and checks
 // that the Service port targets the container port.
 func TestKMIPPortExamples(t *testing.T) {
-	values := "service:\n  ports:\n" + indent(valuesComment(t, "server (`config.kmip`), add its port:"), "    ") +
-		"ports:\n" + indent(valuesComment(t, "With the KMIP server, add its port (`config.kmip.port`):"), "  ")
+	values := "service:\n  ports:\n" + indent(valuesComment(t, "server (`config.kmips`), add its port:"), "    ") +
+		"ports:\n" + indent(valuesComment(t, "With the KMIP server, add its port (`config.kmips`):"), "  ")
 	output := render(t, "-f", writeValues(t, values))
 
 	s := object[service](t, output, "Service")

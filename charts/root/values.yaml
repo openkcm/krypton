@@ -301,7 +301,7 @@ service:
   # -- Service type. Keep `ClusterIP`: the gRPC APIs include the admin API.
   type: ClusterIP
   # -- Ports of the Service. The first port is shown in the release notes. With the KMIP
-  # server (`config.kmip`), add its port:
+  # server (`config.kmips`), add its port:
   #   - name: grpc
   #     protocol: TCP
   #     port: 8080
@@ -318,7 +318,7 @@ service:
 
 # -- Ports of the root node container. The probes and the network policy refer to them by
 # name. The gRPC server listens on 8080, or on the port in the environment variable
-# `SERVER_PORT` (`extraEnvs`). With the KMIP server, add its port (`config.kmip.port`):
+# `SERVER_PORT` (`extraEnvs`). With the KMIP server, add its port (`config.kmips`):
 #   - name: grpc
 #     containerPort: 8080
 #     protocol: TCP
@@ -362,7 +362,7 @@ extraInitContainers: []
 extraContainers: []
 
 # -- Volumes added to the pod. Besides its configuration, the root node reads the files that
-# `config` names: the certificates and keys of `config.auth` and `config.kmip`, and writes
+# `config` names: the certificates and keys of `config.auth` and `config.kmips`, and writes
 # the files of `unsafe-sqlite` vaults. The TLS files are PEM files:
 #   tls.crt   the certificate, then the intermediate CAs that issued it, if any:
 #               -----BEGIN CERTIFICATE-----
@@ -491,21 +491,21 @@ config:
   #   K1:
   #     crypto: { name: kek-crypto, type: aes256gcm }
   #     vault: { name: kek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/kek.db } }
-  key_bindings: {}
-#    K1:
-#      crypto:
-#        name: kek-crypto
-#        type: aes256gcm
-#      vault:
-#        name: kek-vault
-#        type: unsafe-sqlite-memory
-#    K2:
-#      crypto:
-#        name: dek-crypto
-#        type: aes256gcm
-#      vault:
-#        name: dek-vault
-#        type: unsafe-sqlite-memory
+  key_bindings:
+    K1:
+      crypto:
+        name: kek-crypto
+        type: aes256gcm
+      vault:
+        name: kek-vault
+        type: unsafe-sqlite-memory
+    K2:
+      crypto:
+        name: dek-crypto
+        type: aes256gcm
+      vault:
+        name: dek-vault
+        type: unsafe-sqlite-memory
 
   # -- Key hierarchy: a `name` and the key kinds from the top (`key_specs`). Each kind has a
   # `kind`, a `role` (`root` first, `dek` last, `kek` or `tek` between), an `algorithm`
@@ -515,24 +515,24 @@ config:
   #     requirements:
   #       tenant: { is_required: true, validator: { type: regex, params: { pattern: "^[a-z0-9-]+$" } } }
   #       tier: { is_required: false, validator: { type: enum, params: { values: "gold,silver" } } }
-  hierarchy: {}
-#    name: demo-hierarchy
-#    key_specs:
-#      - kind: K0
-#        role: root
-#        algorithm: AES256
-#        labels_spec:
-#          allow_user_labels: true
-#      - kind: K1
-#        role: kek
-#        algorithm: AES256
-#        labels_spec:
-#          allow_user_labels: true
-#      - kind: K2
-#        role: dek
-#        algorithm: AES256
-#        labels_spec:
-#          allow_user_labels: true
+  hierarchy:
+    name: demo-hierarchy
+    key_specs:
+      - kind: K0
+        role: root
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
+      - kind: K1
+        role: kek
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
+      - kind: K2
+        role: dek
+        algorithm: AES256
+        labels_spec:
+          allow_user_labels: true
 
   # -- Krypton agents and the key kinds they manage. Empty: the root node manages the whole
   # hierarchy. Each segment has a `name`, a `segment` range starting with a `tek` kind, its
@@ -594,13 +594,15 @@ config:
   #       ca_path: /etc/krypton/grpc/ca.crt
   # auth:
 
-  # -- KMIP server, for KMIP clients that need keys of this node. Not set: no KMIP server.
+  # -- KMIP servers, for KMIP clients that need keys of topology agents. Not set: no KMIP
+  # servers. Each entry needs a `name` matching a topology segment whose end kind is `dek`.
   # It requires TLS 1.3 and a client certificate signed by `ca_path`. Add the port to
   # `ports` and `service.ports`:
-  #   bind_addr: 0.0.0.0
-  #   port: 5696
-  #   tls:
-  #     cert_path: /etc/krypton/kmip/tls.crt
-  #     key_path: /etc/krypton/kmip/tls.key
-  #     ca_path: /etc/krypton/kmip/ca.crt
-  # kmip:
+  #   - name: agent-eu10
+  #     bind_addr: 0.0.0.0
+  #     port: 5696
+  #     tls:
+  #       cert_path: /etc/krypton/kmip/tls.crt
+  #       key_path: /etc/krypton/kmip/tls.key
+  #       ca_path: /etc/krypton/kmip/ca.crt
+  # kmips:

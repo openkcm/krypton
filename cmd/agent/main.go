@@ -22,6 +22,7 @@ import (
 	"github.com/openkcm/krypton/internal/config"
 	"github.com/openkcm/krypton/internal/grpcconn"
 	"github.com/openkcm/krypton/internal/keyprocessor"
+	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
@@ -49,17 +50,7 @@ func main() {
 
 	cfg := loadConfig()
 
-	grpcOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-	if cfg.Auth != nil {
-		mtlsConfig, err := config.GetAuthConfig(cfg.Auth.Config)
-		handleErr(err, "failed to get auth config")
-
-		tlsConf, err := mtlsConfig.Client.BuildTLSConfig()
-		handleErr(err, "failed to build TLS config")
-		grpcOpts[0] = grpc.WithTransportCredentials(credentials.NewTLS(tlsConf))
-	}
+	grpcOpts := rootGRPCOpts(cfg)
 
 	conn, err := grpc.NewClient(
 		cfg.KryptonRoot.Address.URL,
@@ -90,12 +81,14 @@ func main() {
 		})
 		return err
 	})
-
 	handleErr(err, "failed to create heartbeat worker")
 	go wrkr.Start(ctx)
 
-	agentDB, grpcServer, lis := setupKeyServiceServer(ctx, agentCfg)
-	defer agentDB.Close()
+	db := database(ctx)
+	defer db.Close()
+
+	kpMgr := keyManager(ctx, db, *agentCfg)
+	grpcServer, lis := setupKeyServiceServer(ctx, db, kpMgr)
 
 	log.Println("Starting agent key service listener")
 	go func() {
@@ -103,6 +96,19 @@ func main() {
 			log.Printf("agent key service stopped: %v", err)
 		}
 	}()
+
+	// KMIP server (optional) — serves unwrapped DEKs to KMIP clients over mTLS.
+	var kmipSrv *kmip.Server
+	if agentCfg.KMIP != nil {
+		kmipSrv, err = kmip.NewServer(*agentCfg.KMIP, kpMgr)
+		handleErr(err, "failed to create kmip server")
+		go func() {
+			log.Printf("KMIP server listening on %s", kmipSrv.Addr())
+			if err := kmipSrv.Serve(); err != nil {
+				log.Printf("KMIP server stopped: %v", err)
+			}
+		}()
+	}
 
 	// graceful shutdown on SIGINT/SIGTERM
 	signalChan := make(chan os.Signal, 1)
@@ -122,6 +128,12 @@ func main() {
 	})
 	if err != nil {
 		log.Printf("failed to deregister agent: %v", err)
+	}
+
+	if kmipSrv != nil {
+		if err := kmipSrv.Shutdown(); err != nil {
+			log.Printf("kmip shutdown: %v", err)
+		}
 	}
 
 	log.Println("Agent shutdown complete")
@@ -151,55 +163,79 @@ func loadConfig() *config.AgentBootstrapConfig {
 	return cfg
 }
 
-func setupKeyServiceServer(ctx context.Context, agentCfg *config.AgentConfig) (*sql.DB, *grpc.Server, net.Listener) {
-	dsn := os.Getenv("AGENT_DATABASE_URL")
-	if dsn == "" {
+func setupKeyServiceServer(ctx context.Context, db *sql.DB, kpMgr *keyprocessor.Manager) (*grpc.Server, net.Listener) {
+	tr := storesql.NewTransactor(db)
+
+	port := os.Getenv("AGENT_PORT")
+	if port == "" {
+		port = "9091"
+	}
+
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+port)
+	handleErr(err, "failed to listen on agent port")
+
+	srv := grpc.NewServer(
+		// this is required to ensure that sensitive data in the RPC context is cleaned up after each RPC call
+		grpc.StatsHandler(securemem.NewRPCHandler()),
+	)
+
+	keys.RegisterKeyServiceServer(srv, keys.NewKeyService(tr))
+	keyversions.RegisterKeyVersionServiceServer(srv, keyversions.NewService(tr, kpMgr))
+	tenants.RegisterTenantServiceServer(srv, tenants.NewTenantService(tr))
+	sealer.RegisterServiceServer(srv, sealer.NewSealerService(kpMgr))
+
+	log.Printf("agent key service listening on :%s", port)
+	return srv, lis
+}
+
+func database(ctx context.Context) *sql.DB {
+	u := os.Getenv("AGENT_DATABASE_URL")
+	if u == "" {
 		log.Fatal("AGENT_DATABASE_URL environment variable is required")
 	}
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", u)
 	handleErr(err, "failed to connect to agent database")
 
 	err = storesql.Migrate(ctx, db, storesql.Agent)
 	handleErr(err, "failed to run agent migrations")
 
-	transactor := storesql.NewTransactor(db)
+	return db
+}
 
-	agentPort := os.Getenv("AGENT_PORT")
-	if agentPort == "" {
-		agentPort = "9091"
-	}
-
-	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+agentPort)
-	handleErr(err, "failed to listen on agent port")
-
-	reg, err := grpcconn.NewRegistry(agentCfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func keyManager(ctx context.Context, db *sql.DB, agentCfg config.AgentConfig) *keyprocessor.Manager {
+	// TODO: add the MTLS client for the parents,
+	// currently it is not propogated in the AgentConfig
+	rg, err := grpcconn.NewRegistry(agentCfg.Connections, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	handleErr(err, "failed to create grpc connection registry")
 
-	bindings := make(map[model.KeyKind]spec.KeyBinding, len(agentCfg.KeyBindings))
+	bgs := make(map[model.KeyKind]spec.KeyBinding, len(agentCfg.KeyBindings))
 	for kind, binding := range agentCfg.KeyBindings {
-		bindings[model.KeyKind(kind)] = binding
+		bgs[model.KeyKind(kind)] = binding
 	}
 
 	kpMgr, err := keyprocessor.NewManager(context.Background(), keyprocessor.ManagerConfig{
 		KeyStore:        storesql.NewKeyStore(db),
 		KeyVersionStore: storesql.NewKeyVersionStore(db),
-		Bindings:        bindings,
+		Bindings:        bgs,
 		Hierarchy:       agentCfg.Hierarchy,
-		Registry:        reg,
+		Registry:        rg,
 	})
 	handleErr(err, "failed to create key processor manager")
+	return kpMgr
+}
 
-	grpcServer := grpc.NewServer(
-		// this is required to ensure that sensitive data in the RPC context is cleaned up after each RPC call
-		grpc.StatsHandler(securemem.NewRPCHandler()),
-	)
+func rootGRPCOpts(c *config.AgentBootstrapConfig) []grpc.DialOption {
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	if c.Auth != nil {
+		mc, err := config.GetAuthConfig(c.Auth.Config)
+		handleErr(err, "failed to get auth config")
 
-	keys.RegisterKeyServiceServer(grpcServer, keys.NewKeyService(transactor))
-	keyversions.RegisterKeyVersionServiceServer(grpcServer, keyversions.NewService(transactor, kpMgr))
-	tenants.RegisterTenantServiceServer(grpcServer, tenants.NewTenantService(transactor))
-	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
-
-	log.Printf("agent key service listening on :%s", agentPort)
-	return db, grpcServer, lis
+		tc, err := mc.Client.BuildTLSConfig()
+		handleErr(err, "failed to build TLS config")
+		opts[0] = grpc.WithTransportCredentials(credentials.NewTLS(tc))
+	}
+	return opts
 }

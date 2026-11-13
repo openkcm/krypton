@@ -283,6 +283,7 @@ connections:
 }
 
 // writeRootConfigWithKMIP writes a root config YAML with KMIP settings to a temp file and returns the path.
+// TODO: will be removed
 func writeRootConfigWithKMIP(t *testing.T, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath string) string {
 	t.Helper()
 
@@ -333,7 +334,8 @@ hierarchy:
       labels_spec:
         allow_user_labels: true
 topology:
-kmip:
+kmips:
+  name: root
   bind_addr: localhost
   port: %s
   tls:

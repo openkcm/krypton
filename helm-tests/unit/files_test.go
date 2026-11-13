@@ -198,7 +198,7 @@ func checkHealth(t *testing.T, address string, tlsConfig *tls.Config) error {
 	return err
 }
 
-// TestFilesKMIP builds the TLS server of the config.kmip example and connects to it with and
+// TestFilesKMIP builds the TLS server of the config.kmips example and connects to it with and
 // without client certificate.
 func TestFilesKMIP(t *testing.T) {
 	cfg := loadValues(t, "-f", writeValues(t, exampleValues(t)))
@@ -208,15 +208,16 @@ func TestFilesKMIP(t *testing.T) {
 			pki := newTestPKI(t)
 			root := newFileRoot(t)
 
+			kmip := cfg.KMIPs[0]
 			certFile, keyFile, caFile := pki.files(t, format, cfg.Name, nil, serviceDNSName)
-			root.write(t, cfg.KMIP.TLS.CertPath, certFile)
-			root.write(t, cfg.KMIP.TLS.KeyPath, keyFile)
-			root.write(t, cfg.KMIP.TLS.CAPath, caFile)
+			root.write(t, kmip.TLS.CertPath, certFile)
+			root.write(t, kmip.TLS.KeyPath, keyFile)
+			root.write(t, kmip.TLS.CAPath, caFile)
 
 			server := config.TLSServer{
-				CertPath: root.path(cfg.KMIP.TLS.CertPath),
-				KeyPath:  root.path(cfg.KMIP.TLS.KeyPath),
-				CAPath:   root.path(cfg.KMIP.TLS.CAPath),
+				CertPath: root.path(kmip.TLS.CertPath),
+				KeyPath:  root.path(kmip.TLS.KeyPath),
+				CAPath:   root.path(kmip.TLS.CAPath),
 			}
 			serverTLS := must(server.BuildTLSConfig())(t)
 
@@ -300,7 +301,7 @@ func TestFilesMountExample(t *testing.T) {
 	files := []string{
 		mtls.Server.CertPath, mtls.Server.KeyPath, mtls.Server.CAPath,
 		mtls.Client.CertPath, mtls.Client.KeyPath, mtls.Client.CAPath,
-		cfg.KMIP.TLS.CertPath, cfg.KMIP.TLS.KeyPath, cfg.KMIP.TLS.CAPath,
+		cfg.KMIPs[0].TLS.CertPath, cfg.KMIPs[0].TLS.KeyPath, cfg.KMIPs[0].TLS.CAPath,
 	}
 	for _, file := range files {
 		if _, _, found := mountOf(file); !found {

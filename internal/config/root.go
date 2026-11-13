@@ -34,57 +34,53 @@ type RootConfig struct {
 	Hierarchy      spec.KeyHierarchy          `yaml:"hierarchy"`
 	Topology       spec.Topology              `yaml:"topology"`
 	Connections    ConnectionConfigs          `yaml:"connections"`
-	KMIP           *KMIP                      `yaml:"kmip,omitempty"`
+	KMIPs          KMIPs                      `yaml:"kmips,omitempty"`
 }
 
 // Validate checks the RootConfig for structural correctness.
-func (cfg *RootConfig) Validate() error {
-	if cfg.Name == "" {
+func (m *RootConfig) Validate() error {
+	if m.Name == "" {
 		return ErrConfigNameEmpty
 	}
-	if cfg.Role != RootRole {
+	if m.Role != RootRole {
 		return fmt.Errorf("%w: must be %q", ErrRoleInvalid, RootRole)
 	}
-	if err := cfg.Hierarchy.Validate(); err != nil {
+	if err := m.Hierarchy.Validate(); err != nil {
 		return fmt.Errorf("hierarchy: %w", err)
 	}
-	if err := cfg.Topology.Validate(); err != nil {
+	if err := m.Topology.Validate(); err != nil {
 		return fmt.Errorf("topology: %w", err)
 	}
-	if err := cfg.Segment.Validate(); err != nil {
+	if err := m.Segment.Validate(); err != nil {
 		return fmt.Errorf("segment: %w", err)
 	}
-	if len(cfg.KeyBindings) == 0 {
+	if len(m.KeyBindings) == 0 {
 		return ErrConfigKeyBindingsEmpty
 	}
-
-	if cfg.RootKey == nil {
+	if m.RootKey == nil {
 		return ErrRootKeyMissing
 	}
-	if err := cfg.RootKey.Validate(); err != nil {
+	if err := m.RootKey.Validate(); err != nil {
 		return fmt.Errorf("root key: %w", err)
 	}
-
-	if err := spec.ValidateRootSegment(cfg.Hierarchy, cfg.Segment, cfg.KeyBindings); err != nil {
+	if err := spec.ValidateRootSegment(m.Hierarchy, m.Segment, m.KeyBindings); err != nil {
 		return fmt.Errorf("root segment: %w", err)
 	}
-	if err := spec.ValidateTopologyAgainstHierarchy(cfg.Hierarchy, cfg.Topology, cfg.Segment, cfg.KeyBindings); err != nil {
+	if err := spec.ValidateTopologyAgainstHierarchy(m.Hierarchy, m.Topology, m.Segment, m.KeyBindings); err != nil {
 		return fmt.Errorf("topology: %w", err)
 	}
-	if cfg.KMIP != nil {
-		if err := cfg.KMIP.Validate(); err != nil {
-			return fmt.Errorf("kmip: %w", err)
-		}
+	if err := m.KMIPs.Validate(m); err != nil {
+		return fmt.Errorf("kmip: %w", err)
 	}
-	if cfg.Auth != nil {
-		if err := cfg.Auth.Validate(); err != nil {
+	if m.Auth != nil {
+		if err := m.Auth.Validate(); err != nil {
 			return fmt.Errorf("auth: %w", err)
 		}
-		if err := cfg.Auth.IdentityConfigs.ValidateAuthIdentities(cfg); err != nil {
+		if err := m.Auth.IdentityConfigs.Validate(m); err != nil {
 			return fmt.Errorf("auth identities: %w", err)
 		}
 	}
-	if err := cfg.Connections.Validate(cfg); err != nil {
+	if err := m.Connections.Validate(m); err != nil {
 		return fmt.Errorf("connections: %w", err)
 	}
 
@@ -96,21 +92,21 @@ func (cfg *RootConfig) Validate() error {
 // returns ErrAuthConfigMissing if the root has no auth config, ErrAgentNotAllowed
 // if the agent is not present in the configured identities, and
 // ErrIdentityConfigsMissing if any required child/root identity has no configured entry.
-func (cfg *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error) {
-	if cfg.Auth == nil {
+func (m *RootConfig) AgentIdentities(agentName string) (IdentityConfigs, error) {
+	if m.Auth == nil {
 		return nil, fmt.Errorf("%w: no auth config found in root config", ErrAuthConfigMissing)
 	}
 
-	cns, ok := cfg.Topology.ChildrenNames(agentName)
+	cns, ok := m.Topology.ChildrenNames(agentName)
 	if !ok {
 		cns = make(map[string]struct{}, 1)
 	}
-	cns[cfg.Name] = struct{}{}
+	cns[m.Name] = struct{}{}
 
 	res := make(IdentityConfigs, 0, len(cns))
 
 	isAgentAllowed := false
-	for _, id := range cfg.Auth.IdentityConfigs {
+	for _, id := range m.Auth.IdentityConfigs {
 		// check if the agent is allowed to connect to root
 		if id.Name == agentName {
 			isAgentAllowed = true

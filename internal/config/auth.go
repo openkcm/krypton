@@ -69,15 +69,15 @@ var _ AuthConfig = (*MTLSConfig)(nil)
 
 // Validate checks the RootAuthConfig for structural correctness, including
 // the auth type, identities list, and the underlying AuthConfig.
-func (c *RootAuthConfig) Validate() error {
-	if c.AuthType != AuthTypeMTLS {
-		return fmt.Errorf("%w: %q", ErrUnknownAuthType, c.AuthType)
+func (m *RootAuthConfig) Validate() error {
+	if m.AuthType != AuthTypeMTLS {
+		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
 	}
 
-	if len(c.IdentityConfigs) == 0 {
+	if len(m.IdentityConfigs) == 0 {
 		return fmt.Errorf("%w: identities cannot be empty", ErrInvalidIdentities)
 	}
-	for _, i := range c.IdentityConfigs {
+	for _, i := range m.IdentityConfigs {
 		if strings.TrimSpace(i.Name) == "" {
 			return fmt.Errorf("%w: identity name cannot be empty", ErrInvalidIdentities)
 		}
@@ -87,26 +87,26 @@ func (c *RootAuthConfig) Validate() error {
 		}
 	}
 
-	if c.Config == nil {
+	if m.Config == nil {
 		return ErrNilAuthConfig
 	}
-	return c.Config.Validate()
+	return m.Config.Validate()
 }
 
 // Validate checks the AgentAuthConfig for structural correctness,
 // including the auth type and the underlying AuthConfig.
-func (c *AgentAuthConfig) Validate() error {
-	if c.AuthType != AuthTypeMTLS {
-		return fmt.Errorf("%w: %q", ErrUnknownAuthType, c.AuthType)
+func (m *AgentAuthConfig) Validate() error {
+	if m.AuthType != AuthTypeMTLS {
+		return fmt.Errorf("%w: %q", ErrUnknownAuthType, m.AuthType)
 	}
 
-	if c.Config == nil {
+	if m.Config == nil {
 		return ErrNilAuthConfig
 	}
-	return c.Config.Validate()
+	return m.Config.Validate()
 }
 
-func (c *RootAuthConfig) UnmarshalYAML(node *yaml.Node) error {
+func (m *RootAuthConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias RootAuthConfig
 	var raw struct {
 		alias `yaml:",inline"`
@@ -128,13 +128,13 @@ func (c *RootAuthConfig) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 
-	*c = RootAuthConfig(raw.alias)
-	c.Config = cfg
+	*m = RootAuthConfig(raw.alias)
+	m.Config = cfg
 
 	return nil
 }
 
-func (c *AgentAuthConfig) UnmarshalYAML(node *yaml.Node) error {
+func (m *AgentAuthConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias AgentAuthConfig
 	var raw struct {
 		alias `yaml:",inline"`
@@ -156,8 +156,8 @@ func (c *AgentAuthConfig) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 
-	*c = AgentAuthConfig(raw.alias)
-	c.Config = cfg
+	*m = AgentAuthConfig(raw.alias)
+	m.Config = cfg
 
 	return nil
 }
@@ -190,34 +190,34 @@ func GetAuthConfig(c AuthConfig) (*MTLSConfig, error) {
 }
 
 // URIs returns a slice of the URI strings from the Identities list.
-func (i IdentityConfigs) URIs() []string {
-	res := make([]string, 0, len(i))
-	for _, id := range i {
+func (m IdentityConfigs) URIs() []string {
+	res := make([]string, 0, len(m))
+	for _, id := range m {
 		res = append(res, string(id.URI))
 	}
 	return res
 }
 
-// ValidateAuthIdentities checks that every root and topology segment name
+// Validate checks that every root and topology segment name
 // has a corresponding identity entry, with no duplicates.
-func (i IdentityConfigs) ValidateAuthIdentities(cfg *RootConfig) error {
-	expected := make(map[string]struct{}, len(cfg.Topology.Segments)+1)
-	expected[cfg.Name] = struct{}{}
+func (m IdentityConfigs) Validate(cfg *RootConfig) error {
+	exp := make(map[string]struct{}, len(cfg.Topology.Segments)+1)
+	exp[cfg.Name] = struct{}{}
 	for _, seg := range cfg.Topology.Segments {
-		expected[seg.Name] = struct{}{}
+		exp[seg.Name] = struct{}{}
 	}
 
-	seen := make(map[string]struct{}, len(i))
-	for _, id := range i {
+	seen := make(map[string]struct{}, len(m))
+	for _, id := range m {
 		if _, ok := seen[id.Name]; ok {
 			return fmt.Errorf("%w: duplicate identity name %q", ErrInvalidIdentities, id.Name)
 		}
 		seen[id.Name] = struct{}{}
-		delete(expected, id.Name)
+		delete(exp, id.Name)
 	}
 
-	if len(expected) > 0 {
-		return fmt.Errorf("%w: missing identities for segments: %v", ErrInvalidIdentities, slices.Collect(maps.Keys(expected)))
+	if len(exp) > 0 {
+		return fmt.Errorf("%w: missing identities for segments: %v", ErrInvalidIdentities, slices.Collect(maps.Keys(exp)))
 	}
 
 	return nil

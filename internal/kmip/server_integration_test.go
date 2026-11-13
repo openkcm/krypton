@@ -36,6 +36,7 @@ func TestServerIntegration(t *testing.T) {
 	env.seedSecret(t, material)
 
 	cfg := config.KMIP{
+		Name:     "root",
 		BindAddr: "127.0.0.1",
 		Port:     freePort(t),
 		TLS: config.TLSServer{
