@@ -711,14 +711,16 @@ func (*StaticSecretAuth) Descriptor() ([]byte, []int) {
 }
 
 type AwsKmsAuth struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Credentials:
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RoleArn    string                 `protobuf:"bytes,1,opt,name=role_arn,json=roleArn,proto3" json:"role_arn,omitempty"`
+	ExternalId string                 `protobuf:"bytes,2,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
+	// Types that are valid to be assigned to CredentialSource:
 	//
-	//	*AwsKmsAuth_Role
+	//	*AwsKmsAuth_Runtime
 	//	*AwsKmsAuth_Static
-	Credentials   isAwsKmsAuth_Credentials `protobuf_oneof:"credentials"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CredentialSource isAwsKmsAuth_CredentialSource `protobuf_oneof:"credential_source"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AwsKmsAuth) Reset() {
@@ -751,17 +753,31 @@ func (*AwsKmsAuth) Descriptor() ([]byte, []int) {
 	return file_rootkey_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *AwsKmsAuth) GetCredentials() isAwsKmsAuth_Credentials {
+func (x *AwsKmsAuth) GetRoleArn() string {
 	if x != nil {
-		return x.Credentials
+		return x.RoleArn
+	}
+	return ""
+}
+
+func (x *AwsKmsAuth) GetExternalId() string {
+	if x != nil {
+		return x.ExternalId
+	}
+	return ""
+}
+
+func (x *AwsKmsAuth) GetCredentialSource() isAwsKmsAuth_CredentialSource {
+	if x != nil {
+		return x.CredentialSource
 	}
 	return nil
 }
 
-func (x *AwsKmsAuth) GetRole() *AwsRoleCredentials {
+func (x *AwsKmsAuth) GetRuntime() *AwsRuntimeCredentials {
 	if x != nil {
-		if x, ok := x.Credentials.(*AwsKmsAuth_Role); ok {
-			return x.Role
+		if x, ok := x.CredentialSource.(*AwsKmsAuth_Runtime); ok {
+			return x.Runtime
 		}
 	}
 	return nil
@@ -769,51 +785,49 @@ func (x *AwsKmsAuth) GetRole() *AwsRoleCredentials {
 
 func (x *AwsKmsAuth) GetStatic() *AwsStaticCredentials {
 	if x != nil {
-		if x, ok := x.Credentials.(*AwsKmsAuth_Static); ok {
+		if x, ok := x.CredentialSource.(*AwsKmsAuth_Static); ok {
 			return x.Static
 		}
 	}
 	return nil
 }
 
-type isAwsKmsAuth_Credentials interface {
-	isAwsKmsAuth_Credentials()
+type isAwsKmsAuth_CredentialSource interface {
+	isAwsKmsAuth_CredentialSource()
 }
 
-type AwsKmsAuth_Role struct {
-	Role *AwsRoleCredentials `protobuf:"bytes,1,opt,name=role,proto3,oneof"`
+type AwsKmsAuth_Runtime struct {
+	Runtime *AwsRuntimeCredentials `protobuf:"bytes,3,opt,name=runtime,proto3,oneof"`
 }
 
 type AwsKmsAuth_Static struct {
-	Static *AwsStaticCredentials `protobuf:"bytes,2,opt,name=static,proto3,oneof"`
+	Static *AwsStaticCredentials `protobuf:"bytes,4,opt,name=static,proto3,oneof"`
 }
 
-func (*AwsKmsAuth_Role) isAwsKmsAuth_Credentials() {}
+func (*AwsKmsAuth_Runtime) isAwsKmsAuth_CredentialSource() {}
 
-func (*AwsKmsAuth_Static) isAwsKmsAuth_Credentials() {}
+func (*AwsKmsAuth_Static) isAwsKmsAuth_CredentialSource() {}
 
-type AwsRoleCredentials struct {
+type AwsRuntimeCredentials struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RoleArn       string                 `protobuf:"bytes,1,opt,name=role_arn,json=roleArn,proto3" json:"role_arn,omitempty"`
-	ExternalId    string                 `protobuf:"bytes,2,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AwsRoleCredentials) Reset() {
-	*x = AwsRoleCredentials{}
+func (x *AwsRuntimeCredentials) Reset() {
+	*x = AwsRuntimeCredentials{}
 	mi := &file_rootkey_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AwsRoleCredentials) String() string {
+func (x *AwsRuntimeCredentials) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AwsRoleCredentials) ProtoMessage() {}
+func (*AwsRuntimeCredentials) ProtoMessage() {}
 
-func (x *AwsRoleCredentials) ProtoReflect() protoreflect.Message {
+func (x *AwsRuntimeCredentials) ProtoReflect() protoreflect.Message {
 	mi := &file_rootkey_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -825,30 +839,15 @@ func (x *AwsRoleCredentials) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AwsRoleCredentials.ProtoReflect.Descriptor instead.
-func (*AwsRoleCredentials) Descriptor() ([]byte, []int) {
+// Deprecated: Use AwsRuntimeCredentials.ProtoReflect.Descriptor instead.
+func (*AwsRuntimeCredentials) Descriptor() ([]byte, []int) {
 	return file_rootkey_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *AwsRoleCredentials) GetRoleArn() string {
-	if x != nil {
-		return x.RoleArn
-	}
-	return ""
-}
-
-func (x *AwsRoleCredentials) GetExternalId() string {
-	if x != nil {
-		return x.ExternalId
-	}
-	return ""
 }
 
 type AwsStaticCredentials struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	AccessKeyId     string                 `protobuf:"bytes,1,opt,name=access_key_id,json=accessKeyId,proto3" json:"access_key_id,omitempty"`
 	SecretAccessKey string                 `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
-	SessionToken    string                 `protobuf:"bytes,3,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -893,13 +892,6 @@ func (x *AwsStaticCredentials) GetAccessKeyId() string {
 func (x *AwsStaticCredentials) GetSecretAccessKey() string {
 	if x != nil {
 		return x.SecretAccessKey
-	}
-	return ""
-}
-
-func (x *AwsStaticCredentials) GetSessionToken() string {
-	if x != nil {
-		return x.SessionToken
 	}
 	return ""
 }
@@ -1116,20 +1108,19 @@ const file_rootkey_proto_rawDesc = "" +
 	"\aaws_kms\x18\x02 \x01(\v2$.krypton.v1.admin.rootkey.AwsKmsAuthH\x00R\x06awsKmsB\n" +
 	"\n" +
 	"\bprovider\"\x12\n" +
-	"\x10StaticSecretAuth\"\xa9\x01\n" +
+	"\x10StaticSecretAuth\"\xf4\x01\n" +
 	"\n" +
-	"AwsKmsAuth\x12B\n" +
-	"\x04role\x18\x01 \x01(\v2,.krypton.v1.admin.rootkey.AwsRoleCredentialsH\x00R\x04role\x12H\n" +
-	"\x06static\x18\x02 \x01(\v2..krypton.v1.admin.rootkey.AwsStaticCredentialsH\x00R\x06staticB\r\n" +
-	"\vcredentials\"P\n" +
-	"\x12AwsRoleCredentials\x12\x19\n" +
+	"AwsKmsAuth\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12\x1f\n" +
 	"\vexternal_id\x18\x02 \x01(\tR\n" +
-	"externalId\"\x8b\x01\n" +
+	"externalId\x12K\n" +
+	"\aruntime\x18\x03 \x01(\v2/.krypton.v1.admin.rootkey.AwsRuntimeCredentialsH\x00R\aruntime\x12H\n" +
+	"\x06static\x18\x04 \x01(\v2..krypton.v1.admin.rootkey.AwsStaticCredentialsH\x00R\x06staticB\x13\n" +
+	"\x11credential_source\"\x17\n" +
+	"\x15AwsRuntimeCredentials\"f\n" +
 	"\x14AwsStaticCredentials\x12\"\n" +
 	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
-	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\x12#\n" +
-	"\rsession_token\x18\x03 \x01(\tR\fsessionToken\"\xab\x01\n" +
+	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\"\xab\x01\n" +
 	"\vProviderKey\x12P\n" +
 	"\rstatic_secret\x18\x01 \x01(\v2).krypton.v1.admin.rootkey.StaticSecretKeyH\x00R\fstaticSecret\x12>\n" +
 	"\aaws_kms\x18\x02 \x01(\v2#.krypton.v1.admin.rootkey.AwsKmsKeyH\x00R\x06awsKmsB\n" +
@@ -1174,7 +1165,7 @@ var file_rootkey_proto_goTypes = []any{
 	(*ProviderAuth)(nil),              // 11: krypton.v1.admin.rootkey.ProviderAuth
 	(*StaticSecretAuth)(nil),          // 12: krypton.v1.admin.rootkey.StaticSecretAuth
 	(*AwsKmsAuth)(nil),                // 13: krypton.v1.admin.rootkey.AwsKmsAuth
-	(*AwsRoleCredentials)(nil),        // 14: krypton.v1.admin.rootkey.AwsRoleCredentials
+	(*AwsRuntimeCredentials)(nil),     // 14: krypton.v1.admin.rootkey.AwsRuntimeCredentials
 	(*AwsStaticCredentials)(nil),      // 15: krypton.v1.admin.rootkey.AwsStaticCredentials
 	(*ProviderKey)(nil),               // 16: krypton.v1.admin.rootkey.ProviderKey
 	(*StaticSecretKey)(nil),           // 17: krypton.v1.admin.rootkey.StaticSecretKey
@@ -1190,7 +1181,7 @@ var file_rootkey_proto_depIdxs = []int32{
 	10, // 6: krypton.v1.admin.rootkey.ProviderConfig.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsConfig
 	12, // 7: krypton.v1.admin.rootkey.ProviderAuth.static_secret:type_name -> krypton.v1.admin.rootkey.StaticSecretAuth
 	13, // 8: krypton.v1.admin.rootkey.ProviderAuth.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsAuth
-	14, // 9: krypton.v1.admin.rootkey.AwsKmsAuth.role:type_name -> krypton.v1.admin.rootkey.AwsRoleCredentials
+	14, // 9: krypton.v1.admin.rootkey.AwsKmsAuth.runtime:type_name -> krypton.v1.admin.rootkey.AwsRuntimeCredentials
 	15, // 10: krypton.v1.admin.rootkey.AwsKmsAuth.static:type_name -> krypton.v1.admin.rootkey.AwsStaticCredentials
 	17, // 11: krypton.v1.admin.rootkey.ProviderKey.static_secret:type_name -> krypton.v1.admin.rootkey.StaticSecretKey
 	18, // 12: krypton.v1.admin.rootkey.ProviderKey.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsKey
@@ -1223,7 +1214,7 @@ func file_rootkey_proto_init() {
 		(*ProviderAuth_AwsKms)(nil),
 	}
 	file_rootkey_proto_msgTypes[13].OneofWrappers = []any{
-		(*AwsKmsAuth_Role)(nil),
+		(*AwsKmsAuth_Runtime)(nil),
 		(*AwsKmsAuth_Static)(nil),
 	}
 	file_rootkey_proto_msgTypes[16].OneofWrappers = []any{
