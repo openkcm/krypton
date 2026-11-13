@@ -86,21 +86,20 @@ message ProviderAuth {
 message StaticSecretAuth {}
 
 message AwsKmsAuth {
-  oneof credentials {
-    AwsRoleCredentials role = 1;
-    AwsStaticCredentials static = 2;
+  string role_arn = 1;
+  string external_id = 2;
+
+  oneof credential_source {
+    AwsRuntimeCredentials runtime = 3;
+    AwsStaticCredentials static = 4;
   }
 }
 
-message AwsRoleCredentials {
-  string role_arn = 1;
-  string external_id = 2;
-}
+message AwsRuntimeCredentials {}
 
 message AwsStaticCredentials {
   string access_key_id = 1;
   string secret_access_key = 2; 
-  string session_token = 3;
 }
 
 message ProviderKey {
