@@ -42,6 +42,10 @@ func (m KMIPs) Validate(cfg *RootConfig) error {
 		}
 	}
 
+	if dk == "" && len(m) > 0 {
+		return fmt.Errorf("%w: hierarchy has no DEK kind but KMIP servers are configured", ErrKMIPInvalidConfig)
+	}
+
 	das := make(map[string]struct{}, len(cfg.Topology.Segments))
 	for _, seg := range cfg.Topology.Segments {
 		if seg.Segment.EndKind == dk {
