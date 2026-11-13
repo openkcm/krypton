@@ -22,6 +22,8 @@ import (
 
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/providertest"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
@@ -34,6 +36,7 @@ import (
 
 type testSetup struct {
 	client          rootkey.ServiceClient
+	root            *keyprocessor.RootManager
 	keyStore        store.Key
 	keyVersionStore store.KeyVersion
 	tenantStore     store.Tenant
@@ -139,6 +142,7 @@ func setupServerAndClient(t *testing.T, db *sql.DB, allowedProviders ...sealer.T
 
 	return &testSetup{
 		client:          rootkey.NewServiceClient(conn),
+		root:            manager,
 		keyStore:        storesql.NewKeyStore(db),
 		keyVersionStore: storesql.NewKeyVersionStore(db),
 		tenantStore:     storesql.NewTenantStore(db),
@@ -185,19 +189,36 @@ func validCreateRequest(tenantID, keyID string) *rootkey.CreateProviderRequest {
 	return &rootkey.CreateProviderRequest{
 		TenantId: tenantID,
 		KeyId:    keyID,
-		Config: &rootkey.ProviderConfig{Provider: &rootkey.ProviderConfig_StaticSecret{
-			StaticSecret: &rootkey.StaticSecretConfig{
-				SecretName: "test-sealer",
-				Secret:     []byte("0123456789abcdef0123456789abcdef"),
+		Provider: &rootkey.Provider{Provider: &rootkey.Provider_TestProvider{
+			TestProvider: &rootkey.TestProvider{
+				Config:      &rootkey.TestProviderConfig{InstanceId: "provider-instance"},
+				Auth:        &rootkey.TestProviderAuth{AccessToken: "access-token"},
+				ProviderKey: &rootkey.TestProviderKey{KeyId: "provider-key-1"},
 			},
 		}},
-		Auth: &rootkey.ProviderAuth{Provider: &rootkey.ProviderAuth_StaticSecret{
-			StaticSecret: &rootkey.StaticSecretAuth{},
-		}},
-		ProviderKey: &rootkey.ProviderKey{Provider: &rootkey.ProviderKey_StaticSecret{
-			StaticSecret: &rootkey.StaticSecretKey{Id: "provider-key-1"},
-		}},
 	}
+}
+
+func provisionTestProvider(t *testing.T) *providertest.Provider {
+	t.Helper()
+	t.Setenv(providertest.EnableEnv, providertest.EnableAck)
+	t.Setenv(providertest.DirectoryEnv, t.TempDir())
+
+	provider, err := providertest.New()
+	require.NoError(t, err)
+	require.NoError(t, provider.UpsertInstance(t.Context(), "provider-instance"))
+	require.NoError(t, provider.UpsertKey(t.Context(), "provider-instance", "provider-key-1"))
+	require.NoError(t, provider.UpsertKeyAuth(t.Context(), "provider-instance", "provider-key-1", "access-token"))
+	return provider
+}
+
+func newSecureData(t *testing.T, value string) *securemem.Data {
+	t.Helper()
+	data, err := securemem.NewData("rootkey-service-test", len(value))
+	require.NoError(t, err)
+	copy(data.SecureBytes(), value)
+	t.Cleanup(func() { _ = data.Destroy() })
+	return data
 }
 
 func createProvider(t *testing.T, setup *testSetup, tenantID, keyID string) {

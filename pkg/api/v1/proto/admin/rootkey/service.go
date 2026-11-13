@@ -2,7 +2,6 @@ package rootkey
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"uuid"
 
@@ -11,11 +10,8 @@ import (
 
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
-	"github.com/openkcm/krypton/internal/sealer/staticsecret"
-	"github.com/openkcm/krypton/internal/secret/inline"
-	"github.com/openkcm/krypton/internal/secret/secretprovider"
-	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/pkg/api/v1/proto"
 	"github.com/openkcm/krypton/pkg/store"
@@ -43,10 +39,6 @@ var (
 	ErrInvalidKeyID = errors.New("key ID must be a valid UUID")
 	// ErrProviderKeyRequired means no provider key was specified.
 	ErrProviderKeyRequired = errors.New("provider key is required")
-	// ErrSecretRequired means no static secret was specified.
-	ErrSecretRequired = errors.New("secret is required")
-	// ErrProviderMismatch means the provider inputs select different providers.
-	ErrProviderMismatch = errors.New("provider config and provider key must use the same provider")
 	// ErrUnsupportedProvider means the selected provider is not supported.
 	ErrUnsupportedProvider = errors.New("provider is not supported")
 )
@@ -58,26 +50,10 @@ func (s *Service) CreateProvider(ctx context.Context, req *CreateProviderRequest
 		return nil, err
 	}
 
-	keyType, providerKeyID, err := providerKey(req.GetProviderKey())
+	spec, providerKeyID, err := provider(req.GetProvider())
 	if err != nil {
 		return nil, err
 	}
-
-	authType, auth, err := providerAuth(req.GetAuth())
-	if err != nil {
-		return nil, err
-	}
-
-	spec, err := providerSpec(req.GetConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	typesMatch := spec.Type == authType && spec.Type == keyType
-	if !typesMatch {
-		return nil, invalidArgument(ErrProviderMismatch)
-	}
-	spec.Auth = auth
 
 	err = s.root.CreateProvider(ctx, keyprocessor.CreateProviderInput{
 		TenantID:      req.GetTenantId(),
@@ -158,25 +134,49 @@ func (s *Service) RemoveProvider(ctx context.Context, req *RemoveProviderRequest
 	return &RemoveProviderResponse{}, nil
 }
 
-func providerSpec(cfg *ProviderConfig) (sealerprovider.Spec, error) {
-	switch c := cfg.GetProvider().(type) {
-	case *ProviderConfig_StaticSecret:
-		return staticSecretSpec(c.StaticSecret)
-	case *ProviderConfig_AwsKms:
-		return sealerprovider.Spec{}, unsupportedProvider() // aws_kms not yet supported
+func provider(p *Provider) (sealerprovider.Spec, string, error) {
+	switch p := p.GetProvider().(type) {
+	case *Provider_TestProvider:
+		return testProvider(p.TestProvider)
+	case *Provider_AwsKms:
+		return sealerprovider.Spec{}, "", unsupportedProvider() // aws_kms not yet supported
 	default:
-		return sealerprovider.Spec{}, unsupportedProvider()
+		return sealerprovider.Spec{}, "", unsupportedProvider()
 	}
+}
+
+func testProvider(p *TestProvider) (sealerprovider.Spec, string, error) {
+	config := &providertest.Config{InstanceID: p.GetConfig().GetInstanceId()}
+	if err := config.ValidateSealerConfig(); err != nil {
+		return sealerprovider.Spec{}, "", invalidArgument(err)
+	}
+
+	auth := &providertest.Auth{Token: providertest.AccessToken(p.GetAuth().GetAccessToken())}
+	if err := auth.ValidateSealerAuth(); err != nil {
+		return sealerprovider.Spec{}, "", invalidArgument(err)
+	}
+
+	providerKeyID := p.GetProviderKey().GetKeyId()
+	if providerKeyID == "" {
+		return sealerprovider.Spec{}, "", invalidArgument(ErrProviderKeyRequired)
+	}
+
+	return sealerprovider.Spec{
+		Name:   config.InstanceID,
+		Type:   providertest.TypeProviderTest,
+		Config: config,
+		Auth:   auth,
+	}, providerKeyID, nil
 }
 
 func providerKey(key *ProviderKey) (sealer.Type, string, error) {
 	switch k := key.GetProvider().(type) {
-	case *ProviderKey_StaticSecret:
-		id := k.StaticSecret.GetId()
+	case *ProviderKey_TestProvider:
+		id := k.TestProvider.GetKeyId()
 		if id == "" {
 			return "", "", invalidArgument(ErrProviderKeyRequired)
 		}
-		return staticsecret.TypeStaticSecret, id, nil
+		return providertest.TypeProviderTest, id, nil
 	case *ProviderKey_AwsKms:
 		return "", "", unsupportedProvider() // aws_kms not yet supported
 	default:
@@ -185,38 +185,18 @@ func providerKey(key *ProviderKey) (sealer.Type, string, error) {
 }
 
 func providerAuth(auth *ProviderAuth) (sealer.Type, sealer.SealerAuth, error) {
-	switch auth.GetProvider().(type) {
-	case *ProviderAuth_StaticSecret:
-		return staticsecret.TypeStaticSecret, &staticsecret.Auth{}, nil
+	switch a := auth.GetProvider().(type) {
+	case *ProviderAuth_TestProvider:
+		providerAuth := &providertest.Auth{Token: providertest.AccessToken(a.TestProvider.GetAccessToken())}
+		if err := providerAuth.ValidateSealerAuth(); err != nil {
+			return "", nil, invalidArgument(err)
+		}
+		return providertest.TypeProviderTest, providerAuth, nil
 	case *ProviderAuth_AwsKms:
 		return "", nil, unsupportedProvider() // aws_kms not yet supported
 	default:
 		return "", nil, unsupportedProvider()
 	}
-}
-
-func staticSecretSpec(cfg *StaticSecretConfig) (sealerprovider.Spec, error) {
-	raw := cfg.GetSecret()
-	if len(raw) == 0 {
-		return sealerprovider.Spec{}, invalidArgument(ErrSecretRequired)
-	}
-	defer securemem.Zero(raw)
-
-	buf := make([]byte, base64.StdEncoding.EncodedLen(len(raw)))
-	base64.StdEncoding.Encode(buf, raw)
-	defer securemem.Zero(buf)
-
-	spec := sealerprovider.Spec{
-		Name: cfg.GetSecretName(),
-		Type: staticsecret.TypeStaticSecret,
-		Config: &staticsecret.Config{
-			Secret: secretprovider.Spec{
-				Type:   inline.Type,
-				Config: &inline.Config{Secret: string(buf)},
-			},
-		},
-	}
-	return spec, nil
 }
 
 func validateIDs(tenantID, keyID string) error {
