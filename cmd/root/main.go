@@ -28,6 +28,7 @@ import (
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/kmip"
 	"github.com/openkcm/krypton/internal/orchestrator"
+	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
 	"github.com/openkcm/krypton/internal/worker"
@@ -37,6 +38,7 @@ import (
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/rootkey"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/agents"
 	"github.com/openkcm/krypton/pkg/api/v1/proto/sealer"
+	"github.com/openkcm/krypton/pkg/api/v1/proto/test/provider"
 	"github.com/openkcm/krypton/pkg/model"
 	"github.com/openkcm/krypton/pkg/store"
 	storesql "github.com/openkcm/krypton/pkg/store/sql"
@@ -175,6 +177,9 @@ func main() {
 	// grpc server setup for sealer
 	sealer.RegisterServiceServer(grpcServer, sealer.NewSealerService(kpMgr))
 
+	err = registerUnsafeTestProvider(grpcServer)
+	handleErr(err, "failed to register unsafe test provider")
+
 	lis, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":"+srvPort)
 	handleErr(err, "failed to listen on gRPC port")
 
@@ -229,6 +234,22 @@ func loadConfig() *config.RootConfig {
 	handleErr(err, "failed to load root config from "+path)
 
 	return rCfg
+}
+
+func registerUnsafeTestProvider(registrar grpc.ServiceRegistrar) error {
+	if !providertest.IsEnabled() {
+		return nil
+	}
+
+	prov, err := providertest.New()
+	if err != nil {
+		return err
+	}
+
+	provider.RegisterServiceServer(registrar, provider.NewService(prov))
+	log.Print("WARNING: unsafe test provider API is enabled")
+
+	return nil
 }
 
 // Worker to periodically check agent heartbeats and update their registration status accordingly.

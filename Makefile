@@ -96,6 +96,7 @@ proto-gen:
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/keys"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/rootkey"
 	./scripts/proto-gen.sh "api-specs/v1/proto/admin/actions"
+	./scripts/proto-gen.sh "api-specs/v1/proto/test/provider"
 	./scripts/proto-gen.sh "api-specs/v1/proto"
 	$(MAKE) go-format
 
