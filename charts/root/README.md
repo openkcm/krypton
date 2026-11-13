@@ -113,7 +113,7 @@ kr --server localhost:8080 get tenants
 | Port | Serves |
 | --- | --- |
 | `grpc` (8080) | The gRPC APIs: `TenantService`, `KeyService`, `ActionService` and the agent `Service` |
-| `kmip` (`config.kmip.port`, if configured) | KMIP `Get` and `GetAttributes` |
+| `kmip` (`config.kmips[].port`, if configured) | KMIP `Get` and `GetAttributes` |
 
 The root node has no HTTP health endpoint; the probes check that the gRPC port accepts
 connections. The startup probe allows 120 seconds, because the root node migrates its database
@@ -132,7 +132,7 @@ before it opens the port.
 | `config.topology` | no agents | The agents and the key kinds they manage |
 | `config.connections` | `root` at `krypton-root:8080` | The gRPC addresses of the root node and the agents |
 | `config.auth` | not set | Mutual TLS on the gRPC port |
-| `config.kmip` | not set | KMIP server |
+| `config.kmips` | not set | KMIP servers |
 | `replicaCount` / `strategy` | `1` / `Recreate` | Keep them with the development vaults |
 | `networkPolicy.enabled` | `false` | Restrict who may reach the gRPC APIs and the KMIP server |
 | `resources` | 100m CPU, 128Mi memory and 64Mi ephemeral storage requested; 512Mi memory and 256Mi ephemeral storage limits | |
@@ -191,8 +191,9 @@ example at `config.auth`.
 
 ## KMIP server
 
-With `config.kmip`, the root node runs a KMIP server for keys of its segment. It requires TLS
-1.3 and a client certificate issued by `config.kmip.tls.ca_path`; the common name of the client
+With `config.kmips`, the root node runs KMIP servers for keys of topology agents. Each entry
+needs a `name` matching a topology segment whose end kind is `dek`. It requires TLS 1.3 and a
+client certificate issued by the entry's `tls.ca_path`; the common name of the client
 certificate must equal the tenant ID of the keys it requests. Add the port to `ports` and
 `service.ports` (examples in values.yaml) and restrict its clients with `networkPolicy.kmip.from`.
 
@@ -258,7 +259,7 @@ configuration works with v0.1.0 as well. When you move from v0.1.0 to a later re
 | Pod exits with `DATABASE_URL environment variable is required` | `database.existingSecret` is not set |
 | Pod exits with `failed to run migrations` | PostgreSQL is not reachable with the URL, or the user may not create tables |
 | Pod exits with `no connection config for root "root"` | `config.connections` has no entry for the root node |
-| Pod exits with `kmip: invalid TLS configuration` | `config.kmip.tls` misses a file, for example because it uses the v0.1.0 key names |
+| Pod exits with `kmip: invalid TLS configuration` | A `config.kmips` entry's `tls` misses a file, for example because it uses the v0.1.0 key names |
 | New pod stays `Pending` with `Multi-Attach error` | Rolling update with a ReadWriteOnce vault volume: use `strategy: { type: Recreate }` |
 | Keys are gone after a restart | `unsafe-sqlite-memory` vaults keep keys only in memory |
 | Upgrade fails with `field is immutable` on the ConfigMap | `config.isImmutable` is true: delete the ConfigMap `krypton-root-config` before the upgrade |

@@ -26,7 +26,7 @@ Call the gRPC APIs from your machine with the kr CLI (make cli in the Krypton re
 {{- $unsafeVaults := list }}
 {{- with $cfg.root_key }}{{ with .vault }}{{ if hasPrefix "unsafe-" (.type | default "" | toString) }}{{ $unsafeVaults = append $unsafeVaults (printf "root_key (%s)" .type) }}{{ end }}{{ end }}{{ end }}
 {{- range $kind, $binding := $cfg.key_bindings }}
-{{- with $binding.vault }}{{ if hasPrefix "unsafe-" (.type | default "" | toString) }}{{ $unsafeVaults = append $unsafeVaults (printf "%s (%s)" $kind .type) }}{{ end }}{{ end }}
+{{- if $binding }}{{- with $binding.vault }}{{ if hasPrefix "unsafe-" (.type | default "" | toString) }}{{ $unsafeVaults = append $unsafeVaults (printf "%s (%s)" $kind .type) }}{{ end }}{{ end }}{{ end }}
 {{- end }}
 {{- $rootConnection := false }}
 {{- range $cfg.connections }}{{ if eq (.name | default "" | toString) ($cfg.name | default "" | toString) }}{{ $rootConnection = true }}{{ end }}{{ end }}
@@ -50,8 +50,8 @@ Call the gRPC APIs from your machine with the kr CLI (make cli in the Krypton re
 {{- $warnings = append $warnings "strategy is not Recreate: during an update the old and the new pod run at the same time, each with its own unsafe-sqlite vault, and a ReadWriteOnce volume cannot be mounted by both on different nodes." }}
 {{- end }}
 {{- end }}
-{{- if and $cfg.kmip (not $kmipPort) }}
-{{- $warnings = append $warnings "config.kmip is set, but ports has no port named kmip: KMIP clients cannot reach the server. Add the port to ports and service.ports." }}
+{{- if and $cfg.kmips (not $kmipPort) }}
+{{- $warnings = append $warnings "config.kmips is set, but ports has no port named kmip: KMIP clients cannot reach the server. Add the port to ports and service.ports." }}
 {{- end }}
 {{- if and (not $cfg.auth) (not .Values.networkPolicy.enabled) }}
 {{- $warnings = append $warnings "config.auth is not set and networkPolicy.enabled is false: every client that can reach the Service can call the gRPC APIs, including the admin API. Enable networkPolicy, use a service mesh, or configure config.auth." }}
