@@ -46,7 +46,12 @@ func (m KMIPs) Validate(cfg *RootConfig) error {
 		return fmt.Errorf("%w: hierarchy has no DEK kind but KMIP servers are configured", ErrKMIPInvalidConfig)
 	}
 
-	das := make(map[string]struct{}, len(cfg.Topology.Segments))
+	das := make(map[string]struct{}, len(cfg.Topology.Segments)+1)
+	// if dek is managed by root itself, then the root config is a valid agent for kmip servers
+	if cfg.Segment.EndKind == dk {
+		das[cfg.Name] = struct{}{}
+	}
+	// add all topology segments whose end kind is the DEK kind to the valid agent set
 	for _, seg := range cfg.Topology.Segments {
 		if seg.Segment.EndKind == dk {
 			das[seg.Name] = struct{}{}

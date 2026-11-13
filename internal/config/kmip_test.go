@@ -191,6 +191,70 @@ func TestKMIPsValidate(t *testing.T) {
 				*kmips = nil
 			},
 		},
+		{
+			name: "valid KMIP server referencing root segment as DEK agent",
+			mutate: func(cfg *config.RootConfig, kmips *config.KMIPs) {
+				cfg.Name = "root-agent"
+				cfg.Segment = spec.HierarchySegment{
+					StartKind: "K0",
+					EndKind:   "K3",
+				}
+				// Remove topology segments so only root manages DEK
+				cfg.Topology.Segments = nil
+				*kmips = config.KMIPs{validKMIP("root-agent")}
+			},
+			wantErr: nil,
+		},
+		{
+			name: "KMIP name matches root but root EndKind is not DEK",
+			mutate: func(cfg *config.RootConfig, kmips *config.KMIPs) {
+				cfg.Name = "root-agent"
+				cfg.Segment = spec.HierarchySegment{
+					StartKind: "K0",
+					EndKind:   "K1", // not DEK kind "K3"
+				}
+				*kmips = config.KMIPs{validKMIP("root-agent")}
+			},
+			wantErr: config.ErrKMIPInvalidConfig,
+		},
+		{
+			name: "no DEK kind in hierarchy with empty KMIPs is valid",
+			mutate: func(cfg *config.RootConfig, kmips *config.KMIPs) {
+				cfg.Hierarchy.KeySpecs = []spec.KeySpec{
+					{Kind: "K0", Role: spec.KeyRoleRoot},
+					{Kind: "K1", Role: spec.KeyRoleKek},
+				}
+				*kmips = nil
+			},
+			wantErr: nil,
+		},
+		{
+			name: "topology segment with non-DEK EndKind is not valid KMIP agent",
+			mutate: func(cfg *config.RootConfig, kmips *config.KMIPs) {
+				cfg.Topology.Segments = append(cfg.Topology.Segments, spec.TopologySegment{
+					Name: "agent-gcp",
+					Segment: spec.HierarchySegment{
+						StartKind: "K1",
+						EndKind:   "K2", // not DEK kind "K3"
+					},
+				})
+				*kmips = append(*kmips, validKMIP("agent-gcp"))
+			},
+			wantErr: config.ErrKMIPInvalidConfig,
+		},
+		{
+			name: "KMIP entry fails validation with empty name",
+			mutate: func(cfg *config.RootConfig, kmips *config.KMIPs) {
+				// Root with empty name and EndKind matching DEK allows "" in das
+				cfg.Name = ""
+				cfg.Segment = spec.HierarchySegment{
+					StartKind: "K0",
+					EndKind:   "K3",
+				}
+				(*kmips)[0].Name = ""
+			},
+			wantErr: config.ErrKMIPEmptyName,
+		},
 	}
 
 	for _, tt := range tests {
