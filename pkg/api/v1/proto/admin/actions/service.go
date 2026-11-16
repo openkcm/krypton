@@ -24,7 +24,12 @@ const (
 
 // actionTypeByJobGroupType maps an orbital JobGroup.Type to an ActionType.
 var actionTypeByJobGroupType = map[string]ActionType{
-	orchestrator.AnnounceKey: ActionType_ANNOUNCE_KEY,
+	orchestrator.AnnounceKey:   ActionType_ANNOUNCE_KEY,
+	orchestrator.ActivateKey:   ActionType_ACTIVATE_KEY,
+	orchestrator.SuspendKey:    ActionType_SUSPEND_KEY,
+	orchestrator.DeactivateKey: ActionType_DEACTIVATE_KEY,
+	orchestrator.CompromiseKey: ActionType_COMPROMISE_KEY,
+	orchestrator.DestroyKey:    ActionType_DESTROY_KEY,
 }
 
 // JobGroupStore retrieves orbital job groups backing actions.

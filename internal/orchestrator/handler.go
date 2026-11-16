@@ -42,6 +42,7 @@ const (
 	SuspendKey    = "suspend-key"
 	DeactivateKey = "deactivate-key"
 	CompromiseKey = "compromise-key"
+	DestroyKey    = "destroy-key"
 )
 
 type HandlerConfig struct {

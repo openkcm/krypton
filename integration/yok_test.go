@@ -86,7 +86,9 @@ func TestYOKLifecycle(t *testing.T) {
 		require.Len(t, versions.KeyVersions, 1)
 		assert.Equal(t, firstKeyID, versions.KeyVersions[0].Labels[sealer.ProviderKeyMetadataKey(providertest.TypeProviderTest)])
 
-		activateKey(t, keyClient, tenantID, rootKeyID)
+		activateKey(t, keyClient, tenantID, rootKeyID, false)
+		awaitKeyProcessingStatusViaGRPC(t, keyClient, rootKeyID, tenantID, string(model.KeyProcessingCompleted), 15*time.Second)
+
 		firstChildID = announceAndActivateChildKey(t, keyClient, tenantID, rootKeyID)
 
 		sealed, err := sealerClient.Seal(ctx, &sealergrpc.SealRequest{
@@ -490,21 +492,10 @@ func announceAndActivateChildKey(
 	})
 	require.NoError(t, err)
 	keyID := response.GetKey().GetId()
-	awaitKeyProcessingStatusViaGRPC(t, client, keyID, tenantID, string(model.KeyProcessingCompleted), 15*time.Second)
-	activateKey(t, client, tenantID, keyID)
-	return keyID
-}
 
-func activateKey(
-	t *testing.T,
-	client keygrpc.KeyServiceClient,
-	tenantID, keyID string,
-) {
-	t.Helper()
-	_, err := client.ActivateKey(t.Context(), &keygrpc.ActivateKeyRequest{
-		TenantId: tenantID,
-		Id:       keyID,
-	})
-	require.NoError(t, err)
 	awaitKeyProcessingStatusViaGRPC(t, client, keyID, tenantID, string(model.KeyProcessingCompleted), 15*time.Second)
+	activateKey(t, client, tenantID, keyID, false)
+	awaitKeyProcessingStatusViaGRPC(t, client, keyID, tenantID, string(model.KeyProcessingCompleted), 15*time.Second)
+
+	return keyID
 }

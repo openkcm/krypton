@@ -18,13 +18,13 @@ func activateCmd() *cobra.Command {
 	return cmd
 }
 
-type activatedKeyRow struct {
-	Status bool
+type activatedKeyJobGroup struct {
+	ID string
 }
 
 func activateKeyCmd() *cobra.Command {
 	var tenantID, keyID string
-	var asJSON bool
+	var asJSON, isCascading bool
 
 	cmd := &cobra.Command{
 		Use:   keyCmd,
@@ -47,15 +47,16 @@ func activateKeyCmd() *cobra.Command {
 
 			client := keys.NewKeyServiceClient(conn)
 
-			_, err = client.ActivateKey(cmd.Context(), &keys.ActivateKeyRequest{
-				TenantId: tenantID,
-				Id:       keyID,
+			resp, err := client.ActivateKey(cmd.Context(), &keys.ActivateKeyRequest{
+				TenantId:  tenantID,
+				Id:        keyID,
+				Cascading: isCascading,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to activate key: %w", err)
 			}
 
-			builder, err := output.From(activatedKeyRow{Status: true})
+			builder, err := output.From(activatedKeyJobGroup{ID: resp.GetJobGroupId()})
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}
@@ -67,6 +68,7 @@ func activateKeyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&keyID, "key-id", "", "id of the key")
 	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "id of the tenant")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output in JSON format")
+	cmd.Flags().BoolVar(&isCascading, "cascading", false, "cascade activation to all child keys (default: false)")
 	_ = cmd.MarkFlagRequired("key-id")
 
 	return cmd
