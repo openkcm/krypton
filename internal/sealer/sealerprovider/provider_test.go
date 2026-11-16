@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
@@ -102,6 +103,25 @@ func TestSpec_Validate(t *testing.T) {
 }
 
 func TestSpec_UnmarshalYAML(t *testing.T) {
+	t.Run("should unmarshal test provider spec", func(t *testing.T) {
+		input := `
+name: test-instance
+type: providertest
+auth:
+  access_token: token
+config:
+  instance_id: test-instance
+`
+
+		var spec sealerprovider.Spec
+		err := yaml.Unmarshal([]byte(input), &spec)
+
+		require.NoError(t, err)
+		assert.Equal(t, providertest.TypeProviderTest, spec.Type)
+		assert.Equal(t, &providertest.Config{InstanceID: "test-instance"}, spec.Config)
+		assert.Equal(t, &providertest.Auth{Token: "token"}, spec.Auth)
+	})
+
 	t.Run("should unmarshal staticsecret spec with auth", func(t *testing.T) {
 		// given
 		input := `
@@ -196,6 +216,24 @@ func TestSpec_MarshalYAML(t *testing.T) {
 }
 
 func TestGetSealer(t *testing.T) {
+	t.Run("should construct test provider client", func(t *testing.T) {
+		t.Setenv(providertest.EnableEnv, providertest.EnableAck)
+		t.Setenv(providertest.DirectoryEnv, t.TempDir())
+		provider, err := providertest.New()
+		require.NoError(t, err)
+		require.NoError(t, provider.UpsertInstance(t.Context(), "instance"))
+
+		s, err := sealerprovider.GetSealer(t.Context(), sealerprovider.Spec{
+			Name:   "instance",
+			Type:   providertest.TypeProviderTest,
+			Config: &providertest.Config{InstanceID: "instance"},
+			Auth:   &providertest.Auth{Token: "token"},
+		})
+
+		require.NoError(t, err)
+		assert.IsType(t, &providertest.Client{}, s)
+	})
+
 	t.Run("should return error for unknown config type", func(t *testing.T) {
 		// given
 		ctx := t.Context()

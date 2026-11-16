@@ -30,9 +30,7 @@ service Service {
 message CreateProviderRequest {
   string tenant_id = 1;
   string key_id = 2;
-  ProviderConfig config = 3;
-  ProviderAuth auth = 4;
-  ProviderKey provider_key = 5;
+  Provider provider = 3;
 }
 
 message CreateProviderResponse {}
@@ -60,16 +58,27 @@ message RemoveProviderRequest {
 
 message RemoveProviderResponse {}
 
-message ProviderConfig {
+message Provider {
   oneof provider {
-    StaticSecretConfig static_secret = 1;
-    AwsKmsConfig aws_kms = 2;
+    TestProvider test_provider = 1;
+    AwsKmsProvider aws_kms = 2;
   }
 }
 
-message StaticSecretConfig {
-  string secret_name = 1;
-  bytes secret = 2; 
+message TestProvider {
+  TestProviderConfig config = 1;
+  TestProviderAuth auth = 2;
+  TestProviderKey provider_key = 3;
+}
+
+message AwsKmsProvider {
+  AwsKmsConfig config = 1;
+  AwsKmsAuth auth = 2;
+  AwsKmsKey provider_key = 3;
+}
+
+message TestProviderConfig {
+  string instance_id = 1;
 }
 
 message AwsKmsConfig {
@@ -78,12 +87,14 @@ message AwsKmsConfig {
 
 message ProviderAuth {
   oneof provider {
-    StaticSecretAuth static_secret = 1;
+    TestProviderAuth test_provider = 1;
     AwsKmsAuth aws_kms = 2;
   }
 }
 
-message StaticSecretAuth {}
+message TestProviderAuth {
+  string access_token = 1;
+}
 
 message AwsKmsAuth {
   string role_arn = 1;
@@ -104,13 +115,13 @@ message AwsStaticCredentials {
 
 message ProviderKey {
   oneof provider {
-    StaticSecretKey static_secret = 1;
+    TestProviderKey test_provider = 1;
     AwsKmsKey aws_kms = 2;
   }
 }
 
-message StaticSecretKey {
-  string id = 1;
+message TestProviderKey {
+  string key_id = 1;
 }
 
 message AwsKmsKey {

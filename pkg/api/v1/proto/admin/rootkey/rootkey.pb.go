@@ -26,9 +26,7 @@ type CreateProviderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
-	Config        *ProviderConfig        `protobuf:"bytes,3,opt,name=config,proto3" json:"config,omitempty"`
-	Auth          *ProviderAuth          `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
-	ProviderKey   *ProviderKey           `protobuf:"bytes,5,opt,name=provider_key,json=providerKey,proto3" json:"provider_key,omitempty"`
+	Provider      *Provider              `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -77,23 +75,9 @@ func (x *CreateProviderRequest) GetKeyId() string {
 	return ""
 }
 
-func (x *CreateProviderRequest) GetConfig() *ProviderConfig {
+func (x *CreateProviderRequest) GetProvider() *Provider {
 	if x != nil {
-		return x.Config
-	}
-	return nil
-}
-
-func (x *CreateProviderRequest) GetAuth() *ProviderAuth {
-	if x != nil {
-		return x.Auth
-	}
-	return nil
-}
-
-func (x *CreateProviderRequest) GetProviderKey() *ProviderKey {
-	if x != nil {
-		return x.ProviderKey
+		return x.Provider
 	}
 	return nil
 }
@@ -414,31 +398,31 @@ func (*RemoveProviderResponse) Descriptor() ([]byte, []int) {
 	return file_rootkey_proto_rawDescGZIP(), []int{7}
 }
 
-type ProviderConfig struct {
+type Provider struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Provider:
 	//
-	//	*ProviderConfig_StaticSecret
-	//	*ProviderConfig_AwsKms
-	Provider      isProviderConfig_Provider `protobuf_oneof:"provider"`
+	//	*Provider_TestProvider
+	//	*Provider_AwsKms
+	Provider      isProvider_Provider `protobuf_oneof:"provider"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProviderConfig) Reset() {
-	*x = ProviderConfig{}
+func (x *Provider) Reset() {
+	*x = Provider{}
 	mi := &file_rootkey_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProviderConfig) String() string {
+func (x *Provider) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProviderConfig) ProtoMessage() {}
+func (*Provider) ProtoMessage() {}
 
-func (x *ProviderConfig) ProtoReflect() protoreflect.Message {
+func (x *Provider) ProtoReflect() protoreflect.Message {
 	mi := &file_rootkey_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -450,74 +434,75 @@ func (x *ProviderConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProviderConfig.ProtoReflect.Descriptor instead.
-func (*ProviderConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use Provider.ProtoReflect.Descriptor instead.
+func (*Provider) Descriptor() ([]byte, []int) {
 	return file_rootkey_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ProviderConfig) GetProvider() isProviderConfig_Provider {
+func (x *Provider) GetProvider() isProvider_Provider {
 	if x != nil {
 		return x.Provider
 	}
 	return nil
 }
 
-func (x *ProviderConfig) GetStaticSecret() *StaticSecretConfig {
+func (x *Provider) GetTestProvider() *TestProvider {
 	if x != nil {
-		if x, ok := x.Provider.(*ProviderConfig_StaticSecret); ok {
-			return x.StaticSecret
+		if x, ok := x.Provider.(*Provider_TestProvider); ok {
+			return x.TestProvider
 		}
 	}
 	return nil
 }
 
-func (x *ProviderConfig) GetAwsKms() *AwsKmsConfig {
+func (x *Provider) GetAwsKms() *AwsKmsProvider {
 	if x != nil {
-		if x, ok := x.Provider.(*ProviderConfig_AwsKms); ok {
+		if x, ok := x.Provider.(*Provider_AwsKms); ok {
 			return x.AwsKms
 		}
 	}
 	return nil
 }
 
-type isProviderConfig_Provider interface {
-	isProviderConfig_Provider()
+type isProvider_Provider interface {
+	isProvider_Provider()
 }
 
-type ProviderConfig_StaticSecret struct {
-	StaticSecret *StaticSecretConfig `protobuf:"bytes,1,opt,name=static_secret,json=staticSecret,proto3,oneof"`
+type Provider_TestProvider struct {
+	TestProvider *TestProvider `protobuf:"bytes,1,opt,name=test_provider,json=testProvider,proto3,oneof"`
 }
 
-type ProviderConfig_AwsKms struct {
-	AwsKms *AwsKmsConfig `protobuf:"bytes,2,opt,name=aws_kms,json=awsKms,proto3,oneof"`
+type Provider_AwsKms struct {
+	AwsKms *AwsKmsProvider `protobuf:"bytes,2,opt,name=aws_kms,json=awsKms,proto3,oneof"`
 }
 
-func (*ProviderConfig_StaticSecret) isProviderConfig_Provider() {}
+func (*Provider_TestProvider) isProvider_Provider() {}
 
-func (*ProviderConfig_AwsKms) isProviderConfig_Provider() {}
+func (*Provider_AwsKms) isProvider_Provider() {}
 
-type StaticSecretConfig struct {
+type TestProvider struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SecretName    string                 `protobuf:"bytes,1,opt,name=secret_name,json=secretName,proto3" json:"secret_name,omitempty"`
-	Secret        []byte                 `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
+	Config        *TestProviderConfig    `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	Auth          *TestProviderAuth      `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	ProviderKey   *TestProviderKey       `protobuf:"bytes,3,opt,name=provider_key,json=providerKey,proto3" json:"provider_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StaticSecretConfig) Reset() {
-	*x = StaticSecretConfig{}
+func (x *TestProvider) Reset() {
+	*x = TestProvider{}
 	mi := &file_rootkey_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StaticSecretConfig) String() string {
+func (x *TestProvider) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StaticSecretConfig) ProtoMessage() {}
+func (*TestProvider) ProtoMessage() {}
 
-func (x *StaticSecretConfig) ProtoReflect() protoreflect.Message {
+func (x *TestProvider) ProtoReflect() protoreflect.Message {
 	mi := &file_rootkey_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -529,23 +514,134 @@ func (x *StaticSecretConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StaticSecretConfig.ProtoReflect.Descriptor instead.
-func (*StaticSecretConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use TestProvider.ProtoReflect.Descriptor instead.
+func (*TestProvider) Descriptor() ([]byte, []int) {
 	return file_rootkey_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *StaticSecretConfig) GetSecretName() string {
+func (x *TestProvider) GetConfig() *TestProviderConfig {
 	if x != nil {
-		return x.SecretName
-	}
-	return ""
-}
-
-func (x *StaticSecretConfig) GetSecret() []byte {
-	if x != nil {
-		return x.Secret
+		return x.Config
 	}
 	return nil
+}
+
+func (x *TestProvider) GetAuth() *TestProviderAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+func (x *TestProvider) GetProviderKey() *TestProviderKey {
+	if x != nil {
+		return x.ProviderKey
+	}
+	return nil
+}
+
+type AwsKmsProvider struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Config        *AwsKmsConfig          `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	Auth          *AwsKmsAuth            `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	ProviderKey   *AwsKmsKey             `protobuf:"bytes,3,opt,name=provider_key,json=providerKey,proto3" json:"provider_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AwsKmsProvider) Reset() {
+	*x = AwsKmsProvider{}
+	mi := &file_rootkey_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AwsKmsProvider) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AwsKmsProvider) ProtoMessage() {}
+
+func (x *AwsKmsProvider) ProtoReflect() protoreflect.Message {
+	mi := &file_rootkey_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AwsKmsProvider.ProtoReflect.Descriptor instead.
+func (*AwsKmsProvider) Descriptor() ([]byte, []int) {
+	return file_rootkey_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AwsKmsProvider) GetConfig() *AwsKmsConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *AwsKmsProvider) GetAuth() *AwsKmsAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+func (x *AwsKmsProvider) GetProviderKey() *AwsKmsKey {
+	if x != nil {
+		return x.ProviderKey
+	}
+	return nil
+}
+
+type TestProviderConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestProviderConfig) Reset() {
+	*x = TestProviderConfig{}
+	mi := &file_rootkey_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestProviderConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestProviderConfig) ProtoMessage() {}
+
+func (x *TestProviderConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_rootkey_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestProviderConfig.ProtoReflect.Descriptor instead.
+func (*TestProviderConfig) Descriptor() ([]byte, []int) {
+	return file_rootkey_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TestProviderConfig) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
 }
 
 type AwsKmsConfig struct {
@@ -557,7 +653,7 @@ type AwsKmsConfig struct {
 
 func (x *AwsKmsConfig) Reset() {
 	*x = AwsKmsConfig{}
-	mi := &file_rootkey_proto_msgTypes[10]
+	mi := &file_rootkey_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -569,7 +665,7 @@ func (x *AwsKmsConfig) String() string {
 func (*AwsKmsConfig) ProtoMessage() {}
 
 func (x *AwsKmsConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[10]
+	mi := &file_rootkey_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -582,7 +678,7 @@ func (x *AwsKmsConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsKmsConfig.ProtoReflect.Descriptor instead.
 func (*AwsKmsConfig) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{10}
+	return file_rootkey_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AwsKmsConfig) GetRegion() string {
@@ -596,7 +692,7 @@ type ProviderAuth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Provider:
 	//
-	//	*ProviderAuth_StaticSecret
+	//	*ProviderAuth_TestProvider
 	//	*ProviderAuth_AwsKms
 	Provider      isProviderAuth_Provider `protobuf_oneof:"provider"`
 	unknownFields protoimpl.UnknownFields
@@ -605,7 +701,7 @@ type ProviderAuth struct {
 
 func (x *ProviderAuth) Reset() {
 	*x = ProviderAuth{}
-	mi := &file_rootkey_proto_msgTypes[11]
+	mi := &file_rootkey_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -617,7 +713,7 @@ func (x *ProviderAuth) String() string {
 func (*ProviderAuth) ProtoMessage() {}
 
 func (x *ProviderAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[11]
+	mi := &file_rootkey_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,7 +726,7 @@ func (x *ProviderAuth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderAuth.ProtoReflect.Descriptor instead.
 func (*ProviderAuth) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{11}
+	return file_rootkey_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ProviderAuth) GetProvider() isProviderAuth_Provider {
@@ -640,10 +736,10 @@ func (x *ProviderAuth) GetProvider() isProviderAuth_Provider {
 	return nil
 }
 
-func (x *ProviderAuth) GetStaticSecret() *StaticSecretAuth {
+func (x *ProviderAuth) GetTestProvider() *TestProviderAuth {
 	if x != nil {
-		if x, ok := x.Provider.(*ProviderAuth_StaticSecret); ok {
-			return x.StaticSecret
+		if x, ok := x.Provider.(*ProviderAuth_TestProvider); ok {
+			return x.TestProvider
 		}
 	}
 	return nil
@@ -662,39 +758,40 @@ type isProviderAuth_Provider interface {
 	isProviderAuth_Provider()
 }
 
-type ProviderAuth_StaticSecret struct {
-	StaticSecret *StaticSecretAuth `protobuf:"bytes,1,opt,name=static_secret,json=staticSecret,proto3,oneof"`
+type ProviderAuth_TestProvider struct {
+	TestProvider *TestProviderAuth `protobuf:"bytes,1,opt,name=test_provider,json=testProvider,proto3,oneof"`
 }
 
 type ProviderAuth_AwsKms struct {
 	AwsKms *AwsKmsAuth `protobuf:"bytes,2,opt,name=aws_kms,json=awsKms,proto3,oneof"`
 }
 
-func (*ProviderAuth_StaticSecret) isProviderAuth_Provider() {}
+func (*ProviderAuth_TestProvider) isProviderAuth_Provider() {}
 
 func (*ProviderAuth_AwsKms) isProviderAuth_Provider() {}
 
-type StaticSecretAuth struct {
+type TestProviderAuth struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StaticSecretAuth) Reset() {
-	*x = StaticSecretAuth{}
-	mi := &file_rootkey_proto_msgTypes[12]
+func (x *TestProviderAuth) Reset() {
+	*x = TestProviderAuth{}
+	mi := &file_rootkey_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StaticSecretAuth) String() string {
+func (x *TestProviderAuth) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StaticSecretAuth) ProtoMessage() {}
+func (*TestProviderAuth) ProtoMessage() {}
 
-func (x *StaticSecretAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[12]
+func (x *TestProviderAuth) ProtoReflect() protoreflect.Message {
+	mi := &file_rootkey_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,9 +802,16 @@ func (x *StaticSecretAuth) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StaticSecretAuth.ProtoReflect.Descriptor instead.
-func (*StaticSecretAuth) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{12}
+// Deprecated: Use TestProviderAuth.ProtoReflect.Descriptor instead.
+func (*TestProviderAuth) Descriptor() ([]byte, []int) {
+	return file_rootkey_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TestProviderAuth) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
 }
 
 type AwsKmsAuth struct {
@@ -725,7 +829,7 @@ type AwsKmsAuth struct {
 
 func (x *AwsKmsAuth) Reset() {
 	*x = AwsKmsAuth{}
-	mi := &file_rootkey_proto_msgTypes[13]
+	mi := &file_rootkey_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -737,7 +841,7 @@ func (x *AwsKmsAuth) String() string {
 func (*AwsKmsAuth) ProtoMessage() {}
 
 func (x *AwsKmsAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[13]
+	mi := &file_rootkey_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -750,7 +854,7 @@ func (x *AwsKmsAuth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsKmsAuth.ProtoReflect.Descriptor instead.
 func (*AwsKmsAuth) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{13}
+	return file_rootkey_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AwsKmsAuth) GetRoleArn() string {
@@ -816,7 +920,7 @@ type AwsRuntimeCredentials struct {
 
 func (x *AwsRuntimeCredentials) Reset() {
 	*x = AwsRuntimeCredentials{}
-	mi := &file_rootkey_proto_msgTypes[14]
+	mi := &file_rootkey_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -828,7 +932,7 @@ func (x *AwsRuntimeCredentials) String() string {
 func (*AwsRuntimeCredentials) ProtoMessage() {}
 
 func (x *AwsRuntimeCredentials) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[14]
+	mi := &file_rootkey_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -841,7 +945,7 @@ func (x *AwsRuntimeCredentials) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsRuntimeCredentials.ProtoReflect.Descriptor instead.
 func (*AwsRuntimeCredentials) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{14}
+	return file_rootkey_proto_rawDescGZIP(), []int{16}
 }
 
 type AwsStaticCredentials struct {
@@ -854,7 +958,7 @@ type AwsStaticCredentials struct {
 
 func (x *AwsStaticCredentials) Reset() {
 	*x = AwsStaticCredentials{}
-	mi := &file_rootkey_proto_msgTypes[15]
+	mi := &file_rootkey_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -866,7 +970,7 @@ func (x *AwsStaticCredentials) String() string {
 func (*AwsStaticCredentials) ProtoMessage() {}
 
 func (x *AwsStaticCredentials) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[15]
+	mi := &file_rootkey_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -879,7 +983,7 @@ func (x *AwsStaticCredentials) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsStaticCredentials.ProtoReflect.Descriptor instead.
 func (*AwsStaticCredentials) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{15}
+	return file_rootkey_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AwsStaticCredentials) GetAccessKeyId() string {
@@ -900,7 +1004,7 @@ type ProviderKey struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Provider:
 	//
-	//	*ProviderKey_StaticSecret
+	//	*ProviderKey_TestProvider
 	//	*ProviderKey_AwsKms
 	Provider      isProviderKey_Provider `protobuf_oneof:"provider"`
 	unknownFields protoimpl.UnknownFields
@@ -909,7 +1013,7 @@ type ProviderKey struct {
 
 func (x *ProviderKey) Reset() {
 	*x = ProviderKey{}
-	mi := &file_rootkey_proto_msgTypes[16]
+	mi := &file_rootkey_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1025,7 @@ func (x *ProviderKey) String() string {
 func (*ProviderKey) ProtoMessage() {}
 
 func (x *ProviderKey) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[16]
+	mi := &file_rootkey_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1038,7 @@ func (x *ProviderKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderKey.ProtoReflect.Descriptor instead.
 func (*ProviderKey) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{16}
+	return file_rootkey_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ProviderKey) GetProvider() isProviderKey_Provider {
@@ -944,10 +1048,10 @@ func (x *ProviderKey) GetProvider() isProviderKey_Provider {
 	return nil
 }
 
-func (x *ProviderKey) GetStaticSecret() *StaticSecretKey {
+func (x *ProviderKey) GetTestProvider() *TestProviderKey {
 	if x != nil {
-		if x, ok := x.Provider.(*ProviderKey_StaticSecret); ok {
-			return x.StaticSecret
+		if x, ok := x.Provider.(*ProviderKey_TestProvider); ok {
+			return x.TestProvider
 		}
 	}
 	return nil
@@ -966,40 +1070,40 @@ type isProviderKey_Provider interface {
 	isProviderKey_Provider()
 }
 
-type ProviderKey_StaticSecret struct {
-	StaticSecret *StaticSecretKey `protobuf:"bytes,1,opt,name=static_secret,json=staticSecret,proto3,oneof"`
+type ProviderKey_TestProvider struct {
+	TestProvider *TestProviderKey `protobuf:"bytes,1,opt,name=test_provider,json=testProvider,proto3,oneof"`
 }
 
 type ProviderKey_AwsKms struct {
 	AwsKms *AwsKmsKey `protobuf:"bytes,2,opt,name=aws_kms,json=awsKms,proto3,oneof"`
 }
 
-func (*ProviderKey_StaticSecret) isProviderKey_Provider() {}
+func (*ProviderKey_TestProvider) isProviderKey_Provider() {}
 
 func (*ProviderKey_AwsKms) isProviderKey_Provider() {}
 
-type StaticSecretKey struct {
+type TestProviderKey struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StaticSecretKey) Reset() {
-	*x = StaticSecretKey{}
-	mi := &file_rootkey_proto_msgTypes[17]
+func (x *TestProviderKey) Reset() {
+	*x = TestProviderKey{}
+	mi := &file_rootkey_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StaticSecretKey) String() string {
+func (x *TestProviderKey) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StaticSecretKey) ProtoMessage() {}
+func (*TestProviderKey) ProtoMessage() {}
 
-func (x *StaticSecretKey) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[17]
+func (x *TestProviderKey) ProtoReflect() protoreflect.Message {
+	mi := &file_rootkey_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,14 +1114,14 @@ func (x *StaticSecretKey) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StaticSecretKey.ProtoReflect.Descriptor instead.
-func (*StaticSecretKey) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{17}
+// Deprecated: Use TestProviderKey.ProtoReflect.Descriptor instead.
+func (*TestProviderKey) Descriptor() ([]byte, []int) {
+	return file_rootkey_proto_rawDescGZIP(), []int{19}
 }
 
-func (x *StaticSecretKey) GetId() string {
+func (x *TestProviderKey) GetKeyId() string {
 	if x != nil {
-		return x.Id
+		return x.KeyId
 	}
 	return ""
 }
@@ -1031,7 +1135,7 @@ type AwsKmsKey struct {
 
 func (x *AwsKmsKey) Reset() {
 	*x = AwsKmsKey{}
-	mi := &file_rootkey_proto_msgTypes[18]
+	mi := &file_rootkey_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1043,7 +1147,7 @@ func (x *AwsKmsKey) String() string {
 func (*AwsKmsKey) ProtoMessage() {}
 
 func (x *AwsKmsKey) ProtoReflect() protoreflect.Message {
-	mi := &file_rootkey_proto_msgTypes[18]
+	mi := &file_rootkey_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1056,7 +1160,7 @@ func (x *AwsKmsKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsKmsKey.ProtoReflect.Descriptor instead.
 func (*AwsKmsKey) Descriptor() ([]byte, []int) {
-	return file_rootkey_proto_rawDescGZIP(), []int{18}
+	return file_rootkey_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AwsKmsKey) GetKeyArn() string {
@@ -1070,13 +1174,11 @@ var File_rootkey_proto protoreflect.FileDescriptor
 
 const file_rootkey_proto_rawDesc = "" +
 	"\n" +
-	"\rrootkey.proto\x12\x18krypton.v1.admin.rootkey\"\x93\x02\n" +
+	"\rrootkey.proto\x12\x18krypton.v1.admin.rootkey\"\x8b\x01\n" +
 	"\x15CreateProviderRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
-	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12@\n" +
-	"\x06config\x18\x03 \x01(\v2(.krypton.v1.admin.rootkey.ProviderConfigR\x06config\x12:\n" +
-	"\x04auth\x18\x04 \x01(\v2&.krypton.v1.admin.rootkey.ProviderAuthR\x04auth\x12H\n" +
-	"\fprovider_key\x18\x05 \x01(\v2%.krypton.v1.admin.rootkey.ProviderKeyR\vproviderKey\"\x18\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12>\n" +
+	"\bprovider\x18\x03 \x01(\v2\".krypton.v1.admin.rootkey.ProviderR\bprovider\"\x18\n" +
 	"\x16CreateProviderResponse\"\x83\x01\n" +
 	"\x11RotateAuthRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
@@ -1091,24 +1193,32 @@ const file_rootkey_proto_rawDesc = "" +
 	"\x15RemoveProviderRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\"\x18\n" +
-	"\x16RemoveProviderResponse\"\xb4\x01\n" +
-	"\x0eProviderConfig\x12S\n" +
-	"\rstatic_secret\x18\x01 \x01(\v2,.krypton.v1.admin.rootkey.StaticSecretConfigH\x00R\fstaticSecret\x12A\n" +
-	"\aaws_kms\x18\x02 \x01(\v2&.krypton.v1.admin.rootkey.AwsKmsConfigH\x00R\x06awsKmsB\n" +
+	"\x16RemoveProviderResponse\"\xaa\x01\n" +
+	"\bProvider\x12M\n" +
+	"\rtest_provider\x18\x01 \x01(\v2&.krypton.v1.admin.rootkey.TestProviderH\x00R\ftestProvider\x12C\n" +
+	"\aaws_kms\x18\x02 \x01(\v2(.krypton.v1.admin.rootkey.AwsKmsProviderH\x00R\x06awsKmsB\n" +
 	"\n" +
-	"\bprovider\"M\n" +
-	"\x12StaticSecretConfig\x12\x1f\n" +
-	"\vsecret_name\x18\x01 \x01(\tR\n" +
-	"secretName\x12\x16\n" +
-	"\x06secret\x18\x02 \x01(\fR\x06secret\"&\n" +
+	"\bprovider\"\xe2\x01\n" +
+	"\fTestProvider\x12D\n" +
+	"\x06config\x18\x01 \x01(\v2,.krypton.v1.admin.rootkey.TestProviderConfigR\x06config\x12>\n" +
+	"\x04auth\x18\x02 \x01(\v2*.krypton.v1.admin.rootkey.TestProviderAuthR\x04auth\x12L\n" +
+	"\fprovider_key\x18\x03 \x01(\v2).krypton.v1.admin.rootkey.TestProviderKeyR\vproviderKey\"\xd2\x01\n" +
+	"\x0eAwsKmsProvider\x12>\n" +
+	"\x06config\x18\x01 \x01(\v2&.krypton.v1.admin.rootkey.AwsKmsConfigR\x06config\x128\n" +
+	"\x04auth\x18\x02 \x01(\v2$.krypton.v1.admin.rootkey.AwsKmsAuthR\x04auth\x12F\n" +
+	"\fprovider_key\x18\x03 \x01(\v2#.krypton.v1.admin.rootkey.AwsKmsKeyR\vproviderKey\"5\n" +
+	"\x12TestProviderConfig\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\"&\n" +
 	"\fAwsKmsConfig\x12\x16\n" +
 	"\x06region\x18\x01 \x01(\tR\x06region\"\xae\x01\n" +
 	"\fProviderAuth\x12Q\n" +
-	"\rstatic_secret\x18\x01 \x01(\v2*.krypton.v1.admin.rootkey.StaticSecretAuthH\x00R\fstaticSecret\x12?\n" +
+	"\rtest_provider\x18\x01 \x01(\v2*.krypton.v1.admin.rootkey.TestProviderAuthH\x00R\ftestProvider\x12?\n" +
 	"\aaws_kms\x18\x02 \x01(\v2$.krypton.v1.admin.rootkey.AwsKmsAuthH\x00R\x06awsKmsB\n" +
 	"\n" +
-	"\bprovider\"\x12\n" +
-	"\x10StaticSecretAuth\"\xf4\x01\n" +
+	"\bprovider\"5\n" +
+	"\x10TestProviderAuth\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\"\xf4\x01\n" +
 	"\n" +
 	"AwsKmsAuth\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12\x1f\n" +
@@ -1122,12 +1232,12 @@ const file_rootkey_proto_rawDesc = "" +
 	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
 	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\"\xab\x01\n" +
 	"\vProviderKey\x12P\n" +
-	"\rstatic_secret\x18\x01 \x01(\v2).krypton.v1.admin.rootkey.StaticSecretKeyH\x00R\fstaticSecret\x12>\n" +
+	"\rtest_provider\x18\x01 \x01(\v2).krypton.v1.admin.rootkey.TestProviderKeyH\x00R\ftestProvider\x12>\n" +
 	"\aaws_kms\x18\x02 \x01(\v2#.krypton.v1.admin.rootkey.AwsKmsKeyH\x00R\x06awsKmsB\n" +
 	"\n" +
-	"\bprovider\"!\n" +
-	"\x0fStaticSecretKey\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"$\n" +
+	"\bprovider\"(\n" +
+	"\x0fTestProviderKey\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\"$\n" +
 	"\tAwsKmsKey\x12\x17\n" +
 	"\akey_arn\x18\x01 \x01(\tR\x06keyArn2\xda\x03\n" +
 	"\aService\x12s\n" +
@@ -1149,7 +1259,7 @@ func file_rootkey_proto_rawDescGZIP() []byte {
 	return file_rootkey_proto_rawDescData
 }
 
-var file_rootkey_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_rootkey_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_rootkey_proto_goTypes = []any{
 	(*CreateProviderRequest)(nil),     // 0: krypton.v1.admin.rootkey.CreateProviderRequest
 	(*CreateProviderResponse)(nil),    // 1: krypton.v1.admin.rootkey.CreateProviderResponse
@@ -1159,45 +1269,51 @@ var file_rootkey_proto_goTypes = []any{
 	(*RotateProviderKeyResponse)(nil), // 5: krypton.v1.admin.rootkey.RotateProviderKeyResponse
 	(*RemoveProviderRequest)(nil),     // 6: krypton.v1.admin.rootkey.RemoveProviderRequest
 	(*RemoveProviderResponse)(nil),    // 7: krypton.v1.admin.rootkey.RemoveProviderResponse
-	(*ProviderConfig)(nil),            // 8: krypton.v1.admin.rootkey.ProviderConfig
-	(*StaticSecretConfig)(nil),        // 9: krypton.v1.admin.rootkey.StaticSecretConfig
-	(*AwsKmsConfig)(nil),              // 10: krypton.v1.admin.rootkey.AwsKmsConfig
-	(*ProviderAuth)(nil),              // 11: krypton.v1.admin.rootkey.ProviderAuth
-	(*StaticSecretAuth)(nil),          // 12: krypton.v1.admin.rootkey.StaticSecretAuth
-	(*AwsKmsAuth)(nil),                // 13: krypton.v1.admin.rootkey.AwsKmsAuth
-	(*AwsRuntimeCredentials)(nil),     // 14: krypton.v1.admin.rootkey.AwsRuntimeCredentials
-	(*AwsStaticCredentials)(nil),      // 15: krypton.v1.admin.rootkey.AwsStaticCredentials
-	(*ProviderKey)(nil),               // 16: krypton.v1.admin.rootkey.ProviderKey
-	(*StaticSecretKey)(nil),           // 17: krypton.v1.admin.rootkey.StaticSecretKey
-	(*AwsKmsKey)(nil),                 // 18: krypton.v1.admin.rootkey.AwsKmsKey
+	(*Provider)(nil),                  // 8: krypton.v1.admin.rootkey.Provider
+	(*TestProvider)(nil),              // 9: krypton.v1.admin.rootkey.TestProvider
+	(*AwsKmsProvider)(nil),            // 10: krypton.v1.admin.rootkey.AwsKmsProvider
+	(*TestProviderConfig)(nil),        // 11: krypton.v1.admin.rootkey.TestProviderConfig
+	(*AwsKmsConfig)(nil),              // 12: krypton.v1.admin.rootkey.AwsKmsConfig
+	(*ProviderAuth)(nil),              // 13: krypton.v1.admin.rootkey.ProviderAuth
+	(*TestProviderAuth)(nil),          // 14: krypton.v1.admin.rootkey.TestProviderAuth
+	(*AwsKmsAuth)(nil),                // 15: krypton.v1.admin.rootkey.AwsKmsAuth
+	(*AwsRuntimeCredentials)(nil),     // 16: krypton.v1.admin.rootkey.AwsRuntimeCredentials
+	(*AwsStaticCredentials)(nil),      // 17: krypton.v1.admin.rootkey.AwsStaticCredentials
+	(*ProviderKey)(nil),               // 18: krypton.v1.admin.rootkey.ProviderKey
+	(*TestProviderKey)(nil),           // 19: krypton.v1.admin.rootkey.TestProviderKey
+	(*AwsKmsKey)(nil),                 // 20: krypton.v1.admin.rootkey.AwsKmsKey
 }
 var file_rootkey_proto_depIdxs = []int32{
-	8,  // 0: krypton.v1.admin.rootkey.CreateProviderRequest.config:type_name -> krypton.v1.admin.rootkey.ProviderConfig
-	11, // 1: krypton.v1.admin.rootkey.CreateProviderRequest.auth:type_name -> krypton.v1.admin.rootkey.ProviderAuth
-	16, // 2: krypton.v1.admin.rootkey.CreateProviderRequest.provider_key:type_name -> krypton.v1.admin.rootkey.ProviderKey
-	11, // 3: krypton.v1.admin.rootkey.RotateAuthRequest.auth:type_name -> krypton.v1.admin.rootkey.ProviderAuth
-	16, // 4: krypton.v1.admin.rootkey.RotateProviderKeyRequest.provider_key:type_name -> krypton.v1.admin.rootkey.ProviderKey
-	9,  // 5: krypton.v1.admin.rootkey.ProviderConfig.static_secret:type_name -> krypton.v1.admin.rootkey.StaticSecretConfig
-	10, // 6: krypton.v1.admin.rootkey.ProviderConfig.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsConfig
-	12, // 7: krypton.v1.admin.rootkey.ProviderAuth.static_secret:type_name -> krypton.v1.admin.rootkey.StaticSecretAuth
-	13, // 8: krypton.v1.admin.rootkey.ProviderAuth.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsAuth
-	14, // 9: krypton.v1.admin.rootkey.AwsKmsAuth.runtime:type_name -> krypton.v1.admin.rootkey.AwsRuntimeCredentials
-	15, // 10: krypton.v1.admin.rootkey.AwsKmsAuth.static:type_name -> krypton.v1.admin.rootkey.AwsStaticCredentials
-	17, // 11: krypton.v1.admin.rootkey.ProviderKey.static_secret:type_name -> krypton.v1.admin.rootkey.StaticSecretKey
-	18, // 12: krypton.v1.admin.rootkey.ProviderKey.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsKey
-	0,  // 13: krypton.v1.admin.rootkey.Service.CreateProvider:input_type -> krypton.v1.admin.rootkey.CreateProviderRequest
-	2,  // 14: krypton.v1.admin.rootkey.Service.RotateAuth:input_type -> krypton.v1.admin.rootkey.RotateAuthRequest
-	4,  // 15: krypton.v1.admin.rootkey.Service.RotateProviderKey:input_type -> krypton.v1.admin.rootkey.RotateProviderKeyRequest
-	6,  // 16: krypton.v1.admin.rootkey.Service.RemoveProvider:input_type -> krypton.v1.admin.rootkey.RemoveProviderRequest
-	1,  // 17: krypton.v1.admin.rootkey.Service.CreateProvider:output_type -> krypton.v1.admin.rootkey.CreateProviderResponse
-	3,  // 18: krypton.v1.admin.rootkey.Service.RotateAuth:output_type -> krypton.v1.admin.rootkey.RotateAuthResponse
-	5,  // 19: krypton.v1.admin.rootkey.Service.RotateProviderKey:output_type -> krypton.v1.admin.rootkey.RotateProviderKeyResponse
-	7,  // 20: krypton.v1.admin.rootkey.Service.RemoveProvider:output_type -> krypton.v1.admin.rootkey.RemoveProviderResponse
-	17, // [17:21] is the sub-list for method output_type
-	13, // [13:17] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	8,  // 0: krypton.v1.admin.rootkey.CreateProviderRequest.provider:type_name -> krypton.v1.admin.rootkey.Provider
+	13, // 1: krypton.v1.admin.rootkey.RotateAuthRequest.auth:type_name -> krypton.v1.admin.rootkey.ProviderAuth
+	18, // 2: krypton.v1.admin.rootkey.RotateProviderKeyRequest.provider_key:type_name -> krypton.v1.admin.rootkey.ProviderKey
+	9,  // 3: krypton.v1.admin.rootkey.Provider.test_provider:type_name -> krypton.v1.admin.rootkey.TestProvider
+	10, // 4: krypton.v1.admin.rootkey.Provider.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsProvider
+	11, // 5: krypton.v1.admin.rootkey.TestProvider.config:type_name -> krypton.v1.admin.rootkey.TestProviderConfig
+	14, // 6: krypton.v1.admin.rootkey.TestProvider.auth:type_name -> krypton.v1.admin.rootkey.TestProviderAuth
+	19, // 7: krypton.v1.admin.rootkey.TestProvider.provider_key:type_name -> krypton.v1.admin.rootkey.TestProviderKey
+	12, // 8: krypton.v1.admin.rootkey.AwsKmsProvider.config:type_name -> krypton.v1.admin.rootkey.AwsKmsConfig
+	15, // 9: krypton.v1.admin.rootkey.AwsKmsProvider.auth:type_name -> krypton.v1.admin.rootkey.AwsKmsAuth
+	20, // 10: krypton.v1.admin.rootkey.AwsKmsProvider.provider_key:type_name -> krypton.v1.admin.rootkey.AwsKmsKey
+	14, // 11: krypton.v1.admin.rootkey.ProviderAuth.test_provider:type_name -> krypton.v1.admin.rootkey.TestProviderAuth
+	15, // 12: krypton.v1.admin.rootkey.ProviderAuth.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsAuth
+	16, // 13: krypton.v1.admin.rootkey.AwsKmsAuth.runtime:type_name -> krypton.v1.admin.rootkey.AwsRuntimeCredentials
+	17, // 14: krypton.v1.admin.rootkey.AwsKmsAuth.static:type_name -> krypton.v1.admin.rootkey.AwsStaticCredentials
+	19, // 15: krypton.v1.admin.rootkey.ProviderKey.test_provider:type_name -> krypton.v1.admin.rootkey.TestProviderKey
+	20, // 16: krypton.v1.admin.rootkey.ProviderKey.aws_kms:type_name -> krypton.v1.admin.rootkey.AwsKmsKey
+	0,  // 17: krypton.v1.admin.rootkey.Service.CreateProvider:input_type -> krypton.v1.admin.rootkey.CreateProviderRequest
+	2,  // 18: krypton.v1.admin.rootkey.Service.RotateAuth:input_type -> krypton.v1.admin.rootkey.RotateAuthRequest
+	4,  // 19: krypton.v1.admin.rootkey.Service.RotateProviderKey:input_type -> krypton.v1.admin.rootkey.RotateProviderKeyRequest
+	6,  // 20: krypton.v1.admin.rootkey.Service.RemoveProvider:input_type -> krypton.v1.admin.rootkey.RemoveProviderRequest
+	1,  // 21: krypton.v1.admin.rootkey.Service.CreateProvider:output_type -> krypton.v1.admin.rootkey.CreateProviderResponse
+	3,  // 22: krypton.v1.admin.rootkey.Service.RotateAuth:output_type -> krypton.v1.admin.rootkey.RotateAuthResponse
+	5,  // 23: krypton.v1.admin.rootkey.Service.RotateProviderKey:output_type -> krypton.v1.admin.rootkey.RotateProviderKeyResponse
+	7,  // 24: krypton.v1.admin.rootkey.Service.RemoveProvider:output_type -> krypton.v1.admin.rootkey.RemoveProviderResponse
+	21, // [21:25] is the sub-list for method output_type
+	17, // [17:21] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_rootkey_proto_init() }
@@ -1206,19 +1322,19 @@ func file_rootkey_proto_init() {
 		return
 	}
 	file_rootkey_proto_msgTypes[8].OneofWrappers = []any{
-		(*ProviderConfig_StaticSecret)(nil),
-		(*ProviderConfig_AwsKms)(nil),
-	}
-	file_rootkey_proto_msgTypes[11].OneofWrappers = []any{
-		(*ProviderAuth_StaticSecret)(nil),
-		(*ProviderAuth_AwsKms)(nil),
+		(*Provider_TestProvider)(nil),
+		(*Provider_AwsKms)(nil),
 	}
 	file_rootkey_proto_msgTypes[13].OneofWrappers = []any{
+		(*ProviderAuth_TestProvider)(nil),
+		(*ProviderAuth_AwsKms)(nil),
+	}
+	file_rootkey_proto_msgTypes[15].OneofWrappers = []any{
 		(*AwsKmsAuth_Runtime)(nil),
 		(*AwsKmsAuth_Static)(nil),
 	}
-	file_rootkey_proto_msgTypes[16].OneofWrappers = []any{
-		(*ProviderKey_StaticSecret)(nil),
+	file_rootkey_proto_msgTypes[18].OneofWrappers = []any{
+		(*ProviderKey_TestProvider)(nil),
 		(*ProviderKey_AwsKms)(nil),
 	}
 	type x struct{}
@@ -1227,7 +1343,7 @@ func file_rootkey_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rootkey_proto_rawDesc), len(file_rootkey_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
