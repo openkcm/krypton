@@ -143,30 +143,16 @@ func baseRootConfig(agentName string) config.RootConfig {
 			URI:  "kryptonid://acme-corp/service/agent-aws",
 		},
 	}
-	identities = append(identities,
-		config.IdentityConfig{
-			Name: "child-agent-1",
-			URI:  "kryptonid://acme-corp/service/child-agent-1",
-		},
-		config.IdentityConfig{
-			Name: "child-agent-2",
-			URI:  "kryptonid://acme-corp/service/child-agent-2",
-		},
-		config.IdentityConfig{
-			Name: "child-agent-3",
-			URI:  "kryptonid://acme-corp/service/child-agent-3",
-		},
-	)
 
 	return config.RootConfig{
 		Name: "root",
 		Hierarchy: spec.KeyHierarchy{
 			Name: "root-hierarchy",
 			KeySpecs: []spec.KeySpec{
-				{Kind: "K0"},
-				{Kind: "K1"},
-				{Kind: "K2"},
-				{Kind: "K3"},
+				{Kind: "K0", Role: spec.KeyRoleRoot},
+				{Kind: "K1", Role: spec.KeyRoleKek},
+				{Kind: "K2", Role: spec.KeyRoleTek},
+				{Kind: "K3", Role: spec.KeyRoleDek},
 			},
 		},
 		Auth: &config.RootAuthConfig{
@@ -187,70 +173,31 @@ func baseRootConfig(agentName string) config.RootConfig {
 					URL:  "localhost:5051",
 				},
 			},
-			{
-				Name: "child-agent-1",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  "localhost:5052",
-				},
-			},
-			{
-				Name: "child-agent-2",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  "localhost:5053",
-				},
-			},
-			{
-				Name: "child-agent-3",
-				Address: config.Address{
-					Type: config.AddressTypeGRPC,
-					URL:  "localhost:5054",
-				},
-			},
 		},
 		Topology: spec.Topology{
 			Segments: []spec.TopologySegment{
 				{
-					Name: agentName,
+					Name:           agentName,
+					SelectorLabels: spec.SelectorLabels{},
 					KeyBindings: map[string]spec.KeyBinding{
-						"K1": {
+						"K3": {
 							CryptorSpec: validCryptor(),
+						},
+						"K2": {
 							ParentKeyProvider: &spec.ParentKeyProviderRef{
 								AgentName: "root",
 							},
 						},
 					},
-					SelectorLabels: spec.SelectorLabels{"region": "us-west"},
-				},
-				{
-					Name: "child-agent-1",
-					KeyBindings: map[string]spec.KeyBinding{
-						"K2": {
-							ParentKeyProvider: &spec.ParentKeyProviderRef{
-								AgentName: agentName,
-							},
-						},
-					},
-				},
-				{
-					Name: "child-agent-2",
-					KeyBindings: map[string]spec.KeyBinding{
-						"K2": {
-							ParentKeyProvider: &spec.ParentKeyProviderRef{
-								AgentName: agentName,
-							},
-						},
-					},
-				},
-				{
-					Name: "child-agent-3",
-					KeyBindings: map[string]spec.KeyBinding{
-						"K3": {},
-					},
 				},
 			},
 		},
+		Role:           "",
+		Segment:        spec.HierarchySegment{},
+		SelectorLabels: spec.SelectorLabels{},
+		RootKey:        &spec.RootKeySpec{},
+		KeyBindings:    map[string]spec.KeyBinding{},
+		KMIPs:          config.KMIPs{},
 	}
 }
 
@@ -274,6 +221,28 @@ func validRootConfig(agentName string) config.RootConfig {
 			Name: "root",
 			URI:  "kryptonid://acme-corp/service/root",
 		})
+	return cfg
+}
+
+func validRootConfigWithAgentKMIP(agentName string) config.RootConfig {
+	cfg := baseRootConfig(agentName)
+	cfg.Auth.IdentityConfigs = append(cfg.Auth.IdentityConfigs,
+		config.IdentityConfig{
+			Name: "root",
+			URI:  "kryptonid://acme-corp/service/root",
+		})
+	cfg.KMIPs = config.KMIPs{
+		{
+			Name:     agentName,
+			BindAddr: "0.0.0.0",
+			Port:     100,
+			TLS: config.TLSServer{
+				CertPath: "cert.pem",
+				KeyPath:  "key.pem",
+				CAPath:   "ca.pem",
+			},
+		},
+	}
 	return cfg
 }
 

@@ -207,8 +207,8 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("name %q, role %q; want root, root", cfg.Name, cfg.Role)
 	}
 
-	if cfg.Auth != nil || cfg.KMIP != nil {
-		t.Errorf("auth and kmip are set by default: %+v, %+v", cfg.Auth, cfg.KMIP)
+	if cfg.Auth != nil || len(cfg.KMIPs) != 0 {
+		t.Errorf("auth and kmips are set by default: auth=%+v, kmips=%+v", cfg.Auth, cfg.KMIPs)
 	}
 
 	// The agents reach the root at its own entry of connections: the chart's Service.
@@ -263,13 +263,47 @@ func TestConfigMistakes(t *testing.T) {
 
 	t.Run("KMIP TLS file names of Krypton v0.1.0", func(t *testing.T) {
 		values := writeValues(t, `config:
-  kmip:
-    bind_addr: 0.0.0.0
-    port: 5696
-    tls:
-      server_cert: /etc/krypton/kmip/tls.crt
-      server_key: /etc/krypton/kmip/tls.key
-      client_ca: /etc/krypton/kmip/ca.crt
+  segment: { start_kind: K0, end_kind: K1 }
+  root_key:
+    allowed_providers: [ aes256gcm-staticsecret ]
+    vault: { name: cred-vault, type: unsafe-sqlite-memory }
+  key_bindings:
+    K1:
+      crypto: { name: kek-crypto, type: aes256gcm }
+      parent_key_provider: { agent_name: root }
+    K2: null
+  hierarchy:
+    name: h
+    key_specs:
+      - { kind: K0, role: root, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+      - { kind: K1, role: kek, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+      - { kind: K2, role: tek, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+      - { kind: K3, role: dek, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+  topology:
+    segments:
+      - name: agent-test
+        segment: { start_kind: K2, end_kind: K3 }
+        selector_labels: { region: test }
+        key_bindings:
+          K2:
+            sealer: { name: s, type: aes256gcm-staticsecret, config: { secret: { type: envvar, config: { name: KEY } } } }
+            crypto: { name: c, type: aes256gcm }
+            vault: { name: v, type: unsafe-sqlite-memory }
+            parent_key_provider: { agent_name: root }
+          K3:
+            crypto: { name: c3, type: aes256gcm }
+            vault: { name: v3, type: unsafe-sqlite-memory }
+  connections:
+    - { name: root, address: { type: grpc, url: root:8080 } }
+    - { name: agent-test, address: { type: grpc, url: agent:8080 } }
+  kmips:
+    - name: agent-test
+      bind_addr: 0.0.0.0
+      port: 5696
+      tls:
+        server_cert: /etc/krypton/kmip/tls.crt
+        server_key: /etc/krypton/kmip/tls.key
+        client_ca: /etc/krypton/kmip/ca.crt
 `)
 
 		_, err := loadConfig(t, renderConfigYAML(t, "-f", values))
@@ -314,7 +348,7 @@ func exampleValues(t *testing.T) string {
 		indent(valuesComment(t, "works for agents in the same namespace."), "    ") +
 		"  auth:\n" +
 		indent(valuesComment(t, "there for their format):"), "    ") +
-		"  kmip:\n" +
+		"  kmips:\n" +
 		indent(valuesComment(t, "`ports` and `service.ports`:"), "    ")
 }
 
@@ -322,7 +356,7 @@ func exampleValues(t *testing.T) string {
 func TestConfigExamples(t *testing.T) {
 	cfg := loadValues(t, "-f", writeValues(t, exampleValues(t)))
 
-	if len(cfg.Topology.Segments) != 1 || cfg.Auth == nil || cfg.KMIP == nil {
+	if len(cfg.Topology.Segments) != 1 || cfg.Auth == nil || len(cfg.KMIPs) == 0 {
 		t.Fatalf("the examples are not all in the configuration: %+v", cfg)
 	}
 

@@ -35,18 +35,18 @@ func NewAgentService(store store.Agent, config config.RootConfig) *AgentService 
 // Register registers an agent and returns its configuration.
 // It validates the input, checks if the agent is defined in the topology, creates the
 // agent config, stores the registration, and returns the config as YAML.
-func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*RegisterAgentResponse, error) {
+func (m *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*RegisterAgentResponse, error) {
 	// TODO: Get agentname from the authenticated context instead of the request, to prevent spoofing.
-	agentName := r.GetAgentName()
-	instanceID := r.GetInstanceId()
-	err := validateInput(agentName, instanceID)
+	an := r.GetAgentName()
+	id := r.GetInstanceId()
+	err := validateInput(an, id)
 	if err != nil {
 		return nil, err
 	}
 
-	seg := a.config.Topology.GetSegmentByName(agentName)
+	seg := m.config.Topology.GetSegmentByName(an)
 	if seg == nil {
-		slog.Error("agent not found in topology", "agentName", agentName)
+		slog.Error("agent not found in topology", "agentName", an)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.NotFound, "agent not found in topology"),
 			proto.Code_ERROR_CODE_ABORT,
@@ -54,10 +54,10 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	}
 
 	var ids config.IdentityConfigs
-	if a.config.Auth != nil {
-		ids, err = a.config.AgentIdentities(agentName)
+	if m.config.Auth != nil {
+		ids, err = m.config.AgentIdentities(an)
 		if err != nil {
-			slog.Error("failed to get agent identity configs", "agentName", agentName, "error", err)
+			slog.Error("failed to get agent identity configs", "agentName", an, "error", err)
 			return nil, proto.ErrDetailsWithCode(
 				status.New(codes.FailedPrecondition, "failed to get agent identity configs"),
 				proto.Code_ERROR_CODE_ABORT,
@@ -65,44 +65,46 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 		}
 	}
 
-	parentName, ok := a.config.Topology.ParentName(agentName)
+	pn, ok := m.config.Topology.ParentName(an)
 	if !ok {
-		slog.Error("parent agent not found in topology", "agentName", agentName)
+		slog.Error("parent agent not found in topology", "agentName", an)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, "parent agent not found in topology"),
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
 
-	ccs, err := a.config.Connections.ByNames(parentName)
+	ccs, err := m.config.Connections.ByNames(pn)
 	if err != nil {
-		slog.Error("failed to get connection configs", "agentName", agentName, "error", err)
+		slog.Error("failed to get connection configs", "agentName", an, "error", err)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.FailedPrecondition, "failed to get connection configs"),
 			proto.Code_ERROR_CODE_ABORT,
 		)
 	}
 
-	cfg := config.NewAgentConfig(a.config.Hierarchy, *seg, ids, ccs)
+	kc := m.lookupKMIP(an)
 
-	rawCfg, err := yaml.Marshal(cfg)
+	cfg := config.NewAgentConfig(m.config.Hierarchy, *seg, ids, ccs, kc)
+
+	b, err := yaml.Marshal(cfg)
 	if err != nil {
-		slog.Error("failed to marshal agent config to yaml", "agentName", agentName, "error", err)
+		slog.Error("failed to marshal agent config to yaml", "agentName", an, "error", err)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.Internal, "failed to marshal agent config to yaml"),
 			proto.Code_ERROR_CODE_ABORT)
 	}
 
-	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
+	_, err = m.store.Register(ctx, store.RegisterAgentQuery{
 		Registration: core.AgentRegistration{
-			Name:          agentName,
-			InstanceID:    instanceID,
+			Name:          an,
+			InstanceID:    id,
 			Status:        core.AgentRegistrationStatusRegistered,
 			LastHeartbeat: clock.Now(),
 		},
 	})
 	if err != nil {
-		slog.Error("failed to register agent", "agentName", agentName, "instanceID", instanceID, "error", err)
+		slog.Error("failed to register agent", "agentName", an, "instanceID", id, "error", err)
 		return nil, proto.ErrDetailsWithCode(
 			status.New(codes.Internal, "failed to register agent"),
 			proto.Code_ERROR_CODE_RETRY,
@@ -110,12 +112,20 @@ func (a *AgentService) Register(ctx context.Context, r *RegisterAgentRequest) (*
 	}
 
 	return &RegisterAgentResponse{
-		Config: rawCfg,
+		Config: b,
 	}, nil
 }
 
+func (m *AgentService) lookupKMIP(agentName string) *config.KMIP {
+	cfg, ok := m.config.KMIPs.ByName(agentName)
+	if ok {
+		return &cfg
+	}
+	return nil
+}
+
 // SendHeartbeat updates the last heartbeat time of the agent.
-func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
+func (m *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatRequest) (*SendHeartbeatResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -123,7 +133,7 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 		return nil, err
 	}
 
-	seg := a.config.Topology.GetSegmentByName(agentName)
+	seg := m.config.Topology.GetSegmentByName(agentName)
 	if seg == nil {
 		slog.Error("agent not found in topology", "agentName", agentName)
 		return nil, proto.ErrDetailsWithCode(
@@ -132,7 +142,7 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 		)
 	}
 
-	_, err = a.store.Register(ctx, store.RegisterAgentQuery{
+	_, err = m.store.Register(ctx, store.RegisterAgentQuery{
 		Registration: core.AgentRegistration{
 			Name:          agentName,
 			InstanceID:    instanceID,
@@ -152,7 +162,7 @@ func (a *AgentService) SendHeartbeat(ctx context.Context, r *SendHeartbeatReques
 }
 
 // Deregister updates the agent status to deregistered.
-func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
+func (m *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest) (*DeregisterAgentResponse, error) {
 	agentName := r.GetAgentName()
 	instanceID := r.GetInstanceId()
 	err := validateInput(agentName, instanceID)
@@ -160,7 +170,7 @@ func (a *AgentService) Deregister(ctx context.Context, r *DeregisterAgentRequest
 		return nil, err
 	}
 
-	err = a.store.UpdateStatus(ctx, store.UpdateAgentStatusQuery{
+	err = m.store.UpdateStatus(ctx, store.UpdateAgentStatusQuery{
 		Name:       agentName,
 		InstanceID: instanceID,
 		FromStatus: []core.AgentRegistrationStatus{

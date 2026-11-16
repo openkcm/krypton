@@ -56,6 +56,16 @@ func TestNewAgentConfig(t *testing.T) {
 			},
 		},
 	}
+	expKMIP := &config.KMIP{
+		Name:     "name",
+		BindAddr: "localhost",
+		Port:     100,
+		TLS: config.TLSServer{
+			CertPath: "certpath",
+			KeyPath:  "keypath",
+			CAPath:   "certpath",
+		},
+	}
 
 	expConfig := config.AgentConfig{
 		Name:            "segment1",
@@ -66,11 +76,12 @@ func TestNewAgentConfig(t *testing.T) {
 		SelectorLabels:  topologySegment.SelectorLabels,
 		Role:            config.AgentRole,
 		Hierarchy:       expHierarchy,
+		KMIP:            expKMIP,
 		KeepAlive:       30,
 	}
 
 	// when
-	actConfig := config.NewAgentConfig(expHierarchy, topologySegment, expIdentityConfigs, expConnections)
+	actConfig := config.NewAgentConfig(expHierarchy, topologySegment, expIdentityConfigs, expConnections, expKMIP)
 
 	// then
 	assert.Equal(t, expConfig, actConfig)

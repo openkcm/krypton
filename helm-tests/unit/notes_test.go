@@ -120,7 +120,8 @@ func TestReleaseNotes(t *testing.T) {
 		{
 			name: "KMIP server without port",
 			args: append([]string{
-				"--set", "config.kmip.bind_addr=0.0.0.0", "--set", "config.kmip.port=5696",
+				"--set", "config.kmips[0].name=agent", "--set", "config.kmips[0].bind_addr=0.0.0.0",
+				"--set", "config.kmips[0].port=5696",
 			}, startingValues...),
 			warnings: []string{"Development vaults", "ports has no port named kmip"},
 		},

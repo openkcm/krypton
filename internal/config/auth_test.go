@@ -859,7 +859,7 @@ func TestIdentities_ValidateAuthIdentities(t *testing.T) {
 	for _, tt := range tts {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			err := tt.identities.ValidateAuthIdentities(tt.cfg)
+			err := tt.identities.Validate(tt.cfg)
 
 			// then
 			assert.ErrorIs(t, err, tt.wantErr)

@@ -41,6 +41,7 @@ type AgentConfig struct {
 	Role            Role                       `yaml:"role"`
 	Hierarchy       spec.KeyHierarchy          `yaml:"hierarchy"`
 	KeepAlive       KeepAliveConfig            `yaml:"keep_alive"`
+	KMIP            *KMIP                      `yaml:"kmip,omitempty"`
 }
 
 // AgentBootstrapConfig is the minimal configuration that agents load from file on startup. It contains just enough information to connect to root.
@@ -51,19 +52,28 @@ type AgentBootstrapConfig struct {
 	KryptonRoot KryptonRoot      `yaml:"krypton_root"`
 }
 
-var ErrConfigAddressEmpty = errors.New("address URL cannot be empty")
-var ErrAddressTypeInvalid = errors.New("address type must be 'grpc'")
+var (
+	ErrConfigAddressEmpty = errors.New("address URL cannot be empty")
+	ErrAddressTypeInvalid = errors.New("address type must be 'grpc'")
+)
 
 // NewAgentConfig creates a new AgentConfig based on the provided KeyHierarchy and TopologySegment.
-func NewAgentConfig(h spec.KeyHierarchy, seg spec.TopologySegment, identities IdentityConfigs, connections ConnectionConfigs) AgentConfig {
+func NewAgentConfig(
+	h spec.KeyHierarchy,
+	seg spec.TopologySegment,
+	ids IdentityConfigs,
+	ccs ConnectionConfigs,
+	kpc *KMIP,
+) AgentConfig {
 	return AgentConfig{
 		Name:            seg.Name,
-		IdentityConfigs: identities,
-		Connections:     connections,
+		IdentityConfigs: ids,
+		Connections:     ccs,
 		KeyBindings:     seg.KeyBindings,
 		Segment:         seg.Segment,
 		SelectorLabels:  seg.SelectorLabels,
 		Role:            AgentRole,
+		KMIP:            kpc,
 		Hierarchy:       h,
 		KeepAlive:       defaultKeepAlive,
 	}
