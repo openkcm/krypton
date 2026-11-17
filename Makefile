@@ -74,6 +74,11 @@ postgres-stop:
 
 ROOT_SERVER_PORT := 8080
 AGENT_SERVER_PORT := 8081
+TEST_PROVIDER_SERVER := localhost:$(ROOT_SERVER_PORT)
+TEST_PROVIDER_DIR := $(CURDIR)/tmp/test-provider
+TEST_PROVIDER_INSTANCE_ID ?= test-instance
+TEST_PROVIDER_KEY_ID ?= test-key
+TEST_PROVIDER_ACCESS_TOKEN ?= test-token
 
 .PHONY: agent
 agent:
@@ -81,7 +86,15 @@ agent:
 
 .PHONY: root
 root:
-	ROOT_CONFIG_PATH="./examples/root.config.yaml" SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
+	ENABLE_UNSAFE_TEST_PROVIDER="I_ACCEPT" UNSAFE_TEST_PROVIDER_DIR="$(TEST_PROVIDER_DIR)" ROOT_CONFIG_PATH="./examples/root.config.yaml" SERVER_PORT="$(ROOT_SERVER_PORT)" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/root
+
+.PHONY: test-provider
+test-provider:
+	go run ./hack/testprovider \
+		--server "$(TEST_PROVIDER_SERVER)" \
+		--instance-id "$(TEST_PROVIDER_INSTANCE_ID)" \
+		--key-id "$(TEST_PROVIDER_KEY_ID)" \
+		--access-token "$(TEST_PROVIDER_ACCESS_TOKEN)"
 
 .PHONY: dev
 dev: postgres root
@@ -150,4 +163,3 @@ k3d-cluster:
 .PHONY: deploy-postgres
 deploy-postgres:
 	kubectl apply -f hack/postgres.yaml
-

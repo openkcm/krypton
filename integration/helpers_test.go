@@ -282,6 +282,53 @@ connections:
 	return writeTempFile(t, "root-config-*.yaml", content)
 }
 
+func writeSingleRootConfig(t *testing.T, rootProvider string) string {
+	t.Helper()
+
+	content := fmt.Sprintf(`name: root
+role: root
+segment:
+  start_kind: K0
+  end_kind: K1
+root_key:
+  allowed_providers:
+    - %s
+  vault:
+    name: credentials-vault
+    type: unsafe-sqlite-memory
+key_bindings:
+  K1:
+    crypto:
+      name: dek-crypto
+      type: aes256gcm
+    vault:
+      name: root-vault
+      type: unsafe-sqlite-memory
+hierarchy:
+  name: test-hierarchy
+  key_specs:
+    - kind: K0
+      role: root
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+    - kind: K1
+      role: dek
+      algorithm: AES256
+      labels_spec:
+        allow_user_labels: true
+topology:
+  segments: []
+connections:
+  - name: root
+    address:
+      type: grpc
+      url: localhost:50051
+`, rootProvider)
+
+	return writeTempFile(t, "single-root-config-*.yaml", content)
+}
+
 // writeRootConfigWithKMIP writes a root config YAML with KMIP settings to a temp file and returns the path.
 // TODO: will be removed
 func writeRootConfigWithKMIP(t *testing.T, kmipPort, kmipServerCertPath, kmipServerKeyPath, kmipClientCAPath string) string {
