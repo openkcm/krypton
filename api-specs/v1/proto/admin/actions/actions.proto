@@ -15,7 +15,7 @@ enum ActionType {
   ACTIVATE_KEY = 2;
   SUSPEND_KEY = 3;
   DEACTIVATE_KEY = 4;
-  COMPROMISE_KEY = 5;
+  MARK_COMPROMISED = 5;
   DESTROY_KEY = 6;
 }
 

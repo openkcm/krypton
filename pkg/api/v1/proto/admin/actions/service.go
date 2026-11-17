@@ -28,7 +28,7 @@ var actionTypeByJobGroupType = map[string]ActionType{
 	orchestrator.ActivateKey:   ActionType_ACTIVATE_KEY,
 	orchestrator.SuspendKey:    ActionType_SUSPEND_KEY,
 	orchestrator.DeactivateKey: ActionType_DEACTIVATE_KEY,
-	orchestrator.CompromiseKey: ActionType_COMPROMISE_KEY,
+	orchestrator.CompromiseKey: ActionType_MARK_COMPROMISED,
 	orchestrator.DestroyKey:    ActionType_DESTROY_KEY,
 }
 

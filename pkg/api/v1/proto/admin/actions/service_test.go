@@ -161,7 +161,7 @@ func TestGetAction_Success(t *testing.T) {
 		{
 			name:          "compromise key",
 			actionType:    orchestrator.CompromiseKey,
-			expActionType: actions.ActionType_COMPROMISE_KEY,
+			expActionType: actions.ActionType_MARK_COMPROMISED,
 		},
 		{
 			name:          "deactivate key",
