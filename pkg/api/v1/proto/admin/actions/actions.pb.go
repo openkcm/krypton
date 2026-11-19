@@ -28,6 +28,10 @@ const (
 	ActionType_ACTION_TYPE_UNSPECIFIED ActionType = 0
 	ActionType_ANNOUNCE_KEY            ActionType = 1
 	ActionType_ACTIVATE_KEY            ActionType = 2
+	ActionType_SUSPEND_KEY             ActionType = 3
+	ActionType_DEACTIVATE_KEY          ActionType = 4
+	ActionType_MARK_COMPROMISED        ActionType = 5
+	ActionType_DESTROY_KEY             ActionType = 6
 )
 
 // Enum value maps for ActionType.
@@ -36,11 +40,19 @@ var (
 		0: "ACTION_TYPE_UNSPECIFIED",
 		1: "ANNOUNCE_KEY",
 		2: "ACTIVATE_KEY",
+		3: "SUSPEND_KEY",
+		4: "DEACTIVATE_KEY",
+		5: "MARK_COMPROMISED",
+		6: "DESTROY_KEY",
 	}
 	ActionType_value = map[string]int32{
 		"ACTION_TYPE_UNSPECIFIED": 0,
 		"ANNOUNCE_KEY":            1,
 		"ACTIVATE_KEY":            2,
+		"SUSPEND_KEY":             3,
+		"DEACTIVATE_KEY":          4,
+		"MARK_COMPROMISED":        5,
+		"DESTROY_KEY":             6,
 	}
 )
 
@@ -331,12 +343,16 @@ const file_actions_proto_rawDesc = "" +
 	"\x10GetActionRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"M\n" +
 	"\x11GetActionResponse\x128\n" +
-	"\x06action\x18\x01 \x01(\v2 .krypton.v1.admin.actions.ActionR\x06action*M\n" +
+	"\x06action\x18\x01 \x01(\v2 .krypton.v1.admin.actions.ActionR\x06action*\x99\x01\n" +
 	"\n" +
 	"ActionType\x12\x1b\n" +
 	"\x17ACTION_TYPE_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fANNOUNCE_KEY\x10\x01\x12\x10\n" +
-	"\fACTIVATE_KEY\x10\x02*s\n" +
+	"\fACTIVATE_KEY\x10\x02\x12\x0f\n" +
+	"\vSUSPEND_KEY\x10\x03\x12\x12\n" +
+	"\x0eDEACTIVATE_KEY\x10\x04\x12\x14\n" +
+	"\x10MARK_COMPROMISED\x10\x05\x12\x0f\n" +
+	"\vDESTROY_KEY\x10\x06*s\n" +
 	"\n" +
 	"TargetType\x12\x1b\n" +
 	"\x17TARGET_TYPE_UNSPECIFIED\x10\x00\x12\x16\n" +

@@ -138,39 +138,80 @@ func TestGetAction_Errors(t *testing.T) {
 }
 
 func TestGetAction_Success(t *testing.T) {
-	id := uuid.New()
-	store := &fakeStore{
-		found: true,
-		group: orbital.JobGroup{
-			ID:        id,
-			Type:      orchestrator.AnnounceKey,
-			Status:    orbital.JobGroupStatusProcessing,
-			CreatedAt: 100,
-			UpdatedAt: 200,
-			Labels: orbital.Labels{
-				actions.LabelKeyTargetType: actions.TargetType_TARGET_TYPE_KEY.String(),
-				actions.LabelKeyTargetID:   "tenant-1:key-1",
-				actions.LabelKeyCascading:  "true",
-			},
+	tests := []struct {
+		name          string
+		actionType    string
+		expActionType actions.ActionType
+	}{
+		{
+			name:          "announce key",
+			actionType:    orchestrator.AnnounceKey,
+			expActionType: actions.ActionType_ANNOUNCE_KEY,
+		},
+		{
+			name:          "activate key",
+			actionType:    orchestrator.ActivateKey,
+			expActionType: actions.ActionType_ACTIVATE_KEY,
+		},
+		{
+			name:          "suspend key",
+			actionType:    orchestrator.SuspendKey,
+			expActionType: actions.ActionType_SUSPEND_KEY,
+		},
+		{
+			name:          "compromise key",
+			actionType:    orchestrator.CompromiseKey,
+			expActionType: actions.ActionType_MARK_COMPROMISED,
+		},
+		{
+			name:          "deactivate key",
+			actionType:    orchestrator.DeactivateKey,
+			expActionType: actions.ActionType_DEACTIVATE_KEY,
+		},
+		{
+			name:          "destroy key",
+			actionType:    orchestrator.DestroyKey,
+			expActionType: actions.ActionType_DESTROY_KEY,
 		},
 	}
-	cli := setupActionClient(t, store)
 
-	resp, err := cli.GetAction(context.Background(), &actions.GetActionRequest{Id: id.String()})
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id := uuid.New()
+			store := &fakeStore{
+				found: true,
+				group: orbital.JobGroup{
+					ID:        id,
+					Type:      tt.actionType,
+					Status:    orbital.JobGroupStatusProcessing,
+					CreatedAt: 100,
+					UpdatedAt: 200,
+					Labels: orbital.Labels{
+						actions.LabelKeyTargetType: actions.TargetType_TARGET_TYPE_KEY.String(),
+						actions.LabelKeyTargetID:   "tenant-1:key-1",
+						actions.LabelKeyCascading:  "true",
+					},
+				},
+			}
+			cli := setupActionClient(t, store)
 
-	assert.Equal(t, id, store.gotID, "request id is parsed and forwarded to the store")
+			resp, err := cli.GetAction(context.Background(), &actions.GetActionRequest{Id: id.String()})
+			require.NoError(t, err)
 
-	a := resp.GetAction()
-	require.NotNil(t, a)
-	assert.Equal(t, id.String(), a.GetId())
-	assert.Equal(t, actions.ActionType_ANNOUNCE_KEY, a.GetType())
-	assert.Equal(t, string(orbital.JobGroupStatusProcessing), a.GetStatus())
-	assert.Equal(t, actions.TargetType_TARGET_TYPE_KEY, a.GetTargetType())
-	assert.Equal(t, "tenant-1:key-1", a.GetTargetId())
-	assert.True(t, a.GetCascading())
-	assert.Equal(t, int64(100), a.GetCreatedAt())
-	assert.Equal(t, int64(200), a.GetUpdatedAt())
+			assert.Equal(t, id, store.gotID, "request id is parsed and forwarded to the store")
+
+			a := resp.GetAction()
+			require.NotNil(t, a)
+			assert.Equal(t, id.String(), a.GetId())
+			assert.Equal(t, tt.expActionType, a.GetType())
+			assert.Equal(t, string(orbital.JobGroupStatusProcessing), a.GetStatus())
+			assert.Equal(t, actions.TargetType_TARGET_TYPE_KEY, a.GetTargetType())
+			assert.Equal(t, "tenant-1:key-1", a.GetTargetId())
+			assert.True(t, a.GetCascading())
+			assert.Equal(t, int64(100), a.GetCreatedAt())
+			assert.Equal(t, int64(200), a.GetUpdatedAt())
+		})
+	}
 }
 
 func TestGetAction_DefaultsWhenLabelsAbsent(t *testing.T) {

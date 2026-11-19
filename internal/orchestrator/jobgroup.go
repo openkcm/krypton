@@ -25,16 +25,16 @@ func (h *JobGroupHandler) JobGroupType() string {
 }
 
 func (h *JobGroupHandler) OnJobGroupDone(ctx context.Context, group orbital.JobGroup) error {
-	slogctx.Info(ctx, "job group done", "handler", h.cfg, "jobGroupID", group.ID)
+	slogctx.Info(ctx, "job group done", "handler", h.cfg.handlerType, "jobGroupID", group.ID)
 	return nil
 }
 
 func (h *JobGroupHandler) OnJobGroupFailed(ctx context.Context, group orbital.JobGroup) error {
-	slogctx.Warn(ctx, "job group failed", "handler", h.cfg, "jobGroupID", group.ID, "error", group.ErrorMessage)
+	slogctx.Warn(ctx, "job group failed", "handler", h.cfg.handlerType, "jobGroupID", group.ID, "error", group.ErrorMessage)
 	return nil
 }
 
 func (h *JobGroupHandler) OnJobGroupCanceled(ctx context.Context, group orbital.JobGroup) error {
-	slogctx.Warn(ctx, "job group canceled", "handler", h.cfg, "jobGroupID", group.ID)
+	slogctx.Warn(ctx, "job group canceled", "handler", h.cfg.handlerType, "jobGroupID", group.ID)
 	return nil
 }

@@ -13,6 +13,10 @@ enum ActionType {
   ACTION_TYPE_UNSPECIFIED = 0;
   ANNOUNCE_KEY = 1;
   ACTIVATE_KEY = 2;
+  SUSPEND_KEY = 3;
+  DEACTIVATE_KEY = 4;
+  MARK_COMPROMISED = 5;
+  DESTROY_KEY = 6;
 }
 
 enum TargetType {

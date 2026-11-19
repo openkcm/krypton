@@ -57,16 +57,16 @@ func (h *TaskResolver) ConfirmJob(_ context.Context, _ orbital.Job) (orbital.Job
 }
 
 func (h *TaskResolver) OnJobCanceled(ctx context.Context, job orbital.Job) error {
-	slogctx.Warn(ctx, "job canceled", "handler", h.cfg, "jobID", job.ID)
+	slogctx.Warn(ctx, "job canceled", "handler", h.cfg.handlerType, "jobID", job.ID)
 	return nil
 }
 
 func (h *TaskResolver) OnJobDone(ctx context.Context, job orbital.Job) error {
-	slogctx.Info(ctx, "job completed", "handler", h.cfg, "jobID", job.ID)
+	slogctx.Info(ctx, "job completed", "handler", h.cfg.handlerType, "jobID", job.ID)
 	return nil
 }
 
 func (h *TaskResolver) OnJobFailed(ctx context.Context, job orbital.Job) error {
-	slogctx.Warn(ctx, "job failed", "handler", h.cfg, "jobID", job.ID, "error", job.ErrorMessage)
+	slogctx.Warn(ctx, "job failed", "handler", h.cfg.handlerType, "jobID", job.ID, "error", job.ErrorMessage)
 	return nil
 }

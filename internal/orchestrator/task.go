@@ -57,7 +57,7 @@ func (m *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 
 	err := json.Unmarshal(req.TaskData, &kid)
 	if err != nil {
-		resp.Fail(fmt.Sprintf("handler %v failed to unmarshal task data: %v", m.cfg, err))
+		resp.Fail(fmt.Sprintf("handler %v failed to unmarshal task data: %v", m.cfg.handlerType, err))
 		return
 	}
 
@@ -85,7 +85,7 @@ func (m *TaskHandler) Handle(ctx context.Context, req orbital.HandlerRequest, re
 			_ = r.Apply(resp)
 			return
 		}
-		slog.Error("task failed", "handler", m.cfg, "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
+		slog.Error("task failed", "handler", m.cfg.handlerType, "error", err, "key_id", kid.ID, "tenant_id", kid.TenantID)
 		resp.ContinueAndWaitFor(RetryBackoff)
 	}
 }
