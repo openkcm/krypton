@@ -10,6 +10,7 @@ import (
 
 	"github.com/openkcm/krypton/internal/keyprocessor"
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/awskms"
 	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/vault"
@@ -139,7 +140,7 @@ func provider(p *Provider) (sealerprovider.Spec, string, error) {
 	case *Provider_TestProvider:
 		return testProvider(p.TestProvider)
 	case *Provider_AwsKms:
-		return sealerprovider.Spec{}, "", unsupportedProvider() // aws_kms not yet supported
+		return awsKmsProvider(p.AwsKms)
 	default:
 		return sealerprovider.Spec{}, "", unsupportedProvider()
 	}
@@ -169,6 +170,59 @@ func testProvider(p *TestProvider) (sealerprovider.Spec, string, error) {
 	}, providerKeyID, nil
 }
 
+func awsKmsProvider(p *AwsKmsProvider) (sealerprovider.Spec, string, error) {
+	config := &awskms.Config{Region: p.GetConfig().GetRegion()}
+	if err := config.ValidateSealerConfig(); err != nil {
+		return sealerprovider.Spec{}, "", invalidArgument(err)
+	}
+
+	auth, err := awsKmsAuth(p.GetAuth())
+	if err != nil {
+		return sealerprovider.Spec{}, "", err
+	}
+
+	keyARN, err := awsKmsKey(p.GetProviderKey())
+	if err != nil {
+		return sealerprovider.Spec{}, "", err
+	}
+
+	return sealerprovider.Spec{
+		Name:   string(awskms.TypeAwsKms),
+		Type:   awskms.TypeAwsKms,
+		Config: config,
+		Auth:   auth,
+	}, keyARN, nil
+}
+
+func awsKmsAuth(a *AwsKmsAuth) (*awskms.Auth, error) {
+	if a.GetRuntime() != nil {
+		return nil, unsupportedProvider()
+	}
+
+	auth := &awskms.Auth{
+		RoleARN:    a.GetRoleArn(),
+		ExternalID: a.GetExternalId(),
+	}
+	if s := a.GetStatic(); s != nil {
+		auth.Static = &awskms.StaticCredentials{
+			AccessKeyID:     s.GetAccessKeyId(),
+			SecretAccessKey: s.GetSecretAccessKey(),
+		}
+	}
+	if err := auth.ValidateSealerAuth(); err != nil {
+		return nil, invalidArgument(err)
+	}
+	return auth, nil
+}
+
+func awsKmsKey(k *AwsKmsKey) (string, error) {
+	keyARN := k.GetKeyArn()
+	if keyARN == "" {
+		return "", invalidArgument(ErrProviderKeyRequired)
+	}
+	return keyARN, nil
+}
+
 func providerKey(key *ProviderKey) (sealer.Type, string, error) {
 	switch k := key.GetProvider().(type) {
 	case *ProviderKey_TestProvider:
@@ -178,7 +232,11 @@ func providerKey(key *ProviderKey) (sealer.Type, string, error) {
 		}
 		return providertest.TypeProviderTest, id, nil
 	case *ProviderKey_AwsKms:
-		return "", "", unsupportedProvider() // aws_kms not yet supported
+		keyARN, err := awsKmsKey(k.AwsKms)
+		if err != nil {
+			return "", "", err
+		}
+		return awskms.TypeAwsKms, keyARN, nil
 	default:
 		return "", "", unsupportedProvider()
 	}
@@ -193,7 +251,11 @@ func providerAuth(auth *ProviderAuth) (sealer.Type, sealer.SealerAuth, error) {
 		}
 		return providertest.TypeProviderTest, providerAuth, nil
 	case *ProviderAuth_AwsKms:
-		return "", nil, unsupportedProvider() // aws_kms not yet supported
+		providerAuth, err := awsKmsAuth(a.AwsKms)
+		if err != nil {
+			return "", nil, err
+		}
+		return awskms.TypeAwsKms, providerAuth, nil
 	default:
 		return "", nil, unsupportedProvider()
 	}

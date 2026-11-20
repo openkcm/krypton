@@ -481,6 +481,7 @@ config:
   root_key:
     allowed_providers:
       - aes256gcm-staticsecret
+      - awskms
     vault:
       name: credentials-vault
       type: unsafe-sqlite-memory
