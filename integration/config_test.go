@@ -18,13 +18,13 @@ import (
 
 // Region identifiers used to name topology segments and KMIP endpoints.
 const (
-	region_root      = "root"
-	region_ap        = "ap"
-	region_eu        = "eu"
-	region_germany   = "de"
-	region_spain     = "es"
-	region_japan     = "jp"
-	region_singapore = "sg"
+	regionRoot      = "root"
+	regionAp        = "ap"
+	regionEu        = "eu"
+	regionGermany   = "de"
+	regionSpain     = "es"
+	regionJapan     = "jp"
+	regionSingapore = "sg"
 )
 
 // rootLevelConfig defines a flat hierarchy where root handles all keys (K0->K1->K2).
@@ -33,7 +33,7 @@ const (
 //
 // [k0(root) k1(tek) k2(dek)]
 var rootLevelConfig = config.RootConfig{
-	Name: region_root,
+	Name: regionRoot,
 	Role: config.RootRole,
 	Segment: spec.HierarchySegment{
 		StartKind: "K0",
@@ -115,7 +115,7 @@ var rootLevelConfig = config.RootConfig{
 //
 // [k2(tek) k3(dek)]   [k2(tek) k3(dek)]
 var regionLevelConfig = config.RootConfig{
-	Name: region_root,
+	Name: regionRoot,
 	Role: config.RootRole,
 	Segment: spec.HierarchySegment{
 		StartKind: "K0",
@@ -182,7 +182,7 @@ var regionLevelConfig = config.RootConfig{
 	Topology: spec.Topology{
 		Segments: []spec.TopologySegment{
 			{
-				Name: region_ap,
+				Name: regionAp,
 				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
@@ -210,7 +210,7 @@ var regionLevelConfig = config.RootConfig{
 							Config: &sqlitevault.InMemoryConfig{},
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_root,
+							AgentName: regionRoot,
 						},
 					},
 					"K3": {
@@ -231,7 +231,7 @@ var regionLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_eu,
+				Name: regionEu,
 				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
@@ -257,7 +257,7 @@ var regionLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_root,
+							AgentName: regionRoot,
 						},
 					},
 					"K3": {
@@ -294,7 +294,7 @@ var regionLevelConfig = config.RootConfig{
 //
 // [k4(tek) k5(dek)]    [k4(tek) k5(dek)]
 var countryLevelConfig = config.RootConfig{
-	Name: region_root,
+	Name: regionRoot,
 	Role: config.RootRole,
 	Segment: spec.HierarchySegment{
 		StartKind: "K0",
@@ -377,7 +377,7 @@ var countryLevelConfig = config.RootConfig{
 	Topology: spec.Topology{
 		Segments: []spec.TopologySegment{
 			{
-				Name: region_eu,
+				Name: regionEu,
 				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
@@ -403,7 +403,7 @@ var countryLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_root,
+							AgentName: regionRoot,
 						},
 					},
 					"K3": {
@@ -422,7 +422,7 @@ var countryLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_ap,
+				Name: regionAp,
 				Segment: spec.HierarchySegment{
 					StartKind: "K2",
 					EndKind:   "K3",
@@ -450,7 +450,7 @@ var countryLevelConfig = config.RootConfig{
 							Config: &sqlitevault.InMemoryConfig{},
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_root,
+							AgentName: regionRoot,
 						},
 					},
 					"K3": {
@@ -471,7 +471,7 @@ var countryLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_germany,
+				Name: regionGermany,
 				Segment: spec.HierarchySegment{
 					StartKind: "K4",
 					EndKind:   "K5",
@@ -497,7 +497,7 @@ var countryLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_eu,
+							AgentName: regionEu,
 						},
 					},
 					"K5": {
@@ -516,7 +516,7 @@ var countryLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_spain,
+				Name: regionSpain,
 				Segment: spec.HierarchySegment{
 					StartKind: "K4",
 					EndKind:   "K5",
@@ -542,7 +542,7 @@ var countryLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_eu,
+							AgentName: regionEu,
 						},
 					},
 					"K5": {
@@ -561,7 +561,7 @@ var countryLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_japan,
+				Name: regionJapan,
 				Segment: spec.HierarchySegment{
 					StartKind: "K4",
 					EndKind:   "K5",
@@ -587,7 +587,7 @@ var countryLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_ap,
+							AgentName: regionAp,
 						},
 					},
 					"K5": {
@@ -606,7 +606,7 @@ var countryLevelConfig = config.RootConfig{
 				},
 			},
 			{
-				Name: region_singapore,
+				Name: regionSingapore,
 				Segment: spec.HierarchySegment{
 					StartKind: "K4",
 					EndKind:   "K5",
@@ -632,7 +632,7 @@ var countryLevelConfig = config.RootConfig{
 							Type: sqlitevault.TypeUnsafeMemory,
 						},
 						ParentKeyProvider: &spec.ParentKeyProviderRef{
-							AgentName: region_ap,
+							AgentName: regionAp,
 						},
 					},
 					"K5": {

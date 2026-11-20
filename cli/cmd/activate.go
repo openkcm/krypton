@@ -18,10 +18,6 @@ func activateCmd() *cobra.Command {
 	return cmd
 }
 
-type activatedKeyJobGroup struct {
-	ID string
-}
-
 func activateKeyCmd() *cobra.Command {
 	var tenantID, keyID string
 	var asJSON, isCascading bool
@@ -56,7 +52,7 @@ func activateKeyCmd() *cobra.Command {
 				return fmt.Errorf("failed to activate key: %w", err)
 			}
 
-			builder, err := output.From(activatedKeyJobGroup{ID: resp.GetJobGroupId()})
+			builder, err := output.From(jobGroup{ID: resp.GetJobGroupId()})
 			if err != nil {
 				return fmt.Errorf("failed to format output: %w", err)
 			}

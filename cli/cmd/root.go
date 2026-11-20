@@ -25,6 +25,7 @@ func init() {
 	rootCmd.AddCommand(selectCmd())
 	rootCmd.AddCommand(announceCmd())
 	rootCmd.AddCommand(activateCmd())
+	rootCmd.AddCommand(suspendCmd())
 	rootCmd.AddCommand(actionCmd())
 	rootCmd.AddCommand(yokCmd())
 }
