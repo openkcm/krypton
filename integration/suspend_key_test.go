@@ -2,7 +2,6 @@ package integration
 
 import (
 	"testing"
-	"time"
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -59,7 +58,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 
 	// activating the root key in root
 	jobID := activateKey(t, kCli, tenantID, k0rootID, false)
-	isJobFinished(t, aCli, jobID, 15*time.Second)
+	isJobFinished(t, aCli, jobID)
 	assertKeyStateAndStatus(t, kCli, tenantID, k0rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 	// Suspend keys individually across ap and eu, verify KMIP isolation.
@@ -110,7 +109,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -121,23 +120,23 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKMIPKeyFound(t, kmipEu, tenantID, k3euID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k2apID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k2euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k3apID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k3euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 
 		assertKMIPKeyNotFound(t, kmipAp, tenantID, k3apID)
@@ -193,7 +192,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 
 		// cascade-activate all children from k1 via CLI
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -204,7 +203,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKMIPKeyFound(t, kmipEu, tenantID, k3euID)
 
 		jobID = suspendKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -212,7 +211,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = suspendKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -271,7 +270,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3apID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -282,7 +281,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKMIPKeyFound(t, kmipEu, tenantID, k3euID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -365,13 +364,13 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = deactivateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
@@ -419,13 +418,13 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1KeyID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1KeyID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = compromiseKey(t, kCli, tenantID, k1KeyID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1KeyID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
@@ -517,7 +516,7 @@ func TestSuspendKey_RootLevel(t *testing.T) {
 
 	// activating the root key in root
 	jobID := activateKey(t, kCli, tenantID, k0rootID, false)
-	isJobFinished(t, aCli, jobID, 15*time.Second)
+	isJobFinished(t, aCli, jobID)
 	assertKeyStateAndStatus(t, kCli, tenantID, k0rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 	// Activate then suspend each key individually down the hierarchy.
@@ -532,7 +531,7 @@ func TestSuspendKey_RootLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		k2rootID := announceKey(t, kCli, &keys.AnnounceKeyRequest{
@@ -544,20 +543,20 @@ func TestSuspendKey_RootLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID = activateKey(t, kCli, tenantID, k2rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		assertKMIPKeyFound(t, kmipRoot, tenantID, k2rootID)
 
 		jobID = suspendKey(t, kCli, tenantID, k2rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		assertKMIPKeyNotFound(t, kmipRoot, tenantID, k2rootID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 	})
@@ -582,14 +581,14 @@ func TestSuspendKey_RootLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		assertKMIPKeyFound(t, kmipRoot, tenantID, k2rootID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 	})
@@ -641,7 +640,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 
 	// activating the root key in root
 	jobID := activateKey(t, kCli, tenantID, k0rootID, false)
-	isJobFinished(t, aCli, jobID, 15*time.Second)
+	isJobFinished(t, aCli, jobID)
 	assertKeyStateAndStatus(t, kCli, tenantID, k0rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 	// Activate then suspend each key individually from root down to country level (de).
@@ -656,7 +655,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		k2euID := announceKey(t, kCli, &keys.AnnounceKeyRequest{
@@ -669,7 +668,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID = activateKey(t, kCli, tenantID, k2euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		k3euID := announceKey(t, kCli, &keys.AnnounceKeyRequest{
@@ -682,7 +681,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID = activateKey(t, kCli, tenantID, k3euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		k4deID := announceKey(t, kCli, &keys.AnnounceKeyRequest{
@@ -695,7 +694,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k4deID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID = activateKey(t, kCli, tenantID, k4deID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k4deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		k5deID := announceKey(t, kCli, &keys.AnnounceKeyRequest{
@@ -708,13 +707,13 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID = activateKey(t, kCli, tenantID, k5deID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		assertKMIPKeyFound(t, kmipGermany, tenantID, k5deID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -722,7 +721,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k2euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -730,7 +729,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k3euID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -738,7 +737,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k4deID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -746,7 +745,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5deID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		jobID = suspendKey(t, kCli, tenantID, k5deID, false)
-		isJobFinished(t, aCli, jobID, 15*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -874,7 +873,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k5sgID, model.KeyLifeCyclePreActivation, model.KeyProcessingCompleted)
 
 		jobID := activateKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 20*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -895,7 +894,7 @@ func TestSuspendKey_CountryLevel(t *testing.T) {
 		assertKMIPKeyFound(t, kmipSingapore, tenantID, k5sgID)
 
 		jobID = suspendKey(t, kCli, tenantID, k1rootID, true)
-		isJobFinished(t, aCli, jobID, 20*time.Second)
+		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)

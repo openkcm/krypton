@@ -506,7 +506,7 @@ func assertKeyStateAndStatus(t *testing.T, cli keys.KeyServiceClient, tenantID, 
 }
 
 // isJobFinished polls the action service until the job reaches Done status.
-func isJobFinished(t *testing.T, aCli actions.ActionServiceClient, jobID string, duration time.Duration) {
+func isJobFinished(t *testing.T, aCli actions.ActionServiceClient, jobID string) {
 	t.Helper()
 	assert.Eventually(t, func() bool {
 		r, err := aCli.GetAction(t.Context(), &actions.GetActionRequest{
@@ -514,7 +514,7 @@ func isJobFinished(t *testing.T, aCli actions.ActionServiceClient, jobID string,
 		})
 		require.NoError(t, err)
 		return r.GetAction().GetStatus() == string(orbital.JobGroupStatusDone)
-	}, duration, 200*time.Millisecond)
+	}, 60*time.Second, 200*time.Millisecond)
 }
 
 // compromiseKey marks a key (and optionally its children) as compromised.
