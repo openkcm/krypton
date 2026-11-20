@@ -114,9 +114,16 @@ func TestCreateProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects unsupported provider", func(t *testing.T) {
+	t.Run("rejects unsupported aws_kms credential source", func(t *testing.T) {
 		req := validCreateRequest(tenant.ID, uuid.New().String())
-		req.Provider.Provider = &rootkey.Provider_AwsKms{AwsKms: &rootkey.AwsKmsProvider{}}
+		req.Provider.Provider = &rootkey.Provider_AwsKms{AwsKms: &rootkey.AwsKmsProvider{
+			Config: &rootkey.AwsKmsConfig{Region: "eu-central-1"},
+			Auth: &rootkey.AwsKmsAuth{
+				RoleArn:          "arn:aws:iam::111122223333:role/krypton",
+				CredentialSource: &rootkey.AwsKmsAuth_Runtime{Runtime: &rootkey.AwsRuntimeCredentials{}},
+			},
+			ProviderKey: &rootkey.AwsKmsKey{KeyArn: "arn:aws:kms:eu-central-1:111122223333:key/1234abcd"},
+		}}
 		_, err := setup.client.CreateProvider(t.Context(), req)
 		assertRPCError(t, err, codes.Unimplemented, proto.Code_ERROR_CODE_ABORT)
 		assert.Equal(t, rootkey.ErrUnsupportedProvider.Error(), status.Convert(err).Message())
@@ -217,9 +224,12 @@ func TestRotateAuth(t *testing.T) {
 		assertRPCError(t, err, codes.InvalidArgument, proto.Code_ERROR_CODE_ABORT)
 	})
 
-	t.Run("rejects unsupported auth", func(t *testing.T) {
+	t.Run("rejects unsupported aws_kms credential source", func(t *testing.T) {
 		req := validRequest()
-		req.Auth.Provider = &rootkey.ProviderAuth_AwsKms{AwsKms: &rootkey.AwsKmsAuth{}}
+		req.Auth.Provider = &rootkey.ProviderAuth_AwsKms{AwsKms: &rootkey.AwsKmsAuth{
+			RoleArn:          "arn:aws:iam::111122223333:role/krypton",
+			CredentialSource: &rootkey.AwsKmsAuth_Runtime{Runtime: &rootkey.AwsRuntimeCredentials{}},
+		}}
 		_, err := setup.client.RotateAuth(t.Context(), req)
 		assertRPCError(t, err, codes.Unimplemented, proto.Code_ERROR_CODE_ABORT)
 	})
@@ -334,7 +344,7 @@ func TestRotateProviderKey(t *testing.T) {
 
 	t.Run("rejects unsupported provider", func(t *testing.T) {
 		req := validRequest()
-		req.ProviderKey.Provider = &rootkey.ProviderKey_AwsKms{AwsKms: &rootkey.AwsKmsKey{}}
+		req.ProviderKey.Provider = nil
 		_, err := setup.client.RotateProviderKey(t.Context(), req)
 		assertRPCError(t, err, codes.Unimplemented, proto.Code_ERROR_CODE_ABORT)
 	})
