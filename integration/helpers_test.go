@@ -652,18 +652,15 @@ func seedSelectedTenant(t *testing.T, homeDir, tenantID, tenantName string) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.lock"), payload, 0o600))
 }
 
-// dialAs creates a KMIP client authenticated with the certificate for the given CN.
-func dialAs(t *testing.T, addr string, pki *testPKI, cn string) *kmipclient.Client {
+func dialAs(t *testing.T, addr string, caPEM, certPEM, keyPEM []byte) *kmipclient.Client {
 	t.Helper()
-	cc, ok := pki.agentCerts[cn]
-	require.True(t, ok, "no client cert for CN %q", cn)
 	c, err := kmipclient.Dial(
 		addr,
-		kmipclient.WithRootCAPem(pki.caPEM),
-		kmipclient.WithClientCertPEM(cc.certPEM, cc.keyPEM),
+		kmipclient.WithRootCAPem(caPEM),
+		kmipclient.WithClientCertPEM(certPEM, keyPEM),
 		kmipclient.WithServerName(localHost),
 	)
-	require.NoError(t, err, "Dial as %s", cn)
+	require.NoError(t, err, "Dial address %s", addr)
 	return c
 }
 
