@@ -76,6 +76,14 @@ type createSecretRequest struct {
 
 type createSecretResponse struct{}
 
+type storeSecretRequest struct {
+	KeyVersion model.KeyVersion
+	Secret     *securemem.Data
+	AAD        []byte
+}
+
+type storeSecretResponse struct{}
+
 type deleteSecretRequest struct {
 	KeyVersion model.KeyVersion
 }
@@ -91,11 +99,30 @@ func (p *processor) createSecret(ctx context.Context, req createSecretRequest) (
 		}
 		defer resp.Secret.Destroy()
 
-		transSealed, err := p.transportSeal(ctx, req.KeyVersion, resp.Secret, req.AAD)
-		if err != nil {
-			return err
+		_, err = p.storeSecret(ctx, storeSecretRequest{
+			KeyVersion: req.KeyVersion,
+			Secret:     resp.Secret,
+			AAD:        req.AAD,
+		})
+		return err
+	})
+
+	return createSecretResponse{}, err
+}
+
+// storeSecret seals and persists the supplied key material for the requested key version.
+func (p *processor) storeSecret(ctx context.Context, req storeSecretRequest) (storeSecretResponse, error) {
+	_, err := securemem.Run(ctx, func(ctx context.Context, _ *securemem.HandlerRequest) error {
+		transSealed := req.Secret
+
+		if p.transportSealer != nil {
+			var err error
+			transSealed, err = p.transportSeal(ctx, req.KeyVersion, req.Secret, req.AAD)
+			if err != nil {
+				return err
+			}
+			defer transSealed.Destroy()
 		}
-		defer transSealed.Destroy()
 
 		parentSealed, err := p.parentSeal(ctx, req.KeyVersion, transSealed, req.AAD)
 		if err != nil {
@@ -114,7 +141,7 @@ func (p *processor) createSecret(ctx context.Context, req createSecretRequest) (
 		return err
 	})
 
-	return createSecretResponse{}, err
+	return storeSecretResponse{}, err
 }
 
 // encrypt encrypts plaintext using the provided secret.
@@ -198,11 +225,14 @@ func (p *processor) resolveSecret(ctx context.Context, kv model.KeyVersion) (cry
 		}
 		defer parentUnsealed.Destroy()
 
-		transUnsealed, err := p.transportUnseal(ctx, kv, parentUnsealed, exported.Metadata)
-		if err != nil {
-			return err
+		transUnsealed := parentUnsealed
+		if p.transportSealer != nil {
+			transUnsealed, err = p.transportUnseal(ctx, kv, parentUnsealed, exported.Metadata)
+			if err != nil {
+				return err
+			}
+			defer transUnsealed.Destroy()
 		}
-		defer transUnsealed.Destroy()
 
 		// copy so that defers can unconditionally destroy all intermediates.
 		sec, err := copySec(transUnsealed)
@@ -227,9 +257,6 @@ func (p *processor) resolveSecret(ctx context.Context, kv model.KeyVersion) (cry
 }
 
 func (p *processor) transportSeal(ctx context.Context, kv model.KeyVersion, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
-	if p.transportSealer == nil {
-		return sec, nil
-	}
 	resp, err := p.transportSealer.Seal(ctx, sealer.SealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,
@@ -244,9 +271,6 @@ func (p *processor) transportSeal(ctx context.Context, kv model.KeyVersion, sec 
 }
 
 func (p *processor) transportUnseal(ctx context.Context, kv model.KeyVersion, sec *securemem.Data, aad []byte) (*securemem.Data, error) {
-	if p.transportSealer == nil {
-		return sec, nil
-	}
 	resp, err := p.transportSealer.Unseal(ctx, sealer.UnsealRequest{
 		TenantID:   kv.TenantID,
 		KeyID:      kv.KeyID,

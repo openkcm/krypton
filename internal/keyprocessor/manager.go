@@ -32,6 +32,8 @@ var (
 	ErrRegistryRequired = errors.New("no registry provided for parent key provider")
 	// ErrParentNotRegistered is returned when the registry has no connection for the requested parent agent.
 	ErrParentNotRegistered = errors.New("no connection registered for parent key provider")
+	// ErrInvalidResealRequest is returned when the old and new key versions do not describe a valid reseal operation.
+	ErrInvalidResealRequest = errors.New("invalid reseal request")
 )
 
 // ManagerConfig holds the dependencies needed to construct a Manager.
@@ -61,6 +63,17 @@ type GenerateAndSealSecretRequest struct {
 }
 
 type GenerateAndSealSecretResponse struct{}
+
+// ResealSecretRequest identifies the old and new key versions for resealing key material.
+type ResealSecretRequest struct {
+	OldKeyVersion model.KeyVersion
+	NewKeyVersion model.KeyVersion
+	NewAAD        []byte
+	KeyKind       model.KeyKind
+}
+
+// ResealSecretResponse is returned after key material is successfully resealed.
+type ResealSecretResponse struct{}
 
 // NewManager constructs a Manager by resolving the root sealer and building
 // a processor for each non-root key kind defined in the hierarchy.
@@ -115,6 +128,32 @@ func (m *Manager) GenerateAndSealSecret(ctx context.Context, req GenerateAndSeal
 		AAD:        req.AAD,
 	})
 	return GenerateAndSealSecretResponse{}, err
+}
+
+// ResealSecret stores existing key material as a new revision sealed by a newer parent key version.
+func (km *Manager) ResealSecret(ctx context.Context, req ResealSecretRequest) (ResealSecretResponse, error) {
+	if err := validateResealRequest(req); err != nil {
+		return ResealSecretResponse{}, err
+	}
+
+	proc, ok := km.processors[req.KeyKind]
+	if !ok {
+		return ResealSecretResponse{}, fmt.Errorf("%w: key kind %s", ErrProcessorNotFound, req.KeyKind)
+	}
+
+	sec, err := proc.resolveSecret(ctx, req.OldKeyVersion)
+	if err != nil {
+		return ResealSecretResponse{}, err
+	}
+	defer sec.Data.Destroy()
+
+	_, err = proc.storeSecret(ctx, storeSecretRequest{
+		KeyVersion: req.NewKeyVersion,
+		AAD:        req.NewAAD,
+		Secret:     sec.Data,
+	})
+
+	return ResealSecretResponse{}, err
 }
 
 // ExportSecretRequest identifies the key whose plaintext material to export.
@@ -314,4 +353,24 @@ func (km *Manager) resolveUsableKeyVersion(ctx context.Context, tenantID, keyID 
 		return model.KeyVersion{}, fmt.Errorf("%w: key %s version %d", ErrNoUsableKeyVersion, keyID, version)
 	}
 	return result.KeyVersions[0], nil
+}
+
+func validateResealRequest(req ResealSecretRequest) error {
+	o, n := req.OldKeyVersion, req.NewKeyVersion
+	if o.TenantID != n.TenantID || o.KeyID != n.KeyID || o.Version != n.Version {
+		return fmt.Errorf("%w: old and new key versions do not identify the same key material", ErrInvalidResealRequest)
+	}
+	if n.Revision != o.Revision+1 {
+		return fmt.Errorf("%w: new revision must follow old revision", ErrInvalidResealRequest)
+	}
+	if o.ParentKeyID == nil || n.ParentKeyID == nil || *o.ParentKeyID != *n.ParentKeyID {
+		return fmt.Errorf("%w: old and new parent keys do not match", ErrInvalidResealRequest)
+	}
+	if o.ParentKeyVersion == nil || n.ParentKeyVersion == nil || *n.ParentKeyVersion <= *o.ParentKeyVersion {
+		return fmt.Errorf("%w: new parent key version must be newer than old parent key version", ErrInvalidResealRequest)
+	}
+	if o.ProcessingState != model.KeyVersionUsable || n.ProcessingState != model.KeyVersionReWrapping {
+		return fmt.Errorf("%w: old must be usable and new must be re-wrapping", ErrInvalidResealRequest)
+	}
+	return nil
 }
