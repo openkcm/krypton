@@ -24,7 +24,9 @@ import (
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/envvar"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
+	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
+	"github.com/openkcm/krypton/internal/vault"
 	"github.com/openkcm/krypton/internal/vault/sqlitevault"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 	"github.com/openkcm/krypton/pkg/model"
@@ -1550,6 +1552,235 @@ func TestGenerateAndSealSecret(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, keyprocessor.GenerateAndSealSecretResponse{}, resp)
 	})
+}
+
+func TestManagerResealSecret(t *testing.T) {
+	t.Run("should reject invalid requests", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			mutate func(*keyprocessor.ResealSecretRequest)
+		}{
+			{
+				name: "different tenant",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.TenantID = uuid.New().String()
+				},
+			},
+			{
+				name: "different key",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.KeyID = uuid.New().String()
+				},
+			},
+			{
+				name: "different key version",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.Version++
+				},
+			},
+			{
+				name: "non-consecutive revision",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.Revision++
+				},
+			},
+			{
+				name: "old parent key missing",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.OldKeyVersion.ParentKeyID = nil
+				},
+			},
+			{
+				name: "new parent key missing",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.ParentKeyID = nil
+				},
+			},
+			{
+				name: "different parent key",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					parentID := uuid.New().String()
+					req.NewKeyVersion.ParentKeyID = &parentID
+				},
+			},
+			{
+				name: "old parent key version missing",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.OldKeyVersion.ParentKeyVersion = nil
+				},
+			},
+			{
+				name: "new parent key version missing",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.ParentKeyVersion = nil
+				},
+			},
+			{
+				name: "parent key version not newer",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					version := *req.OldKeyVersion.ParentKeyVersion
+					req.NewKeyVersion.ParentKeyVersion = &version
+				},
+			},
+			{
+				name: "old key version not usable",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.OldKeyVersion.ProcessingState = model.KeyVersionActivating
+				},
+			},
+			{
+				name: "new key version not re-wrapping",
+				mutate: func(req *keyprocessor.ResealSecretRequest) {
+					req.NewKeyVersion.ProcessingState = model.KeyVersionUsable
+				},
+			},
+		}
+
+		mgr := keyprocessor.NewTestManager(nil, nil, nil)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				req := newValidResealSecretRequest()
+				tt.mutate(&req)
+
+				resp, err := mgr.ResealSecret(t.Context(), req)
+
+				assert.ErrorIs(t, err, keyprocessor.ErrInvalidResealRequest)
+				assert.Equal(t, keyprocessor.ResealSecretResponse{}, resp)
+			})
+		}
+	})
+
+	t.Run("should return error if processor is not found", func(t *testing.T) {
+		mgr := keyprocessor.NewTestManager(nil, nil, nil)
+
+		resp, err := mgr.ResealSecret(t.Context(), newValidResealSecretRequest())
+
+		assert.ErrorIs(t, err, keyprocessor.ErrProcessorNotFound)
+		assert.Equal(t, keyprocessor.ResealSecretResponse{}, resp)
+	})
+
+	t.Run("should return error if old secret cannot be resolved", func(t *testing.T) {
+		resolveErr := errors.New("secret unavailable")
+		v := &vaultWrapper{
+			exportSecretFn: func(context.Context, vault.ExportSecretRequest) (*vault.ExportSecretResponse, error) {
+				return nil, resolveErr
+			},
+		}
+		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, newTestSealer(t), v)
+		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{"K1": *proc})
+
+		resp, err := mgr.ResealSecret(t.Context(), newValidResealSecretRequest())
+
+		assert.ErrorIs(t, err, resolveErr)
+		assert.Equal(t, keyprocessor.ResealSecretResponse{}, resp)
+	})
+
+	t.Run("should return error if resealed secret cannot be stored", func(t *testing.T) {
+		storeErr := errors.New("vault unavailable")
+		req := newValidResealSecretRequest()
+		v := &vaultWrapper{Vault: newTestVault(t)}
+		parent := &sealerWrapper{Sealer: newTestSealer(t)}
+		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, parent, v)
+		_, err := proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyVersion: req.OldKeyVersion,
+			AAD:        req.OldKeyVersion.AAD(),
+		})
+		require.NoError(t, err)
+
+		var resealedMaterial *securemem.Data
+		parent.sealFn = func(ctx context.Context, sealReq sealer.SealRequest) (sealer.SealResponse, error) {
+			resealedMaterial = sealReq.Plaintext
+			return parent.Sealer.Seal(ctx, sealReq)
+		}
+		v.importSecretFn = func(context.Context, vault.ImportSecretRequest) (*vault.ImportSecretResponse, error) {
+			return nil, storeErr
+		}
+		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{"K1": *proc})
+
+		resp, err := mgr.ResealSecret(t.Context(), req)
+
+		assert.ErrorIs(t, err, storeErr)
+		assert.Equal(t, keyprocessor.ResealSecretResponse{}, resp)
+		require.NotNil(t, resealedMaterial)
+		assert.Nil(t, resealedMaterial.SecureBytes())
+	})
+
+	t.Run("should preserve key material under the newer parent key version", func(t *testing.T) {
+		req := newValidResealSecretRequest()
+		parent := &sealerWrapper{Sealer: newTestSealer(t)}
+		proc := keyprocessor.NewProcessor(newTestSecretGen(), newTestCryptor(), nil, parent, newTestVault(t))
+
+		_, err := proc.CreateSecret(t.Context(), keyprocessor.CreateSecretRequest{
+			KeyVersion: req.OldKeyVersion,
+			AAD:        req.OldKeyVersion.AAD(),
+		})
+		require.NoError(t, err)
+
+		original, err := proc.ResolveSecret(t.Context(), req.OldKeyVersion)
+		require.NoError(t, err)
+		originalBytes := append([]byte(nil), original.Data.SecureBytes()...)
+		require.NoError(t, original.Data.Destroy())
+
+		calls := make([]string, 0, 2)
+		var resealedMaterial *securemem.Data
+		parent.unsealFn = func(ctx context.Context, sealReq sealer.UnsealRequest) (sealer.UnsealResponse, error) {
+			calls = append(calls, "unseal")
+			assert.Equal(t, req.OldKeyVersion.TenantID, sealReq.TenantID)
+			assert.Equal(t, *req.OldKeyVersion.ParentKeyID, sealReq.KeyID)
+			assert.Equal(t, *req.OldKeyVersion.ParentKeyVersion, sealReq.KeyVersion)
+			assert.Equal(t, req.OldKeyVersion.AAD(), sealReq.AAD)
+			return parent.Sealer.Unseal(ctx, sealReq)
+		}
+		parent.sealFn = func(ctx context.Context, sealReq sealer.SealRequest) (sealer.SealResponse, error) {
+			calls = append(calls, "seal")
+			resealedMaterial = sealReq.Plaintext
+			assert.Equal(t, req.NewKeyVersion.TenantID, sealReq.TenantID)
+			assert.Equal(t, *req.NewKeyVersion.ParentKeyID, sealReq.KeyID)
+			assert.Equal(t, *req.NewKeyVersion.ParentKeyVersion, sealReq.KeyVersion)
+			assert.Equal(t, req.NewAAD, sealReq.AAD)
+			return parent.Sealer.Seal(ctx, sealReq)
+		}
+
+		mgr := keyprocessor.NewTestManager(nil, nil, map[model.KeyKind]keyprocessor.Processor{req.KeyKind: *proc})
+		resp, err := mgr.ResealSecret(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.Equal(t, keyprocessor.ResealSecretResponse{}, resp)
+		assert.Equal(t, []string{"unseal", "seal"}, calls)
+		require.NotNil(t, resealedMaterial)
+		assert.Nil(t, resealedMaterial.SecureBytes())
+
+		// Stop observing calls made while verifying the stored revisions.
+		parent.unsealFn = nil
+		parent.sealFn = nil
+
+		resealed, err := proc.ResolveSecret(t.Context(), req.NewKeyVersion)
+		require.NoError(t, err)
+		assert.Equal(t, originalBytes, []byte(resealed.Data.SecureBytes()))
+		require.NoError(t, resealed.Data.Destroy())
+
+		old, err := proc.ResolveSecret(t.Context(), req.OldKeyVersion)
+		require.NoError(t, err)
+		assert.Equal(t, originalBytes, []byte(old.Data.SecureBytes()))
+		require.NoError(t, old.Data.Destroy())
+	})
+}
+
+func newValidResealSecretRequest() keyprocessor.ResealSecretRequest {
+	parentID := uuid.New().String()
+	oldParentVersion, newParentVersion := 1, 2
+	oldKV := model.NewKeyVersion(uuid.New().String(), uuid.New().String(), 1, &parentID, &oldParentVersion)
+	newKV := oldKV
+	newKV.Revision++
+	newKV.ParentKeyVersion = &newParentVersion
+	newKV.ProcessingState = model.KeyVersionReWrapping
+
+	return keyprocessor.ResealSecretRequest{
+		OldKeyVersion: oldKV,
+		NewKeyVersion: newKV,
+		NewAAD:        newKV.AAD(),
+		KeyKind:       "K1",
+	}
 }
 
 type exportSetup struct {
