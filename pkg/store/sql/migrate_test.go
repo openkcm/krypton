@@ -115,15 +115,15 @@ func TestMigrate_UnknownNode(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown node")
 }
 
-func TestMigrate_KeyVersionParentFKEnforced(t *testing.T) {
+func TestMigrate_KeyVersionParentRevisionIndependent(t *testing.T) {
 	db := createFreshDB(t)
 	ctx := t.Context()
 
 	require.NoError(t, storesql.Migrate(ctx, db, storesql.Root))
 
 	tenantID := uuid.New().String()
-	keyID := uuid.New().String()
-	bogusParentID := uuid.New().String()
+	parentKeyID := uuid.New().String()
+	childKeyID := uuid.New().String()
 
 	_, err := db.ExecContext(ctx,
 		`INSERT INTO tenants (id, name, created_at, updated_at) VALUES ($1, $2, 0, 0)`,
@@ -132,16 +132,28 @@ func TestMigrate_KeyVersionParentFKEnforced(t *testing.T) {
 
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO keys (id, tenant_id, kind, name, managed_by, life_cycle_state, created_at, updated_at)
-		 VALUES ($1, $2, 'k', 'n', 'm', 'active', 0, 0)`,
-		keyID, tenantID)
+		 VALUES ($1, $2, 'k', 'parent', 'm', 'active', 0, 0)`,
+		parentKeyID, tenantID)
 	require.NoError(t, err)
 
-	// Inserting a key_version whose parent (parent_key_id, parent_key_version)
-	// does not exist in key_versions must fail via FK.
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO keys (id, tenant_id, kind, name, parent_id, managed_by, life_cycle_state, created_at, updated_at)
+		 VALUES ($1, $2, 'k', 'child', $3, 'm', 'active', 0, 0)`,
+		childKeyID, tenantID, parentKeyID)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO key_versions
+		 (tenant_id, key_id, version, revision, life_cycle_state, processing_state, created_at, updated_at)
+		 VALUES ($1, $2, 1, 1, 'active', 'pending', 0, 0)`,
+		tenantID, parentKeyID)
+	require.NoError(t, err)
+
+	// A child's revision is independent of its parent key version's revision.
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO key_versions
 		 (tenant_id, key_id, version, revision, parent_key_id, parent_key_version, life_cycle_state, processing_state, created_at, updated_at)
-		 VALUES ($1, $2, 1, 1, $3, 1, 'active', 'pending', 0, 0)`,
-		tenantID, keyID, bogusParentID)
-	require.Error(t, err, "expected FK violation for missing parent key_version")
+		 VALUES ($1, $2, 1, 2, $3, 1, 'active', 'pending', 0, 0)`,
+		tenantID, childKeyID, parentKeyID)
+	require.NoError(t, err)
 }
