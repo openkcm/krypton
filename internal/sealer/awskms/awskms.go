@@ -2,11 +2,20 @@ package awskms
 
 import (
 	"errors"
+	"regexp"
 
 	"github.com/openkcm/krypton/internal/sealer"
 )
 
 const TypeAwsKms sealer.Type = "awskms"
+
+// AWS STS limits for the ExternalId of AssumeRole.
+const (
+	externalIDMinLength = 2
+	externalIDMaxLength = 1224
+)
+
+var externalIDPattern = regexp.MustCompile(`^[\w+=,.@:/-]+$`)
 
 var (
 	ErrRegionMissing            = errors.New("region is missing")
@@ -14,6 +23,7 @@ var (
 	ErrAccessKeyIDMissing       = errors.New("access key ID is missing")
 	ErrSecretAccessKeyMissing   = errors.New("secret access key is missing")
 	ErrRoleARNMissing           = errors.New("role ARN is missing")
+	ErrExternalIDInvalid        = errors.New("external ID must be 2-1224 characters of letters, digits and _+=,.@:/-")
 	ErrKeyARNMissing            = errors.New("provider key ARN is missing")
 	ErrEncrypt                  = errors.New("aws kms encrypt failed")
 	ErrDecrypt                  = errors.New("aws kms decrypt failed")
@@ -59,5 +69,12 @@ func (a *Auth) ValidateSealerAuth() error {
 	if a.RoleARN == "" {
 		return ErrRoleARNMissing
 	}
+	if a.ExternalID != "" && !validExternalID(a.ExternalID) {
+		return ErrExternalIDInvalid
+	}
 	return nil
+}
+
+func validExternalID(id string) bool {
+	return len(id) >= externalIDMinLength && len(id) <= externalIDMaxLength && externalIDPattern.MatchString(id)
 }

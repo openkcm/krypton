@@ -51,6 +51,9 @@ func NewClient(config Config, auth Auth) (*Client, error) {
 		auth.RoleARN,
 		func(o *stscreds.AssumeRoleOptions) {
 			o.RoleSessionName = roleSessionName
+			if auth.ExternalID != "" {
+				o.ExternalID = aws.String(auth.ExternalID)
+			}
 		},
 	))
 
