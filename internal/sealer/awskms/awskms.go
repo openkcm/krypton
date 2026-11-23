@@ -34,9 +34,9 @@ func (c *Config) ValidateSealerConfig() error {
 }
 
 type Auth struct {
-	RoleARN    string             `yaml:"role_arn,omitempty"`
-	ExternalID string             `yaml:"external_id,omitempty"`
-	Static     *StaticCredentials `yaml:"static,omitempty"`
+	RoleARN    string             `yaml:"role_arn"`
+	ExternalID string             `yaml:"external_id"`
+	Static     *StaticCredentials `yaml:"static"`
 }
 
 type StaticCredentials struct {
