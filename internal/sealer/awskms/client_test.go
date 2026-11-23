@@ -3,6 +3,7 @@ package awskms
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 
@@ -16,11 +17,15 @@ import (
 
 const testKeyARN = "arn:aws:kms:eu-central-1:111122223333:key/1234abcd"
 
-var errKMS = errors.New("kms unavailable")
+var (
+	errKMS             = errors.New("kms unavailable")
+	errContextMismatch = errors.New("invalid ciphertext")
+)
 
 type fakeKMS struct {
-	err    error
-	keyIDs []string
+	err      error
+	keyIDs   []string
+	contexts map[string]map[string]string
 }
 
 func (f *fakeKMS) Encrypt(_ context.Context, in *kms.EncryptInput, _ ...func(*kms.Options)) (*kms.EncryptOutput, error) {
@@ -30,6 +35,10 @@ func (f *fakeKMS) Encrypt(_ context.Context, in *kms.EncryptInput, _ ...func(*km
 	}
 	blob := slices.Clone(in.Plaintext)
 	slices.Reverse(blob)
+	if f.contexts == nil {
+		f.contexts = map[string]map[string]string{}
+	}
+	f.contexts[string(blob)] = in.EncryptionContext
 	return &kms.EncryptOutput{CiphertextBlob: blob}, nil
 }
 
@@ -37,6 +46,9 @@ func (f *fakeKMS) Decrypt(_ context.Context, in *kms.DecryptInput, _ ...func(*km
 	f.keyIDs = append(f.keyIDs, *in.KeyId)
 	if f.err != nil {
 		return nil, f.err
+	}
+	if !maps.Equal(f.contexts[string(in.CiphertextBlob)], in.EncryptionContext) {
+		return nil, errContextMismatch
 	}
 	plain := slices.Clone(in.CiphertextBlob)
 	slices.Reverse(plain)
@@ -63,12 +75,16 @@ func TestSealUnsealRoundTrip(t *testing.T) {
 
 	// when
 	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
+		TenantID:  "t-1",
 		Plaintext: secureData(t, secret),
+		AAD:       []byte("t-1:dk-1:1:1"),
 		Metadata:  keyMetadata(),
 	})
 	require.NoError(t, err)
 	unsealed, err := client.Unseal(t.Context(), sealer.UnsealRequest{
+		TenantID:   "t-1",
 		Ciphertext: sealed.Ciphertext,
+		AAD:        []byte("t-1:dk-1:1:1"),
 		Metadata:   keyMetadata(),
 	})
 
@@ -77,6 +93,36 @@ func TestSealUnsealRoundTrip(t *testing.T) {
 	assert.NotEqual(t, secret, sealed.Ciphertext.SecureBytes())
 	assert.Equal(t, secret, []byte(unsealed.Plaintext.SecureBytes()))
 	assert.Equal(t, []string{testKeyARN, testKeyARN}, fake.keyIDs)
+	assert.Equal(t, map[string]string{"tenant": "t-1", "aad": "t-1:dk-1:1:1"},
+		fake.contexts[string(sealed.Ciphertext.SecureBytes())])
+}
+
+func TestUnsealWithOtherAAD(t *testing.T) {
+	// given
+	client := &Client{kms: &fakeKMS{}}
+	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
+		TenantID:  "t-1",
+		Plaintext: secureData(t, []byte("secret")),
+		AAD:       []byte("t-1:dk-1:1:1"),
+		Metadata:  keyMetadata(),
+	})
+	require.NoError(t, err)
+
+	// when
+	_, err = client.Unseal(t.Context(), sealer.UnsealRequest{
+		TenantID:   "t-1",
+		Ciphertext: sealed.Ciphertext,
+		AAD:        []byte("t-1:dk-2:1:1"),
+		Metadata:   keyMetadata(),
+	})
+
+	// then
+	require.ErrorIs(t, err, ErrDecrypt)
+	require.ErrorIs(t, err, errContextMismatch)
+}
+
+func TestEncryptionContextWithoutValues(t *testing.T) {
+	assert.Nil(t, encryptionContext("", nil))
 }
 
 func TestSealWithoutKeyARN(t *testing.T) {

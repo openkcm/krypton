@@ -18,6 +18,9 @@ const (
 	roleSessionName = "krypton"
 	ciphertextKey   = "awskms-ciphertext"
 	plaintextKey    = "awskms-plaintext"
+
+	contextTenantKey = "tenant"
+	contextAADKey    = "aad"
 )
 
 type kmsAPI interface {
@@ -62,8 +65,9 @@ func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealR
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
 		out, err := c.kms.Encrypt(ctx, &kms.EncryptInput{
-			KeyId:     aws.String(keyARN),
-			Plaintext: req.Plaintext.SecureBytes(),
+			KeyId:             aws.String(keyARN),
+			Plaintext:         req.Plaintext.SecureBytes(),
+			EncryptionContext: encryptionContext(req.TenantID, req.AAD),
 		})
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrEncrypt, err)
@@ -89,8 +93,9 @@ func (c *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.U
 
 	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
 		out, err := c.kms.Decrypt(ctx, &kms.DecryptInput{
-			KeyId:          aws.String(keyARN),
-			CiphertextBlob: req.Ciphertext.SecureBytes(),
+			KeyId:             aws.String(keyARN),
+			CiphertextBlob:    req.Ciphertext.SecureBytes(),
+			EncryptionContext: encryptionContext(req.TenantID, req.AAD),
 		})
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrDecrypt, err)
@@ -107,6 +112,21 @@ func (c *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.U
 		return sealer.UnsealResponse{}, err
 	}
 	return sealer.UnsealResponse{Plaintext: plaintext}, nil
+}
+
+// KMS binds the ciphertext to this context, so Unseal must send exactly what Seal sent.
+func encryptionContext(tenantID string, aad []byte) map[string]string {
+	ec := map[string]string{}
+	if tenantID != "" {
+		ec[contextTenantKey] = tenantID
+	}
+	if len(aad) > 0 {
+		ec[contextAADKey] = string(aad)
+	}
+	if len(ec) == 0 {
+		return nil
+	}
+	return ec
 }
 
 func keyARNFromMetadata(metadata map[string]string) (string, error) {
