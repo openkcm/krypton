@@ -12,7 +12,7 @@ import (
 func compromiseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compromise",
-		Short: "Compromise a key",
+		Short: "Mark a key as compormised",
 	}
 	cmd.AddCommand(compromiseKeyCmd())
 	return cmd
@@ -24,7 +24,7 @@ func compromiseKeyCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   keyCmd,
-		Short: "Compromise an existing key by tenant and key ID",
+		Short: "Mark as compromised an existing key by tenant and key ID",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if tenantID == "" {
