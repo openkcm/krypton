@@ -68,7 +68,7 @@ const keysRootConstraints = `,
 var createKeysTable = fmt.Sprintf(keyTable, keysRootConstraints)
 var createAgentsKeysTable = fmt.Sprintf(keyTable, "")
 
-const keyVersionTable = `
+const createKeyVersionsTable = `
 CREATE TABLE IF NOT EXISTS key_versions (
 	tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 	key_id UUID NOT NULL,
@@ -83,16 +83,9 @@ CREATE TABLE IF NOT EXISTS key_versions (
 	updated_at BIGINT NOT NULL,
 
 	PRIMARY KEY (tenant_id, key_id, version, revision),
-	FOREIGN KEY (tenant_id, key_id) REFERENCES keys(tenant_id, id)%s
+	FOREIGN KEY (tenant_id, key_id) REFERENCES keys(tenant_id, id)
 );
 `
-
-const keyVersionsRootConstraints = `,
-	FOREIGN KEY (tenant_id, parent_key_id, parent_key_version, revision)
-		REFERENCES key_versions(tenant_id, key_id, version, revision)`
-
-var createKeyVersionsTable = fmt.Sprintf(keyVersionTable, keyVersionsRootConstraints)
-var createAgentsKeyVersionsTable = fmt.Sprintf(keyVersionTable, "")
 
 func Migrate(ctx context.Context, db *sql.DB, n Node) error {
 	switch n {
@@ -129,7 +122,7 @@ func Migrate(ctx context.Context, db *sql.DB, n Node) error {
 	case Agent:
 		stmts = append(stmts,
 			createAgentsKeysTable,
-			createAgentsKeyVersionsTable,
+			createKeyVersionsTable,
 		)
 	}
 
