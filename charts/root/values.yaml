@@ -480,7 +480,6 @@ config:
   # configured here.
   root_key:
     allowed_providers:
-      - aes256gcm-staticsecret
       - awskms
     vault:
       name: credentials-vault
