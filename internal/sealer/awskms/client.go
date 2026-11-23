@@ -14,7 +14,11 @@ import (
 	"github.com/openkcm/krypton/internal/securemem"
 )
 
-const roleSessionName = "krypton"
+const (
+	roleSessionName = "krypton"
+	ciphertextKey   = "awskms-ciphertext"
+	plaintextKey    = "awskms-plaintext"
+)
 
 type kmsAPI interface {
 	Encrypt(ctx context.Context, params *kms.EncryptInput, optFns ...func(*kms.Options)) (*kms.EncryptOutput, error)
@@ -56,15 +60,21 @@ func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealR
 		return sealer.SealResponse{}, err
 	}
 
-	out, err := c.kms.Encrypt(ctx, &kms.EncryptInput{
-		KeyId:     aws.String(keyARN),
-		Plaintext: req.Plaintext.SecureBytes(),
+	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
+		out, err := c.kms.Encrypt(ctx, &kms.EncryptInput{
+			KeyId:     aws.String(keyARN),
+			Plaintext: req.Plaintext.SecureBytes(),
+		})
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrEncrypt, err)
+		}
+		return keep(hr, ciphertextKey, out.CiphertextBlob)
 	})
 	if err != nil {
-		return sealer.SealResponse{}, fmt.Errorf("%w: %w", ErrEncrypt, err)
+		return sealer.SealResponse{}, err
 	}
 
-	ciphertext, err := toSecureData("awskms-ciphertext", out.CiphertextBlob)
+	ciphertext, err := result(resp, ciphertextKey)
 	if err != nil {
 		return sealer.SealResponse{}, err
 	}
@@ -77,16 +87,22 @@ func (c *Client) Unseal(ctx context.Context, req sealer.UnsealRequest) (sealer.U
 		return sealer.UnsealResponse{}, err
 	}
 
-	out, err := c.kms.Decrypt(ctx, &kms.DecryptInput{
-		KeyId:          aws.String(keyARN),
-		CiphertextBlob: req.Ciphertext.SecureBytes(),
+	resp, err := securemem.Run(ctx, func(ctx context.Context, hr *securemem.HandlerRequest) error {
+		out, err := c.kms.Decrypt(ctx, &kms.DecryptInput{
+			KeyId:          aws.String(keyARN),
+			CiphertextBlob: req.Ciphertext.SecureBytes(),
+		})
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrDecrypt, err)
+		}
+		defer securemem.Zero(out.Plaintext)
+		return keep(hr, plaintextKey, out.Plaintext)
 	})
 	if err != nil {
-		return sealer.UnsealResponse{}, fmt.Errorf("%w: %w", ErrDecrypt, err)
+		return sealer.UnsealResponse{}, err
 	}
-	defer securemem.Zero(out.Plaintext)
 
-	plaintext, err := toSecureData("awskms-plaintext", out.Plaintext)
+	plaintext, err := result(resp, plaintextKey)
 	if err != nil {
 		return sealer.UnsealResponse{}, err
 	}
@@ -101,11 +117,22 @@ func keyARNFromMetadata(metadata map[string]string) (string, error) {
 	return keyARN, nil
 }
 
-func toSecureData(name string, b []byte) (*securemem.Data, error) {
-	d, err := securemem.NewData(name, len(b))
+func keep(hr *securemem.HandlerRequest, name string, b []byte) error {
+	d, err := hr.PersistentVault().Reserve(name, len(b))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	copy(d.SecureBytes(), b)
+	copy(d, b)
+	return nil
+}
+
+func result(resp *securemem.HandlerResponse, name string) (*securemem.Data, error) {
+	d, ok := resp.MemVault().Get(name)
+	if !ok {
+		if err := resp.MemVault().DestroyAll(); err != nil {
+			return nil, err
+		}
+		return nil, ErrResultMissing
+	}
 	return d, nil
 }

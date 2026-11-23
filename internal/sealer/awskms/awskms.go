@@ -17,6 +17,7 @@ var (
 	ErrKeyARNMissing            = errors.New("provider key ARN is missing")
 	ErrEncrypt                  = errors.New("aws kms encrypt failed")
 	ErrDecrypt                  = errors.New("aws kms decrypt failed")
+	ErrResultMissing            = errors.New("aws kms result missing from secure memory")
 )
 
 type Config struct {
