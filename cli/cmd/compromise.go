@@ -11,7 +11,7 @@ import (
 
 func compromiseCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "compromise",
+		Use:   "mark-compromised",
 		Short: "Mark a key as compormised",
 	}
 	cmd.AddCommand(compromiseKeyCmd())

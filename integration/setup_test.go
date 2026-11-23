@@ -1258,7 +1258,7 @@ func suspendKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascadin
 // suspendKeyCli suspend a key via the CLI binary and returns the job group ID.
 func compromiseKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
 	t.Helper()
-	return keyActionCli(t, "compromise", homeDir, port, tenantID, keyID, cascading)
+	return keyActionCli(t, "mark-compromised", homeDir, port, tenantID, keyID, cascading)
 }
 
 func keyActionCli(t *testing.T, action, homeDir, port, tenantID, keyID string, cascading bool) string {
