@@ -100,8 +100,25 @@ func (s *Spec) Validate() error {
 	return nil
 }
 
+// Option sets what the node config adds to a tenant's Spec.
+type Option func(*options)
+
+type options struct {
+	awsKmsEndpoint *awskms.Endpoint
+}
+
+// WithAwsKmsEndpoint points AWS KMS sealers at endpoint instead of the default AWS endpoints.
+func WithAwsKmsEndpoint(endpoint *awskms.Endpoint) Option {
+	return func(o *options) { o.awsKmsEndpoint = endpoint }
+}
+
 // GetSealer constructs a ready-to-use sealer.Sealer from the given Spec.
-func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
+func GetSealer(ctx context.Context, spec Spec, opts ...Option) (sealer.Sealer, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	switch cfg := spec.Config.(type) {
 	case *staticsecret.Config:
 		secret, err := secretprovider.GetSecret(ctx, cfg.Secret)
@@ -120,7 +137,7 @@ func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 		if !ok || auth == nil {
 			return nil, fmt.Errorf("invalid auth for sealer %q: %T", spec.Name, spec.Auth)
 		}
-		return awskms.NewClient(*cfg, *auth, nil)
+		return awskms.NewClient(*cfg, *auth, o.awsKmsEndpoint)
 	default:
 		return nil, fmt.Errorf("%w: %T", sealer.ErrUnknownType, spec.Config)
 	}

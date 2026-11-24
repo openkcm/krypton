@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/awskms"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/securemem"
 	"github.com/openkcm/krypton/internal/spec"
@@ -36,6 +37,7 @@ type RootManager struct {
 	transactor store.Transactor
 	vault      vault.Vault
 	allowed    map[sealer.Type]struct{}
+	awsKms     *awskms.Endpoint
 }
 
 var _ sealer.Sealer = &RootManager{}
@@ -64,7 +66,7 @@ func NewRootManager(ctx context.Context, cfg RootManagerConfig) (*RootManager, e
 		allowed[t] = struct{}{}
 	}
 
-	return &RootManager{transactor: cfg.Transactor, vault: v, allowed: allowed}, nil
+	return &RootManager{transactor: cfg.Transactor, vault: v, allowed: allowed, awsKms: cfg.RootKey.AwsKms}, nil
 }
 
 // CreateProviderInput is the input for CreateProvider.
@@ -197,7 +199,7 @@ func (rm *RootManager) Seal(ctx context.Context, req sealer.SealRequest) (sealer
 				return err
 			}
 
-			s, err := sealerprovider.GetSealer(ctx, sp)
+			s, err := sealerprovider.GetSealer(ctx, sp, sealerprovider.WithAwsKmsEndpoint(rm.awsKms))
 			if err != nil {
 				return err
 			}
@@ -235,7 +237,7 @@ func (rm *RootManager) Unseal(ctx context.Context, req sealer.UnsealRequest) (se
 				return err
 			}
 
-			s, err := sealerprovider.GetSealer(ctx, sp)
+			s, err := sealerprovider.GetSealer(ctx, sp, sealerprovider.WithAwsKmsEndpoint(rm.awsKms))
 			if err != nil {
 				return err
 			}
