@@ -1,4 +1,4 @@
-package awskms_test
+package awskms
 
 import (
 	"testing"
@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/krypton/internal/sealer"
-	"github.com/openkcm/krypton/internal/sealer/awskms"
 )
 
 const unknownKeyARN = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000000"
@@ -17,9 +16,9 @@ func TestAWSKMSSealUnseal_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
+	client := emulator.newSealer(emulator.createRole(t, keyARN))
 	plaintext := []byte("a 32 byte secret for the l2 key!")
-	metadata := map[string]string{sealer.ProviderKeyMetadataKey(awskms.TypeAwsKms): keyARN}
+	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
 	// when
 	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
@@ -47,8 +46,8 @@ func TestAWSKMSUnseal_OtherContext_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
-	metadata := map[string]string{sealer.ProviderKeyMetadataKey(awskms.TypeAwsKms): keyARN}
+	client := emulator.newSealer(emulator.createRole(t, keyARN))
+	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
 	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
 		TenantID:  "tenant-1",
@@ -84,7 +83,7 @@ func TestAWSKMSUnseal_OtherContext_AWSEmulator(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
-			require.ErrorIs(t, err, awskms.ErrDecrypt)
+			require.ErrorIs(t, err, ErrDecrypt)
 			var invalid *types.InvalidCiphertextException
 			require.ErrorAs(t, err, &invalid)
 		})
@@ -95,9 +94,9 @@ func TestAWSKMSUnseal_DisabledKey_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
+	client := emulator.newSealer(emulator.createRole(t, keyARN))
 	plaintext := []byte("a 32 byte secret for the l2 key!")
-	metadata := map[string]string{sealer.ProviderKeyMetadataKey(awskms.TypeAwsKms): keyARN}
+	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
 	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
 		TenantID:  "tenant-1",
@@ -123,7 +122,7 @@ func TestAWSKMSUnseal_DisabledKey_AWSEmulator(t *testing.T) {
 	unsealed, errEnabled := unseal()
 
 	// then
-	require.ErrorIs(t, errDisabled, awskms.ErrDecrypt)
+	require.ErrorIs(t, errDisabled, ErrDecrypt)
 	var disabled *types.DisabledException
 	require.ErrorAs(t, errDisabled, &disabled)
 
@@ -134,8 +133,8 @@ func TestAWSKMSUnseal_DisabledKey_AWSEmulator(t *testing.T) {
 func TestAWSKMSSeal_UnknownKey_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
-	client := emulator.newSealer(t, emulator.createRole(t, emulator.createKey(t)))
-	metadata := map[string]string{sealer.ProviderKeyMetadataKey(awskms.TypeAwsKms): unknownKeyARN}
+	client := emulator.newSealer(emulator.createRole(t, emulator.createKey(t)))
+	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): unknownKeyARN}
 
 	// when
 	_, err := client.Seal(t.Context(), sealer.SealRequest{
@@ -145,7 +144,7 @@ func TestAWSKMSSeal_UnknownKey_AWSEmulator(t *testing.T) {
 	})
 
 	// then
-	require.ErrorIs(t, err, awskms.ErrEncrypt)
+	require.ErrorIs(t, err, ErrEncrypt)
 	var notFound *types.NotFoundException
 	require.ErrorAs(t, err, &notFound)
 }

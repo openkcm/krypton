@@ -34,25 +34,20 @@ type Client struct {
 
 var _ sealer.Sealer = (*Client)(nil)
 
-func NewClient(
-	config Config,
-	auth Auth,
-	stsOptFns []func(*sts.Options),
-	kmsOptFns []func(*kms.Options),
-) (*Client, error) {
+func NewClient(config Config, auth Auth) (*Client, error) {
 	if err := config.ValidateSealerConfig(); err != nil {
 		return nil, err
 	}
 	if err := auth.ValidateSealerAuth(); err != nil {
 		return nil, err
 	}
+	return newClientFromConfig(aws.Config{Region: config.Region}, auth), nil
+}
 
-	cfg := aws.Config{
-		Region:      config.Region,
-		Credentials: credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, ""),
-	}
+func newClientFromConfig(cfg aws.Config, auth Auth) *Client {
+	cfg.Credentials = credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, "")
 	cfg.Credentials = aws.NewCredentialsCache(stscreds.NewAssumeRoleProvider(
-		sts.NewFromConfig(cfg, stsOptFns...),
+		sts.NewFromConfig(cfg),
 		auth.RoleARN,
 		func(o *stscreds.AssumeRoleOptions) {
 			o.RoleSessionName = roleSessionName
@@ -61,8 +56,7 @@ func NewClient(
 			}
 		},
 	))
-
-	return &Client{kms: kms.NewFromConfig(cfg, kmsOptFns...)}, nil
+	return &Client{kms: kms.NewFromConfig(cfg)}
 }
 
 func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {

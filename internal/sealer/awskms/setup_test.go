@@ -1,4 +1,4 @@
-package awskms_test
+package awskms
 
 import (
 	"crypto/tls"
@@ -13,13 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/openkcm/krypton/internal/sealer/awskms"
-	"github.com/openkcm/krypton/internal/securemem"
 )
 
 const (
@@ -102,30 +98,17 @@ func parseCredentials(t *testing.T, file []byte) (string, string) {
 	return values["aws_access_key_id"], values["aws_secret_access_key"]
 }
 
-func (e awsEmulator) kmsOptions(o *kms.Options) {
-	o.BaseEndpoint = aws.String(e.endpoint)
-	o.HTTPClient = e.httpClient
-}
-
-func (e awsEmulator) stsOptions(o *sts.Options) {
-	o.BaseEndpoint = aws.String(e.endpoint)
-	o.HTTPClient = e.httpClient
-}
-
-func (e awsEmulator) iamOptions(o *iam.Options) {
-	o.BaseEndpoint = aws.String(e.endpoint)
-	o.HTTPClient = e.httpClient
-}
-
 func (e awsEmulator) config() aws.Config {
 	return aws.Config{
-		Region:      emulatorRegion,
-		Credentials: credentials.NewStaticCredentialsProvider(e.accessKey, e.secretKey, ""),
+		Region:       emulatorRegion,
+		Credentials:  credentials.NewStaticCredentialsProvider(e.accessKey, e.secretKey, ""),
+		BaseEndpoint: aws.String(e.endpoint),
+		HTTPClient:   e.httpClient,
 	}
 }
 
 func (e awsEmulator) kmsAdmin() *kms.Client {
-	return kms.NewFromConfig(e.config(), e.kmsOptions)
+	return kms.NewFromConfig(e.config())
 }
 
 func (e awsEmulator) createKey(t *testing.T) string {
@@ -150,7 +133,7 @@ func (e awsEmulator) enableKey(t *testing.T, keyARN string) {
 func (e awsEmulator) createRole(t *testing.T, keyARN string) string {
 	t.Helper()
 	ctx := t.Context()
-	cli := iam.NewFromConfig(e.config(), e.iamOptions)
+	cli := iam.NewFromConfig(e.config())
 
 	out, err := cli.CreateRole(ctx, &iam.CreateRoleInput{
 		RoleName:                 aws.String("krypton-test"),
@@ -167,28 +150,12 @@ func (e awsEmulator) createRole(t *testing.T, keyARN string) string {
 	return *out.Role.Arn
 }
 
-func (e awsEmulator) newSealer(t *testing.T, roleARN string) *awskms.Client {
-	t.Helper()
-	client, err := awskms.NewClient(
-		awskms.Config{Region: emulatorRegion},
-		awskms.Auth{
-			RoleARN: roleARN,
-			Static: &awskms.StaticCredentials{
-				AccessKeyID:     e.accessKey,
-				SecretAccessKey: e.secretKey,
-			},
+func (e awsEmulator) newSealer(roleARN string) *Client {
+	return newClientFromConfig(e.config(), Auth{
+		RoleARN: roleARN,
+		Static: &StaticCredentials{
+			AccessKeyID:     e.accessKey,
+			SecretAccessKey: e.secretKey,
 		},
-		[]func(*sts.Options){e.stsOptions},
-		[]func(*kms.Options){e.kmsOptions},
-	)
-	require.NoError(t, err)
-	return client
-}
-
-func secureData(t *testing.T, b []byte) *securemem.Data {
-	t.Helper()
-	d, err := securemem.NewData("test-plaintext", len(b))
-	require.NoError(t, err)
-	copy(d.SecureBytes(), b)
-	return d
+	})
 }
