@@ -1,11 +1,18 @@
 package awskms_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/krypton/internal/sealer/awskms"
+)
+
+const (
+	testRoleARN         = "arn:aws:iam::111122223333:role/krypton"
+	externalIDMinLength = 2
+	externalIDMaxLength = 1224
 )
 
 func TestConfigValidation(t *testing.T) {
@@ -43,11 +50,11 @@ func TestAuthValidation(t *testing.T) {
 		},
 		{
 			name: "static with role",
-			auth: &awskms.Auth{RoleARN: "arn:aws:iam::111122223333:role/krypton", Static: static()},
+			auth: &awskms.Auth{RoleARN: testRoleARN, Static: static()},
 		},
 		{
 			name: "static with role and external ID",
-			auth: &awskms.Auth{RoleARN: "arn:aws:iam::111122223333:role/krypton", ExternalID: "ext", Static: static()},
+			auth: &awskms.Auth{RoleARN: testRoleARN, ExternalID: "ext", Static: static()},
 		},
 		{name: "nil auth", auth: nil, wantErr: awskms.ErrStaticCredentialsMissing},
 		{name: "static missing", auth: &awskms.Auth{}, wantErr: awskms.ErrStaticCredentialsMissing},
@@ -65,6 +72,51 @@ func TestAuthValidation(t *testing.T) {
 			name:    "external ID without role",
 			auth:    &awskms.Auth{ExternalID: "ext", Static: static()},
 			wantErr: awskms.ErrRoleARNMissing,
+		},
+		{
+			name: "external ID at min length",
+			auth: &awskms.Auth{RoleARN: testRoleARN, ExternalID: strings.Repeat("a", externalIDMinLength), Static: static()},
+		},
+		{
+			name: "external ID at max length",
+			auth: &awskms.Auth{RoleARN: testRoleARN, ExternalID: strings.Repeat("a", externalIDMaxLength), Static: static()},
+		},
+		{
+			name: "external ID with all allowed characters",
+			auth: &awskms.Auth{RoleARN: testRoleARN, ExternalID: "Ab1_+=,.@:/-", Static: static()},
+		},
+		{
+			name: "external ID too short",
+			auth: &awskms.Auth{
+				RoleARN:    testRoleARN,
+				ExternalID: strings.Repeat("a", externalIDMinLength-1),
+				Static:     static(),
+			},
+			wantErr: awskms.ErrExternalIDInvalid,
+		},
+		{
+			name: "external ID too long",
+			auth: &awskms.Auth{
+				RoleARN:    testRoleARN,
+				ExternalID: strings.Repeat("a", externalIDMaxLength+1),
+				Static:     static(),
+			},
+			wantErr: awskms.ErrExternalIDInvalid,
+		},
+		{
+			name:    "external ID with space",
+			auth:    &awskms.Auth{RoleARN: testRoleARN, ExternalID: "ext id", Static: static()},
+			wantErr: awskms.ErrExternalIDInvalid,
+		},
+		{
+			name:    "external ID with invalid character",
+			auth:    &awskms.Auth{RoleARN: testRoleARN, ExternalID: "ext#id", Static: static()},
+			wantErr: awskms.ErrExternalIDInvalid,
+		},
+		{
+			name:    "external ID with non-ASCII letter",
+			auth:    &awskms.Auth{RoleARN: testRoleARN, ExternalID: "extä", Static: static()},
+			wantErr: awskms.ErrExternalIDInvalid,
 		},
 	}
 
