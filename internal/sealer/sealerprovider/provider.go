@@ -120,7 +120,7 @@ func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 		if !ok || auth == nil {
 			return nil, fmt.Errorf("invalid auth for sealer %q: %T", spec.Name, spec.Auth)
 		}
-		return awskms.NewClient(*cfg, *auth)
+		return awskms.NewClient(*cfg, *auth, nil, nil)
 	default:
 		return nil, fmt.Errorf("%w: %T", sealer.ErrUnknownType, spec.Config)
 	}

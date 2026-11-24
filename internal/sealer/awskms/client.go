@@ -34,7 +34,12 @@ type Client struct {
 
 var _ sealer.Sealer = (*Client)(nil)
 
-func NewClient(config Config, auth Auth) (*Client, error) {
+func NewClient(
+	config Config,
+	auth Auth,
+	stsOptFns []func(*sts.Options),
+	kmsOptFns []func(*kms.Options),
+) (*Client, error) {
 	if err := config.ValidateSealerConfig(); err != nil {
 		return nil, err
 	}
@@ -47,7 +52,7 @@ func NewClient(config Config, auth Auth) (*Client, error) {
 		Credentials: credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, ""),
 	}
 	cfg.Credentials = aws.NewCredentialsCache(stscreds.NewAssumeRoleProvider(
-		sts.NewFromConfig(cfg),
+		sts.NewFromConfig(cfg, stsOptFns...),
 		auth.RoleARN,
 		func(o *stscreds.AssumeRoleOptions) {
 			o.RoleSessionName = roleSessionName
@@ -57,7 +62,7 @@ func NewClient(config Config, auth Auth) (*Client, error) {
 		},
 	))
 
-	return &Client{kms: kms.NewFromConfig(cfg)}, nil
+	return &Client{kms: kms.NewFromConfig(cfg, kmsOptFns...)}, nil
 }
 
 func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {
