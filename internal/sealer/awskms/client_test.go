@@ -138,6 +138,19 @@ func TestSealWithoutKeyARN(t *testing.T) {
 	assert.Empty(t, fake.keyIDs)
 }
 
+func TestUnsealWithoutKeyARN(t *testing.T) {
+	// given
+	fake := &fakeKMS{}
+	client := &Client{kms: fake}
+
+	// when
+	_, err := client.Unseal(t.Context(), sealer.UnsealRequest{Ciphertext: secureData(t, []byte("blob"))})
+
+	// then
+	require.ErrorIs(t, err, ErrKeyARNMissing)
+	assert.Empty(t, fake.keyIDs)
+}
+
 func TestKMSErrors(t *testing.T) {
 	// given
 	client := &Client{kms: &fakeKMS{err: errKMS}}
