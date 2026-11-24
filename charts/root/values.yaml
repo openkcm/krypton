@@ -477,7 +477,11 @@ config:
   # -- Configuration of the root key: the sealer providers allowed to seal it
   # (`allowed_providers`) and the `vault` used to store the root key's provider bindings. The
   # root provider itself is created at runtime via the root key API, so no sealing secret is
-  # configured here.
+  # configured here. `aws_kms` optionally sends AWS KMS (`kms_url`) and STS (`sts_url`) calls to
+  # other endpoints, for example VPC endpoints, and trusts the CA in `ca_path`:
+  #   aws_kms:
+  #     kms_url: https://vpce-0a1b2c3d-kms.kms.eu-central-1.vpce.amazonaws.com
+  #     sts_url: https://vpce-0a1b2c3d-sts.sts.eu-central-1.vpce.amazonaws.com
   root_key:
     allowed_providers:
       - awskms
