@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +19,14 @@ import (
 )
 
 const testKeyARN = "arn:aws:kms:eu-central-1:111122223333:key/1234abcd"
+
+var (
+	testConfig = Config{Region: "eu-central-1"}
+	testAuth   = Auth{
+		RoleARN: "arn:aws:iam::111122223333:role/krypton",
+		Static:  &StaticCredentials{AccessKeyID: "AKIAEXAMPLE", SecretAccessKey: "secret"},
+	}
+)
 
 var (
 	errKMS             = errors.New("kms unavailable")
@@ -170,4 +181,54 @@ func TestKMSErrors(t *testing.T) {
 	require.ErrorIs(t, sealErr, errKMS)
 	require.ErrorIs(t, unsealErr, ErrDecrypt)
 	require.ErrorIs(t, unsealErr, errKMS)
+}
+
+func TestNewClientEndpoint(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint *Endpoint
+		wantKMS  *string
+	}{
+		{name: "default AWS endpoint", endpoint: nil},
+		{name: "kms URL", endpoint: &Endpoint{KMSURL: "https://kms.internal"}, wantKMS: aws.String("https://kms.internal")},
+		{name: "sts URL only", endpoint: &Endpoint{STSURL: "https://sts.internal"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			client, err := NewClient(testConfig, testAuth, tt.endpoint)
+
+			// then
+			require.NoError(t, err)
+			kmsClient, ok := client.kms.(*kms.Client)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantKMS, kmsClient.Options().BaseEndpoint)
+		})
+	}
+}
+
+func TestNewClientWithInvalidEndpoint(t *testing.T) {
+	notPEM := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(notPEM, []byte("not a certificate"), 0o600))
+
+	tests := []struct {
+		name     string
+		endpoint *Endpoint
+		wantErr  error
+	}{
+		{name: "http URL", endpoint: &Endpoint{KMSURL: "http://kms.internal"}, wantErr: ErrEndpointURLInvalid},
+		{name: "missing CA file", endpoint: &Endpoint{CAPath: filepath.Join(t.TempDir(), "none.pem")}, wantErr: ErrCAInvalid},
+		{name: "CA file without certificates", endpoint: &Endpoint{CAPath: notPEM}, wantErr: ErrCAInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			_, err := NewClient(testConfig, testAuth, tt.endpoint)
+
+			// then
+			require.ErrorIs(t, err, tt.wantErr)
+		})
+	}
 }

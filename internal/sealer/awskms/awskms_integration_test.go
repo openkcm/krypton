@@ -16,7 +16,7 @@ func TestAWSKMSSealUnseal_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(emulator.createRole(t, keyARN))
+	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
 	plaintext := []byte("a 32 byte secret for the l2 key!")
 	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
@@ -46,7 +46,7 @@ func TestAWSKMSUnseal_OtherContext_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(emulator.createRole(t, keyARN))
+	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
 	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
 	sealed, err := client.Seal(t.Context(), sealer.SealRequest{
@@ -94,7 +94,7 @@ func TestAWSKMSUnseal_DisabledKey_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
 	keyARN := emulator.createKey(t)
-	client := emulator.newSealer(emulator.createRole(t, keyARN))
+	client := emulator.newSealer(t, emulator.createRole(t, keyARN))
 	plaintext := []byte("a 32 byte secret for the l2 key!")
 	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): keyARN}
 
@@ -133,7 +133,7 @@ func TestAWSKMSUnseal_DisabledKey_AWSEmulator(t *testing.T) {
 func TestAWSKMSSeal_UnknownKey_AWSEmulator(t *testing.T) {
 	// given
 	emulator := startAWSEmulator(t)
-	client := emulator.newSealer(emulator.createRole(t, emulator.createKey(t)))
+	client := emulator.newSealer(t, emulator.createRole(t, emulator.createKey(t)))
 	metadata := map[string]string{sealer.ProviderKeyMetadataKey(TypeAwsKms): unknownKeyARN}
 
 	// when

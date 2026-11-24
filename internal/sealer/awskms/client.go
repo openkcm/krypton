@@ -2,13 +2,19 @@ package awskms
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"net/http"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 
 	"github.com/openkcm/krypton/internal/sealer"
 	"github.com/openkcm/krypton/internal/securemem"
@@ -34,20 +40,31 @@ type Client struct {
 
 var _ sealer.Sealer = (*Client)(nil)
 
-func NewClient(config Config, auth Auth) (*Client, error) {
+// NewClient uses the default AWS endpoints of the region unless endpoint overrides them.
+func NewClient(config Config, auth Auth, endpoint *Endpoint) (*Client, error) {
 	if err := config.ValidateSealerConfig(); err != nil {
 		return nil, err
 	}
 	if err := auth.ValidateSealerAuth(); err != nil {
 		return nil, err
 	}
-	return newClientFromConfig(aws.Config{Region: config.Region}, auth), nil
-}
+	if err := endpoint.Validate(); err != nil {
+		return nil, err
+	}
 
-func newClientFromConfig(cfg aws.Config, auth Auth) *Client {
-	cfg.Credentials = credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, "")
+	cfg := aws.Config{
+		Region:      config.Region,
+		Credentials: credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, ""),
+	}
+	if endpoint != nil && endpoint.CAPath != "" {
+		httpClient, err := trustingHTTPClient(endpoint.CAPath)
+		if err != nil {
+			return nil, err
+		}
+		cfg.HTTPClient = httpClient
+	}
 	cfg.Credentials = aws.NewCredentialsCache(stscreds.NewAssumeRoleProvider(
-		sts.NewFromConfig(cfg),
+		sts.NewFromConfig(cfg, func(o *sts.Options) { o.BaseEndpoint = endpoint.stsURL() }),
 		auth.RoleARN,
 		func(o *stscreds.AssumeRoleOptions) {
 			o.RoleSessionName = roleSessionName
@@ -56,7 +73,35 @@ func newClientFromConfig(cfg aws.Config, auth Auth) *Client {
 			}
 		},
 	))
-	return &Client{kms: kms.NewFromConfig(cfg)}
+	return &Client{kms: kms.NewFromConfig(cfg, func(o *kms.Options) { o.BaseEndpoint = endpoint.kmsURL() })}, nil
+}
+
+func (e *Endpoint) kmsURL() *string {
+	if e == nil || e.KMSURL == "" {
+		return nil
+	}
+	return aws.String(e.KMSURL)
+}
+
+func (e *Endpoint) stsURL() *string {
+	if e == nil || e.STSURL == "" {
+		return nil
+	}
+	return aws.String(e.STSURL)
+}
+
+func trustingHTTPClient(caPath string) (*awshttp.BuildableClient, error) {
+	pem, err := os.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrCAInvalid, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, ErrCAInvalid
+	}
+	return awshttp.NewBuildableClient().WithTransportOptions(func(tr *http.Transport) {
+		tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	}), nil
 }
 
 func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +33,7 @@ const (
 
 type awsEmulator struct {
 	endpoint   string
+	caPath     string
 	httpClient *http.Client
 	accessKey  string
 	secretKey  string
@@ -59,13 +62,17 @@ func startAWSEmulator(t *testing.T) awsEmulator {
 	endpoint, err := container.PortEndpoint(ctx, emulatorPort+"/tcp", "https")
 	require.NoError(t, err)
 
+	ca := readContainerFile(t, container, "ca.pem")
 	pool := x509.NewCertPool()
-	require.True(t, pool.AppendCertsFromPEM(readContainerFile(t, container, "ca.pem")))
+	require.True(t, pool.AppendCertsFromPEM(ca))
+	caPath := filepath.Join(t.TempDir(), "ca.pem")
+	require.NoError(t, os.WriteFile(caPath, ca, 0o600))
 
 	accessKey, secretKey := parseCredentials(t, readContainerFile(t, container, "emulator_credentials"))
 
 	return awsEmulator{
 		endpoint: endpoint,
+		caPath:   caPath,
 		httpClient: &http.Client{Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
 		}},
@@ -150,12 +157,19 @@ func (e awsEmulator) createRole(t *testing.T, keyARN string) string {
 	return *out.Role.Arn
 }
 
-func (e awsEmulator) newSealer(roleARN string) *Client {
-	return newClientFromConfig(e.config(), Auth{
-		RoleARN: roleARN,
-		Static: &StaticCredentials{
-			AccessKeyID:     e.accessKey,
-			SecretAccessKey: e.secretKey,
+func (e awsEmulator) newSealer(t *testing.T, roleARN string) *Client {
+	t.Helper()
+	client, err := NewClient(
+		Config{Region: emulatorRegion},
+		Auth{
+			RoleARN: roleARN,
+			Static: &StaticCredentials{
+				AccessKeyID:     e.accessKey,
+				SecretAccessKey: e.secretKey,
+			},
 		},
-	})
+		&Endpoint{KMSURL: e.endpoint, STSURL: e.endpoint, CAPath: e.caPath},
+	)
+	require.NoError(t, err)
+	return client
 }
