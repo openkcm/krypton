@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/openkcm/krypton/internal/sealer"
+	"github.com/openkcm/krypton/internal/sealer/awskms"
 	"github.com/openkcm/krypton/internal/sealer/providertest"
 	"github.com/openkcm/krypton/internal/sealer/staticsecret"
 	"github.com/openkcm/krypton/internal/secret/secretprovider"
@@ -114,6 +115,12 @@ func GetSealer(ctx context.Context, spec Spec) (sealer.Sealer, error) {
 			return nil, fmt.Errorf("invalid auth for sealer %q: %T", spec.Name, spec.Auth)
 		}
 		return providertest.NewClient(*cfg, *auth)
+	case *awskms.Config:
+		auth, ok := spec.Auth.(*awskms.Auth)
+		if !ok || auth == nil {
+			return nil, fmt.Errorf("invalid auth for sealer %q: %T", spec.Name, spec.Auth)
+		}
+		return awskms.NewClient(*cfg, *auth)
 	default:
 		return nil, fmt.Errorf("%w: %T", sealer.ErrUnknownType, spec.Config)
 	}
@@ -133,6 +140,8 @@ func newSealer(t sealer.Type) (sealer.SealerConfig, sealer.SealerAuth, error) {
 		return &staticsecret.Config{}, &staticsecret.Auth{}, nil
 	case providertest.TypeProviderTest:
 		return &providertest.Config{}, &providertest.Auth{}, nil
+	case awskms.TypeAwsKms:
+		return &awskms.Config{}, &awskms.Auth{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %q", sealer.ErrUnknownType, t)
 	}

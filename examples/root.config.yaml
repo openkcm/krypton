@@ -9,6 +9,7 @@ root_key:
   allowed_providers:
     # Test-only provider; never use in production.
     - providertest
+    - awskms
   vault:
     name: credentials-vault
     type: unsafe-sqlite-memory
