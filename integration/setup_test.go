@@ -655,33 +655,6 @@ func dekKind(ksps []spec.KeySpec) string {
 	return dekKind
 }
 
-// jobGroupRow represents a single row of CLI JSON output for a job group.
-type jobGroupRow struct {
-	ID string
-}
-
-// activateKeyCli activates a key via the CLI binary and returns the job group ID.
-func activateKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
-	t.Helper()
-	ctx := t.Context()
-	args := []string{
-		"activate", "key",
-		"--tenant-id", tenantID,
-		"--key-id", keyID,
-		"--json",
-		"--server", "localhost:" + port,
-	}
-	if cascading {
-		args = append(args, "--cascading")
-	}
-
-	cmd := newCLICommand(ctx, homeDir, args...)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "command should succeed, output: %s", string(output))
-	r := decodeJobGroup(t, output)
-	return r.ID
-}
-
 // cleanupCollector accumulates cleanup functions for use in TestMain
 // where *testing.T is unavailable.
 type cleanupCollector struct {
@@ -1251,12 +1224,48 @@ func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig) (services, 
 	return srvs, nil
 }
 
+func newStr(s string) string {
+	return s + uuid.New().String()
+}
+
+// jobGroupRow represents a single row of CLI JSON output for a job group.
+type jobGroupRow struct {
+	ID string
+}
+
+// decodeJobGroup parses JSON output from the CLI into a jobGroupRow.
+func decodeJobGroup(t *testing.T, output []byte) jobGroupRow {
+	t.Helper()
+	var rows []jobGroupRow
+	err := json.Unmarshal(output, &rows)
+	require.NoError(t, err, "failed to decode job group output: %s", string(output))
+	require.NotEmpty(t, rows, "expected at least one job group row in output: %s", string(output))
+	return rows[0]
+}
+
+// activateKeyCli activates a key via the CLI binary and returns the job group ID.
+func activateKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
+	t.Helper()
+	return keyActionCli(t, "activate", homeDir, port, tenantID, keyID, cascading)
+}
+
 // suspendKeyCli suspend a key via the CLI binary and returns the job group ID.
 func suspendKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
 	t.Helper()
+	return keyActionCli(t, "suspend", homeDir, port, tenantID, keyID, cascading)
+}
+
+// suspendKeyCli suspend a key via the CLI binary and returns the job group ID.
+func compromiseKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
+	t.Helper()
+	return keyActionCli(t, "mark-compromised", homeDir, port, tenantID, keyID, cascading)
+}
+
+func keyActionCli(t *testing.T, action, homeDir, port, tenantID, keyID string, cascading bool) string {
+	t.Helper()
 	ctx := t.Context()
 	args := []string{
-		"suspend", "key",
+		action, "key",
 		"--tenant-id", tenantID,
 		"--key-id", keyID,
 		"--json",
@@ -1271,18 +1280,4 @@ func suspendKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascadin
 	require.NoError(t, err, "command should succeed, output: %s", string(output))
 	r := decodeJobGroup(t, output)
 	return r.ID
-}
-
-// decodeJobGroup parses JSON output from the CLI into a jobGroupRow.
-func decodeJobGroup(t *testing.T, output []byte) jobGroupRow {
-	t.Helper()
-	var rows []jobGroupRow
-	err := json.Unmarshal(output, &rows)
-	require.NoError(t, err, "failed to decode job group output: %s", string(output))
-	require.NotEmpty(t, rows, "expected at least one job group row in output: %s", string(output))
-	return rows[0]
-}
-
-func newStr(s string) string {
-	return s + uuid.New().String()
 }
