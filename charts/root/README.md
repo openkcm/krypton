@@ -126,7 +126,7 @@ before it opens the port.
 | `image.tag` / `image.digest` | chart's `appVersion` | The Krypton version to deploy |
 | `image.command` | `[]` | Empty: the release image's entrypoint starts the binary (see [Image](#image)) |
 | `database.existingSecret` | `""` | Secret with the PostgreSQL URL (`DATABASE_URL`). Required |
-| `config.root_key` | static-secret provider allowed, credentials vault in memory | The root key's allowed providers, optional AWS KMS endpoint (`aws_kms`) and provider-binding vault |
+| `config.root_key` | static-secret provider allowed, credentials vault in memory | The root key's allowed providers and provider-binding vault |
 | `config.key_bindings` | K1 and K2 in memory | How the keys of each non-root kind are protected and stored |
 | `config.hierarchy` | K0 `root`, K1 `kek`, K2 `dek` | The key kinds |
 | `config.topology` | no agents | The agents and the key kinds they manage |
