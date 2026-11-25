@@ -1,8 +1,10 @@
 package sql_test
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/base64"
+	"slices"
 	"testing"
 	"uuid"
 
@@ -861,6 +863,178 @@ func TestGetDescendantKeys(t *testing.T) {
 
 		// then
 		assert.ErrorIs(t, err, store.ErrKeyNotFound)
+	})
+}
+
+func TestGetParentChildKeyLayers(t *testing.T) {
+	db, err := sql.Open("postgres", pgConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	require.NoError(t, storesql.Migrate(t.Context(), db, storesql.Root))
+	ks := storesql.NewKeyStore(db)
+	k := createKeyHierarchy(t, ks, storesql.NewTenantStore(db))
+
+	// Exercise nullable job IDs and full key metadata in both parent and child rows.
+	require.NoError(t, ks.UpdateKeyProcessingState(t.Context(), store.UpdateKeyProcessingStateQuery{
+		ID: k.b.ID, TenantID: k.tenant.ID,
+		NewStatus: model.KeyProcessingPending, NewJobID: uuid.New().String(),
+	}))
+	b, err := ks.GetKeyByID(t.Context(), k.b.ID, k.tenant.ID)
+	require.NoError(t, err)
+	k.b = *b
+
+	allLayers := []store.ParentChildKeyLayer{
+		{Parents: []model.Key{k.root}, Children: []model.Key{k.z1, k.z2, k.b, k.c}},
+		{Parents: []model.Key{k.z1, k.z2, k.b, k.c}, Children: []model.Key{k.d, k.e, k.f, k.g}},
+		{Parents: []model.Key{k.d, k.e, k.f, k.g}, Children: []model.Key{k.h}},
+		{Parents: []model.Key{k.h}},
+	}
+	tests := []struct {
+		name          string
+		parentFilters []store.KeyFilter
+		childFilters  []store.KeyFilter
+		depth         *int
+		want          []store.ParentChildKeyLayer
+	}{
+		{
+			name: "unfiltered includes leaves and repeats children as parents",
+			want: allLayers,
+		},
+		{
+			name:          "zero value filters impose no restriction",
+			parentFilters: []store.KeyFilter{{}},
+			childFilters:  []store.KeyFilter{{}},
+			want:          allLayers,
+		},
+		{
+			name: "parent filters retain boundary children but prune their descendants",
+			parentFilters: []store.KeyFilter{{
+				LifeCycleState: model.KeyLifeCycleActive,
+				Status:         []model.KeyProcessingStatus{model.KeyProcessingPending},
+			}},
+			want: []store.ParentChildKeyLayer{
+				allLayers[0],
+				{Parents: []model.Key{k.b}, Children: []model.Key{k.d, k.e}},
+			},
+		},
+		{
+			name:         "child filters exclude keys and their subtrees",
+			childFilters: []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive}},
+			want: []store.ParentChildKeyLayer{
+				{Parents: []model.Key{k.root}, Children: []model.Key{k.b}},
+				{Parents: []model.Key{k.b}},
+			},
+		},
+		{
+			name:          "root need not match child filters",
+			parentFilters: []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive}},
+			childFilters:  []store.KeyFilter{{LifeCycleState: model.KeyLifeCyclePreActivation}},
+			want: []store.ParentChildKeyLayer{
+				{Parents: []model.Key{k.root}, Children: []model.Key{k.z1, k.z2, k.c}},
+			},
+		},
+		{
+			name:         "parent remains when no child matches",
+			childFilters: []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleSuspended}},
+			want:         []store.ParentChildKeyLayer{{Parents: []model.Key{k.root}}},
+		},
+		{
+			name: "OR across filters and AND within filters on both roles",
+			parentFilters: []store.KeyFilter{
+				{LifeCycleState: model.KeyLifeCycleActive, Status: []model.KeyProcessingStatus{model.KeyProcessingPending}},
+				{Status: []model.KeyProcessingStatus{model.KeyProcessingCompleted}},
+			},
+			childFilters: []store.KeyFilter{
+				{Status: []model.KeyProcessingStatus{model.KeyProcessingCompleted}},
+				{LifeCycleState: model.KeyLifeCyclePreActivation, Status: []model.KeyProcessingStatus{model.KeyProcessingPending, model.KeyProcessingInProgress}},
+			},
+			want: []store.ParentChildKeyLayer{
+				{Parents: []model.Key{k.root}, Children: []model.Key{k.z1, k.z2, k.c}},
+				{Parents: []model.Key{k.z2, k.c}, Children: []model.Key{k.f, k.g}},
+			},
+		},
+		{
+			name:  "depth one includes immediate children",
+			depth: new(1),
+			want:  allLayers[:1],
+		},
+		{
+			name:  "depth two includes children of last parent layer",
+			depth: new(2),
+			want:  allLayers[:2],
+		},
+		{
+			name:          "depth limit combines with both filters",
+			parentFilters: []store.KeyFilter{{LifeCycleState: model.KeyLifeCycleActive}},
+			childFilters:  []store.KeyFilter{{Status: []model.KeyProcessingStatus{model.KeyProcessingPending}}},
+			depth:         new(1),
+			want: []store.ParentChildKeyLayer{
+				{Parents: []model.Key{k.root}, Children: []model.Key{k.z1, k.b}},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ks.GetParentChildKeyLayers(t.Context(), store.GetParentChildKeyLayersQuery{
+				KeyID: k.root.ID, TenantID: k.tenant.ID,
+				ParentFilters: tc.parentFilters, ChildFilters: tc.childFilters, Depth: tc.depth,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, result.Layers)
+		})
+	}
+
+	t.Run("selected descendant starts the first parent layer", func(t *testing.T) {
+		result, err := ks.GetParentChildKeyLayers(t.Context(), store.GetParentChildKeyLayersQuery{
+			KeyID: k.c.ID, TenantID: k.tenant.ID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []store.ParentChildKeyLayer{
+			{Parents: []model.Key{k.c}, Children: []model.Key{k.f, k.g}},
+			{Parents: []model.Key{k.f, k.g}, Children: []model.Key{k.h}},
+			{Parents: []model.Key{k.h}},
+		}, result.Layers)
+	})
+
+	t.Run("missing or filtered root returns not found", func(t *testing.T) {
+		otherTenant := createTenant(t, storesql.NewTenantStore(db))
+		for _, query := range []store.GetParentChildKeyLayersQuery{
+			{KeyID: uuid.New().String(), TenantID: k.tenant.ID},
+			{KeyID: k.root.ID, TenantID: otherTenant.ID},
+			{KeyID: k.root.ID, TenantID: k.tenant.ID, ParentFilters: []store.KeyFilter{{
+				LifeCycleState: model.KeyLifeCycleActive,
+				Status:         []model.KeyProcessingStatus{model.KeyProcessingCompleted},
+			}}},
+		} {
+			result, err := ks.GetParentChildKeyLayers(t.Context(), query)
+			assert.ErrorIs(t, err, store.ErrKeyNotFound)
+			assert.Empty(t, result.Layers)
+		}
+	})
+
+	t.Run("invalid query is rejected", func(t *testing.T) {
+		_, err := ks.GetParentChildKeyLayers(t.Context(), store.GetParentChildKeyLayersQuery{
+			KeyID: k.root.ID, TenantID: k.tenant.ID, Depth: new(0),
+		})
+		assert.ErrorIs(t, err, store.ErrInvalidQuery)
+	})
+
+	t.Run("equal creation times are ordered by ID in both roles", func(t *testing.T) {
+		children := []model.Key{k.z1, k.z2, k.b, k.c}
+		for i := range children {
+			children[i].CreatedAt = k.root.CreatedAt
+			_, err := db.ExecContext(t.Context(), "UPDATE keys SET created_at = $1 WHERE id = $2 AND tenant_id = $3",
+				children[i].CreatedAt, children[i].ID, k.tenant.ID)
+			require.NoError(t, err)
+		}
+		slices.SortFunc(children, func(a, b model.Key) int { return cmp.Compare(a.ID, b.ID) })
+		result, err := ks.GetParentChildKeyLayers(t.Context(), store.GetParentChildKeyLayersQuery{
+			KeyID: k.root.ID, TenantID: k.tenant.ID, Depth: new(2),
+		})
+		require.NoError(t, err)
+		require.Len(t, result.Layers, 2)
+		assert.Equal(t, children, result.Layers[0].Children)
+		assert.Equal(t, children, result.Layers[1].Parents)
 	})
 }
 

@@ -86,7 +86,7 @@ func (ks *KeyStore) GetKeyByName(ctx context.Context, query store.GetKeyByNameQu
 	return scanKey(row)
 }
 
-// GetParentKeys returns all ancestors of the given key (including itself) by traversing parent_id up to the root.
+// GetParentKeys returns the key and its ancestors, ordered from root to key.
 func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeysQuery) (store.GetParentKeysResult, error) {
 	stmt := `
 		WITH RECURSIVE key_chain AS (
@@ -131,13 +131,8 @@ func (ks *KeyStore) GetParentKeys(ctx context.Context, query store.GetParentKeys
 	return store.GetParentKeysResult{Keys: keys}, nil
 }
 
-// GetDescendantKeys returns all descendants of the given key (including itself)
-// by traversing parent_id down to the leaves.
-// The result is grouped by depth level.
-//
-// When Filters are provided, they are applied inside the recursive CTE so that
-// any key that does not match at least one filter is excluded together with its
-// entire subtree.
+// GetDescendantKeys returns matching keys, including the root, grouped by depth.
+// Nonmatching keys and their subtrees are excluded.
 func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescendantKeysQuery) (store.GetDescendantKeysResult, error) {
 	err := query.Validate()
 	if err != nil {
@@ -145,48 +140,8 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	}
 
 	args := []any{query.KeyID, query.TenantID}
-	argIdx := 3
-
-	// Build optional filter clauses for both the anchor (no table alias) and
-	// the recursive branch (prefixed with "k.").  Applying the filters inside
-	// the CTE ensures that when a key does not match the criteria its entire
-	// subtree is excluded from the result.
-	//
-	// Each KeyFilter produces a conjunction (AND) of its non-zero fields.
-	// Multiple filters are combined with OR so that a key passes if it
-	// matches at least one filter.
-	var anchorFilter, recursiveFilter strings.Builder
-	if len(query.Filters) > 0 {
-		anchorParts := make([]string, 0, len(query.Filters))
-		recursiveParts := make([]string, 0, len(query.Filters))
-		for _, f := range query.Filters {
-			aParts := make([]string, 0, 2)
-			rParts := make([]string, 0, 2)
-
-			if f.LifeCycleState != "" {
-				aParts = append(aParts, fmt.Sprintf("life_cycle_state = $%d", argIdx))
-				rParts = append(rParts, fmt.Sprintf("k.life_cycle_state = $%d", argIdx))
-				args = append(args, f.LifeCycleState)
-				argIdx++
-			}
-
-			if len(f.Status) > 0 {
-				aParts = append(aParts, fmt.Sprintf("processing_status = ANY($%d)", argIdx))
-				rParts = append(rParts, fmt.Sprintf("k.processing_status = ANY($%d)", argIdx))
-				args = append(args, f.Status)
-				argIdx++
-			}
-
-			if len(aParts) > 0 {
-				anchorParts = append(anchorParts, "("+strings.Join(aParts, " AND ")+")")
-				recursiveParts = append(recursiveParts, "("+strings.Join(rParts, " AND ")+")")
-			}
-		}
-		if len(anchorParts) > 0 {
-			fmt.Fprintf(&anchorFilter, " AND (%s)", strings.Join(anchorParts, " OR "))
-			fmt.Fprintf(&recursiveFilter, " AND (%s)", strings.Join(recursiveParts, " OR "))
-		}
-	}
+	anchorFilter := keyFilterClause(query.Filters, "", &args)
+	recursiveFilter := keyFilterClause(query.Filters, "k.", &args)
 
 	var sb strings.Builder
 	sb.WriteString(`WITH RECURSIVE key_tree AS (`)
@@ -195,7 +150,7 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	sb.WriteString(`SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, 0 AS depth 
 		FROM keys 
 		WHERE id = $1 AND tenant_id = $2`)
-	sb.WriteString(anchorFilter.String())
+	sb.WriteString(anchorFilter)
 
 	sb.WriteString(` UNION ALL `)
 
@@ -203,7 +158,7 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	sb.WriteString(`SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, kt.depth + 1 
 		FROM keys k 
 		INNER JOIN key_tree kt ON k.parent_id = kt.id AND k.tenant_id = kt.tenant_id WHERE 1=1`)
-	sb.WriteString(recursiveFilter.String())
+	sb.WriteString(recursiveFilter)
 	sb.WriteString(`) `)
 
 	sb.WriteString(`SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, depth 
@@ -272,6 +227,86 @@ func (ks *KeyStore) GetDescendantKeys(ctx context.Context, query store.GetDescen
 	}
 
 	return store.GetDescendantKeysResult{KeyTree: layers}, nil
+}
+
+// GetParentChildKeyLayers returns matching parents and children by parent depth,
+// from root to leaves. A missing or nonmatching root returns store.ErrKeyNotFound.
+func (ks *KeyStore) GetParentChildKeyLayers(ctx context.Context, query store.GetParentChildKeyLayersQuery) (store.GetParentChildKeyLayersResult, error) {
+	if err := query.Validate(); err != nil {
+		return store.GetParentChildKeyLayersResult{}, err
+	}
+
+	args := []any{query.KeyID, query.TenantID}
+	parentFilter := keyFilterClause(query.ParentFilters, "k.", &args)
+	childFilter := keyFilterClause(query.ChildFilters, "k.", &args)
+	var depthClause string
+	if query.Depth != nil {
+		depthClause = fmt.Sprintf(" AND p.parent_depth + 1 < $%d", len(args)+1)
+		args = append(args, *query.Depth)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`WITH RECURSIVE parents AS (
+		SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, 0 AS parent_depth
+		FROM keys k WHERE k.id = $1 AND k.tenant_id = $2`)
+	sb.WriteString(parentFilter)
+
+	// Only included children that also qualify as parents continue the recursion.
+	sb.WriteString(` UNION ALL
+		SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, p.parent_depth + 1
+		FROM keys k
+		JOIN parents p ON k.parent_id = p.id AND k.tenant_id = p.tenant_id
+		WHERE 1=1`)
+	sb.WriteString(parentFilter)
+	sb.WriteString(childFilter)
+	sb.WriteString(depthClause)
+
+	// Expand each parent layer after recursion, preserving child-only keys and
+	// returning qualifying keys again as parents in the next layer.
+	sb.WriteString(`), layer_rows AS (
+		SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, parent_depth, TRUE AS is_parent
+		FROM parents
+		UNION ALL
+		SELECT k.id, k.tenant_id, k.kind, k.name, k.parent_id, k.managed_by, k.labels, k.life_cycle_state, k.processing_status, k.processing_job_id, k.created_at, k.updated_at, p.parent_depth, FALSE AS is_parent
+		FROM keys k
+		JOIN parents p ON k.parent_id = p.id AND k.tenant_id = p.tenant_id
+		WHERE 1=1`)
+	sb.WriteString(childFilter)
+	sb.WriteString(`)
+		SELECT id, tenant_id, kind, name, parent_id, managed_by, labels, life_cycle_state, processing_status, processing_job_id, created_at, updated_at, parent_depth, is_parent
+		FROM layer_rows
+		ORDER BY parent_depth ASC, is_parent DESC, created_at ASC, id ASC`)
+
+	rows, err := ks.db.QueryContext(ctx, sb.String(), args...)
+	if err != nil {
+		return store.GetParentChildKeyLayersResult{}, err
+	}
+	defer rows.Close()
+
+	var layers []store.ParentChildKeyLayer
+	for rows.Next() {
+		var depth int
+		var isParent bool
+		key, err := scanKey(rows, &depth, &isParent)
+		if err != nil {
+			return store.GetParentChildKeyLayersResult{}, err
+		}
+		for len(layers) <= depth {
+			layers = append(layers, store.ParentChildKeyLayer{})
+		}
+		if isParent {
+			layers[depth].Parents = append(layers[depth].Parents, *key)
+		} else {
+			layers[depth].Children = append(layers[depth].Children, *key)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return store.GetParentChildKeyLayersResult{}, err
+	}
+	if len(layers) == 0 {
+		return store.GetParentChildKeyLayersResult{}, store.ErrKeyNotFound
+	}
+	return store.GetParentChildKeyLayersResult{Layers: layers}, nil
 }
 
 func (ks *KeyStore) ListKeys(ctx context.Context, query store.ListKeysQuery) (store.ListKeysResult, error) {
@@ -461,6 +496,28 @@ func (ks *KeyStore) UpdateKeyStates(ctx context.Context, q store.UpdateKeyStates
 	return nil
 }
 
+func keyFilterClause(filters []store.KeyFilter, prefix string, args *[]any) string {
+	conditions := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		parts := make([]string, 0, 2)
+		if filter.LifeCycleState != "" {
+			*args = append(*args, filter.LifeCycleState)
+			parts = append(parts, fmt.Sprintf("%slife_cycle_state = $%d", prefix, len(*args)))
+		}
+		if len(filter.Status) > 0 {
+			*args = append(*args, filter.Status)
+			parts = append(parts, fmt.Sprintf("%sprocessing_status = ANY($%d)", prefix, len(*args)))
+		}
+		if len(parts) > 0 {
+			conditions = append(conditions, "("+strings.Join(parts, " AND ")+")")
+		}
+	}
+	if len(conditions) == 0 {
+		return ""
+	}
+	return " AND (" + strings.Join(conditions, " OR ") + ")"
+}
+
 func nullableJobID(jobID string) any {
 	if jobID == "" {
 		return nil
@@ -468,12 +525,13 @@ func nullableJobID(jobID string) any {
 	return jobID
 }
 
-func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
+func scanKey(row interface{ Scan(...any) error }, extra ...any) (*model.Key, error) {
 	var key model.Key
 	var labelsData []byte
 	var processingJobID sql.NullString
 
-	err := row.Scan(
+	dest := make([]any, 0, 12+len(extra))
+	dest = append(dest,
 		&key.ID,
 		&key.TenantID,
 		&key.Kind,
@@ -487,6 +545,7 @@ func scanKey(row interface{ Scan(...any) error }) (*model.Key, error) {
 		&key.CreatedAt,
 		&key.UpdatedAt,
 	)
+	err := row.Scan(append(dest, extra...)...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, store.ErrKeyNotFound
