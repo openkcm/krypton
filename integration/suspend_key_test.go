@@ -26,7 +26,7 @@ import (
 func TestSuspendKey_RegionLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := regionLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -202,7 +202,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKMIPKeyFound(t, kmipAp, tenantID, k3apID)
 		assertKMIPKeyFound(t, kmipEu, tenantID, k3euID)
 
-		jobID = suspendKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, false)
+		jobID = suspendKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, false)
 		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
@@ -210,7 +210,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
-		jobID = suspendKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, true)
+		jobID = suspendKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, true)
 		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleSuspended, model.KeyProcessingCompleted)
@@ -489,7 +489,7 @@ func TestSuspendKey_RegionLevel(t *testing.T) {
 func TestSuspendKey_RootLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := rootLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -610,7 +610,7 @@ func TestSuspendKey_RootLevel(t *testing.T) {
 func TestSuspendKey_CountryLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := countryLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)

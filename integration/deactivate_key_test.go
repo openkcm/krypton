@@ -29,7 +29,7 @@ import (
 func TestDeactivateKey_RegionLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := regionLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -214,13 +214,13 @@ func TestDeactivateKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
 		// deactivate k1 individually (non-cascading) via CLI
-		jobID = deactivateKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, false)
+		jobID = deactivateKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, false)
 		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
 
 		// cascade-deactivate all children from k1 via CLI
 		// k1 is already deactivated+completed, but children should still be deactivated
-		jobID = deactivateKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, true)
+		jobID = deactivateKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, true)
 		isJobFinished(t, aCli, jobID)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleDeactivated, model.KeyProcessingCompleted)
@@ -551,7 +551,7 @@ func TestDeactivateKey_RegionLevel(t *testing.T) {
 func TestDeactivateKey_RootLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := rootLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -671,7 +671,7 @@ func TestDeactivateKey_RootLevel(t *testing.T) {
 func TestDeactivateKey_CountryLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := countryLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)

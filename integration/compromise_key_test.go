@@ -26,7 +26,7 @@ import (
 func TestCompromiseKey_RegionLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := regionLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -195,14 +195,14 @@ func TestCompromiseKey_RegionLevel(t *testing.T) {
 		assertKeyStateAndStatus(t, kCli, tenantID, k3apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
-		compromiseKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, false)
+		compromiseKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, false)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3apID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k3euID, model.KeyLifeCycleActive, model.KeyProcessingCompleted)
 
-		compromiseKeyCli(t, homeDir, rootsrv.port, tenantID, k1rootID, true)
+		compromiseKeyCli(t, homeDir, rootsrv.listener.port, tenantID, k1rootID, true)
 		assertKeyStateAndStatus(t, kCli, tenantID, k1rootID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2apID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
 		assertKeyStateAndStatus(t, kCli, tenantID, k2euID, model.KeyLifeCycleCompromised, model.KeyProcessingCompleted)
@@ -491,7 +491,7 @@ func TestCompromiseKey_RegionLevel(t *testing.T) {
 func TestCompromiseKey_RootLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := rootLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -589,7 +589,7 @@ func TestCompromiseKey_RootLevel(t *testing.T) {
 func TestCompromiseKey_CountryLevel(t *testing.T) {
 	t.Parallel()
 	rootsrv := countryLevelInfra.Find(t, regionRoot)
-	rootconn := grpcConn(t, rootsrv.port)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
