@@ -1,4 +1,4 @@
-package awskms
+package integration
 
 import (
 	"crypto/tls"
@@ -155,21 +155,4 @@ func (e awsEmulator) createRole(t *testing.T, keyARN string) string {
 	})
 	require.NoError(t, err)
 	return *out.Role.Arn
-}
-
-func (e awsEmulator) newSealer(t *testing.T, roleARN string) *Client {
-	t.Helper()
-	client, err := NewClient(
-		Config{Region: emulatorRegion},
-		Auth{
-			RoleARN: roleARN,
-			Static: &StaticCredentials{
-				AccessKeyID:     e.accessKey,
-				SecretAccessKey: e.secretKey,
-			},
-		},
-		&Endpoint{KMSURL: e.endpoint, STSURL: e.endpoint, CAPath: e.caPath},
-	)
-	require.NoError(t, err)
-	return client
 }
