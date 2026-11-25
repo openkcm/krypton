@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 (2026-11-24)
+
+## What's Changed
+* feat: implement test provider service by @fabenan-f in https://github.com/openkcm/krypton/pull/292
+* fix: api-specs for aws kms auth by @fabenan-f in https://github.com/openkcm/krypton/pull/299
+* feat: add test provider as binding option for root key by @fabenan-f in https://github.com/openkcm/krypton/pull/300
+* feat: add kmip for agents by @jithinkunjachan in https://github.com/openkcm/krypton/pull/298
+* feat: add yok cli by @fabenan-f in https://github.com/openkcm/krypton/pull/301
+* feat: add activate integration test by @jithinkunjachan in https://github.com/openkcm/krypton/pull/302
+* feat: reseal secrets by @fabenan-f in https://github.com/openkcm/krypton/pull/305
+* feat: add suspend key CLI command and integration tests by @jithinkunjachan in https://github.com/openkcm/krypton/pull/303
+* fix: remove incorrect revision-coupled FK by @fabenan-f in https://github.com/openkcm/krypton/pull/307
+* chore(deps): bump golang.org/x/sys from 0.49.0 to 0.50.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/288
+* chore(deps): bump github.com/testcontainers/testcontainers-go from 0.44.0 to 0.45.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/284
+* chore(deps): bump github.com/testcontainers/testcontainers-go/modules/postgres from 0.44.0 to 0.45.0 by @dependabot[bot] in https://github.com/openkcm/krypton/pull/285
+* feat: add compromise key CLI command and integration tests by @jithinkunjachan in https://github.com/openkcm/krypton/pull/309
+* feat: add aws kms sealer by @ykld-work in https://github.com/openkcm/krypton/pull/306
+
+## New Contributors
+* @ykld-work made their first contribution in https://github.com/openkcm/krypton/pull/306
+
+**Full Changelog**: https://github.com/openkcm/krypton/compare/v0.3.0...v0.4.0
+
 ## 0.3.0 (2026-11-12)
 
 ## What's Changed
