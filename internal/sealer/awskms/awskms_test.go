@@ -24,6 +24,29 @@ func TestConfigValidation(t *testing.T) {
 		{name: "valid", config: &awskms.Config{Region: "eu-central-1"}},
 		{name: "nil config", config: nil, wantErr: awskms.ErrRegionMissing},
 		{name: "region missing", config: &awskms.Config{}, wantErr: awskms.ErrRegionMissing},
+		{
+			name: "kms and sts endpoints",
+			config: &awskms.Config{
+				Region:      "eu-central-1",
+				KMSEndpoint: "https://kms.internal:443",
+				STSEndpoint: "https://sts.internal",
+			},
+		},
+		{
+			name:    "plain http endpoint",
+			config:  &awskms.Config{Region: "eu-central-1", KMSEndpoint: "http://kms.internal"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
+		{
+			name:    "endpoint without scheme",
+			config:  &awskms.Config{Region: "eu-central-1", KMSEndpoint: "kms.internal"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
+		{
+			name:    "invalid sts endpoint",
+			config:  &awskms.Config{Region: "eu-central-1", STSEndpoint: "https://"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
 	}
 
 	for _, tt := range tests {
@@ -123,43 +146,6 @@ func TestAuthValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.ErrorIs(t, tt.auth.ValidateSealerAuth(), tt.wantErr)
-		})
-	}
-}
-
-func TestEndpointValidation(t *testing.T) {
-	tests := []struct {
-		name     string
-		endpoint *awskms.Endpoint
-		wantErr  error
-	}{
-		{name: "nil endpoint", endpoint: nil},
-		{name: "kms URL", endpoint: &awskms.Endpoint{KMSURL: "https://kms.internal:443"}},
-		{
-			name:     "kms and sts URLs with CA",
-			endpoint: &awskms.Endpoint{KMSURL: "https://kms.internal", STSURL: "https://sts.internal", CAPath: "/ca.pem"},
-		},
-		{name: "CA only", endpoint: &awskms.Endpoint{CAPath: "/ca.pem"}},
-		{
-			name:     "plain http",
-			endpoint: &awskms.Endpoint{KMSURL: "http://kms.internal"},
-			wantErr:  awskms.ErrEndpointURLInvalid,
-		},
-		{
-			name:     "host without scheme",
-			endpoint: &awskms.Endpoint{KMSURL: "kms.internal"},
-			wantErr:  awskms.ErrEndpointURLInvalid,
-		},
-		{
-			name:     "invalid sts URL",
-			endpoint: &awskms.Endpoint{KMSURL: "https://kms.internal", STSURL: "https://"},
-			wantErr:  awskms.ErrEndpointURLInvalid,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.ErrorIs(t, tt.endpoint.Validate(), tt.wantErr)
 		})
 	}
 }

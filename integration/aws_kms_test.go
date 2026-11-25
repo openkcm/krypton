@@ -23,11 +23,7 @@ func TestAWSKMSRootKey(t *testing.T) {
 	keyARN := emulator.createKey(t)
 	roleARN := emulator.createRole(t, keyARN)
 
-	infra := startAWSKMSRoot(t, &awskms.Endpoint{
-		KMSURL: emulator.endpoint,
-		STSURL: emulator.endpoint,
-		CAPath: emulator.caPath,
-	})
+	infra := startAWSKMSRoot(t, emulator.caPath)
 	rootconn := grpcConn(t, infra.Find(t, regionRoot).port)
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
@@ -67,7 +63,7 @@ func TestAWSKMSRootKey(t *testing.T) {
 	})
 }
 
-func startAWSKMSRoot(t *testing.T, endpoint *awskms.Endpoint) services {
+func startAWSKMSRoot(t *testing.T, caPath string) services {
 	t.Helper()
 	c := &cleanupCollector{}
 	t.Cleanup(func() { runCleanups(c.fns) })
@@ -75,11 +71,10 @@ func startAWSKMSRoot(t *testing.T, endpoint *awskms.Endpoint) services {
 	cfg := rootLevelConfig
 	cfg.RootKey = &spec.RootKeySpec{
 		AllowedProviders: []sealer.Type{awskms.TypeAwsKms},
-		AwsKms:           endpoint,
 		Vault:            rootLevelConfig.RootKey.Vault,
 	}
 
-	infra, err := initKRInfraServices(c, cfg)
+	infra, err := initKRInfraServices(c, cfg, "SSL_CERT_FILE="+caPath)
 	require.NoError(t, err)
 	t.Cleanup(infra.Close)
 	return infra
@@ -98,7 +93,11 @@ func createAWSKMSProvider(
 		KeyId:    keyID,
 		Provider: &rootkey.Provider{Provider: &rootkey.Provider_AwsKms{
 			AwsKms: &rootkey.AwsKmsProvider{
-				Config: &rootkey.AwsKmsConfig{Region: emulatorRegion},
+				Config: &rootkey.AwsKmsConfig{
+					Region:      emulatorRegion,
+					KmsEndpoint: emulator.endpoint,
+					StsEndpoint: emulator.endpoint,
+				},
 				Auth: &rootkey.AwsKmsAuth{
 					RoleArn: roleARN,
 					CredentialSource: &rootkey.AwsKmsAuth_Static{Static: &rootkey.AwsStaticCredentials{

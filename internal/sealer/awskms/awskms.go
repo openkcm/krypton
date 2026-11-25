@@ -30,11 +30,12 @@ var (
 	ErrDecrypt                  = errors.New("aws kms decrypt failed")
 	ErrResultMissing            = errors.New("aws kms result missing from secure memory")
 	ErrEndpointURLInvalid       = errors.New("endpoint URL must be an absolute https URL")
-	ErrCAInvalid                = errors.New("CA file could not be read or holds no certificates")
 )
 
 type Config struct {
-	Region string `yaml:"region"`
+	Region      string `yaml:"region"`
+	KMSEndpoint string `yaml:"kms_endpoint,omitempty"`
+	STSEndpoint string `yaml:"sts_endpoint,omitempty"`
 }
 
 var _ sealer.SealerConfig = (*Config)(nil)
@@ -43,20 +44,7 @@ func (c *Config) ValidateSealerConfig() error {
 	if c == nil || c.Region == "" {
 		return ErrRegionMissing
 	}
-	return nil
-}
-
-type Endpoint struct {
-	KMSURL string `yaml:"kms_url"`
-	STSURL string `yaml:"sts_url"`
-	CAPath string `yaml:"ca_path"`
-}
-
-func (e *Endpoint) Validate() error {
-	if e == nil {
-		return nil
-	}
-	for _, raw := range []string{e.KMSURL, e.STSURL} {
+	for _, raw := range []string{c.KMSEndpoint, c.STSEndpoint} {
 		if raw != "" && !httpsURL(raw) {
 			return ErrEndpointURLInvalid
 		}

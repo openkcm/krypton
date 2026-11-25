@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/openkcm/krypton/internal/sealer"
-	"github.com/openkcm/krypton/internal/sealer/awskms"
 	"github.com/openkcm/krypton/internal/sealer/sealerprovider"
 	"github.com/openkcm/krypton/internal/vault/vaultprovider"
 )
@@ -16,12 +15,11 @@ var (
 )
 
 // RootKeySpec configures the root key: which sealer providers may be bound to it
-// at runtime (via the root key service), an optional AWS KMS endpoint for those
-// providers, and the vault that stores the bound provider specs. The root provider
-// itself is created at runtime through the root key API, not statically in configuration.
+// at runtime (via the root key service) and the vault that stores the bound
+// provider specs. The root provider itself is created at runtime through the
+// root key API, not statically in configuration.
 type RootKeySpec struct {
 	AllowedProviders []sealer.Type      `yaml:"allowed_providers"`
-	AwsKms           *awskms.Endpoint   `yaml:"aws_kms,omitempty"`
 	Vault            vaultprovider.Spec `yaml:"vault"`
 }
 
@@ -34,9 +32,6 @@ func (s *RootKeySpec) Validate() error {
 		if err := sealerprovider.ValidateType(p); err != nil {
 			return fmt.Errorf("%w: %q: %w", ErrRootKeyUnknownProvider, p, err)
 		}
-	}
-	if err := s.AwsKms.Validate(); err != nil {
-		return fmt.Errorf("aws_kms: %w", err)
 	}
 	if err := s.Vault.Validate(); err != nil {
 		return fmt.Errorf("vault: %w", err)

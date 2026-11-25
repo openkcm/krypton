@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
@@ -185,19 +183,23 @@ func TestKMSErrors(t *testing.T) {
 
 func TestNewClientEndpoint(t *testing.T) {
 	tests := []struct {
-		name     string
-		endpoint *Endpoint
-		wantKMS  *string
+		name    string
+		config  Config
+		wantKMS *string
 	}{
-		{name: "default AWS endpoint", endpoint: nil},
-		{name: "kms URL", endpoint: &Endpoint{KMSURL: "https://kms.internal"}, wantKMS: aws.String("https://kms.internal")},
-		{name: "sts URL only", endpoint: &Endpoint{STSURL: "https://sts.internal"}},
+		{name: "default AWS endpoint", config: testConfig},
+		{
+			name:    "kms endpoint",
+			config:  Config{Region: testConfig.Region, KMSEndpoint: "https://kms.internal"},
+			wantKMS: aws.String("https://kms.internal"),
+		},
+		{name: "sts endpoint only", config: Config{Region: testConfig.Region, STSEndpoint: "https://sts.internal"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			client, err := NewClient(testConfig, testAuth, tt.endpoint)
+			client, err := NewClient(tt.config, testAuth)
 
 			// then
 			require.NoError(t, err)
@@ -209,26 +211,9 @@ func TestNewClientEndpoint(t *testing.T) {
 }
 
 func TestNewClientWithInvalidEndpoint(t *testing.T) {
-	notPEM := filepath.Join(t.TempDir(), "ca.pem")
-	require.NoError(t, os.WriteFile(notPEM, []byte("not a certificate"), 0o600))
+	// when
+	_, err := NewClient(Config{Region: testConfig.Region, KMSEndpoint: "http://kms.internal"}, testAuth)
 
-	tests := []struct {
-		name     string
-		endpoint *Endpoint
-		wantErr  error
-	}{
-		{name: "http URL", endpoint: &Endpoint{KMSURL: "http://kms.internal"}, wantErr: ErrEndpointURLInvalid},
-		{name: "missing CA file", endpoint: &Endpoint{CAPath: filepath.Join(t.TempDir(), "none.pem")}, wantErr: ErrCAInvalid},
-		{name: "CA file without certificates", endpoint: &Endpoint{CAPath: notPEM}, wantErr: ErrCAInvalid},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// when
-			_, err := NewClient(testConfig, testAuth, tt.endpoint)
-
-			// then
-			require.ErrorIs(t, err, tt.wantErr)
-		})
-	}
+	// then
+	require.ErrorIs(t, err, ErrEndpointURLInvalid)
 }

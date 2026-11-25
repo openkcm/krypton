@@ -83,6 +83,8 @@ message TestProviderConfig {
 
 message AwsKmsConfig {
   string region = 1;
+  string kms_endpoint = 2;
+  string sts_endpoint = 3;
 }
 
 message ProviderAuth {
