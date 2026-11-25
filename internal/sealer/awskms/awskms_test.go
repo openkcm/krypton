@@ -24,6 +24,29 @@ func TestConfigValidation(t *testing.T) {
 		{name: "valid", config: &awskms.Config{Region: "eu-central-1"}},
 		{name: "nil config", config: nil, wantErr: awskms.ErrRegionMissing},
 		{name: "region missing", config: &awskms.Config{}, wantErr: awskms.ErrRegionMissing},
+		{
+			name: "kms and sts endpoints",
+			config: &awskms.Config{
+				Region:      "eu-central-1",
+				KMSEndpoint: "https://kms.internal:443",
+				STSEndpoint: "https://sts.internal",
+			},
+		},
+		{
+			name:    "plain http endpoint",
+			config:  &awskms.Config{Region: "eu-central-1", KMSEndpoint: "http://kms.internal"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
+		{
+			name:    "endpoint without scheme",
+			config:  &awskms.Config{Region: "eu-central-1", KMSEndpoint: "kms.internal"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
+		{
+			name:    "invalid sts endpoint",
+			config:  &awskms.Config{Region: "eu-central-1", STSEndpoint: "https://"},
+			wantErr: awskms.ErrEndpointURLInvalid,
+		},
 	}
 
 	for _, tt := range tests {

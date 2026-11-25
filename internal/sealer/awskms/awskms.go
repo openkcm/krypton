@@ -2,6 +2,7 @@ package awskms
 
 import (
 	"errors"
+	"net/url"
 	"regexp"
 
 	"github.com/openkcm/krypton/internal/sealer"
@@ -28,10 +29,13 @@ var (
 	ErrEncrypt                  = errors.New("aws kms encrypt failed")
 	ErrDecrypt                  = errors.New("aws kms decrypt failed")
 	ErrResultMissing            = errors.New("aws kms result missing from secure memory")
+	ErrEndpointURLInvalid       = errors.New("endpoint URL must be an absolute https URL")
 )
 
 type Config struct {
-	Region string `yaml:"region"`
+	Region      string `yaml:"region"`
+	KMSEndpoint string `yaml:"kms_endpoint,omitempty"`
+	STSEndpoint string `yaml:"sts_endpoint,omitempty"`
 }
 
 var _ sealer.SealerConfig = (*Config)(nil)
@@ -40,7 +44,17 @@ func (c *Config) ValidateSealerConfig() error {
 	if c == nil || c.Region == "" {
 		return ErrRegionMissing
 	}
+	for _, raw := range []string{c.KMSEndpoint, c.STSEndpoint} {
+		if raw != "" && !httpsURL(raw) {
+			return ErrEndpointURLInvalid
+		}
+	}
 	return nil
+}
+
+func httpsURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.Host != ""
 }
 
 type Auth struct {

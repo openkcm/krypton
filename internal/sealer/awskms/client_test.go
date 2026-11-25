@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,14 @@ import (
 )
 
 const testKeyARN = "arn:aws:kms:eu-central-1:111122223333:key/1234abcd"
+
+var (
+	testConfig = Config{Region: "eu-central-1"}
+	testAuth   = Auth{
+		RoleARN: "arn:aws:iam::111122223333:role/krypton",
+		Static:  &StaticCredentials{AccessKeyID: "AKIAEXAMPLE", SecretAccessKey: "secret"},
+	}
+)
 
 var (
 	errKMS             = errors.New("kms unavailable")
@@ -170,4 +179,41 @@ func TestKMSErrors(t *testing.T) {
 	require.ErrorIs(t, sealErr, errKMS)
 	require.ErrorIs(t, unsealErr, ErrDecrypt)
 	require.ErrorIs(t, unsealErr, errKMS)
+}
+
+func TestNewClientEndpoint(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantKMS *string
+	}{
+		{name: "default AWS endpoint", config: testConfig},
+		{
+			name:    "kms endpoint",
+			config:  Config{Region: testConfig.Region, KMSEndpoint: "https://kms.internal"},
+			wantKMS: aws.String("https://kms.internal"),
+		},
+		{name: "sts endpoint only", config: Config{Region: testConfig.Region, STSEndpoint: "https://sts.internal"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			client, err := NewClient(tt.config, testAuth)
+
+			// then
+			require.NoError(t, err)
+			kmsClient, ok := client.kms.(*kms.Client)
+			require.True(t, ok)
+			assert.Equal(t, tt.wantKMS, kmsClient.Options().BaseEndpoint)
+		})
+	}
+}
+
+func TestNewClientWithInvalidEndpoint(t *testing.T) {
+	// when
+	_, err := NewClient(Config{Region: testConfig.Region, KMSEndpoint: "http://kms.internal"}, testAuth)
+
+	// then
+	require.ErrorIs(t, err, ErrEndpointURLInvalid)
 }

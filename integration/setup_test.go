@@ -1077,7 +1077,13 @@ func initAgentService(c *cleanupCollector, agentName, rootPort string) (*service
 }
 
 // initRootService creates a database, writes config with connections to agents, and prepares a command for the root node.
-func initRootService(c *cleanupCollector, cfg config.RootConfig, rootPort string, srvs services) (*service, error) {
+func initRootService(
+	c *cleanupCollector,
+	cfg config.RootConfig,
+	rootPort string,
+	srvs services,
+	env []string,
+) (*service, error) {
 	db, connstr, err := createTestDatabase(c, storesql.Root)
 	if err != nil {
 		return nil, fmt.Errorf("initRootService db: %w", err)
@@ -1134,14 +1140,14 @@ func initRootService(c *cleanupCollector, cfg config.RootConfig, rootPort string
 		return nil, err
 	}
 
-	cmd := newServiceCmd(c, bin, []string{
+	cmd := newServiceCmd(c, bin, append([]string{
 		"ROOT_CONFIG_PATH=" + cfgPath,
 		"DATABASE_URL=" + connstr,
 		"SERVER_PORT=" + rootPort,
 		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 		"ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT",
 		"UNSAFE_TEST_PROVIDER_DIR=" + providerDir,
-	})
+	}, env...))
 
 	return &service{
 		name: cfg.Name,
@@ -1160,7 +1166,7 @@ func initRootService(c *cleanupCollector, cfg config.RootConfig, rootPort string
 }
 
 // initKRInfraServices spins up a full krypton cluster (root + agents) based on the config.
-func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig) (services, error) {
+func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig, rootEnv ...string) (services, error) {
 	rootPort, err := getFreePort()
 	if err != nil {
 		return nil, err
@@ -1195,7 +1201,7 @@ func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig) (services, 
 		cfg.KMIPs = append(cfg.KMIPs, kmipCfg)
 	}
 
-	rootService, err := initRootService(c, cfg, rootPort, srvs)
+	rootService, err := initRootService(c, cfg, rootPort, srvs, rootEnv)
 	if err != nil {
 		return nil, err
 	}

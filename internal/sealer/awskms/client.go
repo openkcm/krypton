@@ -34,6 +34,7 @@ type Client struct {
 
 var _ sealer.Sealer = (*Client)(nil)
 
+// NewClient uses the default AWS endpoints of the region unless config overrides them.
 func NewClient(config Config, auth Auth) (*Client, error) {
 	if err := config.ValidateSealerConfig(); err != nil {
 		return nil, err
@@ -47,7 +48,7 @@ func NewClient(config Config, auth Auth) (*Client, error) {
 		Credentials: credentials.NewStaticCredentialsProvider(auth.Static.AccessKeyID, auth.Static.SecretAccessKey, ""),
 	}
 	cfg.Credentials = aws.NewCredentialsCache(stscreds.NewAssumeRoleProvider(
-		sts.NewFromConfig(cfg),
+		sts.NewFromConfig(cfg, func(o *sts.Options) { o.BaseEndpoint = optionalURL(config.STSEndpoint) }),
 		auth.RoleARN,
 		func(o *stscreds.AssumeRoleOptions) {
 			o.RoleSessionName = roleSessionName
@@ -56,8 +57,15 @@ func NewClient(config Config, auth Auth) (*Client, error) {
 			}
 		},
 	))
+	kmsClient := kms.NewFromConfig(cfg, func(o *kms.Options) { o.BaseEndpoint = optionalURL(config.KMSEndpoint) })
+	return &Client{kms: kmsClient}, nil
+}
 
-	return &Client{kms: kms.NewFromConfig(cfg)}, nil
+func optionalURL(url string) *string {
+	if url == "" {
+		return nil
+	}
+	return aws.String(url)
 }
 
 func (c *Client) Seal(ctx context.Context, req sealer.SealRequest) (sealer.SealResponse, error) {

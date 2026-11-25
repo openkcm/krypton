@@ -171,7 +171,11 @@ func testProvider(p *TestProvider) (sealerprovider.Spec, string, error) {
 }
 
 func awsKmsProvider(p *AwsKmsProvider) (sealerprovider.Spec, string, error) {
-	config := &awskms.Config{Region: p.GetConfig().GetRegion()}
+	config := &awskms.Config{
+		Region:      p.GetConfig().GetRegion(),
+		KMSEndpoint: p.GetConfig().GetKmsEndpoint(),
+		STSEndpoint: p.GetConfig().GetStsEndpoint(),
+	}
 	if err := config.ValidateSealerConfig(); err != nil {
 		return sealerprovider.Spec{}, "", invalidArgument(err)
 	}
