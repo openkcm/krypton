@@ -27,6 +27,7 @@ func init() {
 	rootCmd.AddCommand(activateCmd())
 	rootCmd.AddCommand(suspendCmd())
 	rootCmd.AddCommand(compromiseCmd())
+	rootCmd.AddCommand(deactivateCmd())
 	rootCmd.AddCommand(actionCmd())
 	rootCmd.AddCommand(yokCmd())
 }
