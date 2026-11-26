@@ -93,6 +93,9 @@ func (ls *LabelsSpec) Merge(src LabelsSpec) {
 // It checks that if AllowUserLabels is false, at least one requirement is defined.
 // It also validates each individual LabelRequirement.
 func (ls *LabelsSpec) init() error {
+	if ls == nil {
+		return nil
+	}
 	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
 		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
 	}

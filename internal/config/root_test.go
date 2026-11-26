@@ -498,6 +498,15 @@ topology:
           vault:
             name: "aws-dek-vault"
             type: "unsafe-sqlite-memory"
+          labels_spec:
+            allow_user_labels: false
+            requirements:
+              accountId:
+                is_required: true
+                validator:
+                  type: regex
+                  params:
+                    pattern: "^aws-"
       selector_labels:
         cloud: "aws"
 connections:
@@ -546,6 +555,12 @@ connections:
 
 				assert.Len(t, cfg.Topology.Segments, 1)
 				assert.Equal(t, "agent-aws", cfg.Topology.Segments[0].Name)
+				agentLabels := cfg.Topology.Segments[0].KeyBindings["K3"].LabelsSpec
+				if assert.NotNil(t, agentLabels) {
+					assert.False(t, agentLabels.AllowUserLabels)
+					assert.True(t, agentLabels.Requirements["accountId"].IsRequired)
+				}
+				assert.Nil(t, cfg.Topology.Segments[0].KeyBindings["K2"].LabelsSpec)
 
 				assert.Len(t, cfg.Connections, 2)
 				assert.Equal(t, "root", cfg.Connections[0].Name)

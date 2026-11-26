@@ -38,6 +38,7 @@ type KeyBinding struct {
 	CryptorSpec       *cryptorprovider.Spec `yaml:"crypto,omitempty"`              // Encrypts/decrypts with generated and stored secret
 	VaultSpec         *vaultprovider.Spec   `yaml:"vault,omitempty"`               // Storage backend configuration
 	ParentKeyProvider *ParentKeyProviderRef `yaml:"parent_key_provider,omitempty"` // Where to get parent keys for sealing/unsealing
+	LabelsSpec        *LabelsSpec           `yaml:"labels_spec,omitempty"`
 }
 
 // HasRemoteParent reports whether this binding delegates to a remote agent

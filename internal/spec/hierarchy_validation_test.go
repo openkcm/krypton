@@ -145,6 +145,20 @@ func TestValidateSegmentAgainstHierarchy(t *testing.T) {
 	}
 }
 
+func accountIDLabelsSpec(pattern string) *spec.LabelsSpec {
+	return &spec.LabelsSpec{
+		Requirements: map[string]spec.LabelRequirement{
+			"accountId": {
+				IsRequired: true,
+				Validator: &spec.LabelValidator{
+					Type:   spec.ValidatorTypeRegex,
+					Params: map[string]string{spec.ValidatorTypeRegexKey: pattern},
+				},
+			},
+		},
+	}
+}
+
 func TestValidateRootSegment(t *testing.T) {
 	h := testHierarchy()
 
@@ -225,6 +239,22 @@ func TestValidateRootSegment(t *testing.T) {
 				"K1": {SealerSpec: validSealer(), VaultSpec: validVault()},
 			},
 			wantErr: spec.ErrBindingMissingCryptor,
+		},
+		{
+			name: "root binding with labels spec",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
+			bindings: map[string]spec.KeyBinding{
+				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), LabelsSpec: accountIDLabelsSpec("^aws-")},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "root binding with invalid labels spec pattern",
+			seg:  spec.HierarchySegment{StartKind: "K0", EndKind: "K1"},
+			bindings: map[string]spec.KeyBinding{
+				"K1": {CryptorSpec: validCryptor(), VaultSpec: validVault(), LabelsSpec: accountIDLabelsSpec("aws-[")},
+			},
+			wantErr: spec.ErrLabelValidatorInvalidRegexPattern,
 		},
 	}
 
@@ -354,6 +384,34 @@ func TestValidateAgentSegment(t *testing.T) {
 				// K3 missing
 			},
 			wantErr: spec.ErrSegmentBindingsMissing,
+		},
+		{
+			name: "agent binding with labels spec",
+			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
+			bindings: map[string]spec.KeyBinding{
+				"K2": {
+					SealerSpec:        validSealer(),
+					CryptorSpec:       validCryptor(),
+					VaultSpec:         validVault(),
+					ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
+				},
+				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault(), LabelsSpec: accountIDLabelsSpec("^aws-")},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "agent binding with labels spec without requirements",
+			seg:  spec.HierarchySegment{StartKind: "K2", EndKind: "K3"},
+			bindings: map[string]spec.KeyBinding{
+				"K2": {
+					SealerSpec:        validSealer(),
+					CryptorSpec:       validCryptor(),
+					VaultSpec:         validVault(),
+					ParentKeyProvider: &spec.ParentKeyProviderRef{AgentName: "root"},
+				},
+				"K3": {CryptorSpec: validCryptor(), VaultSpec: validVault(), LabelsSpec: &spec.LabelsSpec{}},
+			},
+			wantErr: spec.ErrLabelsSpecRequirementEmpty,
 		},
 	}
 

@@ -100,6 +100,9 @@ func ValidateRootSegment(h KeyHierarchy, seg HierarchySegment, bindings map[stri
 		if binding.CryptorSpec == nil {
 			return fmt.Errorf("%w: %q", ErrBindingMissingCryptor, ks.Kind)
 		}
+		if err := binding.LabelsSpec.init(); err != nil {
+			return fmt.Errorf("labels spec of %q: %w", ks.Kind, err)
+		}
 	}
 
 	return nil
@@ -150,6 +153,9 @@ func ValidateAgentSegment(h KeyHierarchy, seg HierarchySegment, bindings map[str
 		binding := bindings[string(ks.Kind)]
 		if binding.CryptorSpec == nil {
 			return fmt.Errorf("%w: %q", ErrBindingMissingCryptor, ks.Kind)
+		}
+		if err := binding.LabelsSpec.init(); err != nil {
+			return fmt.Errorf("labels spec of %q: %w", ks.Kind, err)
 		}
 	}
 
