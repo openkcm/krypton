@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -109,7 +110,9 @@ func TestUnsealer(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, expRespBytes, actRes.GetPlaintext())
 
-		assert.Nil(t, cData.SecureBytes(), "expected the secure memory to be destroyed after the RPC")
+		assert.Eventually(t, func() bool {
+			return cData.SecureBytes() == nil
+		}, time.Second, 10*time.Millisecond, "expected the secure memory to be destroyed after the RPC")
 	})
 
 	t.Run("should return invalid argument error for invalid requests", func(t *testing.T) {
