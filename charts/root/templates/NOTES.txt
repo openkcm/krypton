@@ -38,6 +38,9 @@ Call the gRPC APIs from your machine with the kr CLI (make cli in the Krypton re
 {{- if not (or (has "DATABASE_URL" $envs) $envsFrom) }}
 {{- $warnings = append $warnings "DATABASE_URL is not set: the root node exits at startup. Set database.existingSecret to the Secret with the PostgreSQL URL." }}
 {{- end }}
+{{- if not (dig "name" "" ($cfg.hierarchy | default dict)) }}
+{{- $warnings = append $warnings "config.hierarchy is not set: the root node exits at startup. The chart has no default key hierarchy: set config.hierarchy, and config.key_bindings for the key kinds of config.segment (values.yaml has an example)." }}
+{{- end }}
 {{- if not $rootConnection }}
 {{- $warnings = append $warnings (printf "config.connections has no entry named %q (config.name): the root node exits at startup. Add the address at which the agents reach this Service." ($cfg.name | default "" | toString)) }}
 {{- end }}

@@ -200,8 +200,47 @@ func loadValues(t *testing.T, args ...string) *config.RootConfig {
 	return cfg
 }
 
+// devValues writes a values file with the development examples of values.yaml, the key
+// hierarchy K0 to K2 of the default segment and its key bindings in memory, and returns its
+// path. The chart has no default hierarchy, so the root node needs these to start.
+func devValues(t *testing.T) string {
+	t.Helper()
+
+	return writeValues(t, "config:\n"+
+		"  key_bindings:\n"+
+		indent(valuesComment(t, "with the keys in memory, for development:"), "    ")+
+		"  hierarchy:\n"+
+		indent(valuesComment(t, "Example with the three kinds of the default `segment`:"), "    "))
+}
+
+// TestConfigDefaults checks that the chart has no default key hierarchy and key bindings: the
+// root node does not start with the default configuration alone.
 func TestConfigDefaults(t *testing.T) {
-	cfg := loadValues(t)
+	configYAML := renderConfigYAML(t)
+
+	var cfgMap map[string]any
+
+	err := yaml.Unmarshal([]byte(configYAML), &cfgMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{"hierarchy", "key_bindings"} {
+		if !isEmpty(cfgMap[key]) {
+			t.Errorf("config.%s has a default: %v", key, cfgMap[key])
+		}
+	}
+
+	_, err = loadConfig(t, configYAML)
+	if err == nil || !strings.Contains(err.Error(), "hierarchy name cannot be empty") {
+		t.Errorf("want the root node to refuse the default configuration without a hierarchy, got %v", err)
+	}
+}
+
+// TestConfigDevelopmentExample loads the default configuration with the development examples of
+// values.yaml.
+func TestConfigDevelopmentExample(t *testing.T) {
+	cfg := loadValues(t, "-f", devValues(t))
 
 	if cfg.Name != "root" || cfg.Role != config.RootRole {
 		t.Errorf("name %q, role %q; want root, root", cfg.Name, cfg.Role)
@@ -221,7 +260,7 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("address of the root: %q, want the Service krypton-root:8080", url)
 	}
 
-	if len(cfg.KeyBindings) != 2 || len(cfg.Topology.Segments) != 0 {
+	if cfg.Hierarchy.Name != "demo-hierarchy" || len(cfg.KeyBindings) != 2 || len(cfg.Topology.Segments) != 0 {
 		t.Errorf("want the demo hierarchy K0 to K2 without agents, got %d key bindings, %d segments",
 			len(cfg.KeyBindings), len(cfg.Topology.Segments))
 	}
@@ -231,7 +270,8 @@ func TestConfigDefaults(t *testing.T) {
 // config.yaml, and that the unread-keys check of these tests finds keys that the root node
 // ignores.
 func TestConfigPassThrough(t *testing.T) {
-	cm := object[configMap](t, render(t, "--set", "config.isImmutable=true", "--set", "config.futureSetting=on"),
+	cm := object[configMap](t, render(t, "-f", devValues(t), "--set", "config.isImmutable=true",
+		"--set", "config.futureSetting=on"),
 		"ConfigMap")
 
 	if !cm.Immutable {
@@ -253,7 +293,7 @@ func TestConfigPassThrough(t *testing.T) {
 // root node would not report clearly.
 func TestConfigMistakes(t *testing.T) {
 	t.Run("misspelled key is ignored by the root node", func(t *testing.T) {
-		configYAML := renderConfigYAML(t, "--set", "config.selector_label.region=eu10")
+		configYAML := renderConfigYAML(t, "-f", devValues(t), "--set", "config.selector_label.region=eu10")
 
 		cfg := must(loadConfig(t, configYAML))(t)
 		if unread := unreadKeys(t, configYAML, cfg); !slices.Equal(unread, []string{"selector_label"}) {
@@ -270,8 +310,8 @@ func TestConfigMistakes(t *testing.T) {
   key_bindings:
     K1:
       crypto: { name: kek-crypto, type: aes256gcm }
+      vault: { name: kek-vault, type: unsafe-sqlite-memory }
       parent_key_provider: { agent_name: root }
-    K2: null
   hierarchy:
     name: h
     key_specs:
@@ -313,7 +353,7 @@ func TestConfigMistakes(t *testing.T) {
 	})
 
 	t.Run("no connection for the root", func(t *testing.T) {
-		_, err := loadConfig(t, renderConfigYAML(t, "--set", "config.connections=null"))
+		_, err := loadConfig(t, renderConfigYAML(t, "-f", devValues(t), "--set", "config.connections=null"))
 		if err == nil || !strings.Contains(err.Error(), `no connection config for root "root"`) {
 			t.Errorf("want the missing root connection error, got %v", err)
 		}
@@ -329,7 +369,6 @@ func exampleValues(t *testing.T) string {
 	return "config:\n" +
 		"  segment: { start_kind: K0, end_kind: K1 }\n" +
 		"  key_bindings:\n" +
-		"    K2: null\n" +
 		indent(valuesComment(t, "on a persistent volume, or `openbao`:"), "    ") +
 		"  hierarchy:\n" +
 		"    name: example\n" +
@@ -417,7 +456,8 @@ func TestVaultTypes(t *testing.T) {
 		"openbao":              "{ name: kek-vault, type: openbao, config: { address: https://openbao.openbao:8200 } }",
 	} {
 		t.Run(vaultType, func(t *testing.T) {
-			cfg := loadValues(t, "-f", writeValues(t, "config:\n  key_bindings:\n    K1:\n      vault: "+vault+"\n"))
+			cfg := loadValues(t, "-f", devValues(t),
+				"-f", writeValues(t, "config:\n  key_bindings:\n    K1:\n      vault: "+vault+"\n"))
 
 			if got := string(cfg.KeyBindings["K1"].VaultSpec.Type); got != vaultType {
 				t.Errorf("vault type %q, want %q", got, vaultType)
