@@ -213,14 +213,37 @@ func TestValidator_ValidateKeyAnnounceRequest(t *testing.T) {
 			Name: "test-hierarchy",
 			KeySpecs: []spec.KeySpec{
 				{Kind: "K0", Role: spec.KeyRoleRoot},
-				{Kind: "K1", Role: spec.KeyRoleKek},
-				{Kind: "K2", Role: spec.KeyRoleDek},
+				{
+					Kind: "K1",
+					Role: spec.KeyRoleKek,
+					LabelsSpec: spec.LabelsSpec{
+						Requirements: map[string]spec.LabelRequirement{"env": {IsRequired: true}},
+					},
+				},
+				{Kind: "K2", Role: spec.KeyRoleDek, LabelsSpec: spec.LabelsSpec{AllowUserLabels: true}},
 			},
 		},
 		Topology: spec.Topology{
 			Segments: []spec.TopologySegment{
 				{
 					Name:    "agent-aws",
+					Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"},
+					KeyBindings: map[string]spec.KeyBinding{
+						"K2": {LabelsSpec: &spec.LabelsSpec{
+							Requirements: map[string]spec.LabelRequirement{
+								"accountId": {
+									IsRequired: true,
+									Validator: &spec.LabelValidator{
+										Type:   spec.ValidatorTypeRegex,
+										Params: map[string]string{spec.ValidatorTypeRegexKey: "^aws-"},
+									},
+								},
+							},
+						}},
+					},
+				},
+				{
+					Name:    "agent-eu",
 					Segment: spec.HierarchySegment{StartKind: "K2", EndKind: "K2"},
 				},
 			},
@@ -287,6 +310,55 @@ func TestValidator_ValidateKeyAnnounceRequest(t *testing.T) {
 			input: withField(func(in *validator.AnnounceInput) {
 				in.TargetName = "agent-aws"
 				in.KeyKind = "K2"
+				in.Labels = model.Labels{"accountId": "aws-1"}
+			}),
+			wantErr: nil,
+		},
+		{
+			name: "root key with hierarchy label",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.KeyKind = "K1"
+				in.Labels = model.Labels{"env": "prod"}
+			}),
+			wantErr: nil,
+		},
+		{
+			name:    "root key missing hierarchy label",
+			input:   withField(func(in *validator.AnnounceInput) { in.KeyKind = "K1" }),
+			wantErr: spec.ErrLabelsValidationFailed,
+		},
+		{
+			name: "target key missing node label",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-aws"
+				in.KeyKind = "K2"
+			}),
+			wantErr: spec.ErrLabelsValidationFailed,
+		},
+		{
+			name: "target key with invalid node label",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-aws"
+				in.KeyKind = "K2"
+				in.Labels = model.Labels{"accountId": "gcp-1"}
+			}),
+			wantErr: spec.ErrLabelValidatorRegexFailed,
+		},
+		{
+			name: "target key with label not allowed by node",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-aws"
+				in.KeyKind = "K2"
+				in.Labels = model.Labels{"accountId": "aws-1", "env": "prod"}
+			}),
+			wantErr: spec.ErrLabelsValidationFailed,
+		},
+		{
+			name: "target without node spec accepts any labels",
+			input: withField(func(in *validator.AnnounceInput) {
+				in.TargetName = "agent-eu"
+				in.KeyKind = "K2"
+				in.Labels = model.Labels{"env": "prod"}
 			}),
 			wantErr: nil,
 		},

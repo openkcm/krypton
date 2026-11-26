@@ -92,13 +92,14 @@ func setupPostgres() (func(), error) {
 // defaultTestHierarchy mirrors the K0(root) → K1(kek) → K2(tek) → K3(dek)
 // hierarchy used by the existing fixture builders below.
 func defaultTestHierarchy() spec.KeyHierarchy {
+	anyLabels := spec.LabelsSpec{AllowUserLabels: true}
 	return spec.KeyHierarchy{
 		Name: "test-hierarchy",
 		KeySpecs: []spec.KeySpec{
-			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256},
-			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256},
+			{Kind: "K0", Role: spec.KeyRoleRoot, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: anyLabels},
+			{Kind: "K1", Role: spec.KeyRoleKek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: anyLabels},
+			{Kind: "K2", Role: spec.KeyRoleTek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: anyLabels},
+			{Kind: "K3", Role: spec.KeyRoleDek, Algorithm: cryptor.KeyAlgorithmAES256, LabelsSpec: anyLabels},
 		},
 	}
 }

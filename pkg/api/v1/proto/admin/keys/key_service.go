@@ -48,6 +48,7 @@ func (s *KeyService) AnnounceKey(ctx context.Context, req *AnnounceKeyRequest) (
 		Name:       req.GetName(),
 		ParentID:   req.GetParentId(),
 		TargetName: req.GetTargetName(),
+		Labels:     req.GetLabels(),
 	}, s.config)
 	if err != nil {
 		return nil, proto.ErrDetailsWithCode(

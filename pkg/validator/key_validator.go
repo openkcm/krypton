@@ -46,6 +46,7 @@ type AnnounceInput struct {
 	Name       string
 	ParentID   string
 	TargetName string
+	Labels     model.Labels
 }
 
 type UpsertKeyInput struct {
@@ -83,8 +84,8 @@ func ValidateKeyUpsert(input UpsertKeyInput) error {
 	return nil
 }
 
-// ValidateKeyAnnounceRequest verifies an announce request has valid IDs and
-// that the resolved segment manages the requested key kind.
+// ValidateKeyAnnounceRequest verifies an announce request has valid IDs, that the resolved
+// segment manages the requested key kind and that the labels match its labels spec.
 func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) error {
 	switch {
 	case !isValidUUID(input.TenantID):
@@ -96,6 +97,7 @@ func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) erro
 	}
 
 	segment := cfg.Segment
+	bindings := cfg.KeyBindings
 	if input.TargetName != "" {
 		topologySegment := cfg.Topology.GetSegmentByName(input.TargetName)
 		if topologySegment == nil {
@@ -103,13 +105,17 @@ func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) erro
 		}
 
 		segment = topologySegment.Segment
+		bindings = topologySegment.KeyBindings
 	}
 
-	if !cfg.Hierarchy.SegmentContains(segment, model.KeyKind(input.KeyKind)) {
+	kind := model.KeyKind(input.KeyKind)
+	if !cfg.Hierarchy.SegmentContains(segment, kind) {
 		return ErrTargetDoesNotManageKeyKind
 	}
 
-	return nil
+	keySpec, _ := cfg.Hierarchy.FindKeySpec(kind)
+	labelsSpec := keySpec.LabelsSpec.Overlay(bindings[input.KeyKind].LabelsSpec)
+	return labelsSpec.Validate(input.Labels)
 }
 
 // ValidateKeyRequest verifies that the tenant and key IDs of a
