@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -20,6 +21,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -673,42 +675,54 @@ type cleanupCollector struct {
 	fns []func()
 }
 
-func (c *cleanupCollector) add(fn func()) {
-	c.fns = append(c.fns, fn)
+func (m *cleanupCollector) add(fn func()) {
+	m.fns = append(m.fns, fn)
 }
 
-func (c *cleanupCollector) makeTempDir() (string, error) {
+func (m *cleanupCollector) makeTempDir() (string, error) {
 	dir, err := os.MkdirTemp("", "kr-testmain-*")
 	if err != nil {
 		return "", fmt.Errorf("makeTempDir: %w", err)
 	}
-	c.fns = append(c.fns, func() { os.RemoveAll(dir) })
+	m.add(func() { os.RemoveAll(dir) })
 	return dir, nil
 }
 
 // setupKRInfras builds the root, region, and country level infras once for all tests.
 // It returns cleanup functions to tear everything down after m.Run().
 func setupKRInfras() ([]func(), error) {
-	c := &cleanupCollector{}
+	var wg sync.WaitGroup
+	var fns []func()
+	var mux sync.Mutex
+	var errs []error
 
-	var err error
-	if rootLevelInfra, err = initKRInfraServices(c, rootLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("root level: %w", err)
-	}
-	if regionLevelInfra, err = initKRInfraServices(c, regionLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("region level: %w", err)
-	}
-	if countryLevelInfra, err = initKRInfraServices(c, countryLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("country level: %w", err)
+	setup := func(name string, cfg config.RootConfig, srv *services) {
+		defer wg.Done()
+
+		c := &cleanupCollector{}
+		var err error
+
+		*srv, err = initKRInfraServices(c, cfg)
+
+		mux.Lock()
+		defer mux.Unlock()
+
+		fns = append(fns, c.fns...)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s level: %w", name, err))
+			return
+		}
+		fns = append(fns, srv.Close)
 	}
 
-	// Collect cleanups: infra Close first (kills processes, closes DBs),
-	// then c.fns (terminates containers, removes temp dirs).
-	var cleanups []func()
-	cleanups = append(cleanups, c.fns...)
-	cleanups = append(cleanups, rootLevelInfra.Close, regionLevelInfra.Close, countryLevelInfra.Close)
+	wg.Add(3)
+	go setup("root", rootLevelConfig, &rootLevelInfra)
+	go setup("region", regionLevelConfig, &regionLevelInfra)
+	go setup("country", countryLevelConfig, &countryLevelInfra)
 
-	return cleanups, nil
+	wg.Wait()
+
+	return fns, errors.Join(errs...)
 }
 
 type portListener struct {
