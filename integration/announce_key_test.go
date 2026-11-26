@@ -17,10 +17,13 @@ import (
 )
 
 func TestAnnounceKey(t *testing.T) {
-	env := setupEnvironment(t)
+	rootsrv := regionLevelInfra.Find(t, regionRoot)
+	rootconn := grpcConn(t, rootsrv.listener.port)
 
-	tenantCli := admin.NewTenantServiceClient(env.Conn)
-	keyCli := keypb.NewKeyServiceClient(env.Conn)
+	tenantCli := admin.NewTenantServiceClient(rootconn)
+	keyCli := keypb.NewKeyServiceClient(rootconn)
+	rootDB := rootsrv.db
+	regionEuDB := regionLevelInfra.Find(t, regionEu).db
 
 	t.Run("should announce root-managed key and complete via job group", func(t *testing.T) {
 		ctx := t.Context()
@@ -45,7 +48,7 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "root", resp.GetKey().GetManagedBy())
 		assert.Equal(t, "pending", resp.GetKey().GetKeyProcessingState().GetStatus())
 
-		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
+		awaitJobStatus(t, rootDB, keyName, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)
 	})
 
@@ -60,8 +63,8 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		tenantName := tenantResp.GetTenant().GetName()
 
-		insertTenant(t, env.AgentDB, tenantID, tenantName)
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertTenant(t, regionEuDB, tenantID, tenantName)
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		keyName := "test-key-" + uuid.New().String()
 		resp, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -69,20 +72,20 @@ func TestAnnounceKey(t *testing.T) {
 			Kind:       "K2",
 			Name:       keyName,
 			ParentId:   parentID,
-			TargetName: "agent-k1",
+			TargetName: regionEu,
 			Labels:     map[string]string{"cloud": "aws"},
 		})
 		require.NoError(t, err)
 
 		keyID := resp.GetKey().GetId()
 		assert.Equal(t, "pre-activation", resp.GetKey().GetLifeCycleState())
-		assert.Equal(t, "agent-k1", resp.GetKey().GetManagedBy())
+		assert.Equal(t, regionEu, resp.GetKey().GetManagedBy())
 		// AnnounceKey returns the persisted state — Pending for agent-managed.
 		// ConfirmJob flips Pending→InProgress and OnJobDone settles to Completed.
 		assert.Equal(t, "pending", resp.GetKey().GetKeyProcessingState().GetStatus())
 
-		awaitKeyExists(t, env.AgentDB, keyID, tenantID, 10*time.Second)
-		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
+		awaitKeyExists(t, regionEuDB, keyID, tenantID, 10*time.Second)
+		awaitJobStatus(t, rootDB, keyName, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)
 	})
 
@@ -94,8 +97,8 @@ func TestAnnounceKey(t *testing.T) {
 		})
 		require.NoError(t, err)
 		tenantID := tenantResp.GetTenant().GetId()
-		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertTenant(t, regionEuDB, tenantID, tenantResp.GetTenant().GetName())
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		keyName := "idempotent-key-" + uuid.New().String()
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
@@ -103,7 +106,7 @@ func TestAnnounceKey(t *testing.T) {
 			Kind:       "K2",
 			Name:       keyName,
 			ParentId:   parentID,
-			TargetName: "agent-k1",
+			TargetName: regionEu,
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, first.GetKey().GetId())
@@ -116,7 +119,7 @@ func TestAnnounceKey(t *testing.T) {
 			Kind:       "K2",
 			Name:       keyName,
 			ParentId:   parentID,
-			TargetName: "agent-k1",
+			TargetName: regionEu,
 		})
 		require.NoError(t, err)
 
@@ -133,42 +136,42 @@ func TestAnnounceKey(t *testing.T) {
 		require.NoError(t, err)
 
 		tenantID := tenantResp.GetTenant().GetId()
-		insertTenant(t, env.AgentDB, tenantID, tenantResp.GetTenant().GetName())
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertTenant(t, regionEuDB, tenantID, tenantResp.GetTenant().GetName())
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		keyName := "recover-key-" + uuid.New().String()
 		// A key with the same (tenant, name) but a different kind already lives
 		// on the agent → the announce's UpsertKey is rejected with a terminal
 		// ErrKeyConflict → job FAILED → key processing Failed.
-		insertKey(t, env.AgentDB, model.NewKey(tenantID, keyName, "K3", &parentID, "agent-k1", nil))
+		insertKey(t, regionEuDB, model.NewKey(tenantID, keyName, "K3", &parentID, regionEu, nil))
 
 		first, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
 			ParentId:   parentID,
-			TargetName: "agent-k1",
+			TargetName: regionEu,
 		})
 		require.NoError(t, err)
 		keyID := first.GetKey().GetId()
 
-		awaitJobStatus(t, env.RootDB, keyName, "FAILED", 15*time.Second)
+		awaitJobStatus(t, rootDB, keyName, "FAILED", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "failed", 15*time.Second)
 
 		// Remove the conflicting key so the retry can create the announced key.
-		deleteKey(t, env.AgentDB, tenantID, keyName)
+		deleteKey(t, regionEuDB, tenantID, keyName)
 
 		retry, err := keyCli.AnnounceKey(ctx, &keypb.AnnounceKeyRequest{
 			TenantId:   tenantID,
 			Kind:       "K2",
 			Name:       keyName,
 			ParentId:   parentID,
-			TargetName: "agent-k1",
+			TargetName: regionEu,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, keyID, retry.GetKey().GetId(), "retry must reuse the existing key.ID")
 
-		awaitKeyExists(t, env.AgentDB, keyID, tenantID, 10*time.Second)
+		awaitKeyExists(t, regionEuDB, keyID, tenantID, 10*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, keyID, tenantID, "completed", 15*time.Second)
 	})
 
@@ -183,8 +186,8 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		tenantName := tenantResp.GetTenant().GetName()
 
-		insertTenant(t, env.AgentDB, tenantID, tenantName)
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		insertTenant(t, regionEuDB, tenantID, tenantName)
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		homeDir := t.TempDir()
 		// login with no auth
@@ -197,10 +200,10 @@ func TestAnnounceKey(t *testing.T) {
 			"--kind", "K2",
 			"--name", keyName,
 			"--parent", parentID,
-			"--target-name", "agent-k1",
+			"--target-name", regionEu,
 			"--label", "cloud=aws",
 			"--json",
-			"--server", "localhost:"+env.RootPort,
+			"--server", "localhost:"+rootsrv.listener.port,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "command should succeed, output: %s", string(output))
@@ -212,12 +215,12 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "K2", key.Kind)
 		assert.Equal(t, keyName, key.Name)
 		assert.Equal(t, parentID, key.ParentID)
-		assert.Equal(t, "agent-k1", key.ManagedBy)
+		assert.Equal(t, regionEu, key.ManagedBy)
 		assert.Equal(t, "pending", key.Status)
 		assert.NotEmpty(t, key.ID)
 
-		awaitKeyExists(t, env.AgentDB, key.ID, tenantID, 10*time.Second)
-		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
+		awaitKeyExists(t, regionEuDB, key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, rootDB, keyName, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, key.ID, tenantID, "completed", 15*time.Second)
 	})
 
@@ -232,7 +235,7 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		tenantName := tenantResp.GetTenant().GetName()
 
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		homeDir := t.TempDir()
 		// login with no auth
@@ -241,7 +244,7 @@ func TestAnnounceKey(t *testing.T) {
 		seedSelectedTenant(t, homeDir, tenantID, tenantName)
 
 		// check if tenant is not present in agent db
-		agentTenantStore := sql.NewTenantStore(env.AgentDB)
+		agentTenantStore := sql.NewTenantStore(regionEuDB)
 		_, err = agentTenantStore.GetTenant(ctx, store.GetTenantQuery{
 			ID: tenantID,
 		})
@@ -252,10 +255,10 @@ func TestAnnounceKey(t *testing.T) {
 			"--kind", "K2",
 			"--name", keyName,
 			"--parent", parentID,
-			"--target-name", "agent-k1",
+			"--target-name", regionEu,
 			"--label", "cloud=aws",
 			"--json",
-			"--server", "localhost:"+env.RootPort,
+			"--server", "localhost:"+rootsrv.listener.port,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "command should succeed, output: %s", string(output))
@@ -267,12 +270,12 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "K2", key.Kind)
 		assert.Equal(t, keyName, key.Name)
 		assert.Equal(t, parentID, key.ParentID)
-		assert.Equal(t, "agent-k1", key.ManagedBy)
+		assert.Equal(t, regionEu, key.ManagedBy)
 		assert.Equal(t, "pending", key.Status)
 		assert.NotEmpty(t, key.ID)
 
-		awaitKeyExists(t, env.AgentDB, key.ID, tenantID, 10*time.Second)
-		awaitJobStatus(t, env.RootDB, keyName, "DONE", 15*time.Second)
+		awaitKeyExists(t, regionEuDB, key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, rootDB, keyName, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, key.ID, tenantID, "completed", 15*time.Second)
 
 		aTenantRes, err := agentTenantStore.GetTenant(ctx, store.GetTenantQuery{
@@ -294,7 +297,7 @@ func TestAnnounceKey(t *testing.T) {
 		tenantID := tenantResp.GetTenant().GetId()
 		tenantName := tenantResp.GetTenant().GetName()
 
-		parentID := insertActiveParentKey(t, env.RootDB, tenantID, "K1")
+		parentID := insertActiveParentKey(t, rootDB, tenantID, "K1")
 
 		homeDir := t.TempDir()
 		// login with no auth
@@ -307,10 +310,10 @@ func TestAnnounceKey(t *testing.T) {
 			"--kind", "K2",
 			"--name", k2Name,
 			"--parent", parentID,
-			"--target-name", "agent-k1",
+			"--target-name", regionEu,
 			"--label", "cloud=aws",
 			"--json",
-			"--server", "localhost:"+env.RootPort,
+			"--server", "localhost:"+rootsrv.listener.port,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "command should succeed, output: %s", string(output))
@@ -322,12 +325,12 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "K2", k2key.Kind)
 		assert.Equal(t, k2Name, k2key.Name)
 		assert.Equal(t, parentID, k2key.ParentID)
-		assert.Equal(t, "agent-k1", k2key.ManagedBy)
+		assert.Equal(t, regionEu, k2key.ManagedBy)
 		assert.Equal(t, "pending", k2key.Status)
 		assert.NotEmpty(t, k2key.ID)
 
-		awaitKeyExists(t, env.AgentDB, k2key.ID, tenantID, 10*time.Second)
-		awaitJobStatus(t, env.RootDB, k2Name, "DONE", 15*time.Second)
+		awaitKeyExists(t, regionEuDB, k2key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, rootDB, k2Name, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, k2key.ID, tenantID, "completed", 15*time.Second)
 
 		k3Name := "cli-key-" + uuid.New().String()
@@ -335,10 +338,10 @@ func TestAnnounceKey(t *testing.T) {
 			"--kind", "K3",
 			"--name", k3Name,
 			"--parent", k2key.ID,
-			"--target-name", "agent-k1",
+			"--target-name", regionEu,
 			"--label", "cloud=aws",
 			"--json",
-			"--server", "localhost:"+env.RootPort,
+			"--server", "localhost:"+rootsrv.listener.port,
 		)
 		output, err = cmd.CombinedOutput()
 		require.NoError(t, err, "command should succeed, output: %s", string(output))
@@ -350,12 +353,12 @@ func TestAnnounceKey(t *testing.T) {
 		assert.Equal(t, "K3", k3key.Kind)
 		assert.Equal(t, k3Name, k3key.Name)
 		assert.Equal(t, k2key.ID, k3key.ParentID)
-		assert.Equal(t, "agent-k1", k3key.ManagedBy)
+		assert.Equal(t, regionEu, k3key.ManagedBy)
 		assert.Equal(t, "pending", k3key.Status)
 		assert.NotEmpty(t, k3key.ID)
 
-		awaitKeyExists(t, env.AgentDB, k3key.ID, tenantID, 10*time.Second)
-		awaitJobStatus(t, env.RootDB, k3Name, "DONE", 15*time.Second)
+		awaitKeyExists(t, regionEuDB, k3key.ID, tenantID, 10*time.Second)
+		awaitJobStatus(t, rootDB, k3Name, "DONE", 15*time.Second)
 		awaitKeyProcessingStatusViaGRPC(t, keyCli, k3key.ID, tenantID, "completed", 15*time.Second)
 	})
 }
