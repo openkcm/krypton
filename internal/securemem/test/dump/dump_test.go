@@ -22,7 +22,7 @@ import (
 
 const (
 	scriptDest = "/usr/local/bin/analysis.sh"
-	image      = "golang:1.27-alpine"
+	image      = "golang:alpine"
 )
 
 func TestProtection(t *testing.T) {
@@ -70,7 +70,7 @@ func TestProtection(t *testing.T) {
 			ctr := setupDocker(t, tt.isDumpProtectionEnabled)
 
 			t.Cleanup(func() {
-				if err := ctr.Terminate(ctx); err != nil {
+				if err := ctr.Terminate(context.Background()); err != nil {
 					t.Logf("warning: failed to terminate container: %v", err)
 				}
 			})
@@ -171,6 +171,7 @@ func setupDocker(t *testing.T, isDumpProtectionEnabled bool) testcontainers.Cont
 		Env: map[string]string{
 			"IS_DUMP_PROTECTION_ENABLED": strconv.FormatBool(isDumpProtectionEnabled),
 			"TRIGGER_ID":                 strconv.FormatInt(time.Now().UnixNano(), 10),
+			"GOTOOLCHAIN":                "auto",
 		},
 	}
 

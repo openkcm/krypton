@@ -30,6 +30,11 @@ cd /app
 
 echo "👷 Building secret-runner"
 GOEXPERIMENT=runtimesecret go build -o ./tmp/$TRIGGER_ID ./internal/securemem/test/dump
+if [ $? -ne 0 ]; then
+  echo "☠️ BUILD FAILED (check docker go version)"
+  exit 1
+fi
+
 echo "🚀 Starting secret-runner in the background..."
 
 # Change to the secret-runner directory
