@@ -39,6 +39,8 @@ import (
 const (
 	AnnounceKey   = "announce-key"
 	ActivateKey   = "activate-key"
+	RotateKey     = "rotate-key"
+	ResealKey     = "reseal-key"
 	SuspendKey    = "suspend-key"
 	DeactivateKey = "deactivate-key"
 	CompromiseKey = "compromise-key"
@@ -72,6 +74,20 @@ func ActivateHandlerConfig() HandlerConfig {
 				op.MarkKeyCompleted,
 			}
 		},
+	}
+}
+
+func RotateHandlerConfig() HandlerConfig {
+	// TODO: Implement the rotation operator pipeline.
+	return HandlerConfig{
+		handlerType: RotateKey,
+	}
+}
+
+func ResealHandlerConfig() HandlerConfig {
+	// TODO: Implement the resealing operator pipeline.
+	return HandlerConfig{
+		handlerType: ResealKey,
 	}
 }
 

@@ -252,5 +252,40 @@ func TestValidateGetDescendantKeysQuery(t *testing.T) {
 			// then
 			assert.ErrorIs(t, err, tt.expErr)
 		})
+		t.Run(tt.name+"/parent filters", func(t *testing.T) {
+			query := store.GetParentChildKeyLayersQuery{
+				KeyID: tt.subj.KeyID, TenantID: tt.subj.TenantID,
+				ParentFilters: tt.subj.Filters,
+			}
+			assert.ErrorIs(t, query.Validate(), tt.expErr)
+		})
+		t.Run(tt.name+"/child filters", func(t *testing.T) {
+			query := store.GetParentChildKeyLayersQuery{
+				KeyID: tt.subj.KeyID, TenantID: tt.subj.TenantID,
+				ChildFilters: tt.subj.Filters,
+			}
+			assert.ErrorIs(t, query.Validate(), tt.expErr)
+		})
+	}
+}
+
+func TestValidateGetParentChildKeyLayersQueryDepth(t *testing.T) {
+	tests := []struct {
+		name  string
+		depth *int
+		want  error
+	}{
+		{name: "unlimited"},
+		{name: "positive", depth: new(1)},
+		{name: "zero", depth: new(0), want: store.ErrInvalidQuery},
+		{name: "negative", depth: new(-1), want: store.ErrInvalidQuery},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			query := store.GetParentChildKeyLayersQuery{
+				KeyID: uuid.New().String(), TenantID: uuid.New().String(), Depth: tc.depth,
+			}
+			assert.ErrorIs(t, query.Validate(), tc.want)
+		})
 	}
 }

@@ -22,6 +22,7 @@ type Key interface {
 	GetKeyByName(ctx context.Context, query GetKeyByNameQuery) (*model.Key, error)
 	GetParentKeys(ctx context.Context, query GetParentKeysQuery) (GetParentKeysResult, error)
 	GetDescendantKeys(ctx context.Context, query GetDescendantKeysQuery) (GetDescendantKeysResult, error)
+	GetParentChildKeyLayers(ctx context.Context, query GetParentChildKeyLayersQuery) (GetParentChildKeyLayersResult, error)
 	ListKeys(ctx context.Context, query ListKeysQuery) (ListKeysResult, error)
 	UpdateKeyLifeCycleState(ctx context.Context, query UpdateKeyLifeCycleStateQuery) error
 	UpdateKeyProcessingState(ctx context.Context, query UpdateKeyProcessingStateQuery) error
@@ -64,6 +65,26 @@ type GetDescendantKeysResult struct {
 	KeyTree model.KeyTreeTraverser
 }
 
+// GetParentChildKeyLayersQuery walks parent-child layers from KeyID. Included
+// children matching ParentFilters become the next layer's parents.
+// Empty filter groups impose no restriction.
+type GetParentChildKeyLayersQuery struct {
+	KeyID         string
+	TenantID      string
+	ParentFilters []KeyFilter
+	ChildFilters  []KeyFilter
+	Depth         *int
+}
+
+type ParentChildKeyLayer struct {
+	Parents  []model.Key
+	Children []model.Key
+}
+
+type GetParentChildKeyLayersResult struct {
+	Layers []ParentChildKeyLayer
+}
+
 type ListKeysQuery struct {
 	TenantID              string
 	Name                  string
@@ -104,20 +125,33 @@ type UpdateKeyStatesQuery struct {
 }
 
 func (q GetDescendantKeysQuery) Validate() error {
-	if !isValidUUID(q.KeyID) {
-		return fmt.Errorf("%w: invalid query: KeyID must be a valid UUID, got %q", ErrInvalidQuery, q.KeyID)
+	return validateKeyTreeQuery(q.KeyID, q.TenantID, nil, q.Filters)
+}
+
+func (q GetParentChildKeyLayersQuery) Validate() error {
+	return validateKeyTreeQuery(q.KeyID, q.TenantID, q.Depth, q.ParentFilters, q.ChildFilters)
+}
+
+func validateKeyTreeQuery(keyID, tenantID string, depth *int, filterGroups ...[]KeyFilter) error {
+	if !isValidUUID(keyID) {
+		return fmt.Errorf("%w: invalid query: KeyID must be a valid UUID, got %q", ErrInvalidQuery, keyID)
 	}
-	if !isValidUUID(q.TenantID) {
-		return fmt.Errorf("%w: invalid query: TenantID must be a valid UUID, got %q", ErrInvalidQuery, q.TenantID)
+	if !isValidUUID(tenantID) {
+		return fmt.Errorf("%w: invalid query: TenantID must be a valid UUID, got %q", ErrInvalidQuery, tenantID)
+	}
+	if depth != nil && *depth < 1 {
+		return fmt.Errorf("%w: invalid query: Depth must be at least 1, got %d", ErrInvalidQuery, *depth)
 	}
 
-	for _, filter := range q.Filters {
-		if filter.LifeCycleState != "" && !keylifecycle.IsKnown(filter.LifeCycleState) {
-			return fmt.Errorf("%w: invalid query: unknown lifecycle state %q", ErrInvalidQuery, filter.LifeCycleState)
-		}
-		for _, status := range filter.Status {
-			if !model.IsKnownKeyStatus(status) {
-				return fmt.Errorf("%w: invalid query: unknown processing status %q", ErrInvalidQuery, status)
+	for _, filters := range filterGroups {
+		for _, filter := range filters {
+			if filter.LifeCycleState != "" && !keylifecycle.IsKnown(filter.LifeCycleState) {
+				return fmt.Errorf("%w: invalid query: unknown lifecycle state %q", ErrInvalidQuery, filter.LifeCycleState)
+			}
+			for _, status := range filter.Status {
+				if !model.IsKnownKeyStatus(status) {
+					return fmt.Errorf("%w: invalid query: unknown processing status %q", ErrInvalidQuery, status)
+				}
 			}
 		}
 	}
