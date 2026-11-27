@@ -113,7 +113,10 @@ func ValidateKeyAnnounceRequest(input AnnounceInput, cfg config.RootConfig) erro
 		return ErrTargetDoesNotManageKeyKind
 	}
 
-	keySpec, _ := cfg.Hierarchy.FindKeySpec(kind)
+	keySpec, ok := cfg.Hierarchy.FindKeySpec(kind)
+	if !ok {
+		return ErrInvalidKeyKind
+	}
 	labelsSpec := keySpec.LabelsSpec.Overlay(bindings[input.KeyKind].LabelsSpec)
 	return labelsSpec.Validate(input.Labels)
 }
