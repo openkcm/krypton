@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.53.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/lib/pq v1.12.3
-	github.com/moby/moby/api v1.56.1
+	github.com/moby/moby/api v1.57.0
 	github.com/openbao/openbao/api/v2 v2.7.1
 	github.com/openkcm/orbital v0.7.0
 	github.com/ovh/kmip-go v0.9.2-0.20260702131124-6619ae325ac4
