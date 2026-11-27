@@ -29,7 +29,16 @@ set +x
 cd /app
 
 echo "👷 Building secret-runner"
-GOEXPERIMENT=runtimesecret go build -o ./tmp/$TRIGGER_ID ./internal/securemem/test/dump
+if ! GOEXPERIMENT=runtimesecret go build -o ./tmp/$TRIGGER_ID ./internal/securemem/test/dump; then
+  DOCKER_GO=$(go version)
+  GOMOD_VER=$(awk '/^go / {print $2}' /app/go.mod)
+  printf "\033[31m"
+  printf "☠️ BUILD FAILED  Docker Go: [$DOCKER_GO]  Go Mod: [$GOMOD_VER]\n"
+  printf "Upgrade Docker image to $GOMOD_VER or higher to run this test\n"
+  printf "\033[0m"
+  exit 1
+fi
+
 echo "🚀 Starting secret-runner in the background..."
 
 # Change to the secret-runner directory
