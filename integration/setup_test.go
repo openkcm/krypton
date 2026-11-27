@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -20,6 +21,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -414,15 +416,15 @@ type services map[string]*service
 
 // service holds the running process, DB, and KMIP client for a single krypton node.
 type service struct {
-	name      string
-	db        *sql.DB
-	stores    *store.Stores
-	cmd       *exec.Cmd
-	port      string
-	cfgPath   string
-	dbConnStr string
-	kmipPort  string
-	pki       *testPKI
+	name         string
+	db           *sql.DB
+	stores       *store.Stores
+	cmd          *exec.Cmd
+	listener     *portListener // held until the process starts
+	cfgPath      string
+	dbConnStr    string
+	kmipListener *portListener // held until the process starts
+	pki          *testPKI
 }
 
 // Close terminates all service processes and releases resources.
@@ -432,13 +434,25 @@ func (s services) Close() {
 	}
 }
 
-// Close kills the process, closes the KMIP client, and closes the DB.
+// Close kills the process, releases port reservations, and closes the DB.
 func (s *service) Close() {
+	s.releasePortReservations()
 	if s.cmd != nil {
 		_ = s.cmd.Process.Kill()
 	}
 	if s.db != nil {
 		_ = s.db.Close()
+	}
+}
+
+// releasePortReservations releases any held port reservations, allowing
+// external processes to bind to those ports.
+func (s *service) releasePortReservations() {
+	if s.listener != nil {
+		s.listener.Release()
+	}
+	if s.kmipListener != nil {
+		s.kmipListener.Release()
 	}
 }
 
@@ -459,7 +473,7 @@ func (s services) KMIPClient(t *testing.T, name, tenantID string) *kmipclient.Cl
 	require.NotNil(t, res.pki, "pki for service %s is nil", name)
 	clientCerts := res.pki.issueClientCert(t, tenantID)
 
-	cli := dialAs(t, localAddress(res.kmipPort), res.pki.caPEM, clientCerts.certPEM, clientCerts.keyPEM)
+	cli := dialAs(t, localAddress(res.kmipListener.port), res.pki.caPEM, clientCerts.certPEM, clientCerts.keyPEM)
 
 	t.Cleanup(func() {
 		_ = cli.Close()
@@ -661,61 +675,86 @@ type cleanupCollector struct {
 	fns []func()
 }
 
-func (c *cleanupCollector) add(fn func()) {
-	c.fns = append(c.fns, fn)
+func (m *cleanupCollector) add(fn func()) {
+	m.fns = append(m.fns, fn)
 }
 
-func (c *cleanupCollector) makeTempDir() (string, error) {
+func (m *cleanupCollector) makeTempDir() (string, error) {
 	dir, err := os.MkdirTemp("", "kr-testmain-*")
 	if err != nil {
 		return "", fmt.Errorf("makeTempDir: %w", err)
 	}
-	c.fns = append(c.fns, func() { os.RemoveAll(dir) })
+	m.add(func() { os.RemoveAll(dir) })
 	return dir, nil
 }
 
 // setupKRInfras builds the root, region, and country level infras once for all tests.
 // It returns cleanup functions to tear everything down after m.Run().
 func setupKRInfras() ([]func(), error) {
-	c := &cleanupCollector{}
+	var wg sync.WaitGroup
+	var fns []func()
+	var mux sync.Mutex
+	var errs []error
 
-	var err error
-	if rootLevelInfra, err = initKRInfraServices(c, rootLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("root level: %w", err)
-	}
-	if regionLevelInfra, err = initKRInfraServices(c, regionLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("region level: %w", err)
-	}
-	if countryLevelInfra, err = initKRInfraServices(c, countryLevelConfig); err != nil {
-		return c.fns, fmt.Errorf("country level: %w", err)
+	setup := func(name string, cfg config.RootConfig, srv *services) {
+		defer wg.Done()
+
+		c := &cleanupCollector{}
+		var err error
+
+		*srv, err = initKRInfraServices(c, cfg)
+
+		mux.Lock()
+		defer mux.Unlock()
+
+		fns = append(fns, c.fns...)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s level: %w", name, err))
+			return
+		}
+		fns = append(fns, srv.Close)
 	}
 
-	// Collect cleanups: infra Close first (kills processes, closes DBs),
-	// then c.fns (terminates containers, removes temp dirs).
-	var cleanups []func()
-	cleanups = append(cleanups, c.fns...)
-	cleanups = append(cleanups, rootLevelInfra.Close, regionLevelInfra.Close, countryLevelInfra.Close)
+	wg.Add(3)
+	go setup("root", rootLevelConfig, &rootLevelInfra)
+	go setup("region", regionLevelConfig, &regionLevelInfra)
+	go setup("country", countryLevelConfig, &countryLevelInfra)
 
-	return cleanups, nil
+	wg.Wait()
+
+	return fns, errors.Join(errs...)
 }
 
-// ---------------------------------------------------------------------------
-// init* helpers – standalone functions for TestMain (no *testing.T required).
-// Each function returns an error rather than calling t.Fatal / panic.
-// ---------------------------------------------------------------------------
+type portListener struct {
+	port     string
+	listener net.Listener
+}
 
-func getFreePort() (string, error) {
+func (p *portListener) Release() {
+	if p.listener != nil {
+		p.listener.Close()
+		p.listener = nil
+	}
+}
+
+// reservePort opens a TCP listener on a random free port and returns a
+// portReservation that keeps the port occupied.  Callers must call
+// Release before the external process attempts to bind to the port.
+func reservePort() (*portListener, error) {
 	var lc net.ListenConfig
 	l, err := lc.Listen(context.Background(), "tcp", localAddress("0"))
 	if err != nil {
-		return "", fmt.Errorf("getFreePort: %w", err)
+		return nil, fmt.Errorf("reservePort: %w", err)
 	}
-	defer l.Close()
 	addr, ok := l.Addr().(*net.TCPAddr)
 	if !ok {
-		return "", fmt.Errorf("getFreePort: unexpected address type: %T", l.Addr())
+		l.Close()
+		return nil, fmt.Errorf("reservePort: unexpected address type: %T", l.Addr())
 	}
-	return strconv.Itoa(addr.Port), nil
+	return &portListener{
+		port:     strconv.Itoa(addr.Port),
+		listener: l,
+	}, nil
 }
 
 func startPostgresContainer(c *cleanupCollector) (string, error) {
@@ -988,12 +1027,12 @@ func createTestPKI(c *cleanupCollector, agentNames ...string) (*testPKI, error) 
 }
 
 func (s *service) initSetupKMIP(c *cleanupCollector) (config.KMIP, error) {
-	if s.kmipPort == "" {
-		port, err := getFreePort()
+	if s.kmipListener == nil {
+		res, err := reservePort()
 		if err != nil {
 			return config.KMIP{}, err
 		}
-		s.kmipPort = port
+		s.kmipListener = res
 	}
 	pki, err := createTestPKI(c, s.name)
 	if err != nil {
@@ -1001,7 +1040,7 @@ func (s *service) initSetupKMIP(c *cleanupCollector) (config.KMIP, error) {
 	}
 	s.pki = pki
 
-	p, err := strconv.Atoi(s.kmipPort)
+	p, err := strconv.Atoi(s.kmipListener.port)
 	if err != nil {
 		return config.KMIP{}, fmt.Errorf("initSetupKMIP atoi: %w", err)
 	}
@@ -1049,7 +1088,7 @@ func initAgentService(c *cleanupCollector, agentName, rootPort string) (*service
 		return nil, err
 	}
 
-	agentPort, err := getFreePort()
+	agentRes, err := reservePort()
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1096,7 @@ func initAgentService(c *cleanupCollector, agentName, rootPort string) (*service
 		"AGENT_BOOTSTRAP_CONFIG_PATH=" + cfgPath,
 		"AGENT_DATABASE_URL=" + connstr,
 		"KRYPTON_TEK_KEY=" + testKeyBase64,
-		"AGENT_PORT=" + agentPort,
+		"AGENT_PORT=" + agentRes.port,
 	})
 
 	return &service{
@@ -1070,7 +1109,7 @@ func initAgentService(c *cleanupCollector, agentName, rootPort string) (*service
 			KeyVersions: storesql.NewKeyVersionStore(db),
 		},
 		cmd:       cmd,
-		port:      agentPort,
+		listener:  agentRes,
 		cfgPath:   cfgPath,
 		dbConnStr: connstr,
 	}, nil
@@ -1080,7 +1119,7 @@ func initAgentService(c *cleanupCollector, agentName, rootPort string) (*service
 func initRootService(
 	c *cleanupCollector,
 	cfg config.RootConfig,
-	rootPort string,
+	rootPort *portListener,
 	srvs services,
 	env []string,
 ) (*service, error) {
@@ -1095,12 +1134,12 @@ func initRootService(
 		Name: cfg.Name,
 		Address: config.Address{
 			Type: config.AddressTypeGRPC,
-			URL:  localAddress(rootPort),
+			URL:  localAddress(rootPort.port),
 		},
 	})
 
 	for _, srv := range srvs {
-		add := localAddress(srv.port)
+		add := localAddress(srv.listener.port)
 
 		cfg.Connections = append(cfg.Connections, config.ConnectionConfig{
 			Name: srv.name,
@@ -1110,7 +1149,7 @@ func initRootService(
 			},
 		})
 
-		if srv.kmipPort == "" {
+		if srv.kmipListener == nil {
 			continue
 		}
 
@@ -1143,7 +1182,7 @@ func initRootService(
 	cmd := newServiceCmd(c, bin, append([]string{
 		"ROOT_CONFIG_PATH=" + cfgPath,
 		"DATABASE_URL=" + connstr,
-		"SERVER_PORT=" + rootPort,
+		"SERVER_PORT=" + rootPort.port,
 		"KRYPTON_ROOT_KEY=" + testKeyBase64,
 		"ENABLE_UNSAFE_TEST_PROVIDER=I_ACCEPT",
 		"UNSAFE_TEST_PROVIDER_DIR=" + providerDir,
@@ -1159,7 +1198,7 @@ func initRootService(
 			KeyVersions: storesql.NewKeyVersionStore(db),
 		},
 		cmd:       cmd,
-		port:      rootPort,
+		listener:  rootPort,
 		cfgPath:   cfgPath,
 		dbConnStr: connstr,
 	}, nil
@@ -1167,7 +1206,7 @@ func initRootService(
 
 // initKRInfraServices spins up a full krypton cluster (root + agents) based on the config.
 func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig, rootEnv ...string) (services, error) {
-	rootPort, err := getFreePort()
+	rootRes, err := reservePort()
 	if err != nil {
 		return nil, err
 	}
@@ -1177,16 +1216,16 @@ func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig, rootEnv ...
 
 	srvs := make(services, len(topology.Segments)+1)
 	for _, seg := range topology.Segments {
-		srv, err := initAgentService(c, seg.Name, rootPort)
+		srv, err := initAgentService(c, seg.Name, rootRes.port)
 		if err != nil {
 			return nil, err
 		}
 		if seg.Segment.EndKind == dk {
-			port, err := getFreePort()
+			kmipRes, err := reservePort()
 			if err != nil {
 				return nil, err
 			}
-			srv.kmipPort = port
+			srv.kmipListener = kmipRes
 		}
 		srvs[seg.Name] = srv
 	}
@@ -1201,27 +1240,40 @@ func initKRInfraServices(c *cleanupCollector, cfg config.RootConfig, rootEnv ...
 		cfg.KMIPs = append(cfg.KMIPs, kmipCfg)
 	}
 
-	rootService, err := initRootService(c, cfg, rootPort, srvs, rootEnv)
+	rootService, err := initRootService(c, cfg, rootRes, srvs, rootEnv)
 	if err != nil {
 		return nil, err
 	}
 	if rootKMIP != nil {
-		rootService.kmipPort = rootKMIP.kmipPort
 		rootService.pki = rootKMIP.pki
+		rootService.kmipListener = rootKMIP.kmipListener
+	}
+
+	// Release ports that the root process needs to bind: its own gRPC port
+	// and all KMIP ports (KMIP listeners live inside the root process).
+	rootService.releasePortReservations()
+	for _, srv := range srvs {
+		if srv.kmipListener != nil {
+			srv.kmipListener.Release()
+		}
 	}
 
 	if err := rootService.cmd.Start(); err != nil {
 		return nil, fmt.Errorf("initKRInfraServices start root: %w", err)
 	}
-	if err := waitForPortReady(rootService.port); err != nil {
+	if err := waitForPortReady(rootService.listener.port); err != nil {
 		return nil, err
 	}
 
 	for _, srv := range srvs {
+		// Release agent gRPC port immediately before starting the agent.
+		if srv.listener != nil {
+			srv.listener.Release()
+		}
 		if err := srv.cmd.Start(); err != nil {
 			return nil, fmt.Errorf("initKRInfraServices start agent %s: %w", srv.name, err)
 		}
-		if err := waitForPortReady(srv.port); err != nil {
+		if err := waitForPortReady(srv.listener.port); err != nil {
 			return nil, err
 		}
 	}
@@ -1261,10 +1313,16 @@ func suspendKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascadin
 	return keyActionCli(t, "suspend", homeDir, port, tenantID, keyID, cascading)
 }
 
-// suspendKeyCli suspend a key via the CLI binary and returns the job group ID.
+// compromiseKeyCli marks a key as compromised via the CLI binary and returns the job group ID.
 func compromiseKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
 	t.Helper()
 	return keyActionCli(t, "mark-compromised", homeDir, port, tenantID, keyID, cascading)
+}
+
+// deactivateKeyCli deactivates a key via the CLI binary and returns the job group ID.
+func deactivateKeyCli(t *testing.T, homeDir, port, tenantID, keyID string, cascading bool) string {
+	t.Helper()
+	return keyActionCli(t, "deactivate", homeDir, port, tenantID, keyID, cascading)
 }
 
 func keyActionCli(t *testing.T, action, homeDir, port, tenantID, keyID string, cascading bool) string {

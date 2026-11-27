@@ -24,7 +24,7 @@ func TestAWSKMSRootKey(t *testing.T) {
 	roleARN := emulator.createRole(t, keyARN)
 
 	infra := startAWSKMSRoot(t, emulator.caPath)
-	rootconn := grpcConn(t, infra.Find(t, regionRoot).port)
+	rootconn := grpcConn(t, infra.Find(t, regionRoot).listener.port)
 	tCli := admin.NewTenantServiceClient(rootconn)
 	rCli := rootkey.NewServiceClient(rootconn)
 	kCli := keys.NewKeyServiceClient(rootconn)

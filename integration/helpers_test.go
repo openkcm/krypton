@@ -16,8 +16,6 @@ import (
 
 	"github.com/ovh/kmip-go/kmipclient"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/openkcm/krypton/pkg/api/v1/proto/admin/keys"
 	"github.com/openkcm/krypton/pkg/model"
@@ -25,15 +23,6 @@ import (
 )
 
 const localHost = "127.0.0.1"
-
-// testEnvironment holds the shared infrastructure for tests that require root + agent.
-type testEnvironment struct {
-	RootDB    *sql.DB
-	AgentDB   *sql.DB
-	RootPort  string
-	AgentPort string
-	Conn      *grpc.ClientConn
-}
 
 // testEnvWithRootMTLS holds the shared infrastructure for tests that require a root server with mTLS.
 type testEnvWithRootMTLS struct {
@@ -47,55 +36,6 @@ var testKey = []byte("01234567890123456789012345678901")
 
 // testKeyBase64 is testKey encoded as base64 (standard encoding).
 var testKeyBase64 = base64.StdEncoding.EncodeToString(testKey)
-
-// setupEnvironment builds binaries, writes configs, starts root + agent, and returns
-// a testEnvironment with open DB connections and a gRPC client to root.
-func setupEnvironment(t *testing.T) *testEnvironment {
-	t.Helper()
-
-	rootDB, rootConnStr := createDatabase(t, storesql.Root)
-	agentDB, agentConnStr := createDatabase(t, storesql.Agent)
-	rootPort := freePort(t)
-	agentPort := freePort(t)
-
-	rootCfgPath := writeRootConfig(t, "agent-k1", agentPort)
-	agentCfgPath := writeAgentConfig(t, "agent-k1", "localhost:"+rootPort)
-
-	rootBinary := buildBinary(t, "root", "../cmd/root")
-	agentBinary := buildBinary(t, "agent", "../cmd/agent")
-
-	rootCmd := createCmd(t, rootBinary, []string{
-		"ROOT_CONFIG_PATH=" + rootCfgPath,
-		"DATABASE_URL=" + rootConnStr,
-		"SERVER_PORT=" + rootPort,
-	})
-	require.NoError(t, rootCmd.Start(), "failed to start root server")
-	waitForPort(t, rootPort)
-
-	agentCmd := createCmd(t, agentBinary, []string{
-		"AGENT_BOOTSTRAP_CONFIG_PATH=" + agentCfgPath,
-		"AGENT_DATABASE_URL=" + agentConnStr,
-		"KRYPTON_TEK_KEY=" + testKeyBase64,
-		"AGENT_PORT=" + agentPort,
-	})
-	require.NoError(t, agentCmd.Start(), "failed to start agent")
-	waitForPort(t, agentPort)
-
-	conn, err := grpc.NewClient(
-		localAddress(rootPort),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
-
-	return &testEnvironment{
-		RootDB:    rootDB,
-		AgentDB:   agentDB,
-		RootPort:  rootPort,
-		AgentPort: agentPort,
-		Conn:      conn,
-	}
-}
 
 // setupRootEnvWithMTLS builds the root binary, starts a root server with mTLS enabled,
 // and returns a testEnvWithRootMTLS with both mTLS and non-mTLS gRPC connections.
@@ -125,101 +65,6 @@ func setupRootEnvWithMTLS(t *testing.T) *testEnvWithRootMTLS {
 		allowedAgent: allowedAgent,
 		pki:          pki,
 	}
-}
-
-// writeRootConfig writes a root config YAML to a temp file and returns the path.
-func writeRootConfig(t *testing.T, agentName, agentPort string) string {
-	t.Helper()
-
-	content := fmt.Sprintf(`name: root
-role: root
-segment:
-  start_kind: K0
-  end_kind: K1
-selector_labels:
-  environment: production
-root_key:
-  allowed_providers:
-    - aes256gcm-staticsecret
-  vault:
-    name: credentials-vault
-    type: unsafe-sqlite-memory
-key_bindings:
-  K1:
-    crypto:
-      name: kek-crypto
-      type: aes256gcm
-    vault:
-      name: root-vault
-      type: unsafe-sqlite-memory
-hierarchy:
-  name: test-hierarchy
-  key_specs:
-    - kind: K0
-      role: root
-      algorithm: AES256
-      labels_spec:
-        allow_user_labels: true
-    - kind: K1
-      role: kek
-      algorithm: AES256
-      labels_spec:
-        allow_user_labels: true
-    - kind: K2
-      role: tek
-      algorithm: AES256
-      labels_spec:
-        allow_user_labels: true
-    - kind: K3
-      role: dek
-      algorithm: AES256
-      labels_spec:
-        allow_user_labels: true
-topology:
-  segments:
-    - name: %s
-      segment:
-        start_kind: K2
-        end_kind: K3
-      key_bindings:
-        K2:
-          sealer:
-            name: agent-sealer
-            type: aes256gcm-staticsecret
-            config:
-              secret:
-                type: envvar
-                config:
-                  name: KRYPTON_TEK_KEY
-          crypto:
-            name: agent-crypto
-            type: aes256gcm
-          vault:
-            name: agent-vault
-            type: unsafe-sqlite-memory
-          parent_key_provider:
-            agent_name: root
-        K3:
-          crypto:
-            name: agent-dek-crypto
-            type: aes256gcm
-          vault:
-            name: agent-dek-vault
-            type: unsafe-sqlite-memory
-      selector_labels:
-        cloud: aws
-connections:
-  - name: root
-    address:
-      type: grpc
-      url: localhost:50051
-  - name: %s
-    address:
-      type: grpc
-      url: localhost:%s
-`, agentName, agentName, agentPort)
-
-	return writeTempFile(t, "root-config-*.yaml", content)
 }
 
 func writeSingleRootConfig(t *testing.T, rootProvider string) string {
@@ -455,21 +300,6 @@ connections:
 `, serverCertPath, serverKeyPath, clientCAPath, allowedAgent, makeKryptonID(allowedAgent))
 
 	return writeTempFile(t, "root-config-*.yaml", content)
-}
-
-// writeAgentConfig writes an agent bootstrap config YAML to a temp file and returns the path.
-func writeAgentConfig(t *testing.T, agentName, rootAddress string) string {
-	t.Helper()
-
-	content := fmt.Sprintf(`name: %s
-role: agent
-krypton_root:
-  address:
-    type: grpc
-    url: %s
-`, agentName, rootAddress)
-
-	return writeTempFile(t, "agent-config-*.yaml", content)
 }
 
 // writeAgentConfigWithMTLS writes an agent bootstrap config YAML with mTLS settings to a temp file and returns the path.

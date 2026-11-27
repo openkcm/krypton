@@ -26,10 +26,8 @@ type expTenant struct {
 }
 
 func TestCreateTenant(t *testing.T) {
-	tenantStore := newTenantStore(t, nil, storesql.Root)
-	serverAddr := startGRPCServer(t, func(srv *grpc.Server) {
-		admin.RegisterTenantServiceServer(srv, admin.NewTenantService(tenantStore))
-	})
+	rootsrv := regionLevelInfra.Find(t, regionRoot)
+	serverAddr := localAddress(rootsrv.listener.port)
 
 	// login with no auth
 	homeDir := t.TempDir()

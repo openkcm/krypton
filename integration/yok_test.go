@@ -23,13 +23,17 @@ import (
 )
 
 func TestYOKLifecycle(t *testing.T) {
-	env := setupRootWithTestProvider(t)
 	ctx := t.Context()
-	tenantClient := admingrpc.NewTenantServiceClient(env.conn)
-	keyClient := keygrpc.NewKeyServiceClient(env.conn)
-	providerClient := providergrpc.NewServiceClient(env.conn)
-	sealerClient := sealergrpc.NewServiceClient(env.conn)
-	keyVersionStore := newKeyVersionStore(t, env.db, storesql.Root)
+
+	rootsrv := regionLevelInfra.Find(t, regionRoot)
+	conn := grpcConn(t, rootsrv.listener.port)
+
+	tenantClient := admingrpc.NewTenantServiceClient(conn)
+	keyClient := keygrpc.NewKeyServiceClient(conn)
+	providerClient := providergrpc.NewServiceClient(conn)
+	sealerClient := sealergrpc.NewServiceClient(conn)
+	keyVersionStore := newKeyVersionStore(t, rootsrv.db, storesql.Root)
+	serverAddr := localAddress(rootsrv.listener.port)
 
 	tenant := createYOKTenant(t, tenantClient)
 	tenantID := tenant.GetId()
@@ -73,7 +77,7 @@ func TestYOKLifecycle(t *testing.T) {
 			"--instance-id", instanceID,
 			"--provider-key-id", firstKeyID,
 			"--access-token", initialToken,
-			"--server", env.serverAddr,
+			"--server", serverAddr,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "bind failed: %s", output)
@@ -142,7 +146,7 @@ func TestYOKLifecycle(t *testing.T) {
 			"--tenant-id", tenantID,
 			"--key-id", rootKeyID,
 			"--access-token", replacementToken,
-			"--server", env.serverAddr,
+			"--server", serverAddr,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "authentication rotation failed: %s", output)
@@ -187,7 +191,7 @@ func TestYOKLifecycle(t *testing.T) {
 			"--tenant-id", tenantID,
 			"--key-id", rootKeyID,
 			"--provider-key-id", secondKeyID,
-			"--server", env.serverAddr,
+			"--server", serverAddr,
 		)
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "key rotation failed: %s", output)
@@ -270,7 +274,7 @@ func TestYOKLifecycle(t *testing.T) {
 			"yok", "unbind",
 			"--tenant-id", tenantID,
 			"--key-id", rootKeyID,
-			"--server", env.serverAddr,
+			"--server", serverAddr,
 		}
 		cmd := newCLICommand(
 			ctx,
