@@ -4,6 +4,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -159,19 +160,7 @@ func TestRegistration(t *testing.T) {
 		// then
 		// the agent should exit with a non-zero code because the TLS handshake
 		// fails (server cert signed by unknown authority from agent's perspective)
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- agentCmd.Wait()
-		}()
-
-		select {
-		case <-time.After(10 * time.Second):
-			agentCmd.Process.Kill() //nolint:errcheck
-			<-waitCh                // drain goroutine so cleanup's Wait() doesn't race
-			require.Fail(t, "agent process did not exit within timeout when using wrong mTLS certificates")
-		case waitErr := <-waitCh:
-			require.Error(t, waitErr, "agent should exit with error when using wrong mTLS certificates")
-		}
+		waitForCommandToExit(t, agentCmd, "agent process did not exit within timeout when using wrong mTLS certificates")
 
 		// verify no registration appeared in the store
 		_, err = rootAgentStore.Get(ctx, store.GetAgentQuery{
@@ -201,19 +190,7 @@ func TestRegistration(t *testing.T) {
 		err := agentCmd.Start()
 		require.NoError(t, err, "failed to start agent process")
 
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- agentCmd.Wait()
-		}()
-
-		select {
-		case <-time.After(10 * time.Second):
-			agentCmd.Process.Kill() //nolint:errcheck
-			<-waitCh                // drain goroutine so cleanup's Wait() doesn't race
-			require.Fail(t, "agent process did not exit within timeout when root server is down")
-		case waitErr := <-waitCh:
-			require.Error(t, waitErr, "agent should exit with error when root server is down")
-		}
+		waitForCommandToExit(t, agentCmd, "agent should exit with error when root server is down")
 	})
 
 	t.Run("should not start agent if name is not in root config", func(t *testing.T) {
@@ -235,19 +212,7 @@ func TestRegistration(t *testing.T) {
 		err := agentCmd.Start()
 		require.NoError(t, err, "failed to start agent process")
 
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- agentCmd.Wait()
-		}()
-
-		select {
-		case <-time.After(10 * time.Second):
-			agentCmd.Process.Kill() //nolint:errcheck
-			<-waitCh                // drain goroutine so cleanup's Wait() doesn't race
-			require.Fail(t, "agent process did not exit within timeout when agent name is not in root config")
-		case waitErr := <-waitCh:
-			require.Error(t, waitErr, "agent should exit with error when agent name is not in root config")
-		}
+		waitForCommandToExit(t, agentCmd, "agent process did not exit within timeout when agent name is not in root config")
 	})
 
 	t.Run("should register agent with newly issued certificates", func(t *testing.T) {
@@ -377,19 +342,7 @@ func TestRegistration(t *testing.T) {
 		// then
 		// the agent should exit with a non-zero code because the TLS handshake
 		// fails (expired client certificate rejected by server)
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- agentCmd.Wait()
-		}()
-
-		select {
-		case <-time.After(10 * time.Second):
-			agentCmd.Process.Kill() //nolint:errcheck
-			<-waitCh                // drain goroutine so cleanup's Wait() doesn't race
-			require.Fail(t, "agent process did not exit within timeout when using expired certificate")
-		case waitErr := <-waitCh:
-			require.Error(t, waitErr, "agent should exit with error when using expired certificate")
-		}
+		waitForCommandToExit(t, agentCmd, "agent process did not exit within timeout when using expired certificate")
 
 		// verify no registration appeared in the store
 		_, err = rootAgentStore.Get(ctx, store.GetAgentQuery{
@@ -498,4 +451,26 @@ func TestRegistration(t *testing.T) {
 			return errors.Is(err, store.ErrAgentNotFound)
 		}, 20*time.Second, 100*time.Millisecond, "expected agent record to be deleted from store")
 	})
+}
+
+func waitForCommandToExit(t *testing.T, agentCmd *exec.Cmd, errMsg string) {
+	t.Helper()
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- agentCmd.Wait()
+	}()
+
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		agentCmd.Process.Kill() //nolint:errcheck
+		err := <-waitCh         // drain goroutine so cleanup's Wait() doesn't race
+		t.Logf("agent process exited with error: %v", err)
+		require.Fail(t, errMsg)
+	case waitErr := <-waitCh:
+		require.Error(t, waitErr, errMsg)
+	}
 }
