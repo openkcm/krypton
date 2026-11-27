@@ -89,10 +89,23 @@ func (ls *LabelsSpec) Merge(src LabelsSpec) {
 	ls.AllowUserLabels = src.AllowUserLabels
 }
 
+// Overlay returns ls with the node spec merged on top, leaving both unchanged.
+func (ls *LabelsSpec) Overlay(node *LabelsSpec) LabelsSpec {
+	if node == nil {
+		return *ls
+	}
+	out := LabelsSpec{AllowUserLabels: ls.AllowUserLabels, Requirements: maps.Clone(ls.Requirements)}
+	out.Merge(*node)
+	return out
+}
+
 // init performs initialization and validation of the LabelsSpec.
 // It checks that if AllowUserLabels is false, at least one requirement is defined.
 // It also validates each individual LabelRequirement.
 func (ls *LabelsSpec) init() error {
+	if ls == nil {
+		return nil
+	}
 	if !ls.AllowUserLabels && len(ls.Requirements) == 0 {
 		return fmt.Errorf("%w: no label requirements defined", ErrLabelsSpecRequirementEmpty)
 	}

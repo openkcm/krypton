@@ -523,3 +523,32 @@ func TestLabelsSpecMerge(t *testing.T) {
 		}
 	})
 }
+
+func TestLabelsSpecOverlay(t *testing.T) {
+	hierarchy := spec.LabelsSpec{
+		AllowUserLabels: true,
+		Requirements:    map[string]spec.LabelRequirement{"env": {IsRequired: true}},
+	}
+
+	t.Run("should keep hierarchy spec without node spec", func(t *testing.T) {
+		// when
+		got := hierarchy.Overlay(nil)
+
+		// then
+		assert.Equal(t, hierarchy, got)
+	})
+
+	t.Run("should merge node spec without changing hierarchy spec", func(t *testing.T) {
+		// given
+		node := &spec.LabelsSpec{Requirements: map[string]spec.LabelRequirement{"accountId": {IsRequired: true}}}
+
+		// when
+		got := hierarchy.Overlay(node)
+
+		// then
+		assert.False(t, got.AllowUserLabels)
+		assert.Len(t, got.Requirements, 2)
+		assert.True(t, hierarchy.AllowUserLabels)
+		assert.Len(t, hierarchy.Requirements, 1)
+	})
+}
