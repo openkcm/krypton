@@ -59,13 +59,21 @@ func releaseNotes(t *testing.T, args ...string) string {
 	return cm.Data["notes"]
 }
 
-// Values with which the root node starts: its Secret, a network policy and a file vault.
-var startingValues = []string{
-	"--set", "database.existingSecret=krypton-secret",
-	"--set", "networkPolicy.enabled=true",
+// startingArgs returns the values with which the root node starts: its Secret, a network
+// policy, and the development hierarchy of values.yaml.
+func startingArgs(t *testing.T) []string {
+	t.Helper()
+
+	return []string{
+		"-f", devValues(t),
+		"--set", "database.existingSecret=krypton-secret",
+		"--set", "networkPolicy.enabled=true",
+	}
 }
 
 func TestReleaseNotes(t *testing.T) {
+	startingValues := startingArgs(t)
+
 	tests := []struct {
 		name string
 		args []string
@@ -76,9 +84,18 @@ func TestReleaseNotes(t *testing.T) {
 			name: "defaults",
 			warnings: []string{
 				"DATABASE_URL is not set",
-				"Development vaults in config: root_key (unsafe-sqlite-memory), K1 (unsafe-sqlite-memory), K2 (unsafe-sqlite-memory)",
+				"config.hierarchy is not set: the root node exits at startup",
+				"Development vaults in config: root_key (unsafe-sqlite-memory).",
 				"config.auth is not set and networkPolicy.enabled is false",
 			},
+		},
+		{
+			name: "no hierarchy",
+			args: []string{
+				"--set", "database.existingSecret=krypton-secret",
+				"--set", "networkPolicy.enabled=true",
+			},
+			warnings: []string{"config.hierarchy is not set", "Development vaults"},
 		},
 		{
 			name:     "secrets and network policy",
@@ -88,6 +105,7 @@ func TestReleaseNotes(t *testing.T) {
 		{
 			name: "secrets from extraEnvs",
 			args: []string{
+				"-f", devValues(t),
 				"--set", "extraEnvs[0].name=DATABASE_URL", "--set", "extraEnvs[0].value=postgres://db",
 				"--set", "networkPolicy.enabled=true",
 			},

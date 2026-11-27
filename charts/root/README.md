@@ -9,8 +9,11 @@ kinds and get their parent keys from the root node. An optional KMIP server serv
 clients.
 
 > [!WARNING]
-> Krypton is in development and not intended for production use yet. The default
-> configuration keeps all keys in the pod's memory: they are lost when the pod stops.
+> Krypton is in development and not intended for production use yet.
+
+The chart has no default key hierarchy: set `config.hierarchy` and `config.key_bindings` in
+your values, as in the example under [Install](#install). Without them the root node exits at
+startup.
 
 [values.yaml](values.yaml) documents every value and the whole root node configuration.
 
@@ -84,10 +87,21 @@ extraVolumeMounts:
     mountPath: /var/lib/krypton
 
 config:
+  # The key kinds: K0 (root), K1 (key encryption key), K2 (data encryption key). They match
+  # the default config.segment, K0 to K2.
+  hierarchy:
+    name: demo-hierarchy
+    key_specs:
+      - { kind: K0, role: root, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+      - { kind: K1, role: kek, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+      - { kind: K2, role: dek, algorithm: AES256, labels_spec: { allow_user_labels: true } }
+  # How the keys of each kind below the root are encrypted and stored.
   key_bindings:
     K1:
+      crypto: { name: kek-crypto, type: aes256gcm }
       vault: { name: kek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/kek.db } }
     K2:
+      crypto: { name: dek-crypto, type: aes256gcm }
       vault: { name: dek-vault, type: unsafe-sqlite, config: { path: /var/lib/krypton/dek.db } }
 ```
 
@@ -126,9 +140,10 @@ before it opens the port.
 | `image.tag` / `image.digest` | chart's `appVersion` | The Krypton version to deploy |
 | `image.command` | `[]` | Empty: the release image's entrypoint starts the binary (see [Image](#image)) |
 | `database.existingSecret` | `""` | Secret with the PostgreSQL URL (`DATABASE_URL`). Required |
-| `config.root_key` | static-secret provider allowed, credentials vault in memory | The root key's allowed providers and provider-binding vault |
-| `config.key_bindings` | K1 and K2 in memory | How the keys of each non-root kind are protected and stored |
-| `config.hierarchy` | K0 `root`, K1 `kek`, K2 `dek` | The key kinds |
+| `config.segment` | K0 to K2 | The key kinds that the root node manages |
+| `config.root_key` | `awskms` provider allowed, credentials vault in memory | The root key's allowed providers and provider-binding vault |
+| `config.key_bindings` | none: **required** | How the keys of each non-root kind of `config.segment` are protected and stored |
+| `config.hierarchy` | none: **required** | The key kinds |
 | `config.topology` | no agents | The agents and the key kinds they manage |
 | `config.connections` | `root` at `krypton-root:8080` | The gRPC addresses of the root node and the agents |
 | `config.auth` | not set | Mutual TLS on the gRPC port |
@@ -163,7 +178,7 @@ material that Krypton generates and stores, sealed by its parent key, in a vault
 
 | Vault type | Stores in | Use |
 | --- | --- | --- |
-| `unsafe-sqlite-memory` | The pod's memory; lost when the pod stops | Development (default) |
+| `unsafe-sqlite-memory` | The pod's memory; lost when the pod stops | Development (default of `config.root_key`) |
 | `unsafe-sqlite` | A SQLite file on a volume (`config.path`) | Development |
 | `openbao` | OpenBao (`config.address`), one namespace per tenant; token and CA from `BAO_TOKEN` and `BAO_CACERT` in `extraEnvs` | Shared vault |
 
@@ -223,6 +238,12 @@ Everything under `config` except `isImmutable` is written to `config.yaml`. The 
 the configuration at startup and exits if it is not consistent, but it ignores keys it does not
 know: check the spelling of the keys against values.yaml.
 
+## Upgrading from 0.1.3
+
+| Change | Action |
+| --- | --- |
+| `config.hierarchy` and `config.key_bindings` have no default any more (were the demo hierarchy `demo-hierarchy`, K0 `root`, K1 `kek`, K2 `dek`, with K1 and K2 in `unsafe-sqlite-memory` vaults) | If you relied on the defaults, add them to your values, as in the example under [Install](#install) but with your vaults. Keep the hierarchy `name` and kinds of your installation. Without them the root node exits at startup with `hierarchy name cannot be empty` |
+
 ## Upgrading from 0.0.1
 
 | Change | Action |
@@ -241,8 +262,9 @@ Resource names and selector labels are unchanged.
 
 ## Upgrading Krypton beyond v0.1.0
 
-This chart documents the configuration of the Krypton releases after v0.1.0, and its default
-configuration works with v0.1.0 as well. When you move from v0.1.0 to a later release:
+This chart documents the configuration of the Krypton releases after v0.1.0. The default
+configuration of the charts before 0.1.4, the demo hierarchy K0 to K2 with vaults in memory,
+works with v0.1.0 as well. When you move from v0.1.0 to a later release:
 
 | v0.1.0 | Later releases |
 | --- | --- |
@@ -257,6 +279,8 @@ configuration works with v0.1.0 as well. When you move from v0.1.0 to a later re
 | Container init fails with `stat ./root/root.linux-amd64: permission denied` | `image.command` still points into `/root`, which the base image ships as a `0700` root-owned directory. Clear `image.command` and use an image of this chart's `appVersion` or later |
 | `exec format error` | `image.command` is set to a binary that does not match the node's architecture. Clear it and let the image's entrypoint pick the right one |
 | Pod exits with `DATABASE_URL environment variable is required` | `database.existingSecret` is not set |
+| Pod exits with `hierarchy: hierarchy name cannot be empty` | `config.hierarchy` is not set; the chart has no default |
+| Pod exits with `key binding missing for key kind in segment range` or `key binding found for key kind outside segment range` | `config.key_bindings` does not cover exactly the non-root kinds of `config.segment` |
 | Pod exits with `failed to run migrations` | PostgreSQL is not reachable with the URL, or the user may not create tables |
 | Pod exits with `no connection config for root "root"` | `config.connections` has no entry for the root node |
 | Pod exits with `kmip: invalid TLS configuration` | A `config.kmips` entry's `tls` misses a file, for example because it uses the v0.1.0 key names |
